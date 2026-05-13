@@ -1,11 +1,21 @@
-# plan.md — Super Apps MATSANDATAMA (MVP)
+# plan.md — Super Apps MATSANDATAMA (MVP → Phase 3 Complete)
 
 ## 1. Objectives
 - ✅ Prove **core workflow** “Jurnal Presisi” works end-to-end: **QR (encrypted) → decrypt → schedule validation → optional GPS geofence (room-based) → journal create → auto-lock by time window**.
 - ✅ Deliver V1 web app (FastAPI + React + MongoDB) with **multi-role switching** and role set:
-  - Admin, Guru, Wali Kelas, Siswa, Tenaga Kependidikan, Guru Piket, Guru BK, Guru Tata Tertib, Guru Ekstrakurikuler **(+ Ortu/Wali sebagai role akses orang tua)**.
+  - Admin, Guru, Wali Kelas, Siswa, Tenaga Kependidikan, Guru Piket, Guru BK, Guru Tata Tertib, Guru Ekstrakurikuler **(+ Ortu/Wali)**.
 - ✅ Provide master data management, scheduling, **QR card generator (B5 template upload)**, parent/student views, **public realtime monitoring page**, audit/security logs, and branding settings.
-- ✅ Ensure stability with incremental testing; confirm “Jurnal Presisi” validation feedback is clear.
+- ✅ Extend to Phase 3 (as requested):
+  - **Work-day session UX** (login tetap nyaman untuk guru) via **JWT 12 jam + idle timeout 30 menit** (configurable).
+  - **Schedule grid** per hari aktif + slot jam (filter per guru/per kelas) + input jadwal lebih mudah.
+  - **Active days & teaching slots** configurable in settings.
+  - **Semester model** mendukung **regular (ganjil/genap)** & **percepatan (semester 1–6)**.
+  - **Data Siswa + Kehadiran + Kebersihan** untuk Admin & Wali Kelas (RBAC).
+  - **User management grouping by role** (tabs per role).
+  - **Excel import jadwal** (template download + upload + validation).
+  - **Production env vars guidance** via `.env.example`.
+- ✅ Confirm stability with incremental testing + regression:
+  - Backend Phase 3 suite **44/44 PASS (100%)**.
 - 🔜 Transition objective: finalize “Release Notes + Deployment readiness + operational SOP” (backup/restore, admin guide) for handover.
 
 ---
@@ -93,8 +103,8 @@
    - audit logs for CRUD + role switch
    - security logs for login/captcha/lockout/journal blocks
 10. Seed data:
-   - 11 demo users covering all roles + multi-role examples
-   - 7 classes, 8 rooms (GPS), 14 subjects
+   - demo users covering all roles + multi-role examples
+   - classes, rooms (GPS), subjects
    - schedules + 1 sample journal
    - **startup auto-refresh** ensures always an “active-now” demo schedule exists (avoids time-dependent demo failures)
 
@@ -117,7 +127,7 @@
    - Wali Kelas dashboard (class journal status + student list)
    - Siswa dashboard (today schedule + journal read-only)
    - Ortu dashboard (switch child + see journals)
-   - Staff dashboard (for tendik/piket/bk/tatib/ekstra as landing)
+   - Staff dashboard (tendik/piket/bk/tatib/ekstra landing)
 5. Smart Journal flow:
    - QR scan via camera (html5-qrcode)
    - fallback manual token validation
@@ -151,56 +161,115 @@
 
 ---
 
-### Phase 3 — Stabilization + Dynamic QR hardening + deeper role UX
-**Goal:** extend functionality and harden production operations.
+### Phase 3 — Production UX + Scheduling Ergonomics + Student Ops (Requested Enhancements)
+**Goal:** complete requested improvements for real-world operations (guru mudah login, jadwal mudah diisi, modul wali kelas/admin bertambah).
 
-🔜 Planned enhancements:
-1. Dynamic QR hardening:
-   - per-room secret rotation UI
-   - tighter validation windows + replay prevention
-2. Journals:
-   - editing rules, backend lock enforcement UI indicator
-   - better attendance entry UX (per-student optional)
-3. Scheduling:
-   - conflict detection
-   - import (CSV/Excel)
-   - approval workflow
-4. Observability:
-   - log filtering + export
-   - performance metrics
-5. Permission hardening:
-   - fine-grained permissions matrix per role
-   - multi-role edge cases and auditing
-6. Public monitoring:
-   - optional websocket/SSE for realtime instead of polling
+✅ **COMPLETED — Backend + Frontend + Backfill + Tests**
 
-**Phase 3 user stories:**
-1. As admin, I can enable dynamic QR and teachers can journal without downtime.
-2. As teacher, I cannot edit a journal once locked.
-3. As wali kelas, I can see per-period teacher compliance.
-4. As admin, I can review security logs for attacks and lockouts.
-5. As admin, I can detect schedule conflicts before publishing.
+#### 3.1 Security / Session UX (Work-day)
+✅ Implemented:
+- JWT default session updated to **12 jam** (`JWT_EXPIRY_MINUTES = 720`).
+- **Idle timeout auto-logout** (default 30 menit) dengan notifikasi toast.
+- Konfigurasi via **Admin → Pengaturan → Sesi & Keamanan**:
+  - `session_max_hours`
+  - `idle_timeout_minutes`
+- Login response kini mengembalikan `expires_in_minutes` dan `idle_timeout_minutes`.
 
-**End of Phase 3:** 1 full E2E regression pass.
+#### 3.2 B5 Card Readability Fix
+✅ Implemented:
+- Perbaikan layout & ukuran font pada kartu B5:
+  - Class name besar (≈200px), label ruangan 56px, header 64px.
+- Preview di UI diperbesar (lebih proper untuk review sebelum print).
+
+#### 3.3 Scheduling: Active Days + Teaching Slots + Grid View
+✅ Implemented:
+- **Settings baru**:
+  - `active_days`: hari aktif sekolah (Senin–Sabtu)
+  - `teaching_slots`: template jam mengajar (termasuk slot istirahat)
+- **Schedule grid view** pada `/admin/schedules`:
+  - Filter **per kelas / per guru**
+  - Tampilan **Grid (Hari & Jam)** + tab **List**
+  - Klik slot kosong → dialog tambah jadwal pre-filled (hari + jam)
+- Endpoint baru:
+  - `GET /api/schedules/grid`
+
+#### 3.4 Data Siswa + Kehadiran + Kebersihan Kelas
+✅ Implemented:
+- Menu baru tersedia untuk **Admin** dan **Wali Kelas**:
+  - **Data Siswa** (`/admin/siswa`, `/wali-kelas/siswa`)
+  - **Kehadiran Siswa** (`/admin/kehadiran`, `/wali-kelas/kehadiran`)
+  - **Kebersihan Kelas** (`/admin/kebersihan`, `/wali-kelas/kebersihan`)
+- RBAC:
+  - Admin: akses semua kelas
+  - Wali kelas: hanya kelas wali
+  - Siswa (role tunggal): hanya dirinya
+- Backend endpoints baru:
+  - `GET /api/students`
+  - `GET/POST /api/attendance/class/{class_id}` + upsert by (class_id,date)
+  - `GET/POST /api/cleanliness/class/{class_id}` + upsert by (class_id,date)
+
+#### 3.5 User Management Grouped by Role
+✅ Implemented:
+- Halaman Pengguna menggunakan **Tabs per Role** dengan badge count:
+  - Semua, Admin, Guru, Wali Kelas, Siswa, Orang Tua, Tendik, Piket, BK, Tatib, Ekstra
+
+#### 3.6 Tahun Pelajaran: Regular vs Percepatan (Semester 1–6)
+✅ Implemented:
+- Academic year mendukung:
+  - `semester_type = regular` → semester ganjil/genap
+  - `semester_type = accelerated` → semester 1–6
+- UI menampilkan tipe + badge semester aktif
+- Field baru:
+  - `active_semester`
+
+#### 3.7 Excel Import Jadwal
+✅ Implemented:
+- Download template Excel:
+  - `GET /api/schedules/excel-template` (sheet Jadwal + INSTRUKSI + contoh baris)
+- Upload/import:
+  - `POST /api/schedules/import-excel` (validasi referensi kelas/mapel/guru/ruang)
+  - return `{success, errors[], total_rows}`
+- UI:
+  - Tombol Template Excel + Import Excel pada `/admin/schedules`
+
+#### 3.8 Production Environment Variables
+✅ Implemented:
+- Added `/app/backend/.env.example` covering:
+  - `MONGO_URL`, `DB_NAME`, `CORS_ORIGINS`
+  - `JWT_SECRET`
+  - `QR_MASTER_SECRET`
+  - `SCHOOL_ID`
+
+#### 3.9 Testing / Verification
+✅ Completed:
+- Backend Phase 3 suite: **44/44 PASS (100%)**
+- Frontend visual verification for:
+  - Settings Workday tab
+  - Schedules grid
+  - Users role tabs
+  - Data Siswa / Kehadiran
+  - B5 card preview
+
+**End of Phase 3:**
+- ✅ 1 full backend regression pass with no failures.
 
 ---
 
 ## 3. Next Actions (Immediate)
-1. **Handover checklist:**
+1. **Handover checklist (recommended next):**
    - finalize credentials list, demo data guide, environment vars
    - write admin SOP: create user, create room + GPS, create schedule, generate QR card, use monitoring
-2. **Branding finalization:**
-   - upload official MTsN 2 Kota Malang logo (fallback currently can use Kemenag)
-3. **GPS operational setup:**
-   - input GPS lat/lon for each room/class from onsite measurement
-   - set radius per room (recommend 20–50m based on accuracy)
-   - decide which rooms enable GPS enforcement
-4. **Dynamic QR rollout plan:**
-   - start as “optional mode” per room
-   - pilot in selected rooms
-5. **Production readiness:**
+2. **Production readiness:**
+   - set **MONGO_URL**, **JWT_SECRET**, **QR_MASTER_SECRET**, **CORS_ORIGINS** (specific domains)
+   - decide QR secret rotation strategy if using dynamic QR
    - backup/restore strategy for MongoDB
-   - configure CORS, JWT_SECRET, QR_MASTER_SECRET
+3. **GPS operational setup:**
+   - input GPS lat/lon per ruangan dari pengukuran onsite
+   - set radius per room (recommend 20–50m)
+   - decide which rooms enable GPS enforcement
+4. **Schedule operations:**
+   - configure active days  teaching slots template
+   - fill schedules via grid or Excel import
 
 ---
 
@@ -211,7 +280,24 @@
   - Teacher journal only created via validated QR + schedule + optional GPS.
   - Public monitoring accurately reflects schedule and filled status.
   - Admin can manage master data, generate QR cards with template, view logs, and change branding.
+- ✅ **Phase 3:**
+  - Work-day session UX: 12h session + idle logout configurable.
+  - Schedule grid: per guru/per kelas, days  slot template.
+  - Academic year supports regular and accelerated semester models.
+  - Data siswa/kehadiran/kebersihan available with correct RBAC.
+  - Excel import/export template works with validation.
+  - Backend regression pass: 44/44.
 - 🔜 **Operational quality:**
-  - repeatable demo (active-now schedule available)
   - admin guide + SOP available
-  - 1 full regression test run with no critical breaks
+  - one full end-to-end UX regression (frontend) before public launch
+
+---
+
+## Phase 4+ (Future Roadmap)
+- E-Rapor digital
+- Prestasi siswa (portfolio)
+- Ekstrakurikuler advanced module
+- Email reset password (SMTP)
+- Mobile app (React Native/Expo)
+- Schedule conflict detection + approval workflow
+- SSE/WebSocket realtime monitoring

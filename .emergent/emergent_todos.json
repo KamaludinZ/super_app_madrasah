@@ -1,26 +1,26 @@
 [
   {
-    "content": "Phase 3.1: Fix B5 card layout - text size proportional",
+    "content": "Phase 3.1: Fix B5 card layout",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Session management - JWT 12h + idle timeout 30 min + auto-logout",
+    "content": "Phase 3.1: Session management - JWT 12h + idle timeout 30 min",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Settings - Hari aktif sekolah + jam mengajar template",
+    "content": "Phase 3.1: Settings - Hari aktif + jam mengajar template",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Tahun Pelajaran - tipe semester (ganjil/genap atau 1-6 percepatan)",
+    "content": "Phase 3.1: Tahun Pelajaran - semester type (regular/accelerated)",
     "status": "completed"
   },
   {
-    "content": "Phase 3.2: Schedule view grid (per hari aktif + jam slot), filter per guru/kelas",
+    "content": "Phase 3.2: Schedule grid view (per hari aktif + jam slot)",
     "status": "completed"
   },
   {
-    "content": "Phase 3.2: Schedule bulk fill via slot template (click empty slot)",
+    "content": "Phase 3.2: Schedule bulk fill via slot template (click empty)",
     "status": "completed"
   },
   {
@@ -28,23 +28,23 @@
     "status": "completed"
   },
   {
-    "content": "Phase 3.3: Frontend - Menu Data Siswa, Kehadiran, Kebersihan for Admin & Wali Kelas",
+    "content": "Phase 3.3: Frontend - Menu Data Siswa, Kehadiran, Kebersihan",
     "status": "completed"
   },
   {
-    "content": "Phase 3.4: User management - groupby role dengan submenu tabs per role",
+    "content": "Phase 3.4: User management - groupby role tabs",
     "status": "completed"
   },
   {
-    "content": "Phase 3.5: Excel import jadwal (template download + upload + parser)",
+    "content": "Phase 3.5: Excel import jadwal (template + parser)",
     "status": "completed"
   },
   {
-    "content": "Phase 3: Production env vars (.env.example documentation)",
+    "content": "Phase 3: Production env vars (.env.example)",
     "status": "completed"
   },
   {
-    "content": "Phase 3: E2E Testing fitur baru via testing_agent_v3",
-    "status": "in_progress"
+    "content": "Phase 3: E2E Testing fitur baru - 44/44 backend tests PASS",
+    "status": "completed"
   }
 ]
