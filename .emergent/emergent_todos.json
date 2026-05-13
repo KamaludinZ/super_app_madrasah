@@ -1,62 +1,46 @@
 [
   {
-    "content": "Backend: Excel templates + import for Users, Students, Classes, Rooms, Subjects",
+    "content": "Fix backend crash: Move BaseModel import to top of server.py",
+    "status": "completed"
+  },
+  {
+    "content": "Verify backend services running + sanity check Phase 4 endpoints with curl",
+    "status": "completed"
+  },
+  {
+    "content": "Run testing agent for Phase 4 backend (Excel I/O, SMTP, Reset Pwd, Achievements, Ekstrakurikuler, E-Rapor)",
     "status": "in_progress"
   },
   {
-    "content": "Backend: SMTP settings in SettingsModel + test endpoint",
+    "content": "Fix any backend bugs reported by testing agent",
     "status": "pending"
   },
   {
-    "content": "Backend: Email reset password flow (forgot + reset endpoints)",
+    "content": "Frontend A: Admin Excel Imports UI (template download + upload xlsx for 5 entities)",
     "status": "pending"
   },
   {
-    "content": "Backend: Prestasi Siswa (StudentAchievement) - CRUD + verify",
+    "content": "Frontend B: Admin SMTP Settings tab + Forgot/Reset Password pages",
     "status": "pending"
   },
   {
-    "content": "Backend: Ekstrakurikuler (Extracurricular + Members + Attendance + Grade)",
+    "content": "Frontend C: Modul Prestasi Siswa (Siswa submit + Wali Kelas/Admin verify + Galeri)",
     "status": "pending"
   },
   {
-    "content": "Backend: E-Rapor digital (Grade input + rapor per student)",
+    "content": "Frontend D: Modul Ekstrakurikuler (Coach kelola anggota, absensi, nilai)",
     "status": "pending"
   },
   {
-    "content": "Frontend Admin Pengaturan: Tab SMTP settings + test send button",
+    "content": "Frontend E: E-Rapor Digital (Guru input nilai + Siswa/Admin lihat rapor)",
     "status": "pending"
   },
   {
-    "content": "Frontend LoginPage: Lupa password link → reset flow",
+    "content": "Run frontend testing agent for full Phase 4 UI flows",
     "status": "pending"
   },
   {
-    "content": "Frontend Admin: Import buttons di Users/Classes/Rooms/Subjects/Siswa pages",
-    "status": "pending"
-  },
-  {
-    "content": "Frontend Admin: Page Prestasi Siswa + Verifikasi",
-    "status": "pending"
-  },
-  {
-    "content": "Frontend Guru/Admin: Page Ekstrakurikuler (CRUD + anggota + absensi + nilai)",
-    "status": "pending"
-  },
-  {
-    "content": "Frontend Admin/Guru: Page E-Rapor (input nilai + preview rapor)",
-    "status": "pending"
-  },
-  {
-    "content": "Frontend Siswa: Galeri Prestasi + E-Rapor view (read-only)",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: Mobile app Expo docs (separate codebase guide)",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: E2E testing fitur baru",
+    "content": "Update plan.md Phase 4 status COMPLETED",
     "status": "pending"
   }
 ]

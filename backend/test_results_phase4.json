@@ -1,0 +1,304 @@
+{
+  "timestamp": "2026-05-13T09:54:19.217308",
+  "phase": "Phase 4",
+  "total_tests": 49,
+  "passed": 44,
+  "failed": 0,
+  "success_rate": "89.8%",
+  "test_results": [
+    {
+      "test": "GET /api/auth/captcha (admin)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as admin",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (guru1)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as guru1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (walas7a)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as walas7a",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (siswa1)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as siswa1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (ek1)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as ek1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/users/excel-template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/users/import-excel",
+      "status": "SKIPPED",
+      "expected": 200,
+      "actual": "SKIPPED"
+    },
+    {
+      "test": "GET /api/classes/excel-template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/classes/import-excel",
+      "status": "SKIPPED",
+      "expected": 200,
+      "actual": "SKIPPED"
+    },
+    {
+      "test": "GET /api/rooms/excel-template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/rooms/import-excel",
+      "status": "SKIPPED",
+      "expected": 200,
+      "actual": "SKIPPED"
+    },
+    {
+      "test": "GET /api/subjects/excel-template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/subjects/import-excel",
+      "status": "SKIPPED",
+      "expected": 200,
+      "actual": "SKIPPED"
+    },
+    {
+      "test": "GET /api/students/excel-template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/students/import-excel",
+      "status": "SKIPPED",
+      "expected": 200,
+      "actual": "SKIPPED"
+    },
+    {
+      "test": "POST /api/admin/settings/test-smtp - SMTP not configured (expect success:false)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/forgot-password - returns 200 OK (anti-enumeration)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/forgot-password - non-existent user (still 200 OK)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/reset-password/validate/INVALID_TOKEN - expect 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "POST /api/auth/reset-password - invalid token (expect 400)",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/achievements as siswa1 - sees own achievements",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/achievements as siswa1 - submits own achievement",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/achievements/{aid} as siswa1 - edits own unverified achievement",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/achievements/{aid}/verify as walas7a - verifies achievement",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /api/achievements/{aid} as admin - deletes achievement",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/extracurriculars - returns list",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/me as ek1 - get user ID",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/extracurriculars as admin - creates ekstrakurikuler",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/extracurriculars/{eid} as admin - updates ekstrakurikuler",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/extracurriculars/{eid}/members - returns members list",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/extracurriculars/{eid}/members as admin - adds siswa1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/extracurriculars/{eid}/attendance as ek1 - records attendance",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/extracurriculars/{eid}/attendance - returns attendance history",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/extracurriculars/{eid}/grades as ek1 - submits grades",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/extracurriculars/{eid}/grades - returns grades",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /api/extracurriculars/{eid} as admin - deletes ekstrakurikuler",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/classes - get class for grades test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/subjects - get subject for grades test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/grades/bulk as admin - submits bulk grades",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/grades?student_id={sid} - returns student grades",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/grades/rapor/{student_id} as siswa1 - full rapor view",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/health - regression test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/schedules - regression test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/public/monitoring - regression test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    }
+  ]
+}
