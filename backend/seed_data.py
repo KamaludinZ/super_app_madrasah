@@ -185,10 +185,8 @@ async def seed_all(db: Any):
     siswa2 = make_user('siswa2', 'siswa123', 'Aisyah Nur Hidayah', ['siswa'],
                         nisn='0098765433', student_class_id=class_map['7A'])
 
-    # 5. Orang tua (parent of siswa1 & siswa2)
-    ortu1 = make_user('ortu1', 'ortu123', 'Bapak H. Pratama (Wali Siswa)', ['orang_tua'],
-                       phone='081234567890',
-                       parent_of=[siswa1['id'], siswa2['id']])
+    # 5. Orang tua - REMOVED per requirement (akun siswa dipakai gabungan)
+    # (Skip ortu1)
 
     # 6. Guru Ekstrakurikuler (Pramuka)
     ek1 = make_user('ek1', 'ek123', 'Kak Bambang Setiawan', ['guru_ekstrakurikuler'])
@@ -205,7 +203,7 @@ async def seed_all(db: Any):
     # 10. Guru Tata Tertib
     tatib1 = make_user('tatib1', 'tatib123', 'Bapak Sugeng Riyadi, S.Ag', ['guru_tata_tertib', 'guru'])
 
-    all_users = [admin, guru1, walas7a, siswa1, siswa2, ortu1, ek1, tendik1, piket1, bk1, tatib1]
+    all_users = [admin, guru1, walas7a, siswa1, siswa2, ek1, tendik1, piket1, bk1, tatib1]
     await db.users.insert_many(all_users)
     print(f"[seed] {len(all_users)} demo users created")
 
@@ -325,7 +323,7 @@ async def seed_all(db: Any):
     print("[seed] ✅ ALL SEED DATA INSERTED SUCCESSFULLY")
     print("[seed] Demo accounts:")
     print("       admin/admin123, guru1/guru123, walas7a/walas123, siswa1/siswa123,")
-    print("       ortu1/ortu123, ek1/ek123, tendik1/tendik123, piket1/piket123,")
+    print("       siswa2/siswa123, ek1/ek123, tendik1/tendik123, piket1/piket123,")
     print("       bk1/bk123, tatib1/tatib123")
 
 

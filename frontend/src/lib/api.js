@@ -40,7 +40,6 @@ export const ROLE_LABELS = {
   guru_bk: 'Guru BK',
   guru_tata_tertib: 'Guru Tata Tertib',
   guru_ekstrakurikuler: 'Guru Ekstrakurikuler',
-  orang_tua: 'Orang Tua/Wali',
 };
 
 export const DAY_LABELS = {

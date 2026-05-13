@@ -25,7 +25,6 @@ const ROLE_TABS = [
   { value: 'guru', label: 'Guru' },
   { value: 'wali_kelas', label: 'Wali Kelas' },
   { value: 'siswa', label: 'Siswa' },
-  { value: 'orang_tua', label: 'Orang Tua' },
   { value: 'tenaga_kependidikan', label: 'Tendik' },
   { value: 'guru_piket', label: 'Piket' },
   { value: 'guru_bk', label: 'BK' },
@@ -160,6 +159,7 @@ export default function AdminUsersPage() {
                     <TableRow>
                       <TableHead>Username</TableHead>
                       <TableHead>Nama Lengkap</TableHead>
+                      <TableHead>Email</TableHead>
                       <TableHead>Peran</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
@@ -170,6 +170,7 @@ export default function AdminUsersPage() {
                       <TableRow key={u.id} data-testid={`user-row-${u.username}`}>
                         <TableCell className="font-mono">{u.username}</TableCell>
                         <TableCell className="font-medium">{u.full_name}</TableCell>
+                        <TableCell className="text-sm text-slate-600">{u.email || <span className="italic text-slate-400">-</span>}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {u.roles?.map((r) => (
@@ -190,7 +191,7 @@ export default function AdminUsersPage() {
                       </TableRow>
                     ))}
                     {filtered.length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -266,25 +267,6 @@ export default function AdminUsersPage() {
                   <SelectTrigger><SelectValue placeholder="Pilih kelas..." /></SelectTrigger>
                   <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
-              </div>
-            )}
-            {form.roles.includes('orang_tua') && (
-              <div className="sm:col-span-2">
-                <Label>Sebagai Wali dari (pilih siswa)</Label>
-                <div className="grid grid-cols-1 gap-1 mt-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
-                  {studentsList.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                      <Checkbox
-                        checked={form.parent_of.includes(s.id)}
-                        onCheckedChange={() => {
-                          const ex = form.parent_of.includes(s.id);
-                          setForm({ ...form, parent_of: ex ? form.parent_of.filter((x) => x !== s.id) : [...form.parent_of, s.id] });
-                        }}
-                      />
-                      <span>{s.full_name} ({s.nisn || '-'})</span>
-                    </label>
-                  ))}
-                </div>
               </div>
             )}
           </div>

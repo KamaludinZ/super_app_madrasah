@@ -18,7 +18,6 @@ ROLES = [
     'guru_bk',
     'guru_tata_tertib',
     'guru_ekstrakurikuler',
-    'orang_tua',
 ]
 
 ROLE_LABELS = {
@@ -31,7 +30,6 @@ ROLE_LABELS = {
     'guru_bk': 'Guru BK',
     'guru_tata_tertib': 'Guru Tata Tertib',
     'guru_ekstrakurikuler': 'Guru Ekstrakurikuler',
-    'orang_tua': 'Orang Tua/Wali Siswa',
 }
 
 # Default teaching slots template (jam ke- format)

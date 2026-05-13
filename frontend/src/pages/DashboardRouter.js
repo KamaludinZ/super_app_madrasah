@@ -3,7 +3,6 @@ import { useAuth } from '@/lib/AuthContext';
 import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
-import OrtuDashboard from './dashboards/OrtuDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 
 export default function DashboardRouter() {
@@ -13,8 +12,6 @@ export default function DashboardRouter() {
       return <AdminDashboard />;
     case 'siswa':
       return <SiswaDashboard />;
-    case 'orang_tua':
-      return <OrtuDashboard />;
     case 'tenaga_kependidikan':
       return <StaffDashboard />;
     case 'guru':

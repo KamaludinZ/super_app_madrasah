@@ -1,50 +1,50 @@
 [
   {
-    "content": "Phase 3.1: Fix B5 card layout",
+    "content": "Backend: Hapus role orang_tua + cleanup DB",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Session management - JWT 12h + idle timeout 30 min",
+    "content": "Backend: PUT /api/academic-years/{id} untuk edit TP",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Settings - Hari aktif + jam mengajar template",
+    "content": "Backend: Endpoints Jadwal Piket (CRUD + today)",
     "status": "completed"
   },
   {
-    "content": "Phase 3.1: Tahun Pelajaran - semester type (regular/accelerated)",
+    "content": "Backend: GET /api/admin/jurnal rekap + stats-by-teacher",
     "status": "completed"
   },
   {
-    "content": "Phase 3.2: Schedule grid view (per hari aktif + jam slot)",
+    "content": "Frontend AppShell: TP + Semester aktif di sidebar atas Dashboard (semua role)",
     "status": "completed"
   },
   {
-    "content": "Phase 3.2: Schedule bulk fill via slot template (click empty)",
+    "content": "Frontend AppShell: Role switcher dropdown di sebelah avatar (selalu visible)",
     "status": "completed"
   },
   {
-    "content": "Phase 3.3: Backend - Data Siswa, Kehadiran, Kebersihan endpoints",
+    "content": "Frontend AdminUsersPage: Hapus tab orang_tua + Tambah kolom Email",
     "status": "completed"
   },
   {
-    "content": "Phase 3.3: Frontend - Menu Data Siswa, Kehadiran, Kebersihan",
+    "content": "Frontend AdminAcademicYearPage: Tombol Edit + dialog edit",
     "status": "completed"
   },
   {
-    "content": "Phase 3.4: User management - groupby role tabs",
+    "content": "Frontend: /admin/jadwal-piket dengan tampilan Minggu + List",
     "status": "completed"
   },
   {
-    "content": "Phase 3.5: Excel import jadwal (template + parser)",
+    "content": "Frontend: /admin/jurnal (rekap data jurnal + filter + export CSV + chart per guru)",
     "status": "completed"
   },
   {
-    "content": "Phase 3: Production env vars (.env.example)",
+    "content": "Frontend: Hapus ParentDashboard + OrtuDashboard files",
     "status": "completed"
   },
   {
-    "content": "Phase 3: E2E Testing fitur baru - 44/44 backend tests PASS",
+    "content": "Testing: visual + backend smoke test PASSED",
     "status": "completed"
   }
 ]

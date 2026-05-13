@@ -305,6 +305,23 @@ async def create_academic_year(payload: Dict, request: Request, user: Dict = Dep
     return serialize_doc(doc)
 
 
+@api_router.put("/academic-years/{ay_id}")
+async def update_academic_year(ay_id: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    """Edit TP - name, semester_type, semesters list, active_semester"""
+    # Sanitize: prevent _id collision
+    payload.pop('_id', None)
+    payload.pop('id', None)
+    # If is_active set to True here, deactivate others
+    if payload.get('is_active') is True:
+        await db.academic_years.update_many({'id': {'$ne': ay_id}}, {'$set': {'is_active': False}})
+    res = await db.academic_years.update_one({'id': ay_id}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tahun pelajaran tidak ditemukan")
+    await log_audit(user, 'update', 'academic_year', ay_id, details={'keys': list(payload.keys())}, request=request)
+    doc = await db.academic_years.find_one({'id': ay_id}, {'_id': 0})
+    return serialize_doc(doc)
+
+
 @api_router.put("/academic-years/{ay_id}/activate")
 async def activate_academic_year(ay_id: str, request: Request, user: Dict = Depends(require_role('admin'))):
     await db.academic_years.update_many({}, {'$set': {'is_active': False}})
@@ -1305,6 +1322,151 @@ async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[st
         if d in grid:
             grid[d][s['start_time']] = s
     return {'days': active_days, 'slots': slots, 'grid': grid, 'schedules': enriched}
+
+
+# ============================================================
+# JADWAL PIKET (Duty Schedule)
+# ============================================================
+@api_router.get("/piket-schedules")
+async def list_piket(day: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    q = {}
+    if day:
+        q['day'] = day
+    items = await db.piket_schedules.find(q, {'_id': 0}).sort([('day', 1), ('start_time', 1)]).to_list(500)
+    enriched = []
+    for s in items:
+        teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        s['teacher_name'] = teacher.get('full_name') if teacher else None
+        enriched.append(serialize_doc(s))
+    return enriched
+
+
+@api_router.post("/piket-schedules")
+async def create_piket(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    doc = {
+        'id': str(uuid.uuid4()),
+        'day': payload.get('day', 'senin'),
+        'shift': payload.get('shift', 'pagi'),  # pagi/siang/sore
+        'start_time': payload.get('start_time', '06:30'),
+        'end_time': payload.get('end_time', '14:00'),
+        'teacher_id': payload.get('teacher_id'),
+        'notes': payload.get('notes', ''),
+        'is_active': payload.get('is_active', True),
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.piket_schedules.insert_one(doc)
+    await log_audit(user, 'create', 'piket_schedule', doc['id'],
+                   details={'day': doc['day'], 'teacher_id': doc['teacher_id']}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/piket-schedules/{pid}")
+async def update_piket(pid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    payload.pop('_id', None)
+    payload.pop('id', None)
+    res = await db.piket_schedules.update_one({'id': pid}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Jadwal piket tidak ditemukan")
+    await log_audit(user, 'update', 'piket_schedule', pid, details=payload, request=request)
+    doc = await db.piket_schedules.find_one({'id': pid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/piket-schedules/{pid}")
+async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    await db.piket_schedules.delete_one({'id': pid})
+    await log_audit(user, 'delete', 'piket_schedule', pid, request=request)
+    return {'message': 'Dihapus'}
+
+
+@api_router.get("/piket-schedules/today")
+async def piket_today(user: Dict = Depends(get_current_user)):
+    day = current_day_id()
+    items = await db.piket_schedules.find({'day': day, 'is_active': True}, {'_id': 0}).sort('start_time', 1).to_list(50)
+    enriched = []
+    for s in items:
+        teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        s['teacher_name'] = teacher.get('full_name') if teacher else None
+        enriched.append(serialize_doc(s))
+    return enriched
+
+
+# ============================================================
+# ADMIN JURNAL REKAP (Data Jurnal lengkap)
+# ============================================================
+@api_router.get("/admin/jurnal")
+async def admin_jurnal_rekap(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    academic_year_id: Optional[str] = None,
+    limit: int = 500,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Rekap lengkap data jurnal mengajar untuk admin"""
+    q = {}
+    if class_id: q['class_id'] = class_id
+    if teacher_id: q['teacher_id'] = teacher_id
+    if subject_id: q['subject_id'] = subject_id
+    if academic_year_id: q['academic_year_id'] = academic_year_id
+    if start_date or end_date:
+        date_q = {}
+        if start_date: date_q['$gte'] = start_date
+        if end_date: date_q['$lte'] = end_date + 'T23:59:59'
+        q['started_at'] = date_q
+
+    items = await db.journals.find(q, {'_id': 0}).sort('started_at', -1).to_list(limit)
+    enriched = []
+    for j in items:
+        cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
+        sub = await db.subjects.find_one({'id': j.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        teacher = await db.users.find_one({'id': j.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        room = await db.rooms.find_one({'id': j.get('room_id')}, {'_id': 0, 'name': 1})
+        j['class_name'] = cls.get('name') if cls else None
+        j['subject_name'] = sub.get('name') if sub else None
+        j['subject_code'] = sub.get('code') if sub else None
+        j['teacher_name'] = teacher.get('full_name') if teacher else None
+        j['room_name'] = room.get('name') if room else None
+        enriched.append(serialize_doc(j))
+
+    # Compute summary
+    total_hadir = sum(j.get('siswa_hadir', 0) for j in enriched)
+    total_sakit = sum(j.get('siswa_sakit', 0) for j in enriched)
+    total_izin = sum(j.get('siswa_izin', 0) for j in enriched)
+    total_alpa = sum(j.get('siswa_tidak_hadir', 0) for j in enriched)
+    return {
+        'items': enriched,
+        'total': len(enriched),
+        'summary': {
+            'total_hadir': total_hadir, 'total_sakit': total_sakit,
+            'total_izin': total_izin, 'total_alpa': total_alpa,
+            'total_siswa_per_jurnal': total_hadir + total_sakit + total_izin + total_alpa,
+        }
+    }
+
+
+@api_router.get("/admin/jurnal/stats-by-teacher")
+async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))):
+    """Aggregate jurnal count per guru"""
+    ay = await get_active_academic_year()
+    pipeline = []
+    if ay:
+        pipeline.append({'$match': {'academic_year_id': ay['id']}})
+    pipeline.append({'$group': {'_id': '$teacher_id', 'count': {'$sum': 1}}})
+    pipeline.append({'$sort': {'count': -1}})
+    results = await db.journals.aggregate(pipeline).to_list(200)
+    enriched = []
+    for r in results:
+        teacher = await db.users.find_one({'id': r['_id']}, {'_id': 0, 'full_name': 1, 'username': 1})
+        enriched.append({
+            'teacher_id': r['_id'],
+            'teacher_name': teacher.get('full_name') if teacher else 'Unknown',
+            'username': teacher.get('username') if teacher else None,
+            'count': r['count'],
+        })
+    return enriched
 
 
 app.include_router(api_router)

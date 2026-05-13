@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Calendar, ScanLine, History, Users, Building2, BookOpen,
-  ClipboardList, QrCode, FileText, Settings, LogOut, Menu, X, GraduationCap,
-  Home, ShieldCheck, BookMarked, BarChart3, ChevronRight, ChevronDown,
-  UserCheck, Sparkles, FileSpreadsheet,
+  QrCode, Settings, LogOut, Menu, GraduationCap,
+  ShieldCheck, BookMarked, ChevronRight,
+  UserCheck, Sparkles, FileSpreadsheet, ClipboardList,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { ROLE_LABELS } from '@/lib/api';
+import { ROLE_LABELS, api } from '@/lib/api';
 import { toast } from 'sonner';
 
 function navForRole(role, roles) {
@@ -29,14 +30,14 @@ function navForRole(role, roles) {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
   }
-  if (role === 'wali_kelas' || (roles || []).includes('wali_kelas')) {
+  if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
   }
-  if (role === 'orang_tua') {
-    items.push({ to: '/parent', label: 'Dashboard Anak', icon: Home, testid: 'nav-parent' });
+  if (role === 'guru_piket') {
+    items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket' });
   }
   if (role === 'siswa') {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
@@ -51,6 +52,8 @@ function navForRole(role, roles) {
     items.push({ to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' });
     items.push({ to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' });
     items.push({ to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' });
+    items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' });
+    items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' });
     items.push({ to: '/admin/qr-generator', label: 'QR Generator', icon: QrCode, testid: 'nav-qr' });
     items.push({ to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' });
     items.push({ to: '/admin/settings', label: 'Pengaturan', icon: Settings, testid: 'nav-settings' });
@@ -58,31 +61,60 @@ function navForRole(role, roles) {
   return items;
 }
 
-function Sidebar({ items, current, onItemClick }) {
+function ActivePeriodCard({ ay }) {
+  if (!ay || !ay.name) {
+    return (
+      <div className="mx-3 mt-3 mb-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        Belum ada Tahun Pelajaran aktif. Buat di menu Tahun Pelajaran.
+      </div>
+    );
+  }
+  const activeSem = (ay.semesters || []).find((s) => s.is_active) || { label: '-', name: '-' };
   return (
-    <nav className="flex flex-col gap-1 px-3 py-4" data-testid="sidebar-nav">
-      {items.map((it) => {
-        const Icon = it.icon;
-        const active = current === it.to;
-        return (
-          <Link
-            key={it.to}
-            to={it.to}
-            data-testid={it.testid}
-            onClick={onItemClick}
-            className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-              active
-                ? 'bg-[#006837] text-white shadow-sm'
-                : 'text-slate-700 hover:bg-[#006837]/8 hover:text-[#006837]'
-            } ${it.highlight && !active ? 'bg-amber-50 text-amber-900 border border-amber-200' : ''}`}
-          >
-            <Icon className="h-4 w-4" />
-            <span className="flex-1">{it.label}</span>
-            {active && <ChevronRight className="h-3.5 w-3.5" />}
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="mx-3 mt-3 mb-1 rounded-xl bg-gradient-to-br from-[#006837] to-[#0B7A3B] p-3 text-white shadow-sm" data-testid="sidebar-active-period">
+      <div className="flex items-center gap-1.5">
+        <GraduationCap className="h-3.5 w-3.5 opacity-80" />
+        <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">Tahun Pelajaran Aktif</div>
+      </div>
+      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight">{ay.name}</div>
+      <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider opacity-80">Semester</span>
+        <Badge className="bg-amber-300/95 text-amber-900 border-0 capitalize text-[10px] font-bold px-2 py-0">
+          {activeSem.label || activeSem.name}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ items, current, onItemClick, activeAY }) {
+  return (
+    <div className="flex flex-col">
+      <ActivePeriodCard ay={activeAY} />
+      <nav className="flex flex-col gap-1 px-3 py-3" data-testid="sidebar-nav">
+        {items.map((it) => {
+          const Icon = it.icon;
+          const active = current === it.to;
+          return (
+            <Link
+              key={it.to}
+              to={it.to}
+              data-testid={it.testid}
+              onClick={onItemClick}
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-[#006837] text-white shadow-sm'
+                  : 'text-slate-700 hover:bg-[#006837]/8 hover:text-[#006837]'
+              } ${it.highlight && !active ? 'bg-amber-50 text-amber-900 border border-amber-200' : ''}`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="flex-1">{it.label}</span>
+              {active && <ChevronRight className="h-3.5 w-3.5" />}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 
@@ -91,7 +123,12 @@ export default function AppShell({ children }) {
   const nav = useNavigate();
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeAY, setActiveAY] = useState(null);
   const items = navForRole(activeRole, user?.roles || []);
+
+  useEffect(() => {
+    api.get('/academic-years/active').then(({ data }) => setActiveAY(data)).catch(() => {});
+  }, [activeRole]);
 
   const handleLogout = async () => {
     await logout();
@@ -130,7 +167,7 @@ export default function AppShell({ children }) {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <Sidebar items={items} current={loc.pathname} />
+          <Sidebar items={items} current={loc.pathname} activeAY={activeAY} />
         </div>
         <div className="p-3 border-t border-slate-100 text-xs text-slate-500">
           {schoolName}
@@ -163,7 +200,9 @@ export default function AppShell({ children }) {
                       </div>
                     </div>
                   </div>
-                  <Sidebar items={items} current={loc.pathname} onItemClick={() => setMobileOpen(false)} />
+                  <div className="overflow-y-auto h-[calc(100vh-90px)]">
+                    <Sidebar items={items} current={loc.pathname} onItemClick={() => setMobileOpen(false)} activeAY={activeAY} />
+                  </div>
                 </SheetContent>
               </Sheet>
               <div className="min-w-0">
@@ -175,38 +214,39 @@ export default function AppShell({ children }) {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Role switcher */}
-              {user?.roles?.length > 1 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" data-testid="role-switcher-trigger" className="gap-2">
-                      <Badge variant="secondary" className="bg-[#006837]/10 text-[#006837] border border-[#006837]/20">
-                        {ROLE_LABELS[activeRole] || activeRole}
-                      </Badge>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>Berganti Peran</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {user.roles.map((r) => (
-                      <DropdownMenuItem
-                        key={r}
-                        data-testid={`role-option-${r}`}
-                        onClick={() => handleSwitchRole(r)}
-                        className={activeRole === r ? 'bg-[#006837]/8 text-[#006837]' : ''}
-                      >
-                        {ROLE_LABELS[r] || r}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {user?.roles?.length === 1 && (
-                <Badge variant="secondary" className="hidden sm:inline-flex bg-[#006837]/10 text-[#006837] border border-[#006837]/20">
-                  {ROLE_LABELS[activeRole] || activeRole}
-                </Badge>
-              )}
+              {/* Role switcher next to avatar - ALWAYS visible */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="role-switcher-trigger" className="gap-2 h-9 hidden sm:flex">
+                    <Badge variant="secondary" className="bg-[#006837]/10 text-[#006837] border-0 px-1.5 py-0">
+                      {ROLE_LABELS[activeRole] || activeRole}
+                    </Badge>
+                    <ChevronRight className="h-3.5 w-3.5 rotate-90 text-slate-500" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    {user?.roles?.length > 1 ? 'Berganti Peran' : 'Peran Aktif'}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {(user?.roles || []).map((r) => (
+                    <DropdownMenuItem
+                      key={r}
+                      data-testid={`role-option-${r}`}
+                      onClick={() => r !== activeRole && handleSwitchRole(r)}
+                      className={activeRole === r ? 'bg-[#006837]/8 text-[#006837] font-semibold' : ''}
+                    >
+                      {ROLE_LABELS[r] || r}
+                      {activeRole === r && <span className="ml-auto text-xs">aktif</span>}
+                    </DropdownMenuItem>
+                  ))}
+                  {user?.roles?.length === 1 && (
+                    <div className="px-2 py-1.5 text-xs text-slate-500">Anda hanya memiliki 1 peran</div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
+              {/* Avatar + profile menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" data-testid="profile-menu-trigger" className="rounded-full">
@@ -221,6 +261,20 @@ export default function AppShell({ children }) {
                     <div className="text-xs text-slate-500 font-normal">@{user?.username}</div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {/* Mobile-only: show role switcher in menu */}
+                  <div className="sm:hidden">
+                    {(user?.roles || []).map((r) => (
+                      <DropdownMenuItem
+                        key={`mobile-${r}`}
+                        onClick={() => r !== activeRole && handleSwitchRole(r)}
+                        className={activeRole === r ? 'bg-[#006837]/8 text-[#006837]' : ''}
+                      >
+                        {ROLE_LABELS[r] || r}
+                        {activeRole === r && <span className="ml-auto text-xs">aktif</span>}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </div>
                   <DropdownMenuItem onClick={handleLogout} data-testid="logout-button">
                     <LogOut className="h-4 w-4 mr-2" /> Keluar
                   </DropdownMenuItem>

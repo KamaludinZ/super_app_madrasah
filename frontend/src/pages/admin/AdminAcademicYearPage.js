@@ -70,13 +70,14 @@ export default function AdminAcademicYearPage() {
     if (!form.name) { toast.error('Nama wajib'); return; }
     try {
       if (editing) {
-        // No PUT endpoint for AY currently - fallback: delete + create or just notify
-        toast.error('Edit Tahun Pelajaran belum tersedia. Hapus dan buat baru.');
-        return;
+        await api.put(`/academic-years/${editing.id}`, form);
+        toast.success('Tahun pelajaran diperbarui');
+      } else {
+        await api.post('/academic-years', form);
+        toast.success('Tahun pelajaran ditambahkan');
       }
-      await api.post('/academic-years', form);
-      toast.success('Berhasil'); setOpen(false); refresh();
-    } catch (e) { toast.error('Gagal'); }
+      setOpen(false); refresh();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal menyimpan'); }
   };
 
   const handleActivate = async (ay) => {
@@ -122,6 +123,7 @@ export default function AdminAcademicYearPage() {
             </TableCell>
             <TableCell>{ay.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> : <Badge variant="outline">Arsip</Badge>}</TableCell>
             <TableCell className="text-right">
+              <Button size="sm" variant="outline" onClick={() => openEdit(ay)} className="gap-1 mr-1" data-testid={`edit-ay-${ay.name}`}><Pencil className="h-3.5 w-3.5" /> Edit</Button>
               {!ay.is_active && <Button size="sm" variant="outline" onClick={() => handleActivate(ay)} className="gap-1" data-testid={`activate-ay-${ay.name}`}><Check className="h-3.5 w-3.5" /> Aktifkan</Button>}
               <Button size="icon" variant="ghost" onClick={() => handleDelete(ay)} className="text-rose-600 ml-1"><Trash2 className="h-4 w-4" /></Button>
             </TableCell>
@@ -131,7 +133,7 @@ export default function AdminAcademicYearPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Tambah Tahun Pelajaran</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Edit Tahun Pelajaran' : 'Tambah Tahun Pelajaran'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Nama Tahun Pelajaran *</Label><Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="2026/2027" data-testid="ay-form-name" /></div>
             <div>

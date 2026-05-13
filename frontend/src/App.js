@@ -18,11 +18,12 @@ import AdminQRGeneratorPage from '@/pages/admin/AdminQRGeneratorPage';
 import AdminAuditLogsPage from '@/pages/admin/AdminAuditLogsPage';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 import AdminAcademicYearPage from '@/pages/admin/AdminAcademicYearPage';
-import ParentDashboard from '@/pages/ParentDashboard';
 import WaliKelasDashboard from '@/pages/WaliKelasDashboard';
 import DataSiswaPage from '@/pages/DataSiswaPage';
 import KehadiranPage from '@/pages/KehadiranPage';
 import KebersihanPage from '@/pages/KebersihanPage';
+import JadwalPiketPage from '@/pages/admin/JadwalPiketPage';
+import AdminJurnalRekapPage from '@/pages/admin/AdminJurnalRekapPage';
 
 import './App.css';
 
@@ -48,7 +49,6 @@ function App() {
             <Route path="/jurnal/scan" element={<JurnalScanPage />} />
             <Route path="/jurnal/riwayat" element={<JurnalHistoryPage />} />
             <Route path="/jadwal" element={<JadwalPage />} />
-            <Route path="/parent" element={<ParentDashboard />} />
             <Route path="/wali-kelas" element={<WaliKelasDashboard />} />
             <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
             <Route path="/wali-kelas/kehadiran" element={<KehadiranPage />} />
@@ -56,6 +56,8 @@ function App() {
             <Route path="/admin/siswa" element={<DataSiswaPage />} />
             <Route path="/admin/kehadiran" element={<KehadiranPage />} />
             <Route path="/admin/kebersihan" element={<KebersihanPage />} />
+            <Route path="/admin/jadwal-piket" element={<JadwalPiketPage />} />
+            <Route path="/admin/jurnal" element={<AdminJurnalRekapPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />

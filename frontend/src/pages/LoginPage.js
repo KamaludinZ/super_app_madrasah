@@ -200,7 +200,7 @@ export default function LoginPage() {
                   <span>guru1 / guru123</span>
                   <span>walas7a / walas123</span>
                   <span>siswa1 / siswa123</span>
-                  <span>ortu1 / ortu123</span>
+                  <span>piket1 / piket123</span>
                   <span>ek1 / ek123</span>
                 </div>
               </div>
