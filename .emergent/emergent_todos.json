@@ -1,14 +1,22 @@
 [
   {
-    "content": "Tutup Iterasi 1: validasi hasil testing backend 60/60 PASS",
-    "status": "completed"
-  },
-  {
-    "content": "Update plan.md dengan status Batch A + Iterasi 1 = COMPLETED",
-    "status": "completed"
-  },
-  {
-    "content": "Tanyakan ke user prioritas berikutnya (testing FE Iterasi 1 vs Phase 5 / 6 / refactor)",
+    "content": "A. Jalankan testing agent untuk Frontend E2E Iterasi 1 (sidebar role-switch, My Schedules submit/lock, Detail Siswa, Admin Mutasi)",
     "status": "in_progress"
+  },
+  {
+    "content": "A.1 Fix bug Frontend yang ditemukan testing agent (jika ada)",
+    "status": "pending"
+  },
+  {
+    "content": "D.1 Refactor: petakan endpoint di server.py per domain (auth, schedules, users, students, journals, admin, dll)",
+    "status": "pending"
+  },
+  {
+    "content": "D.2 Buat struktur api/routers/ + pindahkan endpoint per domain bertahap",
+    "status": "pending"
+  },
+  {
+    "content": "D.3 Backend regression test setelah refactor (re-run iterasi1_test + batch_a test)",
+    "status": "pending"
   }
 ]
