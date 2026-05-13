@@ -555,6 +555,10 @@ async def list_schedules(
         s['subject_code'] = sub.get('code') if sub else None
         s['teacher_name'] = teacher.get('full_name') if teacher else None
         s['room_name'] = room.get('name') if room else None
+        # Enrich locked_by_name
+        if s.get('locked_by'):
+            lb = await db.users.find_one({'id': s['locked_by']}, {'_id': 0, 'full_name': 1})
+            s['locked_by_name'] = lb.get('full_name') if lb else None
         enriched.append(serialize_doc(s))
     return enriched
 
@@ -666,30 +670,52 @@ async def submit_schedule(sid: str, request: Request, user: Dict = Depends(get_c
 
 
 @api_router.put("/schedules/{sid}/lock")
-async def lock_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
-    """Admin mengunci jadwal — tidak bisa diedit lagi sampai dibuka."""
-    res = await db.schedules.update_one({'id': sid}, {'$set': {
+async def lock_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
+    """Lock jadwal. Admin bisa kunci semua. Wali kelas bisa kunci jadwal di kelasnya saja."""
+    sch = await db.schedules.find_one({'id': sid})
+    if not sch:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_wali = 'wali_kelas' in user.get('roles', [])
+    can_lock = is_admin
+    if is_wali and not is_admin:
+        # Wali kelas hanya bisa kunci jadwal di kelas yang dia jadi wali
+        cls = await db.classes.find_one({'id': sch.get('class_id')}, {'_id': 0, 'homeroom_teacher_id': 1})
+        can_lock = cls and cls.get('homeroom_teacher_id') == user['id']
+    if not can_lock:
+        raise HTTPException(403, "Tidak diizinkan mengunci jadwal ini")
+    locked_by_role = 'admin' if is_admin else 'wali_kelas'
+    await db.schedules.update_one({'id': sid}, {'$set': {
         'status': 'locked',
         'locked_at': now_wib().isoformat(),
         'locked_by': user['id'],
+        'locked_by_role': locked_by_role,
     }})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Tidak ditemukan")
-    await log_audit(user, 'lock', 'schedule', sid, request=request)
+    await log_audit(user, 'lock', 'schedule', sid, details={'by_role': locked_by_role}, request=request)
     doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
     return serialize_doc(doc)
 
 
 @api_router.put("/schedules/{sid}/unlock")
-async def unlock_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
-    """Admin membuka kunci — kembali ke status submitted (editable oleh admin)."""
-    res = await db.schedules.update_one({'id': sid}, {'$set': {
+async def unlock_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
+    """Unlock. Admin bisa unlock kapan saja. Wali kelas HANYA bisa unlock jadwal yang dia sendiri kunci.
+    Jika jadwal dikunci admin, wali kelas TIDAK BISA membukanya."""
+    sch = await db.schedules.find_one({'id': sid})
+    if not sch:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    locked_by_role = sch.get('locked_by_role', 'admin')  # default lama: admin
+    locked_by_uid = sch.get('locked_by')
+    if not is_admin:
+        # Wali kelas hanya boleh unlock kalau dia sendiri yg lock (dan role saat lock = wali_kelas)
+        if locked_by_role != 'wali_kelas' or locked_by_uid != user['id']:
+            raise HTTPException(403, "Hanya admin yang bisa membuka kunci jadwal ini (dikunci admin)")
+    await db.schedules.update_one({'id': sid}, {'$set': {
         'status': 'submitted',
         'locked_at': None,
         'locked_by': None,
+        'locked_by_role': None,
     }})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Tidak ditemukan")
     await log_audit(user, 'unlock', 'schedule', sid, request=request)
     doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
     return serialize_doc(doc)
@@ -3072,6 +3098,54 @@ async def list_mutations(mutation_type: str, role_group: str = 'siswa',
             u['class_name'] = cls.get('name') if cls else None
         enriched.append(serialize_doc(u))
     return enriched
+
+
+# ============================================================
+# CURRICULUM (Kurikulum)
+# ============================================================
+@api_router.get("/curriculums")
+async def list_curriculums(user: Dict = Depends(get_current_user)):
+    items = await db.curriculums.find({}, {'_id': 0}).sort('name', 1).to_list(50)
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/curriculums")
+async def create_curriculum(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    from models import CurriculumModel
+    if not payload.get('name') or not payload.get('code'):
+        raise HTTPException(400, "Nama dan kode kurikulum wajib")
+    existing = await db.curriculums.find_one({'code': payload['code']})
+    if existing:
+        raise HTTPException(400, f"Kode kurikulum {payload['code']} sudah ada")
+    c = CurriculumModel(**payload)
+    doc = c.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.curriculums.insert_one(doc)
+    await log_audit(user, 'create', 'curriculum', c.id, details={'name': c.name}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/curriculums/{cid}")
+async def update_curriculum(cid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    payload.pop('id', None); payload.pop('_id', None)
+    res = await db.curriculums.update_one({'id': cid}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
+    await log_audit(user, 'update', 'curriculum', cid, request=request)
+    doc = await db.curriculums.find_one({'id': cid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/curriculums/{cid}")
+async def delete_curriculum(cid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    # Check usage
+    used_ay = await db.academic_years.count_documents({'curriculum_id': cid})
+    used_sub = await db.subjects.count_documents({'curriculum_ids': cid})
+    if used_ay > 0 or used_sub > 0:
+        raise HTTPException(400, f"Kurikulum sedang dipakai di {used_ay} TP dan {used_sub} mapel. Lepas dulu sebelum hapus.")
+    await db.curriculums.delete_one({'id': cid})
+    await log_audit(user, 'delete', 'curriculum', cid, request=request)
+    return {'message': 'Dihapus'}
 
 
 app.include_router(api_router)

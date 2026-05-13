@@ -70,6 +70,7 @@ class UserModel(BaseModel):
     address: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: bool = True
+    nis: Optional[str] = None  # Nomor Induk Siswa (lokal sekolah, beda dgn NISN)
     # Mutation tracking (for stats: mutasi masuk/keluar di TP aktif)
     mutation_type: Optional[str] = None  # 'masuk' | 'keluar' | None
     mutation_ay_id: Optional[str] = None  # TP saat mutasi
@@ -88,6 +89,18 @@ class AcademicYearModel(BaseModel):
     semester_type: Literal['regular', 'accelerated'] = 'regular'
     semesters: List[Dict[str, Any]] = Field(default_factory=list)
     active_semester: Optional[str] = None  # name of active semester
+    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di TP ini
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CurriculumModel(BaseModel):
+    """Kurikulum (mis. K-13, Kurikulum Merdeka, Kurikulum Madrasah)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Kurikulum Merdeka", "K-13", "Kurikulum Madrasah 2020"
+    code: str  # e.g., "KM", "K13", "KMA183"
+    description: Optional[str] = None
+    is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -147,6 +160,7 @@ class SubjectModel(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
     name: str
+    curriculum_ids: List[str] = Field(default_factory=list)  # kurikulum yang memakai mapel ini
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -171,6 +185,7 @@ class ScheduleModel(BaseModel):
     submitted_by: Optional[str] = None
     locked_at: Optional[datetime] = None
     locked_by: Optional[str] = None
+    locked_by_role: Optional[str] = None  # 'admin' | 'wali_kelas' — siapa role yang lock
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

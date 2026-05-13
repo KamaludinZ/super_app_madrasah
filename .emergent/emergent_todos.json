@@ -1,34 +1,14 @@
 [
   {
-    "content": "Fitur 1: Fix sidebar AppShell + DashboardRouter",
+    "content": "Tutup Iterasi 1: validasi hasil testing backend 60/60 PASS",
     "status": "completed"
   },
   {
-    "content": "Fitur 2A: DataSiswaPage refactor table view + 3 tombol aksi",
+    "content": "Update plan.md dengan status Batch A + Iterasi 1 = COMPLETED",
     "status": "completed"
   },
   {
-    "content": "Fitur 2B: StudentDetailDialog 3 tab + StudentDetailModel backend",
-    "status": "completed"
-  },
-  {
-    "content": "Fitur 2C: StudentAccountInfoDialog (reset pwd + toggle aktif + audit + QR)",
-    "status": "completed"
-  },
-  {
-    "content": "Fitur 3: AdminMutationsPage 4 tab + endpoint /admin/mutations",
-    "status": "completed"
-  },
-  {
-    "content": "Fitur 4A+B: Schedule workflow status + MySchedulePage + admin Kunci/Buka Kunci",
-    "status": "completed"
-  },
-  {
-    "content": "Fix route ordering bulk-lock + audit-logs filter",
-    "status": "completed"
-  },
-  {
-    "content": "Testing backend Iterasi 1 — 98.3% pass (zero critical)",
-    "status": "completed"
+    "content": "Tanyakan ke user prioritas berikutnya (testing FE Iterasi 1 vs Phase 5 / 6 / refactor)",
+    "status": "in_progress"
   }
 ]

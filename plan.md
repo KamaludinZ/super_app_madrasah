@@ -1,4 +1,4 @@
-# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 Complete)
+# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 + Batch A + Iterasi 1 Complete)
 
 ## 1. Objectives
 - ✅ Membuktikan **alur inti** “Jurnal Presisi” end-to-end: **QR (encrypted) → decrypt → validasi jadwal realtime → opsional GPS geofence (ruang) → create jurnal → auto-lock by time window**.
@@ -13,9 +13,21 @@
   - **C. Prestasi Siswa (Portfolio + Verifikasi)**
   - **D. Ekstrakurikuler (CRUD + Members + Attendance + Grades)**
   - **E. E-Rapor Digital (Input nilai + Rapor view)**
-- ✅ Stabilitas terverifikasi:
-  - Backend Phase 4: **89.8% (44/49)** pada iteration_3 (5 test Excel import diskip karena butuh konstruksi file xlsx pada test runner; endpoint dan template download terverifikasi)
-  - Frontend Phase 4: **85% (17/20)** pada iteration_4, **0 critical bug** (3 skenario parsial karena kendala sesi login saat E2E, bukan bug fungsional)
+- ✅ Menyelesaikan **Batch A** (fitur operasional tambahan) untuk kesiapan sekolah:
+  - **Hari Libur** (akademik & mingguan) + endpoint publik “hari ini”
+  - **Backup & Restore** database
+  - **Kapasitas Kelas** + student_count
+  - **Tugas Guru Piket** (task → fill jurnal → auto-complete)
+- ✅ Menyelesaikan **Iterasi 1 (Hardening + Workflow + Data Siswa detail)**:
+  - Perbaikan **sidebar role-switching**
+  - **Workflow Jadwal Guru** (Draft → Terkirim/Submitted → Terkunci/Locked)
+  - **Admin Mutasi** (filter role_group + mutation_type)
+  - **Detail Data Siswa** (tab Data Siswa / Orang Tua / Alamat)
+- ✅ Stabilitas terverifikasi (berbasis test report):
+  - Backend Phase 4: **89.8% (44/49)** pada `iteration_3.json` (5 test Excel import diskip karena konstruksi file xlsx pada test runner; endpoint dan template download terverifikasi)
+  - Frontend Phase 4: **85% (17/20)** pada `iteration_4.json`, **0 critical bug** (3 skenario parsial karena kendala sesi login saat E2E, bukan bug fungsional)
+  - Backend Batch A: **96.1% (49/51)** pada `iteration_6.json` (2 item adalah isu desain test/ekspektasi, bukan bug fungsional)
+  - Backend Iterasi 1: **100% (60/60)** pada `/app/backend/iterasi1_test_results.json`
 
 ---
 
@@ -183,32 +195,139 @@
 - `_user_can_view_class` diperluas agar **guru mapel** dapat mengakses daftar siswa untuk kelas yang dia ampu (dibutuhkan untuk input nilai).
 
 #### 4.7 Testing / Verification
-✅ Backend Phase 4: iteration_3.json
+✅ Backend Phase 4: `iteration_3.json`
 - **89.8% pass (44/49)**, 5 skipped untuk Excel import (konstruksi xlsx pada test runner)
-✅ Frontend Phase 4: iteration_4.json
+✅ Frontend Phase 4: `iteration_4.json`
 - **85% pass (17/20)**, 3 parsial karena kendala sesi login saat E2E (bukan bug fungsional)
 - 0 critical bugs, 0 regressions.
 
 ---
 
+### Batch A — Operasional Tambahan (Holidays, Backup/Restore, Class Capacity, Tugas Guru Piket)
+**Goal:** melengkapi kebutuhan operasional harian sekolah dan kesiapan maintenance data.
+
+✅ **COMPLETED — Backend + Frontend + Testing**
+
+#### A1. Hari Libur (Akademik & Mingguan)
+✅ Backend:
+- CRUD hari libur akademik: `GET/POST/PUT/DELETE /api/academic-holidays`
+- CRUD hari libur mingguan: `GET/POST/PUT/DELETE /api/weekly-holidays`
+- Endpoint publik ringkas: `GET /api/public/holidays/today` (tanpa auth)
+✅ Frontend:
+- UI pengelolaan hari libur (admin) + konsumsi informasi hari libur bila diperlukan.
+
+#### A2. Kapasitas Kelas + Student Count
+✅ Backend:
+- `capacity` pada data kelas + `student_count` pada response list kelas.
+✅ Frontend:
+- Kolom kapasitas (dan tampil student_count) pada Data Kelas.
+
+#### A3. Backup & Restore Database
+✅ Backend:
+- Info backup: `GET /api/admin/backup/info`
+- Export JSON: `GET /api/admin/backup/export`
+- Import JSON (merge/replace): `POST /api/admin/backup/import`
+- Logs: `GET /api/admin/backup/logs`
+✅ Frontend:
+- UI Backup/Restore untuk admin (export/download + import/upload + logs).
+
+#### A4. Tugas Guru Piket
+✅ Backend:
+- CRUD tugas guru: `GET/POST/PUT/DELETE /api/teacher-tasks`
+- Piket hari ini: `GET /api/piket/schedules/today`
+- Piket isi jurnal: `POST /api/piket/fill-journal` (link task_id, auto-complete task)
+✅ Frontend:
+- UI daftar tugas + modul piket (isi jurnal berdasarkan tugas).
+
+#### A5. Testing / Verification
+✅ Backend Batch A: `iteration_6.json`
+- **96.1% (49/51)**; 2 item adalah isu desain test/ekspektasi, bukan bug fungsional.
+
+---
+
+### Iterasi 1 — Workflow Jadwal Guru + Detail Data Siswa + Admin Mutasi + Sidebar Fix
+**Goal:** hardening UX & tata kelola data inti (jadwal dan data siswa) agar stabil dipakai harian.
+
+✅ **COMPLETED — Backend + Frontend + Testing (Backend)**
+
+#### I1. Sidebar Role-Switching Fix
+✅ Frontend:
+- Perbaikan agar switch role tidak “nyangkut”/inkonsisten pada sidebar dan navigasi.
+
+#### I2. Teacher Schedule Workflow (Draft/Submitted/Locked)
+✅ Backend:
+- Status jadwal: `draft` / `submitted` / `locked` + timestamp `submitted_at`, `locked_at`.
+- Endpoint workflow:
+  - `GET /api/schedules/my-schedules`
+  - `PUT /api/schedules/{id}/submit`
+  - `PUT /api/schedules/{id}/lock` (admin)
+  - `PUT /api/schedules/{id}/unlock` (admin)
+  - `PUT /api/schedules/bulk-lock` (admin)
+- RBAC:
+  - Guru hanya bisa buat/edit/hapus saat draft miliknya
+  - Admin bisa override edit dan lock/unlock
+✅ Frontend:
+- Halaman `My Schedules` untuk guru:
+  - daftar jadwal milik guru
+  - aksi submit
+  - status badge draft/terkirim/terkunci
+
+#### I3. Detail Data Siswa (Form Besar: Data Siswa/Orang Tua/Alamat)
+✅ Backend:
+- Endpoint detail siswa: `GET/PUT /api/students/{id}/detail` (upsert, merge)
+- Skema nested: `data_siswa`, `data_ayah`, `data_ibu`, `data_wali`, `data_alamat`
+✅ Frontend:
+- Dialog detail siswa bertab:
+  - **Data Siswa**
+  - **Data Orang Tua/Wali**
+  - **Data Alamat**
+- Integrasi dari Data Siswa page.
+
+#### I4. Admin Mutations Page
+✅ Backend:
+- Endpoint: `GET /api/admin/mutations` + filter `mutation_type` & `role_group`
+- Mutasi pada user (masuk/keluar) tersimpan (`mutation_type`, `mutation_date`) dan mempengaruhi `is_active` sesuai aturan.
+✅ Frontend:
+- Halaman Admin Mutasi: filter + tabel hasil.
+
+#### I5. Audit Logs Filter Enhancement
+✅ Backend:
+- `GET /api/admin/audit-logs` mendukung filter `target_id` dan `target_type`.
+
+#### I6. Testing / Verification
+✅ Backend Iterasi 1: `/app/backend/iterasi1_test_results.json`
+- **100% (60/60)** PASS.
+
+---
+
 ## 3. Next Actions (Immediate)
-1. **Stabilisasi Operasional (Recommended sebelum Phase 5 Mobile):**
-   - Uji di lingkungan sekolah:
-     - Input data massal via Excel nyata (bukan template kosong)
-     - Konfigurasi SMTP real dan test kirim email
-     - SOP verifikasi prestasi oleh wali kelas
-     - SOP absensi & nilai ekstrakurikuler
-     - SOP input nilai rapor per mapel
-2. **Dokumentasi & SOP (Handover readiness):**
-   - Panduan admin: setup TP aktif, jam mengajar, import Excel, buat jadwal, QR generator
-   - Panduan guru: scan jurnal, input nilai
+1. **Validasi UI (Frontend) untuk Iterasi 1 (opsional tapi direkomendasikan sebelum Phase 5):**
+   - Jalankan E2E ringan (manual/skrip) untuk:
+     - Role switching sidebar (semua role)
+     - Guru: My Schedules (buat draft → submit)
+     - Admin: lock/unlock/bulk-lock + audit log
+     - Data Siswa: buka dialog detail, isi field, simpan, buka ulang (persist)
+     - Admin Mutasi: filter siswa/staff masuk/keluar
+2. **Uji lapangan (stabilisasi operasional) sebelum Phase 5 Mobile:**
+   - Import Excel menggunakan data nyata sekolah
+   - Konfigurasi SMTP real + uji forgot/reset password end-to-end
+   - Uji scan jurnal presisi di titik lokasi ruang (akurasi GPS & geofence)
+   - SOP penggunaan:
+     - Verifikasi prestasi oleh wali kelas/admin
+     - Proses piket (tugas → isi jurnal → selesai)
+     - Input nilai rapor per mapel dan cetak rapor
+3. **Dokumentasi & SOP (handover readiness):**
+   - Panduan admin: setup TP aktif, jam mengajar, import Excel, jadwal, QR generator, backup/restore
+   - Panduan guru: scan jurnal, My Schedules workflow, input nilai
+   - Panduan wali kelas: verifikasi prestasi, monitoring siswa
    - Panduan siswa: prestasi + rapor
-   - Backup/restore MongoDB dan strategi env var production.
-3. **Refactor (optional tapi direkomendasikan):**
-   - Pecah `/app/backend/server.py` ke `api/routers/` untuk maintainability.
-4. **Phase 5 (Mobile App Expo) — setelah stabil:**
-   - Mulai dari dokumen `/app/docs/MOBILE_APP_EXPO_SETUP.md`
-   - Fokus awal: auth + role + scan QR + monitoring ringkas.
+4. **Refactor (opsional tapi disarankan):**
+   - Pecah `/app/backend/server.py` (±3000+ lines) ke `api/routers/` untuk maintainability.
+5. **Pilih prioritas lanjutan (mohon konfirmasi user):**
+   - **Phase 5:** Mobile App Expo (Android/iOS) — scan QR offline + push notif (mulai setelah web stabil)
+   - **Phase 6:** Advanced scheduling — conflict detection + approval workflow
+   - **Phase 7:** Integrasi realtime — SSE/WebSocket monitoring + notifikasi
+   - **Phase 8:** Integrasi eksternal + analytics
 
 ---
 
@@ -223,15 +342,27 @@
   - Ekstrakurikuler (anggota/absensi/nilai) berfungsi
   - E-Rapor (input nilai + rapor view + print) berfungsi
   - Tidak ada bug kritikal, tidak ada regresi pada modul Phase 1–3.5
-- 🔜 **Operational quality:**
+- ✅ **Batch A:**
+  - Hari libur akademik/mingguan & endpoint publik “hari ini” berfungsi
+  - Backup/restore dapat dipakai untuk pemeliharaan dan pemindahan data
+  - Kapasitas kelas + student_count membantu monitoring daya tampung
+  - Tugas guru piket terintegrasi dengan pengisian jurnal dan penyelesaian tugas
+- ✅ **Iterasi 1:**
+  - Role-switching sidebar stabil
+  - Workflow jadwal guru (draft→submit→lock) konsisten & aman (RBAC)
+  - Admin mutasi siap dipakai untuk monitoring status masuk/keluar
+  - Detail data siswa lengkap tersimpan dan dapat diakses sesuai RBAC
+- 🔜 **Operational quality (target berikutnya):**
   - SOP digunakan staf sekolah
-  - Pengujian lapangan (GPS, jadwal, email SMTP) lulus
+  - Pengujian lapangan (GPS, jadwal, email SMTP, backup/restore) lulus
   - Observasi 1–2 minggu, kemudian freeze untuk Phase 5 mobile.
 
 ---
 
 ## Phase 5+ (Future Roadmap)
 - **Phase 5:** Mobile App Expo (Android/iOS)
+  - Fokus awal: auth + role + scan QR + monitoring ringkas
+  - Lanjutan: offline-first scan queue + push notification
 - **Phase 6:** Schedule conflict detection + approval workflow
 - **Phase 7:** SSE/WebSocket realtime monitoring + notifikasi
 - **Phase 8:** Integrasi eksternal (opsional) + analytics
