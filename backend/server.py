@@ -1469,6 +1469,768 @@ async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))
     return enriched
 
 
+# ============================================================
+# EXCEL TEMPLATES & IMPORTS (Phase 4)
+# ============================================================
+from excel_io import (
+    user_template, parse_user_rows,
+    class_template, parse_class_rows,
+    room_template, parse_room_rows,
+    subject_template, parse_subject_rows,
+    student_template, parse_student_rows,
+)
+
+
+def _stream_xlsx(content: bytes, filename: str):
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.get("/users/excel-template")
+async def users_template(user: Dict = Depends(require_role('admin'))):
+    return _stream_xlsx(user_template(), 'template_pengguna_matsandatama.xlsx')
+
+
+@api_router.post("/users/import-excel")
+async def users_import(file: UploadFile = File(...), request: Request = None,
+                       user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+    contents = await file.read()
+    try:
+        rows = parse_user_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Gagal membaca Excel: {e}")
+    success = 0
+    errors = []
+    new_docs = []
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
+    valid_roles = set(ROLES)
+    for r in rows:
+        try:
+            if not r['username'] or not r['password'] or not r['full_name']:
+                errors.append(f"Baris {r['_row']}: username/password/nama wajib"); continue
+            if not r['roles']:
+                errors.append(f"Baris {r['_row']}: roles wajib"); continue
+            invalid = [x for x in r['roles'] if x not in valid_roles]
+            if invalid:
+                errors.append(f"Baris {r['_row']}: roles tidak valid {invalid}"); continue
+            existing = await db.users.find_one({'username': r['username']})
+            if existing:
+                errors.append(f"Baris {r['_row']}: username '{r['username']}' sudah ada"); continue
+            student_class_id = None
+            homeroom_class_id = None
+            if 'siswa' in r['roles'] and r.get('kelas_siswa'):
+                student_class_id = classes_map.get(r['kelas_siswa'])
+                if not student_class_id:
+                    errors.append(f"Baris {r['_row']}: kelas '{r['kelas_siswa']}' tidak ditemukan"); continue
+            if 'wali_kelas' in r['roles'] and r.get('wali_kelas'):
+                homeroom_class_id = classes_map.get(r['wali_kelas'])
+                if not homeroom_class_id:
+                    errors.append(f"Baris {r['_row']}: wali_kelas '{r['wali_kelas']}' tidak ditemukan"); continue
+            u = UserModel(
+                username=r['username'],
+                password_hash=hash_password(r['password']),
+                full_name=r['full_name'],
+                roles=r['roles'],
+                nip_nuptk=r.get('nip_nuptk'), nisn=r.get('nisn'),
+                email=r.get('email'), phone=r.get('phone'), gender=r.get('gender'),
+                student_class_id=student_class_id,
+                homeroom_class_id=homeroom_class_id,
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+            # Update wali_kelas reference in class
+            if homeroom_class_id:
+                await db.classes.update_one({'id': homeroom_class_id}, {'$set': {'homeroom_teacher_id': u.id}})
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {e}")
+    if new_docs:
+        await db.users.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'user', None,
+                   details={'success': success, 'errors': len(errors), 'filename': file.filename}, request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@api_router.get("/classes/excel-template")
+async def classes_template_dl(user: Dict = Depends(require_role('admin'))):
+    return _stream_xlsx(class_template(), 'template_kelas_matsandatama.xlsx')
+
+
+@api_router.post("/classes/import-excel")
+async def classes_import(file: UploadFile = File(...), request: Request = None,
+                          user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    rows = parse_class_rows(contents)
+    ay = await get_active_academic_year()
+    if not ay:
+        raise HTTPException(400, "Tidak ada TP aktif")
+    users_map = {u['username']: u['id'] for u in await db.users.find({}, {'_id': 0, 'username': 1, 'id': 1}).to_list(2000)}
+    rooms_map = {r['name']: r['id'] for r in await db.rooms.find({}, {'_id': 0, 'name': 1, 'id': 1}).to_list(500)}
+    success = 0
+    errors = []
+    new_docs = []
+    for r in rows:
+        try:
+            if not r['name']:
+                errors.append(f"Baris {r['_row']}: nama kelas wajib"); continue
+            existing = await db.classes.find_one({'name': r['name'], 'academic_year_id': ay['id']})
+            if existing:
+                errors.append(f"Baris {r['_row']}: kelas '{r['name']}' sudah ada di TP aktif"); continue
+            homeroom_id = users_map.get(r.get('wali_kelas_username')) if r.get('wali_kelas_username') else None
+            room_id = rooms_map.get(r.get('ruang_kode')) if r.get('ruang_kode') else None
+            cls = ClassModel(
+                name=r['name'], grade=r['grade'], parallel=r['parallel'],
+                academic_year_id=ay['id'],
+                homeroom_teacher_id=homeroom_id, room_id=room_id,
+                is_accelerated=r.get('is_accelerated', False),
+            )
+            doc = cls.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {e}")
+    if new_docs:
+        await db.classes.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'class', None, details={'success': success, 'errors': len(errors)}, request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@api_router.get("/rooms/excel-template")
+async def rooms_template_dl(user: Dict = Depends(require_role('admin'))):
+    return _stream_xlsx(room_template(), 'template_ruangan_matsandatama.xlsx')
+
+
+@api_router.post("/rooms/import-excel")
+async def rooms_import(file: UploadFile = File(...), request: Request = None,
+                       user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    rows = parse_room_rows(contents)
+    success = 0
+    errors = []
+    new_docs = []
+    for r in rows:
+        try:
+            if not r['name']:
+                errors.append(f"Baris {r['_row']}: kode ruang wajib"); continue
+            existing = await db.rooms.find_one({'name': r['name']})
+            if existing:
+                errors.append(f"Baris {r['_row']}: kode '{r['name']}' sudah ada"); continue
+            if r.get('qr_mode') == 'dynamic':
+                r['qr_secret'] = pyotp.random_base32()
+            rm = RoomModel(**{k: v for k, v in r.items() if not k.startswith('_')})
+            doc = rm.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {e}")
+    if new_docs:
+        await db.rooms.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'room', None, details={'success': success, 'errors': len(errors)}, request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@api_router.get("/subjects/excel-template")
+async def subjects_template_dl(user: Dict = Depends(require_role('admin'))):
+    return _stream_xlsx(subject_template(), 'template_mapel_matsandatama.xlsx')
+
+
+@api_router.post("/subjects/import-excel")
+async def subjects_import(file: UploadFile = File(...), request: Request = None,
+                          user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    rows = parse_subject_rows(contents)
+    success = 0
+    errors = []
+    new_docs = []
+    for r in rows:
+        try:
+            if not r['code'] or not r['name']:
+                errors.append(f"Baris {r['_row']}: kode & nama wajib"); continue
+            existing = await db.subjects.find_one({'code': r['code']})
+            if existing:
+                errors.append(f"Baris {r['_row']}: kode '{r['code']}' sudah ada"); continue
+            s = SubjectModel(code=r['code'], name=r['name'])
+            doc = s.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {e}")
+    if new_docs:
+        await db.subjects.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'subject', None, details={'success': success, 'errors': len(errors)}, request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@api_router.get("/students/excel-template")
+async def students_template_dl(user: Dict = Depends(require_role('admin'))):
+    return _stream_xlsx(student_template(), 'template_siswa_matsandatama.xlsx')
+
+
+@api_router.post("/students/import-excel")
+async def students_import(file: UploadFile = File(...), request: Request = None,
+                          user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    rows = parse_student_rows(contents)
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
+    success = 0
+    errors = []
+    new_docs = []
+    for r in rows:
+        try:
+            if not all([r['username'], r['password'], r['full_name'], r['nisn'], r['kelas']]):
+                errors.append(f"Baris {r['_row']}: username/password/nama/NISN/kelas wajib"); continue
+            cls_id = classes_map.get(r['kelas'])
+            if not cls_id:
+                errors.append(f"Baris {r['_row']}: kelas '{r['kelas']}' tidak ditemukan"); continue
+            existing = await db.users.find_one({'username': r['username']})
+            if existing:
+                errors.append(f"Baris {r['_row']}: username '{r['username']}' sudah ada"); continue
+            u = UserModel(
+                username=r['username'], password_hash=hash_password(r['password']),
+                full_name=r['full_name'], roles=['siswa'], nisn=r['nisn'],
+                gender=r.get('gender'), student_class_id=cls_id,
+                birth_place=r.get('birth_place'), birth_date=r.get('birth_date'),
+                address=r.get('address'), email=r.get('email'), phone=r.get('phone'),
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {e}")
+    if new_docs:
+        await db.users.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'student', None, details={'success': success, 'errors': len(errors)}, request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+# ============================================================
+# SMTP & PASSWORD RESET (Phase 4)
+# ============================================================
+from email_utils import (
+    create_reset_token, validate_reset_token, consume_reset_token,
+    send_email, build_reset_email,
+)
+
+
+@api_router.post("/admin/settings/test-smtp")
+async def test_smtp(payload: Dict[str, Any], request: Request = None,
+                    user: Dict = Depends(require_role('admin'))):
+    """Send test email to verify SMTP configuration"""
+    settings = await get_settings()
+    # Allow overriding for test
+    cfg = {**settings, **payload}
+    to_email = payload.get('to_email') or user.get('email')
+    if not to_email:
+        raise HTTPException(400, "Email tujuan wajib (set via payload to_email)")
+    result = send_email(
+        cfg, to_email,
+        subject="Test SMTP - Super Apps MATSANDATAMA",
+        body_text="Selamat! Konfigurasi SMTP Anda berhasil. Email ini dikirim sebagai uji coba.",
+        body_html="<p>Selamat! Konfigurasi SMTP Anda <strong>berhasil</strong>. Email ini dikirim sebagai uji coba dari Super Apps MATSANDATAMA.</p>",
+    )
+    await log_audit(user, 'test_smtp', 'settings', None, details={'success': result['success']}, request=request)
+    return result
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str  # username OR email
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+from pydantic import BaseModel
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, request: Request):
+    """Send password reset email. Always returns OK to prevent enumeration."""
+    user = await db.users.find_one({'$or': [
+        {'username': req.identifier},
+        {'email': req.identifier},
+    ]})
+    if not user or not user.get('email') or not user.get('is_active', True):
+        # Silent fail to prevent username enumeration
+        return {'message': 'Jika akun terdaftar dengan email, instruksi reset telah dikirim.'}
+    settings = await get_settings()
+    if not settings.get('smtp_host'):
+        return {'message': 'Fitur reset email belum tersedia. Hubungi admin.'}
+    token = create_reset_token(user['id'], user['email'])
+    base = settings.get('app_public_url') or str(request.base_url).rstrip('/')
+    reset_link = f"{base}/reset-password?token={token}"
+    body = build_reset_email(reset_link, user['username'],
+                             settings.get('app_name', 'Super Apps MATSANDATAMA'),
+                             settings.get('school_name', 'MTsN 2 Kota Malang'))
+    send_result = send_email(
+        settings, user['email'],
+        subject=f"Reset Password - {settings.get('app_name', 'Super Apps MATSANDATAMA')}",
+        body_text=body['text'], body_html=body['html'],
+    )
+    await log_security('forgot_password',
+                       user.get('username'),
+                       {'sent': send_result.get('success'), 'email': user['email']},
+                       request)
+    return {'message': 'Jika akun terdaftar dengan email, instruksi reset telah dikirim.'}
+
+
+@api_router.get("/auth/reset-password/validate/{token}")
+async def reset_password_validate(token: str):
+    item = validate_reset_token(token)
+    if not item:
+        raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
+    user = await db.users.find_one({'id': item['user_id']}, {'_id': 0, 'username': 1, 'email': 1})
+    return {'valid': True, 'username': user.get('username') if user else None}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest, request: Request):
+    item = consume_reset_token(req.token)
+    if not item:
+        raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
+    if len(req.new_password) < 6:
+        raise HTTPException(400, "Password minimal 6 karakter")
+    user = await db.users.find_one({'id': item['user_id']})
+    if not user:
+        raise HTTPException(404, "User tidak ditemukan")
+    await db.users.update_one({'id': user['id']},
+                               {'$set': {'password_hash': hash_password(req.new_password)}})
+    await log_security('password_reset', user.get('username'), {'method': 'email_token'}, request)
+    return {'message': 'Password berhasil direset. Silakan login.'}
+
+
+# ============================================================
+# PRESTASI SISWA (Achievement)
+# ============================================================
+from models_phase4 import (
+    StudentAchievementModel, ExtracurricularModel, ExtracurricularMemberModel,
+    ExtracurricularAttendanceModel, ExtracurricularGradeModel, GradeEntryModel,
+)
+
+
+@api_router.get("/achievements")
+async def list_achievements(student_id: Optional[str] = None,
+                             only_verified: bool = False,
+                             user: Dict = Depends(get_current_user)):
+    q = {}
+    if student_id:
+        q['student_id'] = student_id
+    if only_verified:
+        q['is_verified'] = True
+    # Permission: students can only see their own; admin/wk see all
+    is_admin = 'admin' in user.get('roles', [])
+    if not is_admin and 'wali_kelas' not in user.get('roles', []):
+        if student_id and student_id != user['id'] and user['id'] not in [user['id']]:
+            # Allow seeing own
+            if user['id'] != student_id:
+                raise HTTPException(403, "Tidak diizinkan")
+        if not student_id:
+            q['student_id'] = user['id']
+    items = await db.achievements.find(q, {'_id': 0}).sort('date', -1).to_list(500)
+    enriched = []
+    for a in items:
+        s = await db.users.find_one({'id': a.get('student_id')}, {'_id': 0, 'full_name': 1, 'nisn': 1, 'student_class_id': 1})
+        if s:
+            a['student_name'] = s.get('full_name')
+            a['student_nisn'] = s.get('nisn')
+            cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
+            a['class_name'] = cls.get('name') if cls else None
+        if a.get('verified_by'):
+            v = await db.users.find_one({'id': a['verified_by']}, {'_id': 0, 'full_name': 1})
+            a['verifier_name'] = v.get('full_name') if v else None
+        enriched.append(serialize_doc(a))
+    return enriched
+
+
+@api_router.post("/achievements")
+async def create_achievement(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    # Siswa can self-submit; admin can submit for anyone
+    target_student = payload.get('student_id') or user['id']
+    if 'siswa' in user.get('roles', []) and target_student != user['id']:
+        raise HTTPException(403, "Siswa hanya bisa input prestasi sendiri")
+    a = StudentAchievementModel(
+        student_id=target_student,
+        name=payload.get('name', ''),
+        category=payload.get('category'),
+        level=payload.get('level'),
+        rank=payload.get('rank'),
+        organizer=payload.get('organizer'),
+        date=payload.get('date'),
+        description=payload.get('description'),
+        certificate_url=payload.get('certificate_url'),
+        submitted_by=user['id'],
+    )
+    doc = a.model_dump()
+    doc['submitted_at'] = doc['submitted_at'].isoformat()
+    await db.achievements.insert_one(doc)
+    await log_audit(user, 'create', 'achievement', a.id, details={'name': a.name}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/achievements/{aid}")
+async def update_achievement(aid: str, payload: Dict, request: Request,
+                              user: Dict = Depends(get_current_user)):
+    existing = await db.achievements.find_one({'id': aid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('submitted_by') == user['id'] or existing.get('student_id') == user['id']
+    if not (is_admin or is_owner):
+        raise HTTPException(403, "Tidak diizinkan")
+    payload.pop('_id', None); payload.pop('id', None)
+    await db.achievements.update_one({'id': aid}, {'$set': payload})
+    await log_audit(user, 'update', 'achievement', aid, request=request)
+    doc = await db.achievements.find_one({'id': aid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.put("/achievements/{aid}/verify")
+async def verify_achievement(aid: str, request: Request,
+                              user: Dict = Depends(require_role('admin', 'wali_kelas'))):
+    await db.achievements.update_one({'id': aid}, {'$set': {
+        'is_verified': True, 'verified_by': user['id'],
+        'verified_at': datetime.utcnow().isoformat(),
+    }})
+    await log_audit(user, 'verify', 'achievement', aid, request=request)
+    doc = await db.achievements.find_one({'id': aid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/achievements/{aid}")
+async def delete_achievement(aid: str, request: Request, user: Dict = Depends(get_current_user)):
+    existing = await db.achievements.find_one({'id': aid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('submitted_by') == user['id']
+    if not (is_admin or is_owner):
+        raise HTTPException(403, "Tidak diizinkan")
+    await db.achievements.delete_one({'id': aid})
+    await log_audit(user, 'delete', 'achievement', aid, request=request)
+    return {'message': 'Dihapus'}
+
+
+# ============================================================
+# EKSTRAKURIKULER (Phase 4)
+# ============================================================
+@api_router.get("/extracurriculars")
+async def list_extras(user: Dict = Depends(get_current_user)):
+    items = await db.extracurriculars.find({}, {'_id': 0}).sort('name', 1).to_list(200)
+    enriched = []
+    for e in items:
+        coach = await db.users.find_one({'id': e.get('coach_id')}, {'_id': 0, 'full_name': 1})
+        e['coach_name'] = coach.get('full_name') if coach else None
+        member_count = await db.extracurricular_members.count_documents({'extracurricular_id': e['id'], 'is_active': True})
+        e['member_count'] = member_count
+        enriched.append(serialize_doc(e))
+    return enriched
+
+
+@api_router.post("/extracurriculars")
+async def create_extra(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    ay = await get_active_academic_year()
+    payload['academic_year_id'] = ay['id'] if ay else None
+    e = ExtracurricularModel(**payload)
+    doc = e.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.extracurriculars.insert_one(doc)
+    await log_audit(user, 'create', 'extracurricular', e.id, details={'name': e.name}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/extracurriculars/{eid}")
+async def update_extra(eid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    payload.pop('_id', None); payload.pop('id', None)
+    await db.extracurriculars.update_one({'id': eid}, {'$set': payload})
+    await log_audit(user, 'update', 'extracurricular', eid, request=request)
+    doc = await db.extracurriculars.find_one({'id': eid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/extracurriculars/{eid}")
+async def delete_extra(eid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    await db.extracurriculars.delete_one({'id': eid})
+    await db.extracurricular_members.delete_many({'extracurricular_id': eid})
+    await log_audit(user, 'delete', 'extracurricular', eid, request=request)
+    return {'message': 'Dihapus'}
+
+
+@api_router.get("/extracurriculars/{eid}/members")
+async def list_extra_members(eid: str, user: Dict = Depends(get_current_user)):
+    members = await db.extracurricular_members.find({'extracurricular_id': eid}, {'_id': 0}).to_list(500)
+    enriched = []
+    for m in members:
+        s = await db.users.find_one({'id': m.get('student_id')}, {'_id': 0, 'full_name': 1, 'nisn': 1, 'student_class_id': 1})
+        if s:
+            cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
+            m['student_name'] = s.get('full_name')
+            m['student_nisn'] = s.get('nisn')
+            m['class_name'] = cls.get('name') if cls else None
+        enriched.append(serialize_doc(m))
+    return enriched
+
+
+@api_router.post("/extracurriculars/{eid}/members")
+async def add_extra_members(eid: str, payload: Dict, request: Request,
+                             user: Dict = Depends(get_current_user)):
+    # admin and guru_ekstrakurikuler (coach) can manage
+    extra = await db.extracurriculars.find_one({'id': eid})
+    if not extra:
+        raise HTTPException(404, "Ekskul tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_coach = extra.get('coach_id') == user['id']
+    if not (is_admin or is_coach):
+        raise HTTPException(403, "Tidak diizinkan")
+    student_ids = payload.get('student_ids', [])
+    inserted = 0
+    for sid in student_ids:
+        existing = await db.extracurricular_members.find_one({'extracurricular_id': eid, 'student_id': sid})
+        if existing:
+            await db.extracurricular_members.update_one({'_id': existing['_id']}, {'$set': {'is_active': True}})
+            continue
+        m = ExtracurricularMemberModel(extracurricular_id=eid, student_id=sid)
+        doc = m.model_dump()
+        doc['joined_at'] = doc['joined_at'].isoformat()
+        await db.extracurricular_members.insert_one(doc)
+        inserted += 1
+    await log_audit(user, 'add_members', 'extracurricular', eid, details={'count': len(student_ids)}, request=request)
+    return {'inserted': inserted, 'total': len(student_ids)}
+
+
+@api_router.delete("/extracurriculars/{eid}/members/{mid}")
+async def remove_extra_member(eid: str, mid: str, request: Request,
+                                user: Dict = Depends(get_current_user)):
+    extra = await db.extracurriculars.find_one({'id': eid})
+    is_admin = 'admin' in user.get('roles', [])
+    is_coach = extra and extra.get('coach_id') == user['id']
+    if not (is_admin or is_coach):
+        raise HTTPException(403, "Tidak diizinkan")
+    await db.extracurricular_members.delete_one({'id': mid})
+    return {'message': 'Dihapus'}
+
+
+@api_router.post("/extracurriculars/{eid}/attendance")
+async def submit_extra_attendance(eid: str, payload: Dict, request: Request,
+                                    user: Dict = Depends(get_current_user)):
+    extra = await db.extracurriculars.find_one({'id': eid})
+    is_admin = 'admin' in user.get('roles', [])
+    is_coach = extra and extra.get('coach_id') == user['id']
+    if not (is_admin or is_coach):
+        raise HTTPException(403, "Tidak diizinkan")
+    date = payload.get('date')
+    records = payload.get('records', [])
+    summary = {'hadir': 0, 'sakit': 0, 'izin': 0, 'alpa': 0}
+    for r in records:
+        st = r.get('status', 'hadir')
+        summary[st] = summary.get(st, 0) + 1
+    existing = await db.extracurricular_attendance.find_one({'extracurricular_id': eid, 'date': date})
+    doc = {
+        'extracurricular_id': eid, 'date': date, 'records': records,
+        'recorded_by': user['id'], 'recorded_at': datetime.utcnow().isoformat(),
+        'summary': summary,
+    }
+    if existing:
+        await db.extracurricular_attendance.update_one({'_id': existing['_id']}, {'$set': doc})
+        doc['id'] = existing.get('id', str(uuid.uuid4()))
+    else:
+        doc['id'] = str(uuid.uuid4())
+        await db.extracurricular_attendance.insert_one(doc)
+    await log_audit(user, 'attendance', 'extracurricular', eid, details={'date': date, 'summary': summary}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.get("/extracurriculars/{eid}/attendance")
+async def get_extra_attendance(eid: str, user: Dict = Depends(get_current_user)):
+    items = await db.extracurricular_attendance.find({'extracurricular_id': eid}, {'_id': 0}).sort('date', -1).to_list(200)
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/extracurriculars/{eid}/grades")
+async def submit_extra_grades(eid: str, payload: Dict, request: Request,
+                                user: Dict = Depends(get_current_user)):
+    extra = await db.extracurriculars.find_one({'id': eid})
+    is_admin = 'admin' in user.get('roles', [])
+    is_coach = extra and extra.get('coach_id') == user['id']
+    if not (is_admin or is_coach):
+        raise HTTPException(403, "Tidak diizinkan")
+    ay = await get_active_academic_year()
+    semester = payload.get('semester', 'ganjil')
+    grades = payload.get('grades', [])  # [{student_id, predicate, description}]
+    inserted = 0
+    for g in grades:
+        existing = await db.extracurricular_grades.find_one({
+            'extracurricular_id': eid, 'student_id': g['student_id'],
+            'academic_year_id': ay['id'] if ay else None, 'semester': semester,
+        })
+        doc = {
+            'extracurricular_id': eid, 'student_id': g['student_id'],
+            'academic_year_id': ay['id'] if ay else None, 'semester': semester,
+            'predicate': g.get('predicate'), 'description': g.get('description'),
+            'submitted_by': user['id'], 'submitted_at': datetime.utcnow().isoformat(),
+        }
+        if existing:
+            await db.extracurricular_grades.update_one({'_id': existing['_id']}, {'$set': doc})
+        else:
+            doc['id'] = str(uuid.uuid4())
+            await db.extracurricular_grades.insert_one(doc)
+        inserted += 1
+    await log_audit(user, 'grades', 'extracurricular', eid, details={'count': inserted, 'semester': semester}, request=request)
+    return {'success': inserted}
+
+
+@api_router.get("/extracurriculars/{eid}/grades")
+async def get_extra_grades(eid: str, semester: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    q = {'extracurricular_id': eid}
+    if semester: q['semester'] = semester
+    items = await db.extracurricular_grades.find(q, {'_id': 0}).to_list(500)
+    return [serialize_doc(i) for i in items]
+
+
+# ============================================================
+# E-RAPOR (Grade entries)
+# ============================================================
+@api_router.post("/grades/bulk")
+async def submit_grades_bulk(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    """Bulk submit grades for one class+subject+semester."""
+    ay = await get_active_academic_year()
+    class_id = payload.get('class_id')
+    subject_id = payload.get('subject_id')
+    semester = payload.get('semester', 'ganjil')
+    entries = payload.get('entries', [])  # [{student_id, nilai_pengetahuan, nilai_keterampilan, predicate, description}]
+
+    # Permission: admin or teacher of that subject/class
+    is_admin = 'admin' in user.get('roles', [])
+    if not is_admin:
+        sched = await db.schedules.find_one({
+            'class_id': class_id, 'subject_id': subject_id,
+            'teacher_id': user['id'], 'academic_year_id': ay['id'] if ay else None,
+        })
+        if not sched:
+            raise HTTPException(403, "Anda bukan pengampu mapel ini di kelas tersebut")
+
+    inserted = 0
+    for e in entries:
+        nilai_p = e.get('nilai_pengetahuan')
+        nilai_k = e.get('nilai_keterampilan')
+        nilai_akhir = None
+        if nilai_p is not None and nilai_k is not None:
+            try:
+                nilai_akhir = (float(nilai_p) + float(nilai_k)) / 2
+            except Exception:
+                nilai_akhir = None
+        elif nilai_p is not None:
+            nilai_akhir = float(nilai_p)
+        predicate = e.get('predicate')
+        if not predicate and nilai_akhir is not None:
+            if nilai_akhir >= 88: predicate = 'A'
+            elif nilai_akhir >= 76: predicate = 'B'
+            elif nilai_akhir >= 60: predicate = 'C'
+            else: predicate = 'D'
+        existing = await db.grade_entries.find_one({
+            'student_id': e['student_id'], 'class_id': class_id,
+            'subject_id': subject_id, 'semester': semester,
+            'academic_year_id': ay['id'] if ay else None,
+        })
+        doc = {
+            'student_id': e['student_id'], 'class_id': class_id,
+            'subject_id': subject_id, 'teacher_id': user['id'],
+            'academic_year_id': ay['id'] if ay else None, 'semester': semester,
+            'nilai_pengetahuan': float(nilai_p) if nilai_p is not None else None,
+            'nilai_keterampilan': float(nilai_k) if nilai_k is not None else None,
+            'nilai_akhir': nilai_akhir, 'predicate': predicate,
+            'description': e.get('description'),
+            'submitted_by': user['id'], 'submitted_at': datetime.utcnow().isoformat(),
+        }
+        if existing:
+            await db.grade_entries.update_one({'_id': existing['_id']}, {'$set': doc})
+        else:
+            doc['id'] = str(uuid.uuid4())
+            await db.grade_entries.insert_one(doc)
+        inserted += 1
+    await log_audit(user, 'grades_bulk', 'grade_entries', None,
+                   details={'class_id': class_id, 'subject_id': subject_id, 'count': inserted}, request=request)
+    return {'success': inserted}
+
+
+@api_router.get("/grades")
+async def list_grades(class_id: Optional[str] = None, subject_id: Optional[str] = None,
+                       student_id: Optional[str] = None, semester: Optional[str] = None,
+                       academic_year_id: Optional[str] = None,
+                       user: Dict = Depends(get_current_user)):
+    q = {}
+    if class_id: q['class_id'] = class_id
+    if subject_id: q['subject_id'] = subject_id
+    if student_id: q['student_id'] = student_id
+    if semester: q['semester'] = semester
+    if academic_year_id: q['academic_year_id'] = academic_year_id
+    # Students can only see own
+    if 'admin' not in user.get('roles', []) and 'siswa' in user.get('roles', []):
+        q['student_id'] = user['id']
+    items = await db.grade_entries.find(q, {'_id': 0}).to_list(2000)
+    enriched = []
+    for g in items:
+        s = await db.users.find_one({'id': g.get('student_id')}, {'_id': 0, 'full_name': 1, 'nisn': 1})
+        sub = await db.subjects.find_one({'id': g.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        if s: g['student_name'] = s.get('full_name'); g['student_nisn'] = s.get('nisn')
+        if sub: g['subject_name'] = sub.get('name'); g['subject_code'] = sub.get('code')
+        enriched.append(serialize_doc(g))
+    return enriched
+
+
+@api_router.get("/grades/rapor/{student_id}")
+async def get_student_rapor(student_id: str, semester: Optional[str] = None,
+                              user: Dict = Depends(get_current_user)):
+    """Get rapor view for a student"""
+    student = await db.users.find_one({'id': student_id}, {'_id': 0, 'password_hash': 0})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    # Permission check
+    is_admin = 'admin' in user.get('roles', [])
+    is_self = user['id'] == student_id
+    cls = await db.classes.find_one({'id': student.get('student_class_id')}, {'_id': 0})
+    is_homeroom = cls and cls.get('homeroom_teacher_id') == user['id']
+    if not (is_admin or is_self or is_homeroom):
+        raise HTTPException(403, "Tidak diizinkan")
+    ay = await get_active_academic_year()
+    q = {'student_id': student_id}
+    if semester: q['semester'] = semester
+    if ay: q['academic_year_id'] = ay['id']
+    items = await db.grade_entries.find(q, {'_id': 0}).to_list(200)
+    enriched = []
+    for g in items:
+        sub = await db.subjects.find_one({'id': g.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        teacher = await db.users.find_one({'id': g.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        if sub: g['subject_name'] = sub.get('name'); g['subject_code'] = sub.get('code')
+        if teacher: g['teacher_name'] = teacher.get('full_name')
+        enriched.append(serialize_doc(g))
+    return {
+        'student': serialize_doc(student),
+        'class': serialize_doc(cls) if cls else None,
+        'academic_year': ay,
+        'grades': enriched,
+        'average': round(sum(g.get('nilai_akhir', 0) or 0 for g in enriched) / len(enriched), 2) if enriched else 0,
+    }
+
+
 app.include_router(api_router)
 
 app.add_middleware(

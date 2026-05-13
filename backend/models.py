@@ -247,6 +247,17 @@ class SettingsModel(BaseModel):
     # NEW: Session management
     session_max_hours: int = 12  # max session length (work-day)
     idle_timeout_minutes: int = 30  # auto-logout after inactivity
+    # SMTP configuration (Phase 4)
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: Optional[str] = None
+    # App URL for reset password email link
+    app_public_url: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     updated_by: Optional[str] = None
 

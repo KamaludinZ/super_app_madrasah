@@ -1,50 +1,62 @@
 [
   {
-    "content": "Backend: Hapus role orang_tua + cleanup DB",
-    "status": "completed"
+    "content": "Backend: Excel templates + import for Users, Students, Classes, Rooms, Subjects",
+    "status": "in_progress"
   },
   {
-    "content": "Backend: PUT /api/academic-years/{id} untuk edit TP",
-    "status": "completed"
+    "content": "Backend: SMTP settings in SettingsModel + test endpoint",
+    "status": "pending"
   },
   {
-    "content": "Backend: Endpoints Jadwal Piket (CRUD + today)",
-    "status": "completed"
+    "content": "Backend: Email reset password flow (forgot + reset endpoints)",
+    "status": "pending"
   },
   {
-    "content": "Backend: GET /api/admin/jurnal rekap + stats-by-teacher",
-    "status": "completed"
+    "content": "Backend: Prestasi Siswa (StudentAchievement) - CRUD + verify",
+    "status": "pending"
   },
   {
-    "content": "Frontend AppShell: TP + Semester aktif di sidebar atas Dashboard (semua role)",
-    "status": "completed"
+    "content": "Backend: Ekstrakurikuler (Extracurricular + Members + Attendance + Grade)",
+    "status": "pending"
   },
   {
-    "content": "Frontend AppShell: Role switcher dropdown di sebelah avatar (selalu visible)",
-    "status": "completed"
+    "content": "Backend: E-Rapor digital (Grade input + rapor per student)",
+    "status": "pending"
   },
   {
-    "content": "Frontend AdminUsersPage: Hapus tab orang_tua + Tambah kolom Email",
-    "status": "completed"
+    "content": "Frontend Admin Pengaturan: Tab SMTP settings + test send button",
+    "status": "pending"
   },
   {
-    "content": "Frontend AdminAcademicYearPage: Tombol Edit + dialog edit",
-    "status": "completed"
+    "content": "Frontend LoginPage: Lupa password link → reset flow",
+    "status": "pending"
   },
   {
-    "content": "Frontend: /admin/jadwal-piket dengan tampilan Minggu + List",
-    "status": "completed"
+    "content": "Frontend Admin: Import buttons di Users/Classes/Rooms/Subjects/Siswa pages",
+    "status": "pending"
   },
   {
-    "content": "Frontend: /admin/jurnal (rekap data jurnal + filter + export CSV + chart per guru)",
-    "status": "completed"
+    "content": "Frontend Admin: Page Prestasi Siswa + Verifikasi",
+    "status": "pending"
   },
   {
-    "content": "Frontend: Hapus ParentDashboard + OrtuDashboard files",
-    "status": "completed"
+    "content": "Frontend Guru/Admin: Page Ekstrakurikuler (CRUD + anggota + absensi + nilai)",
+    "status": "pending"
   },
   {
-    "content": "Testing: visual + backend smoke test PASSED",
-    "status": "completed"
+    "content": "Frontend Admin/Guru: Page E-Rapor (input nilai + preview rapor)",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend Siswa: Galeri Prestasi + E-Rapor view (read-only)",
+    "status": "pending"
+  },
+  {
+    "content": "Phase 4: Mobile app Expo docs (separate codebase guide)",
+    "status": "pending"
+  },
+  {
+    "content": "Phase 4: E2E testing fitur baru",
+    "status": "pending"
   }
 ]
