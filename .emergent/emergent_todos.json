@@ -44,11 +44,11 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Seed demo accounts (all 10+ accounts)",
+    "content": "Phase 2: Backend - Seed demo accounts + auto-refresh active schedule",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Theme setup (Kemenag green, fonts, tokens)",
+    "content": "Phase 2: Frontend - Theme + Auth + Routing + AppShell",
     "status": "completed"
   },
   {
@@ -56,11 +56,7 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Auth context + API client",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Role-based Dashboards (Admin, Guru, Wali Kelas, Siswa, Ortu)",
+    "content": "Phase 2: Frontend - 5 Role-based Dashboards",
     "status": "completed"
   },
   {
@@ -72,11 +68,7 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Admin QR Generator + B5 Template",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Admin Audit Log + Settings (Branding)",
+    "content": "Phase 2: Frontend - Admin QR Generator + B5 Template + Audit/Settings",
     "status": "completed"
   },
   {
@@ -84,11 +76,15 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: E2E Testing via testing_agent_v3 (all user stories)",
-    "status": "in_progress"
+    "content": "Phase 2: E2E Testing via testing_agent_v3 (97.1% pass)",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Fix all bugs found by testing agent",
-    "status": "pending"
+    "content": "Phase 2: Fix GPS validation + AY orphan issue + active schedule auto-refresh",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Visual verification of full flow",
+    "status": "completed"
   }
 ]

@@ -160,7 +160,7 @@ def validate_schedule(teacher_id: str, room_id: str, schedules: List[Dict],
                 'start_time': start_dt.isoformat(),
                 'end_time': end_dt.isoformat(),
                 'locked': locked,
-                'reason': f"Jadwal aktif: {sched.get('subject_name', sched.get('subject', ''))} di {room_id}"
+                'reason': f"Jadwal aktif: {sched.get('subject_name', sched.get('subject', 'Mata pelajaran'))}"
             }
 
     return {

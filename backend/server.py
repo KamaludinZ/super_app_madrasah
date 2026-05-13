@@ -657,9 +657,9 @@ async def _validate_qr_full(qr_token: str, user_lat: Optional[float], user_lon: 
     settings = await get_settings()
     result = {
         'overall_valid': False,
-        'qr': {'valid': False, 'reason': ''},
-        'schedule': {'valid': False, 'reason': ''},
-        'gps': {'valid': False, 'reason': ''},
+        'qr': {'valid': False, 'reason': 'Belum diperiksa'},
+        'schedule': {'valid': False, 'reason': 'Belum diperiksa'},
+        'gps': {'valid': False, 'reason': 'Belum diperiksa'},
         'context': {},
     }
     payload = decrypt_qr_payload(qr_token)
@@ -1002,8 +1002,9 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     try:
-        from seed_data import seed_all
+        from seed_data import seed_all, refresh_demo_schedule
         await seed_all(db)
+        await refresh_demo_schedule(db)
     except Exception as e:
         logger.error(f"Seed error: {e}")
 

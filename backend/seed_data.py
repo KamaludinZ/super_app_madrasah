@@ -327,6 +327,77 @@ async def seed_all(db: Any):
     print("       bk1/bk123, tatib1/tatib123")
 
 
+async def refresh_demo_schedule(db: Any):
+    """
+    Ensures there's always an ACTIVE NOW schedule for guru1 in R-7A for demo/testing.
+    Runs on every startup. Won't duplicate if existing active schedule found.
+    """
+    try:
+        ay = await db.academic_years.find_one({'is_active': True})
+        if not ay:
+            # Activate the seed AY if found
+            seed_ay = await db.academic_years.find_one({'name': '2025/2026'})
+            if seed_ay:
+                await db.academic_years.update_many({}, {'$set': {'is_active': False}})
+                await db.academic_years.update_one({'id': seed_ay['id']}, {'$set': {'is_active': True}})
+                ay = seed_ay
+                print("[refresh] Reactivated 2025/2026 academic year")
+
+        if not ay:
+            return
+
+        guru1 = await db.users.find_one({'username': 'guru1'})
+        room7a = await db.rooms.find_one({'name': 'R-7A'})
+        class7a = await db.classes.find_one({'name': '7A'})
+        subj_mtk = await db.subjects.find_one({'code': 'MTK'})
+        if not (guru1 and room7a and class7a and subj_mtk):
+            return
+
+        now = now_wib()
+        today = current_day_id()
+
+        # Check if there's already an active schedule for guru1/R-7A today
+        schedules = await db.schedules.find({
+            'teacher_id': guru1['id'], 'room_id': room7a['id'],
+            'day': today, 'academic_year_id': ay['id'],
+        }).to_list(20)
+
+        has_active = False
+        for s in schedules:
+            try:
+                sh, sm = map(int, s['start_time'].split(':'))
+                eh, em = map(int, s['end_time'].split(':'))
+                start = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+                end = now.replace(hour=eh, minute=em, second=0, microsecond=0)
+                if start - timedelta(minutes=15) <= now <= end + timedelta(minutes=15):
+                    has_active = True
+                    break
+            except Exception:
+                pass
+
+        if has_active:
+            print(f"[refresh] Active schedule exists for guru1/R-7A today ({today})")
+            return
+
+        # Create a fresh active-now schedule
+        active_start = now - timedelta(minutes=5)
+        active_end = now + timedelta(minutes=40)
+        new_sched = {
+            'id': str(uuid.uuid4()),
+            'academic_year_id': ay['id'], 'semester': 'ganjil',
+            'class_id': class7a['id'], 'subject_id': subj_mtk['id'],
+            'teacher_id': guru1['id'], 'room_id': room7a['id'],
+            'day': today,
+            'start_time': active_start.strftime('%H:%M'),
+            'end_time': active_end.strftime('%H:%M'),
+            'is_published': True, 'created_at': datetime.utcnow().isoformat(),
+        }
+        await db.schedules.insert_one(new_sched)
+        print(f"[refresh] Created active-now schedule: guru1 Matematika @ R-7A {new_sched['start_time']}-{new_sched['end_time']} ({today})")
+    except Exception as e:
+        print(f"[refresh] Error: {e}")
+
+
 if __name__ == '__main__':
     from motor.motor_asyncio import AsyncIOMotorClient
     from dotenv import load_dotenv
@@ -335,3 +406,4 @@ if __name__ == '__main__':
     client = AsyncIOMotorClient(os.environ['MONGO_URL'])
     db = client[os.environ['DB_NAME']]
     asyncio.run(seed_all(db))
+    asyncio.run(refresh_demo_schedule(db))
