@@ -33,10 +33,10 @@
   },
   {
     "content": "Run frontend testing agent for full Phase 4 UI flows",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Update plan.md Phase 4 status COMPLETED",
-    "status": "pending"
+    "status": "completed"
   }
 ]
