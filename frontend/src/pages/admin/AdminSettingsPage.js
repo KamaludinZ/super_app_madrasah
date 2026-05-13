@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays } from 'lucide-react';
+import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -93,6 +93,40 @@ export default function AdminSettingsPage() {
     slots.splice(idx, 1); setForm({ ...form, teaching_slots: slots });
   };
 
+  const [smtpTesting, setSmtpTesting] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState('');
+  const handleTestSmtp = async () => {
+    if (!smtpTestEmail.trim()) {
+      toast.error('Masukkan email tujuan uji coba');
+      return;
+    }
+    setSmtpTesting(true);
+    try {
+      // Save first, then test - send current form fields as overrides
+      const payload = {
+        smtp_host: form.smtp_host,
+        smtp_port: parseInt(form.smtp_port) || 587,
+        smtp_user: form.smtp_user,
+        smtp_password: form.smtp_password,
+        smtp_use_tls: !!form.smtp_use_tls,
+        smtp_use_ssl: !!form.smtp_use_ssl,
+        smtp_from_email: form.smtp_from_email,
+        smtp_from_name: form.smtp_from_name,
+        to_email: smtpTestEmail.trim(),
+      };
+      const { data } = await api.post('/admin/settings/test-smtp', payload);
+      if (data.success) {
+        toast.success(`Email uji coba terkirim ke ${smtpTestEmail}`);
+      } else {
+        toast.error(data.error || 'SMTP gagal');
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal uji SMTP');
+    } finally {
+      setSmtpTesting(false);
+    }
+  };
+
   if (!form) return <div className="text-sm text-slate-500">Memuat...</div>;
 
   return (
@@ -109,6 +143,7 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="workday" data-testid="tab-workday">Hari & Jam Mengajar</TabsTrigger>
           <TabsTrigger value="jurnal" data-testid="tab-jurnal-config">Jurnal & GPS</TabsTrigger>
           <TabsTrigger value="session" data-testid="tab-session">Sesi & Keamanan</TabsTrigger>
+          <TabsTrigger value="smtp" data-testid="tab-smtp">SMTP & Email</TabsTrigger>
         </TabsList>
 
         <TabsContent value="identity" className="mt-4 space-y-4">
@@ -243,6 +278,102 @@ export default function AdminSettingsPage() {
                   <p className="text-xs text-slate-500 mt-1">Default 30 menit. Cocok untuk guru yang berpindah kelas tanpa logout berulang.</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="smtp" className="mt-4 space-y-4">
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-[#006837]/10 flex items-center justify-center shrink-0">
+                  <ServerCog className="h-5 w-5 text-[#006837]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Konfigurasi Server Email (SMTP)</h2>
+                  <p className="text-xs text-slate-600 mt-1">Diperlukan untuk fitur Reset Password via Email. Disarankan menggunakan SMTP dari Gmail / SendGrid / Mailgun.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <Label>SMTP Host</Label>
+                  <Input value={form.smtp_host || ''} onChange={(e) => setForm({...form, smtp_host: e.target.value})}
+                    placeholder="smtp.gmail.com" data-testid="settings-smtp-host" />
+                </div>
+                <div>
+                  <Label>SMTP Port</Label>
+                  <Input type="number" value={form.smtp_port || 587} onChange={(e) => setForm({...form, smtp_port: e.target.value})}
+                    placeholder="587" data-testid="settings-smtp-port" />
+                </div>
+                <div>
+                  <Label>Username SMTP</Label>
+                  <Input value={form.smtp_user || ''} onChange={(e) => setForm({...form, smtp_user: e.target.value})}
+                    placeholder="user@gmail.com" data-testid="settings-smtp-user" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Password SMTP / App Password</Label>
+                  <Input type="password" value={form.smtp_password || ''} onChange={(e) => setForm({...form, smtp_password: e.target.value})}
+                    placeholder="••••••••" autoComplete="new-password" data-testid="settings-smtp-password" />
+                  <p className="text-xs text-slate-500 mt-1">Untuk Gmail, gunakan App Password (bukan password akun Gmail biasa).</p>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <div>
+                    <div className="font-semibold text-sm">Gunakan TLS (STARTTLS)</div>
+                    <div className="text-xs text-slate-600">Default untuk port 587</div>
+                  </div>
+                  <Switch checked={!!form.smtp_use_tls} onCheckedChange={(v) => setForm({...form, smtp_use_tls: v})} data-testid="settings-smtp-tls" />
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <div>
+                    <div className="font-semibold text-sm">Gunakan SSL Langsung</div>
+                    <div className="text-xs text-slate-600">Aktifkan untuk port 465</div>
+                  </div>
+                  <Switch checked={!!form.smtp_use_ssl} onCheckedChange={(v) => setForm({...form, smtp_use_ssl: v})} data-testid="settings-smtp-ssl" />
+                </div>
+                <div>
+                  <Label>From Email (Pengirim)</Label>
+                  <Input value={form.smtp_from_email || ''} onChange={(e) => setForm({...form, smtp_from_email: e.target.value})}
+                    placeholder="noreply@matsa.sch.id" data-testid="settings-smtp-from-email" />
+                </div>
+                <div>
+                  <Label>From Name</Label>
+                  <Input value={form.smtp_from_name || ''} onChange={(e) => setForm({...form, smtp_from_name: e.target.value})}
+                    placeholder="Super Apps MATSANDATAMA" data-testid="settings-smtp-from-name" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>URL Publik Aplikasi (untuk tautan reset email)</Label>
+                  <Input value={form.app_public_url || ''} onChange={(e) => setForm({...form, app_public_url: e.target.value})}
+                    placeholder="https://matsa.preview.emergentagent.com" data-testid="settings-app-public-url" />
+                  <p className="text-xs text-slate-500 mt-1">Kosongkan untuk auto-detect dari request browser.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <Mail className="h-5 w-5 text-amber-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Uji Coba Pengiriman Email</h2>
+                  <p className="text-xs text-slate-600 mt-1">Simpan pengaturan SMTP dulu, lalu masukkan email penerima untuk verifikasi.</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input type="email" value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)}
+                  placeholder="penerima@email.com" className="flex-1" data-testid="settings-smtp-test-email" />
+                <Button onClick={handleTestSmtp} disabled={smtpTesting || !form.smtp_host}
+                  className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="settings-smtp-test-button">
+                  <Send className="h-4 w-4" /> {smtpTesting ? 'Mengirim...' : 'Kirim Test'}
+                </Button>
+              </div>
+              {!form.smtp_host && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  Isi <strong>SMTP Host</strong> terlebih dahulu, lalu klik <strong>Simpan Pengaturan</strong>, baru lakukan uji coba.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

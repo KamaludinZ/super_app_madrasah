@@ -1032,6 +1032,11 @@ async def _user_can_view_class(user: Dict, class_id: str) -> bool:
     overlap = set(user.get('roles', [])) & {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan'}
     if overlap:
         return True
+    # Allow subject teachers who teach this class to view its students
+    if 'guru' in user.get('roles', []) or 'wali_kelas' in user.get('roles', []):
+        sched = await db.schedules.find_one({'class_id': class_id, 'teacher_id': user['id']})
+        if sched:
+            return True
     return False
 
 

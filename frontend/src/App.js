@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'rea
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import LoginPage from '@/pages/LoginPage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import PublicMonitoring from '@/pages/PublicMonitoring';
 import AppShell from '@/components/layout/AppShell';
 import DashboardRouter from '@/pages/DashboardRouter';
@@ -24,6 +26,11 @@ import KehadiranPage from '@/pages/KehadiranPage';
 import KebersihanPage from '@/pages/KebersihanPage';
 import JadwalPiketPage from '@/pages/admin/JadwalPiketPage';
 import AdminJurnalRekapPage from '@/pages/admin/AdminJurnalRekapPage';
+import AdminImportPage from '@/pages/admin/AdminImportPage';
+import AchievementsPage from '@/pages/AchievementsPage';
+import EkstrakurikulerPage from '@/pages/EkstrakurikulerPage';
+import GradesInputPage from '@/pages/GradesInputPage';
+import RaporPage from '@/pages/RaporPage';
 
 import './App.css';
 
@@ -42,6 +49,8 @@ function App() {
         <Toaster richColors position="top-right" />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/public/monitoring" element={<PublicMonitoring />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
@@ -67,6 +76,11 @@ function App() {
             <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/academic-year" element={<AdminAcademicYearPage />} />
+            <Route path="/admin/import" element={<AdminImportPage />} />
+            <Route path="/prestasi" element={<AchievementsPage />} />
+            <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
+            <Route path="/nilai/input" element={<GradesInputPage />} />
+            <Route path="/rapor" element={<RaporPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

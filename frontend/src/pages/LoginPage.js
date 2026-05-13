@@ -191,6 +191,12 @@ export default function LoginPage() {
                   className="w-full h-11 bg-[#006837] hover:bg-[#0B7A3B] text-white font-semibold">
                   {submitting ? 'Memproses...' : (<><LogIn className="h-4 w-4 mr-2" /> Masuk</>)}
                 </Button>
+
+                <div className="text-center pt-1">
+                  <Link to="/forgot-password" className="text-xs text-[#006837] hover:underline font-medium" data-testid="link-forgot-password">
+                    Lupa password?
+                  </Link>
+                </div>
               </form>
 
               <div className="mt-6 pt-4 border-t border-slate-200 text-xs text-slate-500 space-y-1">

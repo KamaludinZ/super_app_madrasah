@@ -9,35 +9,31 @@
   },
   {
     "content": "Run testing agent for Phase 4 backend (Excel I/O, SMTP, Reset Pwd, Achievements, Ekstrakurikuler, E-Rapor)",
-    "status": "in_progress"
-  },
-  {
-    "content": "Fix any backend bugs reported by testing agent",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Frontend A: Admin Excel Imports UI (template download + upload xlsx for 5 entities)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Frontend B: Admin SMTP Settings tab + Forgot/Reset Password pages",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Frontend C: Modul Prestasi Siswa (Siswa submit + Wali Kelas/Admin verify + Galeri)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Frontend D: Modul Ekstrakurikuler (Coach kelola anggota, absensi, nilai)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Frontend E: E-Rapor Digital (Guru input nilai + Siswa/Admin lihat rapor)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Run frontend testing agent for full Phase 4 UI flows",
-    "status": "pending"
+    "status": "in_progress"
   },
   {
     "content": "Update plan.md Phase 4 status COMPLETED",
