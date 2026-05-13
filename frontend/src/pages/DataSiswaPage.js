@@ -2,15 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Users, Search, BookOpen, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Users, Search, GraduationCap, Eye, KeyRound, Pencil, QrCode,
+  UserCheck, UserX, ShieldAlert, History, Loader2, Hash,
+} from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { toast } from 'sonner';
+import StudentDetailDialog from '@/components/students/StudentDetailDialog';
+import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
   const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
+  const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
+  const canEdit = isAdmin || isWaliKelas;
+
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('all');
   const [students, setStudents] = useState([]);
@@ -18,17 +29,21 @@ export default function DataSiswaPage() {
   const [loading, setLoading] = useState(true);
   const [genderFilter, setGenderFilter] = useState('all');
 
+  const [detailStudent, setDetailStudent] = useState(null);
+  const [accountStudent, setAccountStudent] = useState(null);
+
   useEffect(() => {
     (async () => {
       try {
-        if (isAdmin) {
+        if (isAdmin || isWaliKelas) {
           const c = await api.get('/classes');
-          setClasses(c.data);
+          setClasses(c.data || []);
         }
         await loadStudents('all');
       } finally { setLoading(false); }
     })();
-  }, [isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isWaliKelas]);
 
   const loadStudents = async (classId) => {
     setLoading(true);
@@ -36,8 +51,8 @@ export default function DataSiswaPage() {
       const params = {};
       if (classId && classId !== 'all') params.class_id = classId;
       const { data } = await api.get('/students', { params });
-      setStudents(data);
-    } catch (e) { /* */ }
+      setStudents(data || []);
+    } catch (e) { /* ignore */ }
     finally { setLoading(false); }
   };
 
@@ -49,76 +64,170 @@ export default function DataSiswaPage() {
     return true;
   });
 
-  // Group by class for admin view
-  const grouped = filtered.reduce((acc, s) => {
-    const key = s.class_name || 'Belum Ditugaskan';
-    (acc[key] = acc[key] || []).push(s);
-    return acc;
-  }, {});
+  const refresh = () => loadStudents(selectedClass);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><Users className="h-3 w-3 mr-1" /> Data Siswa</Badge>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Data Siswa</h1>
-        <p className="text-sm text-slate-600 mt-1">Total {students.length} siswa{!isAdmin ? ' di kelas Anda' : ''}</p>
+    <div className="space-y-6" data-testid="data-siswa-page">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
+            <Users className="h-3 w-3 mr-1" /> Data Siswa
+          </Badge>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Daftar Siswa</h1>
+          <p className="text-sm text-slate-600 mt-1">
+            {isAdmin ? 'Semua siswa madrasah' : isWaliKelas ? 'Siswa di kelas Anda' : 'Siswa'}
+          </p>
+        </div>
       </div>
 
+      {/* Stat overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatBox icon={Users} label="Total" value={filtered.length} color="bg-slate-50 border-slate-200 text-slate-700" />
+        <StatBox icon={UserCheck} label="Laki-laki" value={filtered.filter((s) => s.gender === 'L').length} color="bg-blue-50 border-blue-200 text-blue-700" />
+        <StatBox icon={UserCheck} label="Perempuan" value={filtered.filter((s) => s.gender === 'P').length} color="bg-rose-50 border-rose-200 text-rose-700" />
+        <StatBox icon={UserX} label="Mutasi" value={filtered.filter((s) => s.mutation_type).length} color="bg-amber-50 border-amber-200 text-amber-700" />
+      </div>
+
+      {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="relative">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input placeholder="Cari nama atau NISN..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="siswa-search" />
-            </div>
-            {isAdmin && (
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger data-testid="siswa-class-filter"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Kelas</SelectItem>
-                  {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
-            <Select value={genderFilter} onValueChange={setGenderFilter}>
-              <SelectTrigger data-testid="siswa-gender-filter"><SelectValue /></SelectTrigger>
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input placeholder="Cari nama atau NISN..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="search-siswa" />
+          </div>
+          {(isAdmin || isWaliKelas) && (
+            <Select value={selectedClass} onValueChange={setSelectedClass}>
+              <SelectTrigger data-testid="filter-kelas"><SelectValue placeholder="Filter Kelas" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua Jenis Kelamin</SelectItem>
-                <SelectItem value="L">Laki-laki (L)</SelectItem>
-                <SelectItem value="P">Perempuan (P)</SelectItem>
+                <SelectItem value="all">Semua Kelas</SelectItem>
+                {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          )}
+          <Select value={genderFilter} onValueChange={setGenderFilter}>
+            <SelectTrigger data-testid="filter-gender"><SelectValue placeholder="Filter Jenis Kelamin" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua</SelectItem>
+              <SelectItem value="L">Laki-laki</SelectItem>
+              <SelectItem value="P">Perempuan</SelectItem>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {loading ? <Loader2 className="h-5 w-5 animate-spin" /> :
-        filtered.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-slate-500">
-            <Users className="h-10 w-10 mx-auto opacity-40 mb-2" />
-            <div>Tidak ada siswa ditemukan</div>
-          </CardContent></Card>
-        ) : (
-          Object.entries(grouped).map(([className, list]) => (
-            <Card key={className}>
-              <CardContent className="p-5">
-                <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><BookOpen className="h-4 w-4 text-[#006837]" /> {className} <Badge variant="outline" className="ml-1">{list.length} siswa</Badge></h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" data-testid={`student-group-${className}`}>
-                  {list.map((s) => (
-                    <div key={s.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 bg-white hover:shadow-sm transition-shadow">
-                      <Avatar className="h-10 w-10"><AvatarFallback className="bg-[#006837] text-white text-xs font-semibold">{s.full_name?.substring(0,2).toUpperCase()}</AvatarFallback></Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold truncate">{s.full_name}</div>
-                        <div className="text-xs text-slate-500 font-mono">{s.nisn || '-'}</div>
-                      </div>
-                      {s.gender && <Badge variant="outline" className="text-xs">{s.gender}</Badge>}
-                    </div>
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-12 text-center text-slate-500">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-[#006837]" />
+              Memuat data siswa...
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table data-testid="siswa-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12 text-center">NO</TableHead>
+                    <TableHead>NAMA</TableHead>
+                    <TableHead>NISN</TableHead>
+                    <TableHead>L/P</TableHead>
+                    <TableHead>KELAS</TableHead>
+                    <TableHead>STATUS</TableHead>
+                    <TableHead className="text-right">AKSI</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((s, i) => (
+                    <TableRow key={s.id} data-testid={`siswa-row-${s.id}`}>
+                      <TableCell className="text-center text-slate-500 font-mono">{i + 1}</TableCell>
+                      <TableCell className="font-semibold">{s.full_name}</TableCell>
+                      <TableCell className="font-mono text-xs">{s.nisn || '-'}</TableCell>
+                      <TableCell>
+                        {s.gender === 'L' ? (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">L</Badge>
+                        ) : s.gender === 'P' ? (
+                          <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">P</Badge>
+                        ) : <span className="text-slate-400 text-xs">-</span>}
+                      </TableCell>
+                      <TableCell>{s.class_name || '-'}</TableCell>
+                      <TableCell>
+                        {s.mutation_type === 'keluar' ? (
+                          <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">Mutasi Keluar</Badge>
+                        ) : s.mutation_type === 'masuk' ? (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">Mutasi Masuk</Badge>
+                        ) : s.is_active === false ? (
+                          <Badge variant="outline" className="text-xs">Nonaktif</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Aktif</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="outline" onClick={() => setDetailStudent(s)}
+                            className="gap-1 border-[#006837]/40 text-[#006837] hover:bg-[#006837]/5"
+                            data-testid={`detail-${s.id}`}>
+                            <Eye className="h-3.5 w-3.5" /> Detail
+                          </Button>
+                          {canEdit && (
+                            <Button size="sm" variant="outline" onClick={() => setAccountStudent(s)}
+                              className="gap-1"
+                              data-testid={`info-akun-${s.id}`}>
+                              <KeyRound className="h-3.5 w-3.5" /> Info Akun
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button size="sm" variant="ghost" onClick={() => setDetailStudent({ ...s, _autoEdit: true })}
+                              className="gap-1 text-amber-700 hover:bg-amber-50"
+                              data-testid={`edit-${s.id}`}>
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
+                  {filtered.length === 0 && (
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
+                      <GraduationCap className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                      <div className="font-semibold">Tidak ada data siswa</div>
+                    </TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {detailStudent && (
+        <StudentDetailDialog
+          student={detailStudent}
+          autoEdit={detailStudent._autoEdit}
+          open={!!detailStudent}
+          onClose={() => { setDetailStudent(null); refresh(); }}
+        />
+      )}
+
+      {accountStudent && (
+        <StudentAccountInfoDialog
+          student={accountStudent}
+          open={!!accountStudent}
+          onClose={() => { setAccountStudent(null); refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StatBox({ icon: Icon, label, value, color }) {
+  return (
+    <div className={`rounded-xl border p-4 ${color}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{label}</span>
+        <Icon className="h-4 w-4 opacity-70" />
+      </div>
+      <div className="text-2xl font-extrabold tabular-nums mt-1">{value}</div>
     </div>
   );
 }

@@ -1,0 +1,371 @@
+{
+  "timestamp": "2026-05-13T13:11:15.831576",
+  "test_type": "Iterasi 1 Enhancement",
+  "total_tests": 60,
+  "passed": 59,
+  "failed": 1,
+  "success_rate": "98.3%",
+  "test_results": [
+    {
+      "test": "GET /api/auth/captcha (for admin login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as admin",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for guru1 login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as guru1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for walas7a login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as walas7a",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for piket1 login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as piket1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for siswa1 login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as siswa1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/users to get siswa2 ID",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/academic-years",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/classes",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/subjects",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /schedules as admin \u2192 status='submitted', submitted_by=admin.id",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /schedules as guru1 with teacher_id=guru1.id (self-assign) \u2192 status='draft'",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /schedules as guru1 with teacher_id=<other user id> \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "POST /schedules as siswa1 \u2192 403 (siswa tidak punya kuasa)",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /schedules/{id} as owner when status=draft \u2192 OK update field",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/submit as owner draft \u2192 status='submitted'",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id} as owner when status=submitted \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /schedules/{id} as admin when status=submitted \u2192 OK",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/lock admin only \u2192 status='locked'",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /schedules as guru1 (for lock test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/lock as non-admin \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /schedules/{id} as admin when status=locked \u2192 OK (admin bypass)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id} as non-admin when status=locked \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /schedules/{id}/unlock admin only \u2192 status='submitted', locked_at null",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/lock (setup for unlock test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/unlock as non-admin \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /schedules/{id}/submit when status=locked \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "POST /schedules as guru1 (for delete test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/submit (setup for delete test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /schedules/{id} non-admin when status=submitted \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "POST /schedules as guru1 (for delete draft test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /schedules/{id} when draft as owner \u2192 OK",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/{id}/unlock (setup for bulk-lock)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /schedules/bulk-lock with {ids:[...]} admin only \u2192 update multiple",
+      "status": "FAILED",
+      "expected": 200,
+      "actual": 404,
+      "error": "{\"detail\":\"Jadwal tidak ditemukan\"}"
+    },
+    {
+      "test": "GET /students/{sid}/detail as admin \u2192 return {student, detail}",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /students/{sid}/detail as siswa.id==sid \u2192 OK (self view)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /students/{sid}/detail as user lain (non-admin/wali/self) \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /students/{sid}/detail as admin with full payload \u2192 OK",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /students/{sid}/detail update again (upsert) \u2192 OK merge",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /students/{sid}/detail as siswa lain (non-self, non-admin/wali) \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /students/{nonexistent}/detail \u2192 404",
+      "status": "PASSED",
+      "expected": 404,
+      "actual": 404
+    },
+    {
+      "test": "PUT /api/users/{uid} - set siswa1 mutation_type=masuk (setup)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/users/{uid} - set guru1 mutation_type=keluar (setup)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /admin/mutations?mutation_type=masuk&role_group=siswa \u2192 list siswa with mutation_type=masuk",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /admin/mutations?mutation_type=keluar&role_group=staff \u2192 list staff with mutation_type=keluar",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /admin/mutations invalid mutation_type \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /admin/mutations as non-admin \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "GET /admin/audit-logs?target_id=<schedule_id> \u2192 filter logs for that schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /admin/audit-logs?target_type=schedule \u2192 filter logs target_type=schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/health still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/settings still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/classes still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/subjects still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/rooms still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "REGRESSION: GET /api/schedules still works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    }
+  ]
+}

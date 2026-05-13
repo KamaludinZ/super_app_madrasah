@@ -30,6 +30,8 @@ import AdminImportPage from '@/pages/admin/AdminImportPage';
 import AdminHolidaysPage from '@/pages/admin/AdminHolidaysPage';
 import AdminBackupPage from '@/pages/admin/AdminBackupPage';
 import PiketTasksPage from '@/pages/PiketTasksPage';
+import MySchedulePage from '@/pages/MySchedulePage';
+import AdminMutationsPage from '@/pages/admin/AdminMutationsPage';
 import AchievementsPage from '@/pages/AchievementsPage';
 import EkstrakurikulerPage from '@/pages/EkstrakurikulerPage';
 import GradesInputPage from '@/pages/GradesInputPage';
@@ -83,6 +85,8 @@ function App() {
             <Route path="/admin/holidays" element={<AdminHolidaysPage />} />
             <Route path="/admin/backup" element={<AdminBackupPage />} />
             <Route path="/piket/tugas" element={<PiketTasksPage />} />
+            <Route path="/jadwal/atur" element={<MySchedulePage />} />
+            <Route path="/admin/mutasi" element={<AdminMutationsPage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />

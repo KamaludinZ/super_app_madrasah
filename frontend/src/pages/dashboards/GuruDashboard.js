@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, ROLE_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function GuruDashboard() {
@@ -19,13 +19,14 @@ export default function GuruDashboard() {
 
   const filled = schedule.filter((s) => s.journal_filled).length;
   const total = schedule.length;
+  const roleLabel = ROLE_LABELS[activeRole] || 'Guru';
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">Dashboard Guru</Badge>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Assalamu'alaikum, {user?.full_name?.split(' ')[0] || 'Guru'}</h1>
+          <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2" data-testid="dashboard-role-badge">Dashboard {roleLabel}</Badge>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Assalamu'alaikum, {user?.full_name?.split(' ')[0] || 'Bapak/Ibu'}</h1>
           <p className="text-sm text-slate-600 mt-1">Berikut ringkasan mengajar Anda hari ini</p>
         </div>
         <Link to="/jurnal/scan">

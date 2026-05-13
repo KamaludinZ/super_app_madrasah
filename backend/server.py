@@ -560,30 +560,139 @@ async def list_schedules(
 
 
 @api_router.post("/schedules")
-async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    """Create schedule. Admin can create for any teacher. Guru/wali_kelas can create their OWN schedule (status: draft)."""
+    is_admin = 'admin' in user.get('roles', [])
+    teacher_id = payload.get('teacher_id')
+    is_self_assign = teacher_id == user['id']
+    can_self = bool(set(user.get('roles', [])) & {'guru', 'wali_kelas'})
+    if not is_admin:
+        if not (can_self and is_self_assign):
+            raise HTTPException(403, "Hanya admin yang bisa menambahkan jadwal orang lain")
+    # Default status: admin's create is 'submitted' (admin auto-publish), self-assign is 'draft'
+    payload.setdefault('status', 'submitted' if is_admin else 'draft')
+    payload['created_by'] = user['id']
     sched = ScheduleModel(**payload)
     doc = sched.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    if doc.get('submitted_at'):
+        doc['submitted_at'] = doc['submitted_at'].isoformat() if isinstance(doc['submitted_at'], datetime) else doc['submitted_at']
+    if doc.get('locked_at'):
+        doc['locked_at'] = doc['locked_at'].isoformat() if isinstance(doc['locked_at'], datetime) else doc['locked_at']
+    if is_admin and doc['status'] == 'submitted':
+        doc['submitted_by'] = user['id']
+        doc['submitted_at'] = now_wib().isoformat()
     await db.schedules.insert_one(doc)
-    await log_audit(user, 'create', 'schedule', sched.id, request=request)
+    await log_audit(user, 'create', 'schedule', sched.id, details={'status': doc['status']}, request=request)
     return serialize_doc(doc)
 
 
+@api_router.put("/schedules/bulk-lock")
+async def bulk_lock_schedules(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    """Lock multiple schedules at once. Returns count regardless of IDs existence."""
+    ids = payload.get('ids') or []
+    if not ids:
+        raise HTTPException(400, "Tidak ada jadwal dipilih")
+    res = await db.schedules.update_many({'id': {'$in': ids}}, {'$set': {
+        'status': 'locked',
+        'locked_at': now_wib().isoformat(),
+        'locked_by': user['id'],
+    }})
+    await log_audit(user, 'bulk_lock', 'schedule', '-', details={'count': res.modified_count, 'requested': len(ids)}, request=request)
+    return {'locked': res.modified_count, 'requested': len(ids)}
+
+
 @api_router.put("/schedules/{sid}")
-async def update_schedule(sid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
-    res = await db.schedules.update_one({'id': sid}, {'$set': payload})
-    if res.matched_count == 0:
+async def update_schedule(sid: str, payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    existing = await db.schedules.find_one({'id': sid})
+    if not existing:
         raise HTTPException(404, "Jadwal tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('teacher_id') == user['id'] or existing.get('created_by') == user['id']
+    status_val = existing.get('status', 'submitted')
+    if status_val == 'locked' and not is_admin:
+        raise HTTPException(403, "Jadwal sudah dikunci. Hanya admin yang bisa edit setelah dibuka kuncinya.")
+    if status_val == 'submitted' and not is_admin:
+        raise HTTPException(403, "Jadwal sudah dikirim. Hanya admin yang bisa edit.")
+    if not (is_admin or (is_owner and status_val == 'draft')):
+        raise HTTPException(403, "Tidak diizinkan")
+    # Don't allow status field via this endpoint - use dedicated submit/lock/unlock
+    payload.pop('status', None)
+    payload.pop('submitted_at', None); payload.pop('submitted_by', None)
+    payload.pop('locked_at', None); payload.pop('locked_by', None)
+    payload.pop('id', None); payload.pop('_id', None); payload.pop('created_by', None)
+    await db.schedules.update_one({'id': sid}, {'$set': payload})
     await log_audit(user, 'update', 'schedule', sid, request=request)
     doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
     return serialize_doc(doc)
 
 
 @api_router.delete("/schedules/{sid}")
-async def delete_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+async def delete_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
+    existing = await db.schedules.find_one({'id': sid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('teacher_id') == user['id'] or existing.get('created_by') == user['id']
+    if existing.get('status') == 'locked' and not is_admin:
+        raise HTTPException(403, "Jadwal terkunci tidak bisa dihapus")
+    if not (is_admin or (is_owner and existing.get('status', 'submitted') == 'draft')):
+        raise HTTPException(403, "Tidak diizinkan")
     await db.schedules.delete_one({'id': sid})
     await log_audit(user, 'delete', 'schedule', sid, request=request)
     return {'message': 'Dihapus'}
+
+
+@api_router.put("/schedules/{sid}/submit")
+async def submit_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
+    """Guru/wali kelas kirim jadwal draft mereka ke admin untuk direview & dikunci."""
+    existing = await db.schedules.find_one({'id': sid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('teacher_id') == user['id'] or existing.get('created_by') == user['id']
+    if not (is_admin or is_owner):
+        raise HTTPException(403, "Tidak diizinkan")
+    if existing.get('status') == 'locked':
+        raise HTTPException(400, "Jadwal sudah terkunci")
+    await db.schedules.update_one({'id': sid}, {'$set': {
+        'status': 'submitted',
+        'submitted_at': now_wib().isoformat(),
+        'submitted_by': user['id'],
+    }})
+    await log_audit(user, 'submit', 'schedule', sid, request=request)
+    doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.put("/schedules/{sid}/lock")
+async def lock_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    """Admin mengunci jadwal — tidak bisa diedit lagi sampai dibuka."""
+    res = await db.schedules.update_one({'id': sid}, {'$set': {
+        'status': 'locked',
+        'locked_at': now_wib().isoformat(),
+        'locked_by': user['id'],
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
+    await log_audit(user, 'lock', 'schedule', sid, request=request)
+    doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.put("/schedules/{sid}/unlock")
+async def unlock_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    """Admin membuka kunci — kembali ke status submitted (editable oleh admin)."""
+    res = await db.schedules.update_one({'id': sid}, {'$set': {
+        'status': 'submitted',
+        'locked_at': None,
+        'locked_by': None,
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
+    await log_audit(user, 'unlock', 'schedule', sid, request=request)
+    doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
 
 
 @api_router.get("/schedules/my-today")
@@ -997,8 +1106,15 @@ async def student_today(student_id: str, user: Dict = Depends(get_current_user))
 # LOGS / STATS
 # ============================================================
 @api_router.get("/admin/audit-logs")
-async def get_audit_logs(limit: int = 200, user: Dict = Depends(require_role('admin'))):
-    items = await db.audit_logs.find({}, {'_id': 0}).sort('timestamp', -1).to_list(limit)
+async def get_audit_logs(limit: int = 200, target_id: Optional[str] = None,
+                          target_type: Optional[str] = None,
+                          user: Dict = Depends(require_role('admin'))):
+    q = {}
+    if target_id:
+        q['entity_id'] = target_id  # Fixed: use entity_id instead of target_id
+    if target_type:
+        q['entity'] = target_type  # Fixed: use entity instead of target_type
+    items = await db.audit_logs.find(q, {'_id': 0}).sort('timestamp', -1).to_list(limit)
     return [serialize_doc(i) for i in items]
 
 
@@ -2860,6 +2976,102 @@ async def set_student_mutation(uid: str, payload: Dict, request: Request,
     await log_audit(user, 'set_mutation', 'user', uid, details=update, request=request)
     doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
     return serialize_doc(doc)
+
+
+# ============================================================
+# STUDENT DETAILS (Tab DATA SISWA - DATA ORANG TUA - DATA ALAMAT)
+# ============================================================
+@api_router.get("/students/{sid}/detail")
+async def get_student_detail(sid: str, user: Dict = Depends(get_current_user)):
+    """Ambil detail siswa. Siswa sendiri/admin/wali kelas bisa lihat."""
+    student = await db.users.find_one({'id': sid}, {'_id': 0, 'password_hash': 0})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    if 'siswa' not in (student.get('roles') or []):
+        raise HTTPException(400, "Bukan siswa")
+    # Permission
+    is_admin = 'admin' in user.get('roles', [])
+    is_self = sid == user['id']
+    is_wk = False
+    if 'wali_kelas' in user.get('roles', []):
+        is_wk = await _user_can_view_class(user, student.get('student_class_id'))
+    if not (is_admin or is_self or is_wk):
+        raise HTTPException(403, "Tidak diizinkan")
+    detail = await db.student_details.find_one({'student_id': sid}, {'_id': 0})
+    return {
+        'student': serialize_doc(student),
+        'detail': serialize_doc(detail) if detail else None,
+    }
+
+
+@api_router.put("/students/{sid}/detail")
+async def upsert_student_detail(sid: str, payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    """Upsert detail siswa. Hanya admin atau wali kelas atau siswa itu sendiri."""
+    student = await db.users.find_one({'id': sid})
+    if not student or 'siswa' not in (student.get('roles') or []):
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_self = sid == user['id']
+    is_wk = False
+    if 'wali_kelas' in user.get('roles', []):
+        is_wk = await _user_can_view_class(user, student.get('student_class_id'))
+    if not (is_admin or is_self or is_wk):
+        raise HTTPException(403, "Tidak diizinkan")
+    payload.pop('id', None); payload.pop('_id', None); payload.pop('student_id', None)
+    payload.pop('created_at', None)
+    payload['updated_at'] = now_wib().isoformat()
+    payload['updated_by'] = user['id']
+    existing = await db.student_details.find_one({'student_id': sid})
+    if existing:
+        await db.student_details.update_one({'student_id': sid}, {'$set': payload})
+    else:
+        from models import StudentDetailModel
+        doc = StudentDetailModel(student_id=sid, **payload).model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        if isinstance(doc.get('updated_at'), datetime):
+            doc['updated_at'] = doc['updated_at'].isoformat()
+        await db.student_details.insert_one(doc)
+    await log_audit(user, 'update', 'student_detail', sid, request=request)
+    out = await db.student_details.find_one({'student_id': sid}, {'_id': 0})
+    return serialize_doc(out)
+
+
+# ============================================================
+# MUTATIONS LIST (untuk halaman Mutasi)
+# ============================================================
+@api_router.get("/admin/mutations")
+async def list_mutations(mutation_type: str, role_group: str = 'siswa',
+                          academic_year_id: Optional[str] = None,
+                          user: Dict = Depends(require_role('admin'))):
+    """Daftar user dengan mutation_type='masuk' atau 'keluar'.
+    role_group: 'siswa' atau 'staff' (guru+tendik).
+    """
+    if mutation_type not in ('masuk', 'keluar'):
+        raise HTTPException(400, "mutation_type harus 'masuk' atau 'keluar'")
+    if role_group not in ('siswa', 'staff'):
+        raise HTTPException(400, "role_group harus 'siswa' atau 'staff'")
+    ay = None
+    if academic_year_id:
+        ay = await db.academic_years.find_one({'id': academic_year_id}, {'_id': 0})
+    else:
+        ay = await get_active_academic_year()
+    q = {'mutation_type': mutation_type}
+    if ay:
+        q['mutation_ay_id'] = ay['id']
+    if role_group == 'siswa':
+        q['roles'] = 'siswa'
+    else:
+        staff_roles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
+                      'guru_ekstrakurikuler', 'tenaga_kependidikan']
+        q['roles'] = {'$in': staff_roles}
+    items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('mutation_date', -1).to_list(500)
+    enriched = []
+    for u in items:
+        if u.get('student_class_id'):
+            cls = await db.classes.find_one({'id': u['student_class_id']}, {'_id': 0, 'name': 1})
+            u['class_name'] = cls.get('name') if cls else None
+        enriched.append(serialize_doc(u))
+    return enriched
 
 
 app.include_router(api_router)

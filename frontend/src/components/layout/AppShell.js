@@ -10,7 +10,7 @@ import {
   FileUp,
   Trophy,
   ClipboardEdit, FileText,
-  CalendarDays, Database, ListChecks,
+  CalendarDays, Database, ListChecks, ArrowRightLeft,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ function navForRole(role, roles) {
   if (teacherRoles.includes(role)) {
     items.push({ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
+    items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
     if (role !== 'guru_piket') {
       items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
@@ -75,6 +76,7 @@ function navForRole(role, roles) {
     items.push({ to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' });
     items.push({ to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' });
     items.push({ to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' });
+    items.push({ to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' });
     items.push({ to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' });
     items.push({ to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' });
     items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' });

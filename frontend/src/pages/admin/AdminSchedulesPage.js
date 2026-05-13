@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Calendar, Download, Upload, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calendar, Download, Upload, LayoutGrid, List, FileSpreadsheet, Lock, Unlock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -80,6 +80,16 @@ export default function AdminSchedulesPage() {
   const handleDelete = async (s) => {
     if (!window.confirm('Hapus jadwal?')) return;
     await api.delete(`/schedules/${s.id}`); toast.success('Dihapus'); await loadGrid(filterMode, filterValue);
+  };
+  const handleLock = async (s) => {
+    if (!window.confirm(`Kunci jadwal ini? Setelah dikunci tidak bisa diedit kecuali dibuka kunci.`)) return;
+    try { await api.put(`/schedules/${s.id}/lock`); toast.success('Jadwal dikunci'); await loadGrid(filterMode, filterValue); }
+    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
+  };
+  const handleUnlock = async (s) => {
+    if (!window.confirm(`Buka kunci jadwal ini?`)) return;
+    try { await api.put(`/schedules/${s.id}/unlock`); toast.success('Kunci dibuka'); await loadGrid(filterMode, filterValue); }
+    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
 
   const downloadTemplate = () => {
@@ -220,7 +230,7 @@ export default function AdminSchedulesPage() {
         <TabsContent value="list" className="mt-4">
           <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-schedules-table">
             <TableHeader><TableRow>
-              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead className="text-right">Aksi</TableHead>
+              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
             <TableBody>{items.map((s) => (
               <TableRow key={s.id}>
@@ -230,9 +240,29 @@ export default function AdminSchedulesPage() {
                 <TableCell>{s.subject_name || '-'}</TableCell>
                 <TableCell className="text-sm">{s.teacher_name || '-'}</TableCell>
                 <TableCell className="font-mono text-sm">{s.room_name || '-'}</TableCell>
+                <TableCell>
+                  {s.status === 'locked' ? (
+                    <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1" data-testid={`status-locked-${s.id}`}>
+                      <Lock className="h-3 w-3" /> Terkunci
+                    </Badge>
+                  ) : s.status === 'submitted' ? (
+                    <Badge className="bg-blue-100 text-blue-700 border-blue-200">Terkirim</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-amber-600 border-amber-300">Draft</Badge>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
+                  {s.status === 'locked' ? (
+                    <Button size="icon" variant="ghost" onClick={() => handleUnlock(s)} className="text-emerald-600" title="Buka Kunci" data-testid={`unlock-${s.id}`}>
+                      <Unlock className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button size="icon" variant="ghost" onClick={() => handleLock(s)} className="text-rose-600" title="Kunci Jadwal" data-testid={`lock-${s.id}`}>
+                      <Lock className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(s)} disabled={s.status === 'locked'}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600" disabled={s.status === 'locked'}><Trash2 className="h-4 w-4" /></Button>
                 </TableCell>
               </TableRow>
             ))}</TableBody>

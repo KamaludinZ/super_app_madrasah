@@ -1,54 +1,34 @@
 [
   {
-    "content": "Backend: Tambah field 'capacity' di ClassModel + endpoint /classes return student_count per kelas",
+    "content": "Fitur 1: Fix sidebar AppShell + DashboardRouter",
     "status": "completed"
   },
   {
-    "content": "Backend: Models WeeklyHolidayModel + AcademicHolidayModel + CRUD endpoints (info-only utk monitoring)",
+    "content": "Fitur 2A: DataSiswaPage refactor table view + 3 tombol aksi",
     "status": "completed"
   },
   {
-    "content": "Backend: Endpoints backup/export (.json + base64 files), backup/import (restore), backup/info",
+    "content": "Fitur 2B: StudentDetailDialog 3 tab + StudentDetailModel backend",
     "status": "completed"
   },
   {
-    "content": "Backend: TeacherTaskModel (tugas titipan dari guru pengajar) + endpoints /piket/tasks (CRUD) + /piket/schedules/today + /piket/fill-journal (audit who filled)",
+    "content": "Fitur 2C: StudentAccountInfoDialog (reset pwd + toggle aktif + audit + QR)",
     "status": "completed"
   },
   {
-    "content": "Backend: Update Journal model dengan filled_by_user_id + fill_mode (self/piket) + task_id; update validate-qr/journal endpoints",
+    "content": "Fitur 3: AdminMutationsPage 4 tab + endpoint /admin/mutations",
     "status": "completed"
   },
   {
-    "content": "Backend: Endpoint /admin/users/{uid}/mutation (set/clear mutation status)",
+    "content": "Fitur 4A+B: Schedule workflow status + MySchedulePage + admin Kunci/Buka Kunci",
     "status": "completed"
   },
   {
-    "content": "Frontend: AdminClassesPage kolom Peserta + input capacity",
+    "content": "Fix route ordering bulk-lock + audit-logs filter",
     "status": "completed"
   },
   {
-    "content": "Frontend: AdminUsersPage section Mutasi di edit dialog",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: AdminHolidaysPage (Weekly CRUD + Academic kalender)",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: AdminBackupPage download/upload + info backup",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: PiketTasksPage + Form Titipan + AdminJurnalRekap badge filled_by",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: Public monitoring banner libur akademik info-only",
-    "status": "completed"
-  },
-  {
-    "content": "Testing agent: backend Batch A (capacity, holidays, backup, piket-tasks, audit, mutation)",
+    "content": "Testing backend Iterasi 1 — 98.3% pass (zero critical)",
     "status": "completed"
   }
 ]

@@ -164,6 +164,13 @@ class ScheduleModel(BaseModel):
     end_time: str
     slot_index: Optional[int] = None  # references teaching_slots index
     is_published: bool = True
+    # === Workflow status ===
+    status: str = 'draft'  # 'draft' (editable by creator) | 'submitted' (waiting admin review) | 'locked' (admin locked, read-only)
+    created_by: Optional[str] = None  # user_id pembuat (admin atau guru/wali)
+    submitted_at: Optional[datetime] = None
+    submitted_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    locked_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -212,6 +219,43 @@ class TeacherTaskModel(BaseModel):
     completed_journal_id: Optional[str] = None  # Link ke journal jika sudah diisi
     completed_by_user_id: Optional[str] = None  # Guru piket yang mengisi
     completed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StudentDetailModel(BaseModel):
+    """Detail lengkap data siswa (sub-collection of users) — Iterasi 1: kerangka minimal."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # FK ke users.id (siswa)
+    # === DATA SISWA ===
+    citizenship: Optional[str] = None  # 'WNI' | 'WNA'
+    nik: Optional[str] = None  # 16 digit for WNI
+    asal_negara: Optional[str] = None  # for WNA
+    nomor_izin_tinggal: Optional[str] = None  # KITAS for WNA
+    jumlah_saudara: Optional[int] = None
+    anak_ke: Optional[int] = None
+    agama: Optional[str] = None  # Islam, Kristen Protestan, Katolik, Hindu, Buddha, Kong hu cu
+    cita_cita: Optional[str] = None
+    no_hp_unavailable: bool = False
+    hobi: Optional[str] = None
+    pembiaya_sekolah: Optional[str] = None  # Orang Tua, Wali, Tanggungan Sendiri, Lainnya
+    pra_sekolah: List[str] = Field(default_factory=list)  # ['TK_RA', 'PAUD']
+    imunisasi: List[str] = Field(default_factory=list)  # ['Hepatitis B','BCG','DPT','Polio','Campak','Covid']
+    nomor_kip: Optional[str] = None
+    nomor_kk: Optional[str] = None
+    nama_kepala_keluarga: Optional[str] = None
+    # === DATA ORANG TUA — embed sebagai dict untuk fleksibilitas ===
+    ayah: Optional[Dict[str, Any]] = None  # {nama, status, citizenship, nik/asal_negara/kitas, tempat_lahir, tgl_lahir, pendidikan, pekerjaan, penghasilan, no_hp_unavailable, no_hp}
+    ibu: Optional[Dict[str, Any]] = None
+    wali: Optional[Dict[str, Any]] = None  # plus {hubungan_wali, nomor_kks, nomor_pkh}
+    # === DATA ALAMAT ===
+    alamat_ayah: Optional[Dict[str, Any]] = None  # {tinggal_luar_negeri, status_kepemilikan, alamat, provinsi, kabupaten, kecamatan, kelurahan, rt, rw, kode_pos}
+    alamat_ibu: Optional[Dict[str, Any]] = None
+    alamat_wali: Optional[Dict[str, Any]] = None
+    alamat_siswa: Optional[Dict[str, Any]] = None  # plus {status_tempat_tinggal, jarak_tempuh, transportasi, waktu_tempuh}
+    # === Update tracking ===
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
