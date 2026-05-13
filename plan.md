@@ -1,4 +1,4 @@
-# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 + Batch A + Iterasi 1 Complete)
+# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 + Batch A + Iterasi 1 + Iterasi 2 Complete)
 
 ## 1. Objectives
 - ✅ Membuktikan **alur inti** “Jurnal Presisi” end-to-end: **QR (encrypted) → decrypt → validasi jadwal realtime → opsional GPS geofence (ruang) → create jurnal → auto-lock by time window**.
@@ -23,11 +23,18 @@
   - **Workflow Jadwal Guru** (Draft → Terkirim/Submitted → Terkunci/Locked)
   - **Admin Mutasi** (filter role_group + mutation_type)
   - **Detail Data Siswa** (tab Data Siswa / Orang Tua / Alamat)
+- ✅ Menyelesaikan **Iterasi 2 (Stabilization: Frontend E2E + Backend Refactor)**:
+  - **Frontend E2E** untuk Iterasi 1 (validasi UI/flow) → production-ready
+  - **Refactor backend**: memecah `server.py` monolitik menjadi `core.py` + `routers/*` per domain
 - ✅ Stabilitas terverifikasi (berbasis test report):
   - Backend Phase 4: **89.8% (44/49)** pada `iteration_3.json` (5 test Excel import diskip karena konstruksi file xlsx pada test runner; endpoint dan template download terverifikasi)
   - Frontend Phase 4: **85% (17/20)** pada `iteration_4.json`, **0 critical bug** (3 skenario parsial karena kendala sesi login saat E2E, bukan bug fungsional)
   - Backend Batch A: **96.1% (49/51)** pada `iteration_6.json` (2 item adalah isu desain test/ekspektasi, bukan bug fungsional)
   - Backend Iterasi 1: **100% (60/60)** pada `/app/backend/iterasi1_test_results.json`
+  - Frontend Iterasi 1 (E2E): **95% overall**, 9 skenario inti PASS, **0 bug kritikal** (`iteration_7.json`)
+  - Regression setelah refactor:
+    - Iterasi 1: **60/60 PASS (100%)**
+    - Batch A: **49/51 PASS (96.1%)**
 
 ---
 
@@ -248,7 +255,7 @@
 ### Iterasi 1 — Workflow Jadwal Guru + Detail Data Siswa + Admin Mutasi + Sidebar Fix
 **Goal:** hardening UX & tata kelola data inti (jadwal dan data siswa) agar stabil dipakai harian.
 
-✅ **COMPLETED — Backend + Frontend + Testing (Backend)**
+✅ **COMPLETED — Backend + Frontend + Testing**
 
 #### I1. Sidebar Role-Switching Fix
 ✅ Frontend:
@@ -300,15 +307,41 @@
 
 ---
 
+### Iterasi 2 — Stabilisasi: Frontend E2E + Refactor Backend
+**Goal:** memastikan Iterasi 1 benar-benar siap dipakai (E2E UI) dan backend mudah dirawat untuk fase berikutnya.
+
+✅ **COMPLETED — Frontend E2E + Backend Refactor + Regression Tests**
+
+#### II-A. Frontend E2E Validation (Iterasi 1)
+✅ Status: production-ready
+- Hasil: **95% overall**, 9 skenario inti PASS, **0 bug kritikal**
+- Report: `/app/test_reports/iteration_7.json`
+- Skenario utama yang tervalidasi:
+  - Login math captcha (admin/guru/walas)
+  - Role switch (walas7a wali_kelas ↔ guru)
+  - My Schedules guru (status badge, aksi submit)
+  - Admin Schedules (lock/unlock UI)
+  - Admin Mutasi (render + filter)
+
+#### II-D. Refactor Backend (server.py → core.py + routers/*)
+✅ Status: completed
+- `server.py` dari **3.173 baris → 90 baris** (≈97% reduksi)
+- Struktur baru:
+  - `core.py` (±136 baris): DB, deps auth/RBAC, helper serialize, audit/security logging
+  - `routers/*` (per domain):
+    - `health.py`, `auth.py`, `admin_settings.py`, `academic.py`, `classes.py`, `subjects.py`, `rooms.py`,
+      `users.py`, `students.py`, `schedules.py`, `journals.py`, `wali_parent.py`, `admin.py`,
+      `public.py`, `holidays_tasks.py`, `phase4.py`
+    - `_shared.py`: helper RBAC `user_can_view_class`
+
+#### II-D2. Regression Tests setelah Refactor
+✅ Iterasi 1: **60/60 PASS (100%)**
+✅ Batch A: **49/51 PASS (96.1%)** (sama seperti sebelum refactor; 2 item adalah desain test)
+
+---
+
 ## 3. Next Actions (Immediate)
-1. **Validasi UI (Frontend) untuk Iterasi 1 (opsional tapi direkomendasikan sebelum Phase 5):**
-   - Jalankan E2E ringan (manual/skrip) untuk:
-     - Role switching sidebar (semua role)
-     - Guru: My Schedules (buat draft → submit)
-     - Admin: lock/unlock/bulk-lock + audit log
-     - Data Siswa: buka dialog detail, isi field, simpan, buka ulang (persist)
-     - Admin Mutasi: filter siswa/staff masuk/keluar
-2. **Uji lapangan (stabilisasi operasional) sebelum Phase 5 Mobile:**
+1. **Stabilisasi operasional (disarankan sebelum Phase 5 Mobile):**
    - Import Excel menggunakan data nyata sekolah
    - Konfigurasi SMTP real + uji forgot/reset password end-to-end
    - Uji scan jurnal presisi di titik lokasi ruang (akurasi GPS & geofence)
@@ -316,17 +349,15 @@
      - Verifikasi prestasi oleh wali kelas/admin
      - Proses piket (tugas → isi jurnal → selesai)
      - Input nilai rapor per mapel dan cetak rapor
-3. **Dokumentasi & SOP (handover readiness):**
+2. **Dokumentasi & SOP (handover readiness):**
    - Panduan admin: setup TP aktif, jam mengajar, import Excel, jadwal, QR generator, backup/restore
    - Panduan guru: scan jurnal, My Schedules workflow, input nilai
    - Panduan wali kelas: verifikasi prestasi, monitoring siswa
    - Panduan siswa: prestasi + rapor
-4. **Refactor (opsional tapi disarankan):**
-   - Pecah `/app/backend/server.py` (±3000+ lines) ke `api/routers/` untuk maintainability.
-5. **Pilih prioritas lanjutan (mohon konfirmasi user):**
-   - **Phase 5:** Mobile App Expo (Android/iOS) — scan QR offline + push notif (mulai setelah web stabil)
+3. **Pilih prioritas lanjutan (mohon konfirmasi):**
    - **Phase 6:** Advanced scheduling — conflict detection + approval workflow
-   - **Phase 7:** Integrasi realtime — SSE/WebSocket monitoring + notifikasi
+   - **Phase 5:** Mobile App Expo (Android/iOS) — scan QR offline + push notif (mulai setelah web stabil)
+   - **Phase 7:** SSE/WebSocket realtime monitoring + notifikasi
    - **Phase 8:** Integrasi eksternal + analytics
 
 ---
@@ -352,6 +383,10 @@
   - Workflow jadwal guru (draft→submit→lock) konsisten & aman (RBAC)
   - Admin mutasi siap dipakai untuk monitoring status masuk/keluar
   - Detail data siswa lengkap tersimpan dan dapat diakses sesuai RBAC
+- ✅ **Iterasi 2:**
+  - Frontend tervalidasi E2E (tidak ada bug kritikal)
+  - Backend maintainable (server.py tipis, router per domain)
+  - Regression test utama lulus setelah refactor
 - 🔜 **Operational quality (target berikutnya):**
   - SOP digunakan staf sekolah
   - Pengujian lapangan (GPS, jadwal, email SMTP, backup/restore) lulus

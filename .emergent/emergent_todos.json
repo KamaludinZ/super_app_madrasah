@@ -1,22 +1,14 @@
 [
   {
-    "content": "A. Jalankan testing agent untuk Frontend E2E Iterasi 1 (sidebar role-switch, My Schedules submit/lock, Detail Siswa, Admin Mutasi)",
+    "content": "A. Frontend E2E Iterasi 1 — DONE (95% pass, 0 bug)",
+    "status": "completed"
+  },
+  {
+    "content": "D. Refactor backend (server.py 3173 → 90, 16 routers + core.py) — DONE, regression Iter1 100%, Batch A 96.1%",
+    "status": "completed"
+  },
+  {
+    "content": "Tanyakan ke user prioritas berikutnya (Phase 6 / Phase 5 / SOP / Phase 7)",
     "status": "in_progress"
-  },
-  {
-    "content": "A.1 Fix bug Frontend yang ditemukan testing agent (jika ada)",
-    "status": "pending"
-  },
-  {
-    "content": "D.1 Refactor: petakan endpoint di server.py per domain (auth, schedules, users, students, journals, admin, dll)",
-    "status": "pending"
-  },
-  {
-    "content": "D.2 Buat struktur api/routers/ + pindahkan endpoint per domain bertahap",
-    "status": "pending"
-  },
-  {
-    "content": "D.3 Backend regression test setelah refactor (re-run iterasi1_test + batch_a test)",
-    "status": "pending"
   }
 ]
