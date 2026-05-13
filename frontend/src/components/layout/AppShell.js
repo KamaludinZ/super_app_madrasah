@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Calendar, ScanLine, History, Users, Building2, BookOpen,
   ClipboardList, QrCode, FileText, Settings, LogOut, Menu, X, GraduationCap,
-  Home, ShieldCheck, BookMarked, BarChart3, ChevronRight,
+  Home, ShieldCheck, BookMarked, BarChart3, ChevronRight, ChevronDown,
+  UserCheck, Sparkles, FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,6 @@ function navForRole(role, roles) {
   const items = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
   ];
-  // Teacher-like roles can fill journal
   const teacherRoles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
   if (teacherRoles.includes(role)) {
     items.push({ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true });
@@ -30,7 +30,10 @@ function navForRole(role, roles) {
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
   }
   if (role === 'wali_kelas' || (roles || []).includes('wali_kelas')) {
-    items.push({ to: '/wali-kelas', label: 'Wali Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
+    items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
+    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
+    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
+    items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
   }
   if (role === 'orang_tua') {
     items.push({ to: '/parent', label: 'Dashboard Anak', icon: Home, testid: 'nav-parent' });
@@ -41,6 +44,9 @@ function navForRole(role, roles) {
   if (role === 'admin') {
     items.push({ to: '/admin/academic-year', label: 'Tahun Pelajaran', icon: GraduationCap, testid: 'nav-academic-year' });
     items.push({ to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' });
+    items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' });
+    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' });
+    items.push({ to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-admin-kebersihan' });
     items.push({ to: '/admin/classes', label: 'Kelas', icon: BookOpen, testid: 'nav-classes' });
     items.push({ to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' });
     items.push({ to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' });

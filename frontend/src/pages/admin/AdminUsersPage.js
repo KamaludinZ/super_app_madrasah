@@ -5,23 +5,40 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, Trash2, Users, Search } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 
 const EMPTY = {
   username: '', password: '', full_name: '', nip_nuptk: '', nisn: '', email: '', phone: '',
   roles: [], homeroom_class_id: '', student_class_id: '', parent_of: [],
+  gender: '', birth_place: '', birth_date: '', address: '',
 };
+
+const ROLE_TABS = [
+  { value: 'all', label: 'Semua' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'guru', label: 'Guru' },
+  { value: 'wali_kelas', label: 'Wali Kelas' },
+  { value: 'siswa', label: 'Siswa' },
+  { value: 'orang_tua', label: 'Orang Tua' },
+  { value: 'tenaga_kependidikan', label: 'Tendik' },
+  { value: 'guru_piket', label: 'Piket' },
+  { value: 'guru_bk', label: 'BK' },
+  { value: 'guru_tata_tertib', label: 'Tatib' },
+  { value: 'guru_ekstrakurikuler', label: 'Ekstra' },
+];
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [classes, setClasses] = useState([]);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -36,9 +53,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [u, r, c] = await Promise.all([
-          api.get('/users'), api.get('/roles'), api.get('/classes'),
-        ]);
+        const [u, r, c] = await Promise.all([api.get('/users'), api.get('/roles'), api.get('/classes')]);
         setUsers(u.data); setRoles(r.data); setClasses(c.data);
         const studs = await api.get('/users', { params: { role: 'siswa' } });
         setStudentsList(studs.data);
@@ -46,14 +61,18 @@ export default function AdminUsersPage() {
     })();
   }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setOpen(true); };
+  const openCreate = () => {
+    setEditing(null);
+    const initialRoles = activeTab !== 'all' ? [activeTab] : [];
+    setForm({ ...EMPTY, roles: initialRoles }); setOpen(true);
+  };
   const openEdit = (u) => {
     setEditing(u); setOpen(true);
     setForm({
       ...EMPTY, ...u, password: '',
       homeroom_class_id: u.homeroom_class_id || '',
       student_class_id: u.student_class_id || '',
-      parent_of: u.parent_of || [],
+      parent_of: u.parent_of || [], gender: u.gender || '',
     });
   };
 
@@ -79,8 +98,7 @@ export default function AdminUsersPage() {
         await api.post('/users', form);
         toast.success('User berhasil dibuat');
       }
-      setOpen(false);
-      refresh();
+      setOpen(false); refresh();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan');
     }
@@ -88,20 +106,23 @@ export default function AdminUsersPage() {
 
   const handleDelete = async (u) => {
     if (!window.confirm(`Hapus user ${u.username}?`)) return;
-    try {
-      await api.delete(`/users/${u.id}`);
-      toast.success('User dihapus');
-      refresh();
-    } catch (e) {
-      toast.error('Gagal menghapus');
-    }
+    try { await api.delete(`/users/${u.id}`); toast.success('User dihapus'); refresh(); }
+    catch (e) { toast.error('Gagal menghapus'); }
   };
 
   const filtered = users.filter((u) => {
+    if (activeTab !== 'all' && !(u.roles || []).includes(activeTab)) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return u.username?.toLowerCase().includes(s) || u.full_name?.toLowerCase().includes(s);
   });
+
+  // Counts per role for badges
+  const roleCounts = ROLE_TABS.reduce((acc, t) => {
+    if (t.value === 'all') acc[t.value] = users.length;
+    else acc[t.value] = users.filter((u) => (u.roles || []).includes(t.value)).length;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
@@ -116,59 +137,72 @@ export default function AdminUsersPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Search className="h-4 w-4 text-slate-400" />
-            <Input placeholder="Cari nama atau username..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" data-testid="user-search-input" />
-          </div>
-          <div className="overflow-x-auto">
-            <Table data-testid="admin-users-table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Nama Lengkap</TableHead>
-                  <TableHead>Peran</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((u) => (
-                  <TableRow key={u.id} data-testid={`user-row-${u.username}`}>
-                    <TableCell className="font-mono">{u.username}</TableCell>
-                    <TableCell className="font-medium">{u.full_name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {u.roles?.map((r) => (
-                          <Badge key={r} variant="secondary" className="text-xs">{ROLE_LABELS[r] || r}</Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {u.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> :
-                        <Badge variant="outline">Nonaktif</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="overflow-x-auto">
+          <TabsList className="bg-white border border-slate-200 inline-flex w-auto min-w-full" data-testid="user-role-tabs">
+            {ROLE_TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value} data-testid={`user-tab-${t.value}`} className="gap-2 whitespace-nowrap">
+                {t.label} <Badge variant="secondary" className="ml-1 px-1.5 text-xs">{roleCounts[t.value] || 0}</Badge>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <TabsContent value={activeTab} className="mt-4">
+          <Card>
+            <CardContent className="p-0">
+              <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+                <Search className="h-4 w-4 text-slate-400" />
+                <Input placeholder="Cari nama atau username..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" data-testid="user-search-input" />
+              </div>
+              <div className="overflow-x-auto">
+                <Table data-testid="admin-users-table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Nama Lengkap</TableHead>
+                      <TableHead>Peran</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((u) => (
+                      <TableRow key={u.id} data-testid={`user-row-${u.username}`}>
+                        <TableCell className="font-mono">{u.username}</TableCell>
+                        <TableCell className="font-medium">{u.full_name}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {u.roles?.map((r) => (
+                              <Badge key={r} variant="secondary" className="text-xs">{ROLE_LABELS[r] || r}</Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {u.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> :
+                            <Badge variant="outline">Nonaktif</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filtered.length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      {/* Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
             <div>
               <Label>Username *</Label>
@@ -191,13 +225,20 @@ export default function AdminUsersPage() {
               <Input value={form.nisn || ''} onChange={(e) => setForm({ ...form, nisn: e.target.value })} />
             </div>
             <div>
-              <Label>Email</Label>
-              <Input value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Label>Jenis Kelamin</Label>
+              <Select value={form.gender || ''} onValueChange={(v) => setForm({...form, gender: v})}>
+                <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="L">Laki-laki</SelectItem>
+                  <SelectItem value="P">Perempuan</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label>HP</Label>
-              <Input value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
+            <div><Label>Tempat Lahir</Label><Input value={form.birth_place || ''} onChange={(e) => setForm({...form, birth_place: e.target.value})} /></div>
+            <div><Label>Tgl Lahir</Label><Input type="date" value={form.birth_date || ''} onChange={(e) => setForm({...form, birth_date: e.target.value})} /></div>
+            <div><Label>Email</Label><Input value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div><Label>HP</Label><Input value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="sm:col-span-2"><Label>Alamat</Label><Input value={form.address || ''} onChange={(e) => setForm({...form, address: e.target.value})} /></div>
             <div className="sm:col-span-2">
               <Label>Peran (boleh lebih dari satu) *</Label>
               <div className="grid grid-cols-2 gap-2 mt-2 max-h-56 overflow-y-auto p-2 border border-slate-200 rounded-lg">

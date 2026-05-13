@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from './api';
+import { useIdleTimeout } from './useIdleTimeout';
+import { toast } from 'sonner';
 
 const AuthContext = createContext(null);
 
@@ -15,6 +17,7 @@ export function AuthProvider({ children }) {
   const [activeRole, setActiveRole] = useState(() => localStorage.getItem('matsa_active_role') || null);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
+  const logoutFnRef = useRef(null);
 
   const refreshMe = useCallback(async () => {
     try {
@@ -33,9 +36,7 @@ export function AuthProvider({ children }) {
       try {
         const { data } = await api.get('/settings');
         setSettings(data);
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) { /* */ }
       if (localStorage.getItem('matsa_token')) {
         await refreshMe();
       }
@@ -43,22 +44,36 @@ export function AuthProvider({ children }) {
     })();
   }, [refreshMe]);
 
-  const login = async (token, userObj, role) => {
+  const login = async (token, userObj, role, sessionInfo) => {
     localStorage.setItem('matsa_token', token);
     localStorage.setItem('matsa_user', JSON.stringify(userObj));
     localStorage.setItem('matsa_active_role', role);
+    if (sessionInfo) {
+      localStorage.setItem('matsa_session_info', JSON.stringify({
+        ...sessionInfo,
+        login_at: Date.now(),
+      }));
+    }
     setUser(userObj);
     setActiveRole(role);
   };
 
-  const logout = async () => {
+  const logout = useCallback(async (reason) => {
     try { await api.post('/auth/logout'); } catch {}
     localStorage.removeItem('matsa_token');
     localStorage.removeItem('matsa_user');
     localStorage.removeItem('matsa_active_role');
+    localStorage.removeItem('matsa_session_info');
     setUser(null);
     setActiveRole(null);
-  };
+    if (reason === 'idle') {
+      toast.info('Anda telah keluar otomatis karena tidak aktif. Silakan login kembali.');
+    } else if (reason === 'session') {
+      toast.info('Sesi Anda telah berakhir. Silakan login kembali.');
+    }
+  }, []);
+
+  logoutFnRef.current = logout;
 
   const switchRole = async (newRole) => {
     const { data } = await api.post('/auth/switch-role', { new_role: newRole });
@@ -69,6 +84,29 @@ export function AuthProvider({ children }) {
     setActiveRole(data.active_role);
     return data;
   };
+
+  // Idle timeout (default 30 min, configurable from settings)
+  const idleTimeoutMinutes = user ? (settings?.idle_timeout_minutes || 30) : 0;
+  useIdleTimeout(idleTimeoutMinutes, () => {
+    if (user) logoutFnRef.current?.('idle');
+  });
+
+  // Session max age check (every minute)
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      try {
+        const raw = localStorage.getItem('matsa_session_info');
+        if (!raw) return;
+        const info = JSON.parse(raw);
+        const maxMs = (info.expires_in_minutes || 720) * 60 * 1000;
+        if (Date.now() - info.login_at > maxMs) {
+          logoutFnRef.current?.('session');
+        }
+      } catch {}
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, activeRole, settings, setSettings, loading, login, logout, switchRole, refreshMe }}>

@@ -14,7 +14,7 @@ from jose import jwt, JWTError
 # JWT Settings
 JWT_SECRET = os.environ.get('JWT_SECRET', 'matsandatama-super-secret-key-2026-change-in-prod')
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRY_MINUTES = 60 * 24  # 24 hours
+JWT_EXPIRY_MINUTES = 60 * 12  # 12 hours (work day)
 
 # Rate limit settings
 MAX_LOGIN_ATTEMPTS = 5

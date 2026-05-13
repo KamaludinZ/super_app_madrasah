@@ -153,8 +153,9 @@ export default function AdminQRGeneratorPage() {
                 <h2 className="text-base font-semibold mb-3">Preview</h2>
                 {cardPreview ? (
                   <div className="space-y-3">
-                    <img src={cardPreview} alt="B5 Card" className="w-full max-w-xs mx-auto rounded-lg shadow-lg border border-[#C8A24A]" data-testid="qr-generator-preview" />
+                    <img src={cardPreview} alt="B5 Card" className="w-full max-w-md mx-auto rounded-lg shadow-lg border border-[#C8A24A]" data-testid="qr-generator-preview" />
                     <Button onClick={downloadCard} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="qr-generator-download-button"><Download className="h-4 w-4" /> Download Kartu B5 (PNG)</Button>
+                    <div className="text-xs text-slate-500 text-center">Cetak pada kertas B5 portrait • 1386x1969 px @ 200 DPI</div>
                   </div>
                 ) : qrPreview ? (
                   <div className="space-y-3">

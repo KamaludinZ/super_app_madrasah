@@ -58,10 +58,12 @@ async def seed_all(db: Any):
         'id': ay_id,
         'name': '2025/2026',
         'is_active': True,
+        'semester_type': 'regular',
         'semesters': [
-            {'name': 'ganjil', 'is_active': True, 'start_date': '2025-07-15', 'end_date': '2025-12-20'},
-            {'name': 'genap', 'is_active': False, 'start_date': '2026-01-05', 'end_date': '2026-06-15'},
+            {'name': 'ganjil', 'label': 'Ganjil', 'is_active': True, 'start_date': '2025-07-15', 'end_date': '2025-12-20'},
+            {'name': 'genap', 'label': 'Genap', 'is_active': False, 'start_date': '2026-01-05', 'end_date': '2026-06-15'},
         ],
+        'active_semester': 'ganjil',
         'created_at': datetime.utcnow().isoformat(),
     }
     await db.academic_years.insert_one(academic_year)
@@ -330,9 +332,26 @@ async def seed_all(db: Any):
 async def refresh_demo_schedule(db: Any):
     """
     Ensures there's always an ACTIVE NOW schedule for guru1 in R-7A for demo/testing.
-    Runs on every startup. Won't duplicate if existing active schedule found.
+    Also ensures settings has default active_days and teaching_slots.
     """
     try:
+        # Backfill settings defaults if missing
+        from models import DEFAULT_ACTIVE_DAYS, DEFAULT_TEACHING_SLOTS
+        settings = await db.settings.find_one({'id': 'global_config'})
+        if settings:
+            updates = {}
+            if not settings.get('active_days'):
+                updates['active_days'] = list(DEFAULT_ACTIVE_DAYS)
+            if not settings.get('teaching_slots'):
+                updates['teaching_slots'] = list(DEFAULT_TEACHING_SLOTS)
+            if 'idle_timeout_minutes' not in settings:
+                updates['idle_timeout_minutes'] = 30
+            if 'session_max_hours' not in settings:
+                updates['session_max_hours'] = 12
+            if updates:
+                await db.settings.update_one({'id': 'global_config'}, {'$set': updates})
+                print(f"[refresh] Backfilled settings: {list(updates.keys())}")
+
         ay = await db.academic_years.find_one({'is_active': True})
         if not ay:
             # Activate the seed AY if found

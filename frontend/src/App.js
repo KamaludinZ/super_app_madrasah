@@ -20,6 +20,9 @@ import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 import AdminAcademicYearPage from '@/pages/admin/AdminAcademicYearPage';
 import ParentDashboard from '@/pages/ParentDashboard';
 import WaliKelasDashboard from '@/pages/WaliKelasDashboard';
+import DataSiswaPage from '@/pages/DataSiswaPage';
+import KehadiranPage from '@/pages/KehadiranPage';
+import KebersihanPage from '@/pages/KebersihanPage';
 
 import './App.css';
 
@@ -47,6 +50,12 @@ function App() {
             <Route path="/jadwal" element={<JadwalPage />} />
             <Route path="/parent" element={<ParentDashboard />} />
             <Route path="/wali-kelas" element={<WaliKelasDashboard />} />
+            <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
+            <Route path="/wali-kelas/kehadiran" element={<KehadiranPage />} />
+            <Route path="/wali-kelas/kebersihan" element={<KebersihanPage />} />
+            <Route path="/admin/siswa" element={<DataSiswaPage />} />
+            <Route path="/admin/kehadiran" element={<KehadiranPage />} />
+            <Route path="/admin/kebersihan" element={<KebersihanPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />

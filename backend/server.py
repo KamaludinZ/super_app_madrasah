@@ -6,6 +6,7 @@ import os
 import io
 import logging
 import base64
+import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -25,6 +26,8 @@ from models import (
     SettingsModel, QRTemplateModel,
     LoginRequest, LoginResponse, CaptchaResponse, RoleSwitchRequest,
     UserCreateRequest, UserUpdateRequest, JournalCreateRequest, QRValidateRequest,
+    ClassAttendanceModel, ClassCleanlinessModel,
+    ClassAttendanceSubmit, ClassCleanlinessSubmit,
 )
 from auth_utils import (
     hash_password, verify_password, create_access_token, decode_token,
@@ -191,7 +194,12 @@ async def login(req: LoginRequest, request: Request):
     await log_security('login_success', req.username, {'role': active_role}, request)
     user_clean = serialize_doc(user.copy())
     user_clean.pop('password_hash', None)
-    return LoginResponse(access_token=token, user=user_clean, active_role=active_role)
+    settings = await get_settings()
+    return LoginResponse(
+        access_token=token, user=user_clean, active_role=active_role,
+        expires_in_minutes=settings.get('session_max_hours', 12) * 60,
+        idle_timeout_minutes=settings.get('idle_timeout_minutes', 30),
+    )
 
 
 @api_router.post("/auth/switch-role")
@@ -231,6 +239,10 @@ async def public_settings():
         'logo_url': s.get('logo_url'),
         'favicon_url': s.get('favicon_url'),
         'primary_color': s.get('primary_color'),
+        'active_days': s.get('active_days', []),
+        'teaching_slots': s.get('teaching_slots', []),
+        'idle_timeout_minutes': s.get('idle_timeout_minutes', 30),
+        'session_max_hours': s.get('session_max_hours', 12),
     }
 
 
@@ -987,6 +999,312 @@ async def admin_stats(user: Dict = Depends(require_role('admin'))):
         'total_schedules_today': total_schedules_today, 'total_journals_today': total_journals_today,
         'active_academic_year': ay.get('name') if ay else None, 'current_day': today,
     }
+
+
+# ============================================================
+# STUDENT DATA (Data Siswa)
+# ============================================================
+async def _user_can_view_class(user: Dict, class_id: str) -> bool:
+    if 'admin' in user.get('roles', []):
+        return True
+    cls = await db.classes.find_one({'id': class_id}, {'_id': 0})
+    if cls and cls.get('homeroom_teacher_id') == user['id']:
+        return True
+    # Allow guru_bk, guru_tata_tertib, guru_piket to view all
+    overlap = set(user.get('roles', [])) & {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan'}
+    if overlap:
+        return True
+    return False
+
+
+@api_router.get("/students")
+async def list_students(class_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    """Get list of students. Admin sees all; wali kelas sees own class; siswa sees self only."""
+    if 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1:
+        # Pure student can only see themselves
+        me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
+        return [serialize_doc(me)] if me else []
+    q = {'roles': 'siswa'}
+    if class_id:
+        if not await _user_can_view_class(user, class_id):
+            raise HTTPException(403, "Tidak diizinkan melihat siswa kelas ini")
+        q['student_class_id'] = class_id
+    elif 'admin' not in user.get('roles', []):
+        # non-admin must specify a class they have access to
+        cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
+        if cls:
+            q['student_class_id'] = cls['id']
+        else:
+            return []
+    items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
+    enriched = []
+    for s in items:
+        cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
+        s['class_name'] = cls.get('name') if cls else None
+        enriched.append(serialize_doc(s))
+    return enriched
+
+
+# ============================================================
+# CLASS ATTENDANCE (Kehadiran Siswa)
+# ============================================================
+@api_router.get("/attendance/class/{class_id}")
+async def get_class_attendance(class_id: str, date: Optional[str] = None,
+                                user: Dict = Depends(get_current_user)):
+    if not await _user_can_view_class(user, class_id):
+        raise HTTPException(403, "Tidak diizinkan")
+    q = {'class_id': class_id}
+    if date:
+        q['date'] = date
+    items = await db.class_attendance.find(q, {'_id': 0}).sort('date', -1).to_list(200)
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/attendance/class")
+async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
+                                   user: Dict = Depends(get_current_user)):
+    if not await _user_can_view_class(user, req.class_id):
+        raise HTTPException(403, "Tidak diizinkan")
+    # Calculate summary
+    summary = {'hadir': 0, 'sakit': 0, 'izin': 0, 'alpa': 0}
+    for r in req.records:
+        st = r.get('status', 'hadir')
+        summary[st] = summary.get(st, 0) + 1
+    # Upsert by class_id + date
+    existing = await db.class_attendance.find_one({'class_id': req.class_id, 'date': req.date})
+    doc = {
+        'class_id': req.class_id, 'date': req.date,
+        'records': req.records, 'recorded_by': user['id'],
+        'recorded_at': datetime.utcnow().isoformat(), 'summary': summary,
+    }
+    if existing:
+        await db.class_attendance.update_one({'_id': existing['_id']}, {'$set': doc})
+        doc['id'] = existing.get('id', str(uuid.uuid4()))
+    else:
+        doc['id'] = str(uuid.uuid4())
+        await db.class_attendance.insert_one(doc)
+    await log_audit(user, 'submit', 'class_attendance', doc['id'],
+                   details={'class_id': req.class_id, 'date': req.date, 'summary': summary},
+                   request=request)
+    return serialize_doc(doc)
+
+
+# ============================================================
+# CLASS CLEANLINESS (Kebersihan Kelas)
+# ============================================================
+@api_router.get("/cleanliness/class/{class_id}")
+async def get_class_cleanliness(class_id: str, limit: int = 30,
+                                 user: Dict = Depends(get_current_user)):
+    if not await _user_can_view_class(user, class_id):
+        raise HTTPException(403, "Tidak diizinkan")
+    items = await db.class_cleanliness.find({'class_id': class_id}, {'_id': 0}).sort('date', -1).to_list(limit)
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/cleanliness/class")
+async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request,
+                                    user: Dict = Depends(get_current_user)):
+    if not await _user_can_view_class(user, req.class_id):
+        raise HTTPException(403, "Tidak diizinkan")
+    existing = await db.class_cleanliness.find_one({'class_id': req.class_id, 'date': req.date})
+    doc = req.model_dump()
+    doc['recorded_by'] = user['id']
+    doc['recorded_at'] = datetime.utcnow().isoformat()
+    if existing:
+        await db.class_cleanliness.update_one({'_id': existing['_id']}, {'$set': doc})
+        doc['id'] = existing.get('id', str(uuid.uuid4()))
+    else:
+        doc['id'] = str(uuid.uuid4())
+        await db.class_cleanliness.insert_one(doc)
+    await log_audit(user, 'submit', 'class_cleanliness', doc['id'],
+                   details={'class_id': req.class_id, 'date': req.date, 'condition': req.condition},
+                   request=request)
+    return serialize_doc(doc)
+
+
+# ============================================================
+# SCHEDULE EXCEL IMPORT
+# ============================================================
+@api_router.get("/schedules/excel-template")
+async def schedule_excel_template(user: Dict = Depends(require_role('admin'))):
+    """Download Excel template for bulk schedule import"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Jadwal"
+    headers = ['hari', 'jam_mulai', 'jam_selesai', 'kelas', 'mapel_kode', 'guru_username', 'ruang_kode', 'semester']
+    ws.append(headers)
+    # Style headers
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='006837')
+        cell.alignment = Alignment(horizontal='center')
+    # Example rows
+    examples = [
+        ['senin', '07:00', '07:45', '7A', 'MTK', 'guru1', 'R-7A', 'ganjil'],
+        ['senin', '07:45', '08:30', '7A', 'IPA', 'walas7a', 'R-7A', 'ganjil'],
+        ['selasa', '07:00', '07:45', '7B', 'MTK', 'guru1', 'R-7B', 'ganjil'],
+    ]
+    for row in examples:
+        ws.append(row)
+    for col_letter, width in zip('ABCDEFGH', [10, 12, 12, 10, 12, 18, 12, 12]):
+        ws.column_dimensions[col_letter].width = width
+
+    # Add INSTRUKSI sheet
+    ws2 = wb.create_sheet("INSTRUKSI")
+    ws2.append(["Petunjuk Pengisian Template Jadwal"])
+    ws2['A1'].font = Font(bold=True, size=14)
+    instructions = [
+        "",
+        "1. Isi data jadwal pada sheet 'Jadwal' mulai baris 2.",
+        "2. Kolom 'hari' wajib salah satu dari: senin, selasa, rabu, kamis, jumat, sabtu (huruf kecil).",
+        "3. Kolom 'jam_mulai' dan 'jam_selesai' format HH:MM (24-jam), contoh: 07:00, 13:45.",
+        "4. Kolom 'kelas' diisi NAMA kelas seperti yang terdaftar (contoh: 7A, 8B).",
+        "5. Kolom 'mapel_kode' diisi KODE mapel (contoh: MTK, IPA, BIN).",
+        "6. Kolom 'guru_username' diisi USERNAME guru pengampu.",
+        "7. Kolom 'ruang_kode' diisi NAMA ruangan (contoh: R-7A).",
+        "8. Kolom 'semester' diisi 'ganjil' atau 'genap' (untuk regular), atau '1','2','3','4','5','6' (untuk percepatan).",
+        "9. Sistem akan mengabaikan baris kosong dan menolak baris dengan data tidak ditemukan.",
+        "10. Setelah selesai, upload file melalui menu Admin > Jadwal > Import Excel.",
+    ]
+    for line in instructions:
+        ws2.append([line])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_jadwal_matsandatama.xlsx"'},
+    )
+
+
+@api_router.post("/schedules/import-excel")
+async def schedule_import_excel(file: UploadFile = File(...), request: Request = None,
+                                 user: Dict = Depends(require_role('admin'))):
+    """Bulk import schedules from Excel file"""
+    from openpyxl import load_workbook
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(400, "File terlalu besar (max 5MB)")
+    try:
+        wb = load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+        ws = wb['Jadwal'] if 'Jadwal' in wb.sheetnames else wb.active
+    except Exception as e:
+        raise HTTPException(400, f"Gagal membaca Excel: {e}")
+
+    ay = await get_active_academic_year()
+    if not ay:
+        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({'academic_year_id': ay['id']}, {'_id': 0}).to_list(500)}
+    subjects_map = {s['code'].upper(): s['id'] for s in await db.subjects.find({}, {'_id': 0}).to_list(500)}
+    rooms_map = {r['name']: r['id'] for r in await db.rooms.find({}, {'_id': 0}).to_list(500)}
+    users_map = {u['username']: u['id'] for u in await db.users.find({}, {'_id': 0, 'username': 1, 'id': 1}).to_list(2000)}
+    valid_days = {'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'}
+
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    success = 0
+    errors = []
+    new_docs = []
+    for idx, row in enumerate(rows, start=2):
+        if not row or all(v is None or str(v).strip() == '' for v in row):
+            continue
+        try:
+            hari = str(row[0]).strip().lower() if row[0] else ''
+            jm = str(row[1]).strip() if row[1] else ''
+            js = str(row[2]).strip() if row[2] else ''
+            kls = str(row[3]).strip() if row[3] else ''
+            mp_kode = str(row[4]).strip().upper() if row[4] else ''
+            gr_username = str(row[5]).strip() if row[5] else ''
+            ruang = str(row[6]).strip() if row[6] else ''
+            sem = str(row[7]).strip().lower() if row[7] else 'ganjil'
+
+            # Handle datetime objects from Excel (HH:MM:SS)
+            if ':' not in jm:
+                jm = str(jm)
+            if ':' not in js:
+                js = str(js)
+            jm = jm[:5]  # take HH:MM
+            js = js[:5]
+
+            if hari not in valid_days:
+                errors.append(f"Baris {idx}: hari '{hari}' tidak valid")
+                continue
+            if kls not in classes_map:
+                errors.append(f"Baris {idx}: kelas '{kls}' tidak ditemukan")
+                continue
+            if mp_kode not in subjects_map:
+                errors.append(f"Baris {idx}: mapel '{mp_kode}' tidak ditemukan")
+                continue
+            if gr_username not in users_map:
+                errors.append(f"Baris {idx}: guru '{gr_username}' tidak ditemukan")
+                continue
+            if ruang not in rooms_map:
+                errors.append(f"Baris {idx}: ruang '{ruang}' tidak ditemukan")
+                continue
+
+            sched = {
+                'id': str(uuid.uuid4()),
+                'academic_year_id': ay['id'], 'semester': sem,
+                'class_id': classes_map[kls], 'subject_id': subjects_map[mp_kode],
+                'teacher_id': users_map[gr_username], 'room_id': rooms_map[ruang],
+                'day': hari, 'start_time': jm, 'end_time': js,
+                'is_published': True, 'created_at': datetime.utcnow().isoformat(),
+            }
+            new_docs.append(sched)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {idx}: {e}")
+    if new_docs:
+        await db.schedules.insert_many(new_docs)
+    await log_audit(user, 'import_excel', 'schedule', None,
+                   details={'success': success, 'errors': len(errors), 'filename': file.filename},
+                   request=request)
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+# ============================================================
+# SCHEDULE GRID (per hari aktif + jam slot)
+# ============================================================
+@api_router.get("/schedules/grid")
+async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[str] = None,
+                          user: Dict = Depends(get_current_user)):
+    """Return schedule data structured as grid: days x slots"""
+    settings = await get_settings()
+    ay = await get_active_academic_year()
+    if not ay:
+        return {'days': [], 'slots': [], 'grid': {}}
+    active_days = settings.get('active_days', ['senin','selasa','rabu','kamis','jumat'])
+    slots = settings.get('teaching_slots', [])
+
+    q = {'academic_year_id': ay['id']}
+    if class_id: q['class_id'] = class_id
+    if teacher_id: q['teacher_id'] = teacher_id
+    items = await db.schedules.find(q, {'_id': 0}).to_list(2000)
+    # Enrich
+    enriched = []
+    for s in items:
+        cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
+        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
+        s['class_name'] = cls.get('name') if cls else None
+        s['subject_name'] = sub.get('name') if sub else None
+        s['subject_code'] = sub.get('code') if sub else None
+        s['teacher_name'] = teacher.get('full_name') if teacher else None
+        s['room_name'] = room.get('name') if room else None
+        enriched.append(serialize_doc(s))
+    # Build grid: {day: {start_time: schedule}}
+    grid = {d: {} for d in active_days}
+    for s in enriched:
+        d = s['day']
+        if d in grid:
+            grid[d][s['start_time']] = s
+    return {'days': active_days, 'slots': slots, 'grid': grid, 'schedules': enriched}
 
 
 app.include_router(api_router)

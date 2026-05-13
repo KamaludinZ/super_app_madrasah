@@ -34,6 +34,22 @@ ROLE_LABELS = {
     'orang_tua': 'Orang Tua/Wali Siswa',
 }
 
+# Default teaching slots template (jam ke- format)
+DEFAULT_TEACHING_SLOTS = [
+    {'name': 'Jam ke-1', 'start_time': '07:00', 'end_time': '07:45'},
+    {'name': 'Jam ke-2', 'start_time': '07:45', 'end_time': '08:30'},
+    {'name': 'Jam ke-3', 'start_time': '08:30', 'end_time': '09:15'},
+    {'name': 'Istirahat',  'start_time': '09:15', 'end_time': '09:30', 'is_break': True},
+    {'name': 'Jam ke-4', 'start_time': '09:30', 'end_time': '10:15'},
+    {'name': 'Jam ke-5', 'start_time': '10:15', 'end_time': '11:00'},
+    {'name': 'Jam ke-6', 'start_time': '11:00', 'end_time': '11:45'},
+    {'name': 'Istirahat & Shalat', 'start_time': '11:45', 'end_time': '12:30', 'is_break': True},
+    {'name': 'Jam ke-7', 'start_time': '12:30', 'end_time': '13:15'},
+    {'name': 'Jam ke-8', 'start_time': '13:15', 'end_time': '14:00'},
+    {'name': 'Jam ke-9', 'start_time': '14:00', 'end_time': '14:45'},
+]
+DEFAULT_ACTIVE_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat']
+
 
 class UserModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -41,15 +57,20 @@ class UserModel(BaseModel):
     username: str
     password_hash: str
     full_name: str
-    nip_nuptk: Optional[str] = None  # for teachers/staff
-    nisn: Optional[str] = None  # for students
-    email: Optional[str] = None  # optional, for reset
+    nip_nuptk: Optional[str] = None
+    nisn: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     roles: List[str] = Field(default_factory=list)
-    # Role-specific data
-    homeroom_class_id: Optional[str] = None  # if wali_kelas
-    student_class_id: Optional[str] = None  # if siswa
-    parent_of: List[str] = Field(default_factory=list)  # student_ids if orang_tua
+    homeroom_class_id: Optional[str] = None
+    student_class_id: Optional[str] = None
+    parent_of: List[str] = Field(default_factory=list)
+    # Additional siswa fields
+    gender: Optional[str] = None  # 'L' / 'P'
+    birth_place: Optional[str] = None
+    birth_date: Optional[str] = None
+    address: Optional[str] = None
+    photo_url: Optional[str] = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
@@ -60,41 +81,45 @@ class AcademicYearModel(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str  # e.g., "2025/2026"
     is_active: bool = False
-    semesters: List[Dict[str, Any]] = Field(default_factory=list)  # [{name, is_active, start_date, end_date}]
+    # 'regular' = ganjil/genap; 'accelerated' = semester 1-6 untuk kelas percepatan
+    semester_type: Literal['regular', 'accelerated'] = 'regular'
+    semesters: List[Dict[str, Any]] = Field(default_factory=list)
+    active_semester: Optional[str] = None  # name of active semester
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ClassModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str  # e.g., "7A", "8B"
-    grade: int  # 7, 8, 9
-    parallel: str  # "A", "B", "C"
+    name: str
+    grade: int
+    parallel: str
     academic_year_id: str
-    homeroom_teacher_id: Optional[str] = None  # wali kelas
-    room_id: Optional[str] = None  # default room
+    homeroom_teacher_id: Optional[str] = None
+    room_id: Optional[str] = None
+    is_accelerated: bool = False  # kelas percepatan flag
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class RoomModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str  # e.g., "R-101", "Lab IPA"
+    name: str
     description: Optional[str] = None
     gps_lat: Optional[float] = None
     gps_lon: Optional[float] = None
     gps_radius_meters: float = 20.0
-    gps_enabled: bool = True  # toggle per room
+    gps_enabled: bool = True
     qr_mode: Literal['static', 'dynamic'] = 'static'
-    qr_secret: Optional[str] = None  # for dynamic QR (TOTP)
+    qr_secret: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class SubjectModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    code: str  # "MTK", "IPA"
-    name: str  # "Matematika"
+    code: str
+    name: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -102,14 +127,15 @@ class ScheduleModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     academic_year_id: str
-    semester: str  # 'ganjil' / 'genap'
+    semester: str  # 'ganjil', 'genap', or '1', '2', ..., '6'
     class_id: str
     subject_id: str
     teacher_id: str
     room_id: str
-    day: str  # 'senin', 'selasa', etc. (Indonesian)
-    start_time: str  # "HH:MM"
-    end_time: str  # "HH:MM"
+    day: str
+    start_time: str
+    end_time: str
+    slot_index: Optional[int] = None  # references teaching_slots index
     is_published: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -139,13 +165,47 @@ class JournalModel(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class AttendanceRecord(BaseModel):
+    """Per-student attendance record"""
+    student_id: str
+    status: Literal['hadir', 'sakit', 'izin', 'alpa'] = 'hadir'
+    note: Optional[str] = None
+
+
+class ClassAttendanceModel(BaseModel):
+    """Daily attendance for a class (recorded by wali kelas or admin)"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    class_id: str
+    date: str  # YYYY-MM-DD
+    records: List[Dict[str, Any]] = Field(default_factory=list)
+    recorded_by: str  # user_id
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    summary: Dict[str, int] = Field(default_factory=dict)  # {'hadir': 28, 'sakit': 1, ...}
+
+
+class ClassCleanlinessModel(BaseModel):
+    """Daily class cleanliness record"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    class_id: str
+    date: str  # YYYY-MM-DD
+    rating: int = 3  # 1-5 stars
+    condition: Literal['bersih', 'cukup', 'kotor'] = 'bersih'
+    notes: Optional[str] = None
+    piket_students: List[str] = Field(default_factory=list)  # student_ids
+    photo_url: Optional[str] = None  # base64
+    recorded_by: str
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class AuditLogModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: Optional[str] = None
     username: Optional[str] = None
-    action: str  # "create", "update", "delete", "login", "logout", "role_switch"
-    entity: str  # "user", "class", "journal", etc.
+    action: str
+    entity: str
     entity_id: Optional[str] = None
     details: Dict[str, Any] = Field(default_factory=dict)
     ip_address: Optional[str] = None
@@ -156,7 +216,7 @@ class AuditLogModel(BaseModel):
 class SecurityLogModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    event_type: str  # "login_success", "login_failed", "locked", "captcha_failed"
+    event_type: str
     username: Optional[str] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
@@ -175,7 +235,7 @@ class SettingsModel(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    logo_url: Optional[str] = None  # base64 data url
+    logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
     report_logo_url: Optional[str] = None
     primary_color: str = "#006837"
@@ -183,6 +243,12 @@ class SettingsModel(BaseModel):
     gps_default_radius: float = 20.0
     qr_default_mode: Literal['static', 'dynamic'] = 'static'
     grace_minutes: int = 15
+    # NEW: Work-day & schedule template config
+    active_days: List[str] = Field(default_factory=lambda: list(DEFAULT_ACTIVE_DAYS))
+    teaching_slots: List[Dict[str, Any]] = Field(default_factory=lambda: list(DEFAULT_TEACHING_SLOTS))
+    # NEW: Session management
+    session_max_hours: int = 12  # max session length (work-day)
+    idle_timeout_minutes: int = 30  # auto-logout after inactivity
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     updated_by: Optional[str] = None
 
@@ -191,7 +257,7 @@ class QRTemplateModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    image_b64: str  # base64-encoded image
+    image_b64: str
     is_default: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -211,6 +277,8 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: Dict[str, Any]
     active_role: str
+    expires_in_minutes: int = 720  # 12 hours
+    idle_timeout_minutes: int = 30
 
 
 class CaptchaResponse(BaseModel):
@@ -235,6 +303,10 @@ class UserCreateRequest(BaseModel):
     homeroom_class_id: Optional[str] = None
     student_class_id: Optional[str] = None
     parent_of: List[str] = Field(default_factory=list)
+    gender: Optional[str] = None
+    birth_place: Optional[str] = None
+    birth_date: Optional[str] = None
+    address: Optional[str] = None
 
 
 class UserUpdateRequest(BaseModel):
@@ -249,6 +321,10 @@ class UserUpdateRequest(BaseModel):
     parent_of: Optional[List[str]] = None
     is_active: Optional[bool] = None
     new_password: Optional[str] = None
+    gender: Optional[str] = None
+    birth_place: Optional[str] = None
+    birth_date: Optional[str] = None
+    address: Optional[str] = None
 
 
 class JournalCreateRequest(BaseModel):
@@ -267,3 +343,19 @@ class QRValidateRequest(BaseModel):
     qr_token: str
     user_lat: Optional[float] = None
     user_lon: Optional[float] = None
+
+
+class ClassAttendanceSubmit(BaseModel):
+    class_id: str
+    date: str
+    records: List[Dict[str, Any]]
+
+
+class ClassCleanlinessSubmit(BaseModel):
+    class_id: str
+    date: str
+    rating: int = 3
+    condition: str = 'bersih'
+    notes: Optional[str] = None
+    piket_students: List[str] = Field(default_factory=list)
+    photo_url: Optional[str] = None

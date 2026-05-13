@@ -1,90 +1,50 @@
 [
   {
-    "content": "Phase 1: Setup environment & install dependencies",
+    "content": "Phase 3.1: Fix B5 card layout - text size proportional",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Create POC script - validate Smart Journal core",
+    "content": "Phase 3.1: Session management - JWT 12h + idle timeout 30 min + auto-logout",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Run POC and fix until ALL tests pass - 15/15 PASSED",
+    "content": "Phase 3.1: Settings - Hari aktif sekolah + jam mengajar template",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Get design guidelines from design_agent (Kemenag green theme)",
+    "content": "Phase 3.1: Tahun Pelajaran - tipe semester (ganjil/genap atau 1-6 percepatan)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Auth (username/password + math captcha + JWT + rate limit)",
+    "content": "Phase 3.2: Schedule view grid (per hari aktif + jam slot), filter per guru/kelas",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - User management with 9 roles + multi-role switching",
+    "content": "Phase 3.2: Schedule bulk fill via slot template (click empty slot)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Master Data (academic year, classes, rooms, subjects, schedules)",
+    "content": "Phase 3.3: Backend - Data Siswa, Kehadiran, Kebersihan endpoints",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Smart Journal endpoints (QR validation + schedule + GPS)",
+    "content": "Phase 3.3: Frontend - Menu Data Siswa, Kehadiran, Kebersihan for Admin & Wali Kelas",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - QR Code generator with B5 card template upload",
+    "content": "Phase 3.4: User management - groupby role dengan submenu tabs per role",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Public real-time monitoring endpoint",
+    "content": "Phase 3.5: Excel import jadwal (template download + upload + parser)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Audit log + Security log + Branding settings",
+    "content": "Phase 3: Production env vars (.env.example documentation)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Seed demo accounts + auto-refresh active schedule",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Theme + Auth + Routing + AppShell",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Login + Math Captcha + Role Switcher",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - 5 Role-based Dashboards",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Smart Journal flow (QR Scan + Form + Validation)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Admin CRUDs (Users, Classes, Rooms, Subjects, Schedules)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Admin QR Generator + B5 Template + Audit/Settings",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Frontend - Public Real-time Monitoring page",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: E2E Testing via testing_agent_v3 (97.1% pass)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Fix GPS validation + AY orphan issue + active schedule auto-refresh",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Visual verification of full flow",
-    "status": "completed"
+    "content": "Phase 3: E2E Testing fitur baru via testing_agent_v3",
+    "status": "in_progress"
   }
 ]

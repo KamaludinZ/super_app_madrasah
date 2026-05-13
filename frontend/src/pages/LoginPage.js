@@ -47,7 +47,10 @@ export default function LoginPage() {
         captcha_id: captcha.challenge_id,
         captcha_answer: parseInt(captchaAnswer, 10),
       });
-      await login(data.access_token, data.user, data.active_role);
+      await login(data.access_token, data.user, data.active_role, {
+        expires_in_minutes: data.expires_in_minutes,
+        idle_timeout_minutes: data.idle_timeout_minutes,
+      });
       toast.success(`Selamat datang, ${data.user.full_name}`);
       nav('/dashboard');
     } catch (err) {
