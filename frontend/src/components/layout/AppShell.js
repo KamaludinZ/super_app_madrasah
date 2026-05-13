@@ -11,6 +11,7 @@ import {
   Trophy,
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,9 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { ROLE_LABELS, api } from '@/lib/api';
 import { toast } from 'sonner';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
+import { HelpCircle } from 'lucide-react';
 
 function navForRole(role, roles) {
   const items = [
@@ -77,6 +81,7 @@ function navForRole(role, roles) {
     items.push({ to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' });
     items.push({ to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' });
     items.push({ to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' });
+    items.push({ to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' });
     items.push({ to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' });
     items.push({ to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' });
     items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' });
@@ -157,12 +162,25 @@ function Sidebar({ items, current, onItemClick, activeAY }) {
 }
 
 export default function AppShell({ children }) {
-  const { user, activeRole, logout, switchRole, settings } = useAuth();
+  const { user, activeRole, logout, switchRole, settings, refreshMe } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeAY, setActiveAY] = useState(null);
+  const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const items = navForRole(activeRole, user?.roles || []);
+
+  // Auto-prompt password change on first load if needed.
+  useEffect(() => {
+    const ps = user?.password_status;
+    if (ps?.should_prompt) {
+      const alreadyShown = sessionStorage.getItem('matsa_pw_prompt_shown');
+      if (!alreadyShown) {
+        setPwDialogOpen(true);
+        sessionStorage.setItem('matsa_pw_prompt_shown', '1');
+      }
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     api.get('/academic-years/active').then(({ data }) => setActiveAY(data)).catch(() => {});
@@ -252,6 +270,20 @@ export default function AppShell({ children }) {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Panduan button */}
+              <Button
+                variant="ghost" size="icon"
+                onClick={() => nav('/panduan')}
+                className="rounded-full hover:bg-[#006837]/8 hidden sm:inline-flex"
+                data-testid="topbar-panduan-btn"
+                title="Panduan Pengguna"
+              >
+                <HelpCircle className="h-5 w-5 text-slate-700" />
+              </Button>
+
+              {/* Notification Bell */}
+              <NotificationBell />
+
               {/* Role switcher next to avatar - ALWAYS visible */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -313,6 +345,12 @@ export default function AppShell({ children }) {
                     ))}
                     <DropdownMenuSeparator />
                   </div>
+                  <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
+                    <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => nav('/panduan')} data-testid="menu-panduan" className="sm:hidden">
+                    <HelpCircle className="h-4 w-4 mr-2" /> Panduan Pengguna
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout} data-testid="logout-button">
                     <LogOut className="h-4 w-4 mr-2" /> Keluar
                   </DropdownMenuItem>
@@ -333,6 +371,16 @@ export default function AppShell({ children }) {
           </motion.div>
         </main>
       </div>
+
+      {/* Password change suggestion dialog (auto-prompts on first load if needed) */}
+      <ChangePasswordDialog
+        open={pwDialogOpen}
+        onOpenChange={setPwDialogOpen}
+        reason={user?.password_status?.reason}
+        message={user?.password_status?.message}
+        onSuccess={() => refreshMe?.()}
+        onDismiss={() => refreshMe?.()}
+      />
     </div>
   );
 }

@@ -76,6 +76,9 @@ class UserModel(BaseModel):
     mutation_ay_id: Optional[str] = None  # TP saat mutasi
     mutation_date: Optional[str] = None  # tanggal mutasi (YYYY-MM-DD)
     mutation_note: Optional[str] = None  # alasan/keterangan
+    # Password policy (suggest change at first login + every 6 months)
+    password_changed_at: Optional[str] = None  # ISO datetime when user last changed password
+    password_change_dismissed_until: Optional[str] = None  # snooze reminder until this ISO datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
 
@@ -369,8 +372,30 @@ class SettingsModel(BaseModel):
     smtp_from_name: Optional[str] = None
     # App URL for reset password email link
     app_public_url: Optional[str] = None
+    # Maintenance mode (admin can toggle to lock app for non-admin users)
+    maintenance_mode: bool = False
+    maintenance_message: Optional[str] = None  # custom message shown to users
+    maintenance_ends_at: Optional[str] = None  # estimated end time (ISO)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     updated_by: Optional[str] = None
+
+
+class AnnouncementModel(BaseModel):
+    """Pengumuman / Announcement (Admin push messages to selected roles)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    body: str  # supports plain text or basic markdown
+    target_roles: List[str] = Field(default_factory=lambda: ['all'])  # 'all' or specific roles
+    severity: Literal['info', 'success', 'warning', 'critical'] = 'info'
+    is_active: bool = True
+    is_pinned: bool = False
+    starts_at: Optional[str] = None  # ISO datetime
+    ends_at: Optional[str] = None  # ISO datetime (auto-hide after)
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[str] = None
 
 
 class QRTemplateModel(BaseModel):

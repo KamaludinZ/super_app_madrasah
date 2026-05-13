@@ -247,3 +247,106 @@ async def backup_import(file: UploadFile = File(...), mode: str = Form('merge'),
 async def backup_logs(user: Dict = Depends(require_role('admin'))):
     items = await db.backup_logs.find({}, {'_id': 0}).sort('created_at', -1).to_list(50)
     return [serialize_doc(i) for i in items]
+
+
+
+# ============================================================
+# EXCEL EXPORTS (Snapshot data to .xlsx)
+# ============================================================
+def _xlsx_response(content: bytes, filename: str):
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+def _ts() -> str:
+    return now_wib().strftime('%Y%m%d_%H%M%S')
+
+
+@router.get("/admin/export/users-excel")
+async def export_users_excel(user: Dict = Depends(require_role('admin')), request: Request = None):
+    from excel_io import export_users_xlsx
+    items = await db.users.find({}, {'_id': 0, 'password_hash': 0}).sort('username', 1).to_list(5000)
+    if request:
+        await log_audit(user, 'export_excel', 'user', None, details={'count': len(items)}, request=request)
+    return _xlsx_response(export_users_xlsx([serialize_doc(i) for i in items]),
+                          f"export_users_{_ts()}.xlsx")
+
+
+@router.get("/admin/export/students-excel")
+async def export_students_excel(user: Dict = Depends(require_role('admin')), request: Request = None):
+    from excel_io import export_students_xlsx
+    siswa = await db.users.find({'roles': 'siswa'}, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(5000)
+    classes_map = {c['id']: c.get('name') for c in await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(1000)}
+    enriched = []
+    for s in siswa:
+        s = serialize_doc(s)
+        s['class_name'] = classes_map.get(s.get('student_class_id'), '')
+        enriched.append(s)
+    if request:
+        await log_audit(user, 'export_excel', 'student', None, details={'count': len(enriched)}, request=request)
+    return _xlsx_response(export_students_xlsx(enriched), f"export_siswa_{_ts()}.xlsx")
+
+
+@router.get("/admin/export/schedules-excel")
+async def export_schedules_excel(academic_year_id: Optional[str] = None,
+                                 user: Dict = Depends(require_role('admin')),
+                                 request: Request = None):
+    from excel_io import export_schedules_xlsx
+    q = {}
+    if academic_year_id:
+        q['academic_year_id'] = academic_year_id
+    schedules = await db.schedules.find(q, {'_id': 0}).sort([('day', 1), ('start_time', 1)]).to_list(5000)
+    classes_map = {c['id']: c.get('name') for c in await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(1000)}
+    subjects_map = {s['id']: s for s in await db.subjects.find({}, {'_id': 0}).to_list(1000)}
+    rooms_map = {r['id']: r.get('name') for r in await db.rooms.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(1000)}
+    teachers_map = {u['id']: u.get('full_name') for u in await db.users.find({}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(5000)}
+    enriched = []
+    for s in schedules:
+        s = serialize_doc(s)
+        s['class_name'] = classes_map.get(s.get('class_id'), '')
+        sub = subjects_map.get(s.get('subject_id'), {})
+        s['subject_name'] = sub.get('name', '') if sub else ''
+        s['subject_code'] = sub.get('code', '') if sub else ''
+        s['room_name'] = rooms_map.get(s.get('room_id'), '')
+        s['teacher_name'] = teachers_map.get(s.get('teacher_id'), '')
+        enriched.append(s)
+    if request:
+        await log_audit(user, 'export_excel', 'schedule', None, details={'count': len(enriched)}, request=request)
+    return _xlsx_response(export_schedules_xlsx(enriched), f"export_jadwal_{_ts()}.xlsx")
+
+
+@router.get("/admin/export/grades-excel")
+async def export_grades_excel(class_id: Optional[str] = None,
+                              subject_id: Optional[str] = None,
+                              semester: Optional[str] = None,
+                              academic_year_id: Optional[str] = None,
+                              user: Dict = Depends(require_role('admin')),
+                              request: Request = None):
+    from excel_io import export_grades_xlsx
+    q = {}
+    if class_id: q['class_id'] = class_id
+    if subject_id: q['subject_id'] = subject_id
+    if semester: q['semester'] = semester
+    if academic_year_id: q['academic_year_id'] = academic_year_id
+    grades = await db.grade_entries.find(q, {'_id': 0}).to_list(20000)
+    students_map = {u['id']: u for u in await db.users.find({'roles': 'siswa'},
+                                                            {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'student_class_id': 1}).to_list(5000)}
+    classes_map = {c['id']: c.get('name') for c in await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(1000)}
+    subjects_map = {s['id']: s for s in await db.subjects.find({}, {'_id': 0}).to_list(1000)}
+    enriched = []
+    for g in grades:
+        g = serialize_doc(g)
+        st = students_map.get(g.get('student_id'), {})
+        g['student_name'] = st.get('full_name', '') if st else ''
+        g['student_nisn'] = st.get('nisn', '') if st else ''
+        g['class_name'] = classes_map.get(g.get('class_id'), '') or classes_map.get(st.get('student_class_id'), '')
+        sub = subjects_map.get(g.get('subject_id'), {})
+        g['subject_name'] = sub.get('name', '') if sub else ''
+        g['subject_code'] = sub.get('code', '') if sub else ''
+        enriched.append(g)
+    if request:
+        await log_audit(user, 'export_excel', 'grade', None, details={'count': len(enriched)}, request=request)
+    return _xlsx_response(export_grades_xlsx(enriched), f"export_nilai_{_ts()}.xlsx")

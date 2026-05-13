@@ -44,6 +44,14 @@ export function AuthProvider({ children }) {
     })();
   }, [refreshMe]);
 
+  // Poll /settings every 60s to detect maintenance mode changes globally
+  useEffect(() => {
+    const id = setInterval(() => {
+      api.get('/settings').then(({ data }) => setSettings(data)).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const login = async (token, userObj, role, sessionInfo) => {
     localStorage.setItem('matsa_token', token);
     localStorage.setItem('matsa_user', JSON.stringify(userObj));

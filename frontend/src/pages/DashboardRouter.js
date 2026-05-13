@@ -5,25 +5,40 @@ import GuruDashboard from './dashboards/GuruDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 import WaliKelasDashboard from './WaliKelasDashboard';
+import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 
+/**
+ * Wrapper that shows AnnouncementsCard at top of dashboard for non-admin roles,
+ * then delegates to the role-specific dashboard component.
+ */
 export default function DashboardRouter() {
   const { activeRole } = useAuth();
+  const isAdmin = activeRole === 'admin';
+
+  let DashboardComponent;
   switch (activeRole) {
     case 'admin':
-      return <AdminDashboard />;
+      DashboardComponent = AdminDashboard; break;
     case 'siswa':
-      return <SiswaDashboard />;
+      DashboardComponent = SiswaDashboard; break;
     case 'tenaga_kependidikan':
-      return <StaffDashboard />;
+      DashboardComponent = StaffDashboard; break;
     case 'wali_kelas':
-      return <WaliKelasDashboard />;
+      DashboardComponent = WaliKelasDashboard; break;
     case 'guru':
     case 'guru_piket':
     case 'guru_bk':
     case 'guru_tata_tertib':
     case 'guru_ekstrakurikuler':
-      return <GuruDashboard />;
+      DashboardComponent = GuruDashboard; break;
     default:
-      return <StaffDashboard />;
+      DashboardComponent = StaffDashboard;
   }
+
+  return (
+    <div className="space-y-4">
+      {!isAdmin && <AnnouncementsCard />}
+      <DashboardComponent />
+    </div>
+  );
 }

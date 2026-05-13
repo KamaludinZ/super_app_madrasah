@@ -1,14 +1,46 @@
 [
   {
-    "content": "A. Frontend E2E Iterasi 1 — DONE (95% pass, 0 bug)",
+    "content": "Backend lengkap (password policy, announcements, notifications, maintenance, Excel exports) — SEMUA TEST PASS",
     "status": "completed"
   },
   {
-    "content": "D. Refactor backend (server.py 3173 → 90, 16 routers + core.py) — DONE, regression Iter1 100%, Batch A 96.1%",
+    "content": "Frontend: ChangePasswordDialog + auto-prompt on dashboard — DONE & TERVERIFIKASI",
     "status": "completed"
   },
   {
-    "content": "Tanyakan ke user prioritas berikutnya (Phase 6 / Phase 5 / SOP / Phase 7)",
+    "content": "Frontend: NotificationBell + AnnouncementsCard — DONE & TERVERIFIKASI (badge 2 muncul, pengumuman ter-render markdown)",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: AdminAnnouncementsPage (/admin/pengumuman) + nav link — DONE",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: ErrorPage + MaintenancePage + 404 catch-all — DONE & TERVERIFIKASI",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: Landing page MadrasahBackdrop (8-point stars, crescent moon, book, pen, arabesque) — DONE & TERVERIFIKASI",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: AdminBackupPage tambah Excel Export section — DONE",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: PanduanPage + 12 dokumen markdown internal — DONE",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: Maintenance toggle di AdminSettingsPage tab Maintenance — DONE",
+    "status": "completed"
+  },
+  {
+    "content": "Docs: 9 file Markdown di /app/docs/ untuk akses offline",
     "status": "in_progress"
+  },
+  {
+    "content": "Testing final: regression iterasi1 + endpoint baru E2E",
+    "status": "pending"
   }
 ]

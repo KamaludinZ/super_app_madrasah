@@ -23,6 +23,7 @@ from routers import (
     health,
     holidays_tasks,
     journals,
+    notifications,
     phase4,
     public,
     rooms,
@@ -58,6 +59,7 @@ api_router.include_router(admin.router)
 api_router.include_router(public.router)
 api_router.include_router(holidays_tasks.router)
 api_router.include_router(phase4.router)
+api_router.include_router(notifications.router)
 
 app.include_router(api_router)
 

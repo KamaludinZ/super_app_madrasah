@@ -1,5 +1,5 @@
 """Authentication: captcha, login, role switch, me, logout, forgot/reset password."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,7 +31,50 @@ from email_utils import (
 )
 from models import CaptchaResponse, LoginRequest, LoginResponse, RoleSwitchRequest
 
+
 router = APIRouter()
+
+
+# ============================================================
+# PASSWORD POLICY HELPERS
+# ============================================================
+PASSWORD_REMINDER_MONTHS = 6
+
+
+def _password_change_status(user: Dict) -> Dict:
+    """Decide whether to prompt user to change password.
+
+    Returns: { should_prompt: bool, reason: 'first_login'|'expired'|None, days_overdue: int }
+    """
+    now = datetime.now(timezone.utc)
+    dismissed_until = user.get('password_change_dismissed_until')
+    if dismissed_until:
+        try:
+            d = datetime.fromisoformat(dismissed_until.replace('Z', '+00:00'))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            if now < d:
+                return {'should_prompt': False, 'reason': None, 'days_overdue': 0}
+        except Exception:
+            pass
+
+    changed_at = user.get('password_changed_at')
+    if not changed_at:
+        return {'should_prompt': True, 'reason': 'first_login', 'days_overdue': 0,
+                'message': 'Selamat datang! Demi keamanan akun Anda, kami sangat menyarankan untuk mengubah password default. Anda boleh mengubahnya sekarang atau menundanya 30 hari.'}
+    try:
+        ts = datetime.fromisoformat(changed_at.replace('Z', '+00:00'))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+    except Exception:
+        return {'should_prompt': True, 'reason': 'first_login', 'days_overdue': 0,
+                'message': 'Demi keamanan akun, mohon ubah password Anda.'}
+    cutoff = ts + timedelta(days=30 * PASSWORD_REMINDER_MONTHS)
+    if now >= cutoff:
+        overdue = (now - cutoff).days
+        return {'should_prompt': True, 'reason': 'expired', 'days_overdue': overdue,
+                'message': f'Sudah lebih dari {PASSWORD_REMINDER_MONTHS} bulan sejak Anda terakhir mengubah password. Demi keamanan akun, mohon perbarui password Anda. (Anda boleh menundanya 30 hari).'}
+    return {'should_prompt': False, 'reason': None, 'days_overdue': 0}
 
 
 @router.get("/auth/captcha", response_model=CaptchaResponse)
@@ -97,6 +140,7 @@ async def switch_role(req: RoleSwitchRequest, request: Request, user: Dict = Dep
 @router.get("/auth/me")
 async def me(user: Dict = Depends(get_current_user)):
     user.pop('password_hash', None)
+    user['password_status'] = _password_change_status(user)
     return user
 
 
@@ -104,6 +148,51 @@ async def me(user: Dict = Depends(get_current_user)):
 async def logout(request: Request, user: Dict = Depends(get_current_user)):
     await log_audit(user, 'logout', 'session', request=request)
     return {'message': 'Logged out'}
+
+
+# ============================================================
+# CHANGE / DISMISS PASSWORD
+# ============================================================
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/auth/change-password")
+async def change_password(req: ChangePasswordRequest, request: Request,
+                          user: Dict = Depends(get_current_user)):
+    """User mengubah password sendiri. Wajib verifikasi password lama dulu."""
+    if len(req.new_password) < 6:
+        raise HTTPException(400, "Password baru minimal 6 karakter")
+    if req.current_password == req.new_password:
+        raise HTTPException(400, "Password baru tidak boleh sama dengan password lama")
+    db_user = await db.users.find_one({'id': user['id']})
+    if not db_user or not verify_password(req.current_password, db_user['password_hash']):
+        await log_security('password_change_failed', user.get('username'),
+                           {'reason': 'wrong_current_password'}, request)
+        raise HTTPException(401, "Password lama salah")
+    await db.users.update_one({'id': user['id']}, {'$set': {
+        'password_hash': hash_password(req.new_password),
+        'password_changed_at': datetime.now(timezone.utc).isoformat(),
+        'password_change_dismissed_until': None,
+    }})
+    await log_security('password_change_success', user.get('username'),
+                       {'method': 'self_service'}, request)
+    await log_audit(user, 'change_password', 'user', user['id'], request=request)
+    return {'message': 'Password berhasil diubah. Silakan gunakan password baru pada login berikutnya.'}
+
+
+@router.post("/auth/dismiss-password-reminder")
+async def dismiss_password_reminder(request: Request, days: int = 30,
+                                    user: Dict = Depends(get_current_user)):
+    """Tunda pengingat ganti password selama N hari (default 30)."""
+    days = max(1, min(days, 90))  # clamp 1-90 hari
+    snooze_until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+    await db.users.update_one({'id': user['id']},
+                              {'$set': {'password_change_dismissed_until': snooze_until}})
+    await log_audit(user, 'dismiss_password_reminder', 'user', user['id'],
+                    details={'snooze_days': days}, request=request)
+    return {'message': f'Pengingat ditunda {days} hari.', 'dismissed_until': snooze_until}
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -165,6 +254,10 @@ async def reset_password(req: ResetPasswordRequest, request: Request):
     if not user:
         raise HTTPException(404, "User tidak ditemukan")
     await db.users.update_one({'id': user['id']},
-                              {'$set': {'password_hash': hash_password(req.new_password)}})
+                              {'$set': {
+                                  'password_hash': hash_password(req.new_password),
+                                  'password_changed_at': datetime.now(timezone.utc).isoformat(),
+                                  'password_change_dismissed_until': None,
+                              }})
     await log_security('password_reset', user.get('username'), {'method': 'email_token'}, request)
     return {'message': 'Password berhasil direset. Silakan login.'}

@@ -38,4 +38,8 @@ async def public_settings():
         'teaching_slots': s.get('teaching_slots', []),
         'idle_timeout_minutes': s.get('idle_timeout_minutes', 30),
         'session_max_hours': s.get('session_max_hours', 12),
+        # Maintenance mode (public so frontend can show maintenance page)
+        'maintenance_mode': s.get('maintenance_mode', False),
+        'maintenance_message': s.get('maintenance_message'),
+        'maintenance_ends_at': s.get('maintenance_ends_at'),
     }

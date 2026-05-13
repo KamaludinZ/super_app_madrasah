@@ -36,15 +36,33 @@ import AchievementsPage from '@/pages/AchievementsPage';
 import EkstrakurikulerPage from '@/pages/EkstrakurikulerPage';
 import GradesInputPage from '@/pages/GradesInputPage';
 import RaporPage from '@/pages/RaporPage';
+import AnnouncementsListPage from '@/pages/AnnouncementsListPage';
+import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage';
+import PanduanPage from '@/pages/PanduanPage';
+import ErrorPage from '@/pages/ErrorPage';
+import MaintenancePage from '@/pages/MaintenancePage';
 
 import './App.css';
+
+function MaintenanceGate({ children }) {
+  const { settings, user } = useAuth();
+  const isAdmin = (user?.roles || []).includes('admin');
+  if (settings?.maintenance_mode && !isAdmin) {
+    return <MaintenancePage />;
+  }
+  return children;
+}
 
 function RequireAuth() {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return null;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  return <AppShell><Outlet /></AppShell>;
+  return (
+    <MaintenanceGate>
+      <AppShell><Outlet /></AppShell>
+    </MaintenanceGate>
+  );
 }
 
 function App() {
@@ -57,6 +75,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/public/monitoring" element={<PublicMonitoring />} />
+          <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
             <Route path="/dashboard" element={<DashboardRouter />} />
@@ -84,6 +103,7 @@ function App() {
             <Route path="/admin/import" element={<AdminImportPage />} />
             <Route path="/admin/holidays" element={<AdminHolidaysPage />} />
             <Route path="/admin/backup" element={<AdminBackupPage />} />
+            <Route path="/admin/pengumuman" element={<AdminAnnouncementsPage />} />
             <Route path="/piket/tugas" element={<PiketTasksPage />} />
             <Route path="/jadwal/atur" element={<MySchedulePage />} />
             <Route path="/admin/mutasi" element={<AdminMutationsPage />} />
@@ -91,8 +111,12 @@ function App() {
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />
             <Route path="/rapor" element={<RaporPage />} />
+            <Route path="/pengumuman" element={<AnnouncementsListPage />} />
+            <Route path="/panduan" element={<PanduanPage />} />
+            <Route path="/panduan/:slug" element={<PanduanPage />} />
+            <Route path="/error/:code" element={<ErrorPage />} />
           </Route>
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<ErrorPage code={404} />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

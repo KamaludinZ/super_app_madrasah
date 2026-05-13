@@ -297,3 +297,128 @@ def parse_student_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
             'phone': str(row[10]).strip() if row[10] else None,
         })
     return rows
+
+
+
+# ============================================================
+# EXPORTERS (snapshot data to Excel)
+# ============================================================
+def _make_export_workbook(sheet_name: str, headers: List[str],
+                          rows: List[List[Any]], col_widths: List[int]) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF', size=11)
+        cell.fill = PatternFill('solid', fgColor=BRAND_HEX)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = Border(bottom=Side(style='thick', color=GOLD_HEX))
+    ws.row_dimensions[1].height = 26
+    for r in rows:
+        ws.append(r)
+    for idx, w in enumerate(col_widths):
+        letter = ws.cell(row=1, column=idx + 1).column_letter
+        ws.column_dimensions[letter].width = w
+    ws.freeze_panes = 'A2'
+    return workbook_to_bytes(wb)
+
+
+def export_users_xlsx(users: List[Dict[str, Any]]) -> bytes:
+    """Export users (excluding password_hash) to Excel."""
+    headers = ['username', 'nama_lengkap', 'nip_nuptk', 'nisn', 'email', 'phone',
+               'roles', 'gender', 'kelas_id', 'wali_kelas_id', 'aktif', 'tanggal_dibuat',
+               'mutasi', 'tanggal_mutasi']
+    rows = []
+    for u in users:
+        rows.append([
+            u.get('username', ''),
+            u.get('full_name', ''),
+            u.get('nip_nuptk', '') or '',
+            u.get('nisn', '') or '',
+            u.get('email', '') or '',
+            u.get('phone', '') or '',
+            ','.join(u.get('roles', [])),
+            u.get('gender', '') or '',
+            u.get('student_class_id', '') or '',
+            u.get('homeroom_class_id', '') or '',
+            'Ya' if u.get('is_active', True) else 'Tidak',
+            str(u.get('created_at', ''))[:19],
+            u.get('mutation_type', '') or '',
+            u.get('mutation_date', '') or '',
+        ])
+    widths = [16, 28, 16, 14, 26, 16, 22, 8, 18, 18, 8, 20, 10, 14]
+    return _make_export_workbook('Users', headers, rows, widths)
+
+
+def export_students_xlsx(students: List[Dict[str, Any]]) -> bytes:
+    """Export students with class name resolved."""
+    headers = ['username', 'NISN', 'nama_lengkap', 'kelas', 'gender',
+               'tempat_lahir', 'tanggal_lahir', 'alamat', 'email', 'phone',
+               'aktif', 'mutasi', 'tanggal_mutasi']
+    rows = []
+    for s in students:
+        rows.append([
+            s.get('username', ''),
+            s.get('nisn', '') or '',
+            s.get('full_name', ''),
+            s.get('class_name', '') or '',
+            s.get('gender', '') or '',
+            s.get('birth_place', '') or '',
+            s.get('birth_date', '') or '',
+            s.get('address', '') or '',
+            s.get('email', '') or '',
+            s.get('phone', '') or '',
+            'Ya' if s.get('is_active', True) else 'Tidak',
+            s.get('mutation_type', '') or '',
+            s.get('mutation_date', '') or '',
+        ])
+    widths = [16, 14, 28, 10, 8, 20, 14, 30, 26, 16, 8, 10, 14]
+    return _make_export_workbook('Siswa', headers, rows, widths)
+
+
+def export_schedules_xlsx(schedules: List[Dict[str, Any]]) -> bytes:
+    """Export schedules with resolved names."""
+    headers = ['hari', 'jam_mulai', 'jam_selesai', 'kelas', 'mapel_kode', 'mapel',
+               'guru', 'ruang', 'semester', 'status']
+    rows = []
+    for s in schedules:
+        rows.append([
+            s.get('day', ''),
+            s.get('start_time', ''),
+            s.get('end_time', ''),
+            s.get('class_name', '') or '',
+            s.get('subject_code', '') or '',
+            s.get('subject_name', '') or '',
+            s.get('teacher_name', '') or '',
+            s.get('room_name', '') or '',
+            s.get('semester', '') or '',
+            s.get('status', 'submitted'),
+        ])
+    widths = [10, 10, 10, 10, 10, 22, 22, 12, 10, 12]
+    return _make_export_workbook('Jadwal', headers, rows, widths)
+
+
+def export_grades_xlsx(grades: List[Dict[str, Any]]) -> bytes:
+    """Export grade entries."""
+    headers = ['NISN', 'nama_siswa', 'kelas', 'mapel_kode', 'mapel',
+               'semester', 'nilai_pengetahuan', 'nilai_keterampilan', 'nilai_akhir',
+               'predikat', 'deskripsi', 'tanggal_input']
+    rows = []
+    for g in grades:
+        rows.append([
+            g.get('student_nisn', '') or '',
+            g.get('student_name', '') or '',
+            g.get('class_name', '') or '',
+            g.get('subject_code', '') or '',
+            g.get('subject_name', '') or '',
+            g.get('semester', '') or '',
+            g.get('nilai_pengetahuan', '') if g.get('nilai_pengetahuan') is not None else '',
+            g.get('nilai_keterampilan', '') if g.get('nilai_keterampilan') is not None else '',
+            g.get('nilai_akhir', '') if g.get('nilai_akhir') is not None else '',
+            g.get('predicate', '') or '',
+            g.get('description', '') or '',
+            str(g.get('submitted_at', ''))[:19],
+        ])
+    widths = [14, 28, 10, 12, 22, 10, 14, 14, 12, 10, 30, 20]
+    return _make_export_workbook('Nilai', headers, rows, widths)

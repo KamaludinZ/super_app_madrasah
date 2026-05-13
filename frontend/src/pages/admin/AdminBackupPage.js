@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import {
   Database, Download, Upload, Loader2, ShieldAlert, History,
-  CheckCircle2, FileJson, HardDrive, Clock, Info,
+  CheckCircle2, FileJson, HardDrive, Clock, Info, FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -60,6 +60,30 @@ export default function AdminBackupPage() {
       await refresh();
     } catch (e) {
       toast.error('Gagal export backup');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doExcelExport = async (kind) => {
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('matsa_token');
+      const r = await fetch(`${BACKEND_URL}/api/admin/export/${kind}-excel`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error('Gagal');
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.download = `export_${kind}_${ts}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Export ${kind} berhasil diunduh`);
+    } catch (e) {
+      toast.error(`Gagal export ${kind}`);
     } finally {
       setBusy(false);
     }
@@ -190,6 +214,45 @@ export default function AdminBackupPage() {
             <Upload className="h-4 w-4" /> Pilih File Backup (.json)
           </Button>
           <input ref={inputRef} type="file" accept=".json" className="hidden" onChange={onFileSelected} />
+        </CardContent>
+      </Card>
+
+      {/* Excel Exports */}
+      <Card data-testid="excel-export-card">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
+            <h2 className="text-base font-semibold">Export Data ke Excel</h2>
+            <Badge variant="outline" className="ml-auto text-xs">Untuk laporan</Badge>
+          </div>
+          <p className="text-sm text-slate-600">
+            Download snapshot data dalam format .xlsx — siap untuk laporan ke Kemenag/Dapodik atau diolah lebih lanjut.
+            Berbeda dengan backup JSON, file Excel ini tidak bisa di-restore tetapi sangat mudah dibaca.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {[
+              { kind: 'users', label: 'Pengguna', desc: 'Semua akun + roles', testid: 'excel-export-users' },
+              { kind: 'students', label: 'Siswa', desc: 'Data siswa + kelas', testid: 'excel-export-students' },
+              { kind: 'schedules', label: 'Jadwal', desc: 'Jadwal mingguan', testid: 'excel-export-schedules' },
+              { kind: 'grades', label: 'Nilai', desc: 'Rekap nilai E-Rapor', testid: 'excel-export-grades' },
+            ].map((e) => (
+              <Button
+                key={e.kind}
+                variant="outline"
+                disabled={busy}
+                onClick={() => doExcelExport(e.kind)}
+                data-testid={e.testid}
+                className="h-auto flex-col items-start py-3 gap-1 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-400"
+              >
+                <div className="flex items-center gap-1.5 w-full">
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-700" />
+                  <span className="font-semibold text-sm">{e.label}</span>
+                  <Download className="h-3 w-3 ml-auto opacity-50" />
+                </div>
+                <span className="text-[10px] text-slate-500 normal-case font-normal">{e.desc}</span>
+              </Button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

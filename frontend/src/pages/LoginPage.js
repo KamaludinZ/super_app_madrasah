@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import MadrasahBackdrop from '@/components/branding/MadrasahBackdrop';
 
 export default function LoginPage() {
   const nav = useNavigate();
@@ -63,8 +64,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-hero-wash flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-pattern-geometric opacity-50 pointer-events-none" />
+    <div className="min-h-screen bg-hero-wash flex items-center justify-center p-4 relative overflow-hidden">
+      <MadrasahBackdrop />
+      <div className="absolute inset-0 bg-pattern-geometric opacity-30 pointer-events-none" />
       <div className="relative w-full max-w-5xl grid lg:grid-cols-2 gap-8 items-center">
         {/* Left brand panel - hidden on mobile */}
         <motion.div

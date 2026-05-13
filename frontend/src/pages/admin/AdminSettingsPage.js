@@ -144,6 +144,7 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="jurnal" data-testid="tab-jurnal-config">Jurnal & GPS</TabsTrigger>
           <TabsTrigger value="session" data-testid="tab-session">Sesi & Keamanan</TabsTrigger>
           <TabsTrigger value="smtp" data-testid="tab-smtp">SMTP & Email</TabsTrigger>
+          <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="identity" className="mt-4 space-y-4">
@@ -374,6 +375,56 @@ export default function AdminSettingsPage() {
                   Isi <strong>SMTP Host</strong> terlebih dahulu, lalu klik <strong>Simpan Pengaturan</strong>, baru lakukan uji coba.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="maintenance" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                Mode Maintenance
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Saat aktif, semua pengguna non-admin akan melihat halaman maintenance. Admin tetap dapat mengakses sistem untuk perbaikan.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50">
+                <div className="flex-1">
+                  <Label className="text-sm font-semibold text-amber-900">Aktifkan Mode Maintenance</Label>
+                  <p className="text-xs text-amber-800 mt-0.5">Pengguna non-admin tidak bisa mengakses aplikasi.</p>
+                </div>
+                <Switch
+                  checked={!!form.maintenance_mode}
+                  onCheckedChange={(v) => setForm({ ...form, maintenance_mode: v })}
+                  data-testid="toggle-maintenance"
+                />
+              </div>
+              <div>
+                <Label htmlFor="mm-msg">Pesan Maintenance (opsional)</Label>
+                <textarea
+                  id="mm-msg" rows={3}
+                  value={form.maintenance_message || ''}
+                  onChange={(e) => setForm({ ...form, maintenance_message: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006837]/30"
+                  placeholder="Contoh: Sistem sedang diperbarui ke versi 2.0. Mohon menunggu hingga pukul 22:00 WIB."
+                  data-testid="input-maintenance-message"
+                />
+              </div>
+              <div>
+                <Label htmlFor="mm-end">Estimasi Selesai (opsional)</Label>
+                <Input
+                  id="mm-end" type="datetime-local"
+                  value={form.maintenance_ends_at || ''}
+                  onChange={(e) => setForm({ ...form, maintenance_ends_at: e.target.value })}
+                  data-testid="input-maintenance-ends"
+                />
+              </div>
+              <p className="text-xs text-slate-500 italic">
+                Jangan lupa klik <strong>Simpan Pengaturan</strong> di bawah agar perubahan berlaku.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
