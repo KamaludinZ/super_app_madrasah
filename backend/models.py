@@ -70,6 +70,11 @@ class UserModel(BaseModel):
     address: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: bool = True
+    # Mutation tracking (for stats: mutasi masuk/keluar di TP aktif)
+    mutation_type: Optional[str] = None  # 'masuk' | 'keluar' | None
+    mutation_ay_id: Optional[str] = None  # TP saat mutasi
+    mutation_date: Optional[str] = None  # tanggal mutasi (YYYY-MM-DD)
+    mutation_note: Optional[str] = None  # alasan/keterangan
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
 

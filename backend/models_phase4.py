@@ -10,19 +10,27 @@ from pydantic import BaseModel, Field, ConfigDict
 class StudentAchievementModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    student_id: str
-    name: str  # nama lomba/prestasi
-    category: Optional[str] = None  # akademik / non-akademik / lainnya
-    level: Optional[str] = None  # kota / kabupaten / provinsi / nasional / internasional
-    rank: Optional[str] = None  # juara 1 / 2 / 3 / harapan / dll
-    organizer: Optional[str] = None  # penyelenggara
-    date: Optional[str] = None  # tanggal prestasi (YYYY-MM-DD)
+    # Holder type: 'siswa' | 'guru' | 'tendik' | 'madrasah'
+    holder_type: str = 'siswa'
+    # For siswa/guru/tendik: user_id; for madrasah: None
+    student_id: Optional[str] = None  # tetap dipakai untuk backward compat (holder_type='siswa')
+    holder_id: Optional[str] = None  # user_id untuk guru/tendik
+    holder_name: Optional[str] = None  # nama display (terutama untuk madrasah)
+    # Core fields
+    name: str  # Nama Lomba
+    bidang_lomba: Optional[str] = None  # Bidang Lomba (Matematika, Fisika, Lari, dll)
+    category: Optional[str] = None  # Kategori Lomba (akademik / non-akademik / olahraga / seni / keagamaan / lainnya)
+    level: Optional[str] = None  # Tingkat (sekolah/kecamatan/kab_kota/provinsi/nasional/internasional)
+    rank: Optional[str] = None  # Peringkat (Juara 1/2/3/Harapan/dll)
+    organizer: Optional[str] = None  # Nama Penyelenggara
+    date: Optional[str] = None  # Tanggal (YYYY-MM-DD)
+    year: Optional[int] = None  # Tahun (auto-derive dari date saat backend create kalau kosong)
     description: Optional[str] = None
-    certificate_url: Optional[str] = None  # base64 image of certificate
+    certificate_url: Optional[str] = None  # base64
     is_verified: bool = False
     verified_by: Optional[str] = None
     verified_at: Optional[datetime] = None
-    submitted_by: Optional[str] = None  # user_id
+    submitted_by: Optional[str] = None
     submitted_at: datetime = Field(default_factory=datetime.utcnow)
 
 

@@ -1,42 +1,34 @@
 [
   {
-    "content": "Fix backend crash: Move BaseModel import to top of server.py",
+    "content": "Backend: Tambah field mutation_type/mutation_ay_id di UserModel + extend StudentAchievementModel dengan holder_type, holder_name, bidang_lomba, tahun",
     "status": "completed"
   },
   {
-    "content": "Verify backend services running + sanity check Phase 4 endpoints with curl",
+    "content": "Backend: Endpoint GET /api/admin/stats/students (total, kelas 7/8/9, mutasi) + GET /api/admin/stats/achievements (total, kab/kota/provinsi/nasional/internasional)",
     "status": "completed"
   },
   {
-    "content": "Run testing agent for Phase 4 backend (Excel I/O, SMTP, Reset Pwd, Achievements, Ekstrakurikuler, E-Rapor)",
+    "content": "Backend: Update GET /api/achievements untuk filter holder_type + handle holder_type=madrasah (no user)",
     "status": "completed"
   },
   {
-    "content": "Frontend A: Admin Excel Imports UI (template download + upload xlsx for 5 entities)",
+    "content": "Frontend: Update AdminDashboard tampilkan 2 StatsOverview baru (Siswa + Prestasi)",
     "status": "completed"
   },
   {
-    "content": "Frontend B: Admin SMTP Settings tab + Forgot/Reset Password pages",
+    "content": "Frontend: Rename menu \"Prestasi Siswa\" → \"Data Prestasi\" di AppShell semua role",
     "status": "completed"
   },
   {
-    "content": "Frontend C: Modul Prestasi Siswa (Siswa submit + Wali Kelas/Admin verify + Galeri)",
+    "content": "Frontend: Refactor AchievementsPage → 4 tabs (Siswa/Guru/Tendik/Madrasah) + tabel kolom baru (No, Tahun, Nama Lomba, Bidang, Penyelenggara, Tingkat, Peringkat, Kategori, Sertifikat)",
     "status": "completed"
   },
   {
-    "content": "Frontend D: Modul Ekstrakurikuler (Coach kelola anggota, absensi, nilai)",
+    "content": "Frontend: Update form dialog tambah field Bidang Lomba + Tahun + Holder selector berdasarkan tab aktif",
     "status": "completed"
   },
   {
-    "content": "Frontend E: E-Rapor Digital (Guru input nilai + Siswa/Admin lihat rapor)",
-    "status": "completed"
-  },
-  {
-    "content": "Run frontend testing agent for full Phase 4 UI flows",
-    "status": "completed"
-  },
-  {
-    "content": "Update plan.md Phase 4 status COMPLETED",
-    "status": "completed"
+    "content": "Testing: verify stats endpoint + new fields backend, lalu frontend prestasi & dashboard",
+    "status": "in_progress"
   }
 ]

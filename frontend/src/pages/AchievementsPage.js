@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Trophy, Plus, Pencil, Trash2, CheckCircle2, Clock, Search, Upload,
   Medal, Image as ImageIcon, Award, Calendar, MapPin, Building, X,
+  GraduationCap, Users as UsersIcon, Briefcase, School,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -29,7 +30,7 @@ const CATEGORIES = [
 const LEVELS = [
   { value: 'sekolah', label: 'Sekolah/Madrasah' },
   { value: 'kecamatan', label: 'Kecamatan' },
-  { value: 'kota', label: 'Kota/Kabupaten' },
+  { value: 'kab_kota', label: 'Kab/Kota' },
   { value: 'provinsi', label: 'Provinsi' },
   { value: 'nasional', label: 'Nasional' },
   { value: 'internasional', label: 'Internasional' },
@@ -41,10 +42,27 @@ const RANKS = [
   'Finalis', 'Peserta Terbaik', 'Medali Emas', 'Medali Perak', 'Medali Perunggu',
 ];
 
+const HOLDER_TABS = [
+  { value: 'siswa', label: 'Prestasi Siswa', icon: GraduationCap, color: 'text-emerald-700' },
+  { value: 'guru', label: 'Prestasi Guru', icon: UsersIcon, color: 'text-blue-700' },
+  { value: 'tendik', label: 'Prestasi Tendik', icon: Briefcase, color: 'text-purple-700' },
+  { value: 'madrasah', label: 'Prestasi Madrasah', icon: School, color: 'text-amber-700' },
+];
+
 const EMPTY = {
-  name: '', category: 'akademik', level: 'kota', rank: 'Juara 1',
-  organizer: '', date: '', description: '', certificate_url: '',
-  student_id: '',
+  holder_type: 'siswa',
+  holder_id: '',
+  holder_name: '',
+  name: '',
+  bidang_lomba: '',
+  category: 'akademik',
+  level: 'kab_kota',
+  rank: 'Juara 1',
+  organizer: '',
+  date: '',
+  year: '',
+  description: '',
+  certificate_url: '',
 };
 
 function catColor(cat) {
@@ -57,17 +75,31 @@ function levelLabel(l) {
   return LEVELS.find((x) => x.value === l)?.label || l || '-';
 }
 
+function holderTypeOf(a) {
+  if (a.holder_type) return a.holder_type;
+  // Legacy backward compat
+  if (a.student_id) return 'siswa';
+  return 'madrasah';
+}
+
 export default function AchievementsPage() {
   const { activeRole, user } = useAuth();
   const isAdmin = activeRole === 'admin';
   const isWaliKelas = activeRole === 'wali_kelas';
   const isSiswa = activeRole === 'siswa';
+  const isGuru = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(activeRole);
+  const isTendik = activeRole === 'tenaga_kependidikan';
   const canVerify = isAdmin || isWaliKelas;
 
+  // Default tab based on role
+  const defaultHolder = isSiswa ? 'siswa' : isGuru ? 'guru' : isTendik ? 'tendik' : 'siswa';
+
+  const [holderTab, setHolderTab] = useState(defaultHolder);
+  const [statusTab, setStatusTab] = useState(canVerify ? 'pending' : 'all');
   const [items, setItems] = useState([]);
   const [students, setStudents] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState(canVerify ? 'pending' : 'mine');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -87,43 +119,66 @@ export default function AchievementsPage() {
     (async () => {
       try {
         await refresh();
-        if (canVerify) {
-          const { data } = await api.get('/users', { params: { role: 'siswa' } });
-          setStudents(data || []);
+        if (canVerify || isAdmin) {
+          const usersResp = await api.get('/users');
+          const all = usersResp.data || [];
+          setStudents(all.filter((u) => (u.roles || []).includes('siswa')));
+          setStaff(all.filter((u) => (u.roles || []).some((r) => r !== 'siswa')));
         }
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRole]);
 
+  // Default holder tab can be siswa for admin, but allow switching
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...EMPTY, student_id: isSiswa ? user?.id : '' });
+    let initialHolder = holderTab;
+    let initialId = '';
+    if (isSiswa) { initialHolder = 'siswa'; initialId = user?.id || ''; }
+    else if (isGuru) { initialHolder = 'guru'; initialId = user?.id || ''; }
+    else if (isTendik) { initialHolder = 'tendik'; initialId = user?.id || ''; }
+    setForm({ ...EMPTY, holder_type: initialHolder, holder_id: initialId });
     setOpen(true);
   };
 
   const openEdit = (a) => {
     setEditing(a);
-    setForm({ ...EMPTY, ...a, date: a.date || '' });
+    const ht = holderTypeOf(a);
+    setForm({
+      ...EMPTY,
+      ...a,
+      holder_type: ht,
+      holder_id: a.holder_id || a.student_id || '',
+      holder_name: a.holder_name || '',
+      year: a.year || (a.date ? parseInt(String(a.date).split('-')[0]) : ''),
+      date: a.date || '',
+    });
     setOpen(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.date) {
-      toast.error('Nama prestasi dan tanggal wajib diisi');
+    if (!form.name) { toast.error('Nama lomba wajib diisi'); return; }
+    if (!form.date && !form.year) { toast.error('Isi tanggal atau tahun lomba'); return; }
+    if (form.holder_type !== 'madrasah' && !form.holder_id) {
+      toast.error('Pilih ' + (form.holder_type === 'siswa' ? 'siswa' : 'pemegang prestasi'));
       return;
     }
-    if (canVerify && !form.student_id) {
-      toast.error('Pilih siswa');
-      return;
+    if (form.holder_type === 'madrasah' && !form.holder_name) {
+      // Default to school name
+      form.holder_name = 'Madrasah';
     }
     try {
+      const payload = {
+        ...form,
+        year: form.year ? parseInt(form.year) : (form.date ? parseInt(String(form.date).split('-')[0]) : null),
+      };
       if (editing) {
-        await api.put(`/achievements/${editing.id}`, form);
+        await api.put(`/achievements/${editing.id}`, payload);
         toast.success('Prestasi diperbarui');
       } else {
-        const payload = isSiswa ? { ...form, student_id: user.id } : form;
         await api.post('/achievements', payload);
         toast.success('Prestasi disimpan');
       }
@@ -139,9 +194,7 @@ export default function AchievementsPage() {
       await api.put(`/achievements/${a.id}/verify`, {});
       toast.success(`Prestasi "${a.name}" diverifikasi`);
       await refresh();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal verifikasi');
-    }
+    } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal verifikasi'); }
   };
 
   const handleDelete = async (a) => {
@@ -150,9 +203,7 @@ export default function AchievementsPage() {
       await api.delete(`/achievements/${a.id}`);
       toast.success('Prestasi dihapus');
       await refresh();
-    } catch (e) {
-      toast.error('Gagal hapus');
-    }
+    } catch (e) { toast.error('Gagal hapus'); }
   };
 
   const handleFile = async (e) => {
@@ -167,185 +218,230 @@ export default function AchievementsPage() {
     reader.readAsDataURL(f);
   };
 
-  const filtered = items.filter((a) => {
-    if (tab === 'mine' && a.student_id !== user?.id) return false;
-    if (tab === 'pending' && a.is_verified) return false;
-    if (tab === 'verified' && !a.is_verified) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      return (a.name || '').toLowerCase().includes(s) ||
-             (a.student_name || '').toLowerCase().includes(s) ||
-             (a.organizer || '').toLowerCase().includes(s);
-    }
-    return true;
-  });
+  const filteredByHolder = useMemo(() => {
+    return items.filter((a) => holderTypeOf(a) === holderTab);
+  }, [items, holderTab]);
 
-  const stats = {
-    total: items.length,
-    pending: items.filter((a) => !a.is_verified).length,
-    verified: items.filter((a) => a.is_verified).length,
-    mine: items.filter((a) => a.student_id === user?.id).length,
-  };
+  const filtered = useMemo(() => {
+    return filteredByHolder.filter((a) => {
+      if (statusTab === 'pending' && a.is_verified) return false;
+      if (statusTab === 'verified' && !a.is_verified) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        return (a.name || '').toLowerCase().includes(s) ||
+               (a.holder_full_name || '').toLowerCase().includes(s) ||
+               (a.holder_name || '').toLowerCase().includes(s) ||
+               (a.organizer || '').toLowerCase().includes(s) ||
+               (a.bidang_lomba || '').toLowerCase().includes(s);
+      }
+      return true;
+    });
+  }, [filteredByHolder, statusTab, search]);
+
+  const stats = useMemo(() => {
+    const all = filteredByHolder;
+    return {
+      total: all.length,
+      pending: all.filter((a) => !a.is_verified).length,
+      verified: all.filter((a) => a.is_verified).length,
+    };
+  }, [filteredByHolder]);
 
   if (loading) return <div className="text-sm text-slate-500">Memuat...</div>;
+
+  // Decide which holder tabs to show: siswa always; others if admin or pure tendik/guru
+  const visibleHolderTabs = HOLDER_TABS.filter((t) => {
+    if (isAdmin || canVerify) return true;
+    if (isSiswa) return t.value === 'siswa';
+    if (isGuru) return t.value === 'guru';
+    if (isTendik) return t.value === 'tendik';
+    return false;
+  });
+
+  const canAddInTab = () => {
+    if (holderTab === 'siswa') return isSiswa || isAdmin || isWaliKelas;
+    if (holderTab === 'guru') return isGuru || isAdmin;
+    if (holderTab === 'tendik') return isTendik || isAdmin;
+    if (holderTab === 'madrasah') return isAdmin;
+    return false;
+  };
 
   return (
     <div className="space-y-6" data-testid="achievements-page">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
-            <Trophy className="h-3 w-3 mr-1" /> Prestasi Siswa
+            <Trophy className="h-3 w-3 mr-1" /> Data Prestasi
           </Badge>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-            {isSiswa ? 'Prestasi Saya' : 'Portofolio Prestasi Siswa'}
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Data Prestasi</h1>
           <p className="text-sm text-slate-600 mt-1">
-            {isSiswa ? 'Catat semua prestasi yang pernah kamu raih' : 'Kelola dan verifikasi prestasi yang diraih siswa'}
+            Catatan prestasi siswa, guru, tenaga kependidikan, dan madrasah
           </p>
         </div>
-        {(isSiswa || isAdmin) && (
+        {canAddInTab() && (
           <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-achievement-button">
-            <Plus className="h-4 w-4" /> {isSiswa ? 'Tambah Prestasi' : 'Tambah'}
+            <Plus className="h-4 w-4" /> Tambah Prestasi
           </Button>
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard icon={Trophy} label="Total" value={stats.total} color="bg-slate-100 text-slate-700" />
-        <StatCard icon={Clock} label="Belum Verifikasi" value={stats.pending} color="bg-amber-100 text-amber-700" />
-        <StatCard icon={CheckCircle2} label="Terverifikasi" value={stats.verified} color="bg-emerald-100 text-emerald-700" />
-        {isSiswa && <StatCard icon={Medal} label="Prestasi Saya" value={stats.mine} color="bg-[#006837]/10 text-[#006837]" />}
-        {canVerify && <StatCard icon={Award} label="Galeri" value={stats.verified} color="bg-[#006837]/10 text-[#006837]" />}
-      </div>
+      {/* Holder Type Tabs */}
+      <Tabs value={holderTab} onValueChange={setHolderTab}>
+        <div className="overflow-x-auto">
+          <TabsList className="bg-white border border-slate-200 inline-flex min-w-full sm:min-w-0" data-testid="holder-tabs">
+            {visibleHolderTabs.map((t) => (
+              <TabsTrigger key={t.value} value={t.value} className="gap-2 whitespace-nowrap" data-testid={`holder-tab-${t.value}`}>
+                <t.icon className={`h-3.5 w-3.5 ${t.color}`} />
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-white border border-slate-200" data-testid="achievement-tabs">
-          {isSiswa && <TabsTrigger value="mine" data-testid="tab-mine">Prestasi Saya</TabsTrigger>}
-          {canVerify && <TabsTrigger value="pending" data-testid="tab-pending">Belum Diverifikasi <Badge className="ml-2 px-1.5 py-0 text-xs bg-amber-100 text-amber-800 border-amber-200">{stats.pending}</Badge></TabsTrigger>}
-          {canVerify && <TabsTrigger value="verified" data-testid="tab-verified">Terverifikasi <Badge className="ml-2 px-1.5 py-0 text-xs bg-emerald-100 text-emerald-800 border-emerald-200">{stats.verified}</Badge></TabsTrigger>}
-          <TabsTrigger value="gallery" data-testid="tab-gallery">Galeri</TabsTrigger>
-        </TabsList>
+        <TabsContent value={holderTab} className="mt-4 space-y-4">
+          {/* Stats summary for current tab */}
+          <div className="grid grid-cols-3 gap-3">
+            <SmallStat icon={Trophy} label="Total" value={stats.total} color="bg-slate-50 border-slate-200 text-slate-700" />
+            <SmallStat icon={Clock} label="Menunggu" value={stats.pending} color="bg-amber-50 border-amber-200 text-amber-700" />
+            <SmallStat icon={CheckCircle2} label="Terverifikasi" value={stats.verified} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+          </div>
 
-        <TabsContent value={tab} className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-                <Search className="h-4 w-4 text-slate-400" />
+          {/* Status sub-tabs */}
+          <Tabs value={statusTab} onValueChange={setStatusTab}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <TabsList className="bg-white border border-slate-200">
+                <TabsTrigger value="all" data-testid="status-tab-all">Semua</TabsTrigger>
+                <TabsTrigger value="pending" data-testid="status-tab-pending">Menunggu {stats.pending > 0 && <Badge className="ml-1.5 px-1.5 py-0 text-xs bg-amber-100 text-amber-800 border-amber-200">{stats.pending}</Badge>}</TabsTrigger>
+                <TabsTrigger value="verified" data-testid="status-tab-verified">Terverifikasi {stats.verified > 0 && <Badge className="ml-1.5 px-1.5 py-0 text-xs bg-emerald-100 text-emerald-800 border-emerald-200">{stats.verified}</Badge>}</TabsTrigger>
+                <TabsTrigger value="gallery" data-testid="status-tab-gallery">Galeri</TabsTrigger>
+              </TabsList>
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <Search className="h-4 w-4 text-slate-400 shrink-0" />
                 <Input
-                  placeholder="Cari nama prestasi, siswa, atau penyelenggara..."
+                  placeholder="Cari nama lomba, peraih, atau penyelenggara..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="max-w-md"
                   data-testid="achievement-search"
                 />
               </div>
+            </div>
 
-              {tab === 'gallery' ? (
-                <div className="p-4">
-                  {filtered.filter((a) => a.is_verified).length === 0 ? (
-                    <EmptyState icon={Award} title="Belum ada prestasi terverifikasi" subtitle="Galeri akan terisi setelah Wali Kelas/Admin memverifikasi prestasi." />
+            <TabsContent value={statusTab} className="mt-4">
+              <Card>
+                <CardContent className="p-0">
+                  {statusTab === 'gallery' ? (
+                    <div className="p-4">
+                      {filtered.filter((a) => a.is_verified).length === 0 ? (
+                        <EmptyState icon={Award} title="Belum ada prestasi terverifikasi" subtitle="Galeri akan terisi setelah Admin/Wali Kelas memverifikasi prestasi." />
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {filtered.filter((a) => a.is_verified).map((a) => (
+                            <GalleryCard key={a.id} a={a} onClick={() => setDetail(a)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filtered.filter((a) => a.is_verified).map((a) => (
-                        <GalleryCard key={a.id} a={a} onClick={() => setDetail(a)} />
-                      ))}
+                    <div className="overflow-x-auto">
+                      <Table data-testid="achievement-table">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12 text-center">No</TableHead>
+                            <TableHead className="w-20">Tahun</TableHead>
+                            <TableHead>Nama Lomba</TableHead>
+                            <TableHead>Bidang Lomba</TableHead>
+                            {holderTab !== 'madrasah' && <TableHead>Pemegang</TableHead>}
+                            <TableHead>Penyelenggara</TableHead>
+                            <TableHead>Tingkat Lomba</TableHead>
+                            <TableHead>Peringkat</TableHead>
+                            <TableHead>Kategori Lomba</TableHead>
+                            <TableHead className="w-24 text-center">Sertifikat</TableHead>
+                            <TableHead className="w-24 text-center">Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filtered.map((a, idx) => (
+                            <TableRow key={a.id} data-testid={`achievement-row-${a.id}`} className="cursor-pointer hover:bg-slate-50" onClick={() => setDetail(a)}>
+                              <TableCell className="text-center text-slate-500 font-mono">{idx + 1}</TableCell>
+                              <TableCell className="font-mono font-semibold">{a.year || (a.date ? String(a.date).split('-')[0] : '-')}</TableCell>
+                              <TableCell className="font-medium">
+                                <div className="line-clamp-2 max-w-[260px]">{a.name}</div>
+                              </TableCell>
+                              <TableCell className="text-sm">{a.bidang_lomba || <span className="italic text-slate-400">-</span>}</TableCell>
+                              {holderTab !== 'madrasah' && (
+                                <TableCell>
+                                  <div className="font-medium text-sm">{a.holder_full_name || a.holder_name || '-'}</div>
+                                  {holderTab === 'siswa' && a.class_name && <div className="text-xs text-slate-500">{a.class_name}</div>}
+                                  {holderTab !== 'siswa' && a.holder_nip_nuptk && <div className="text-xs text-slate-500 font-mono">{a.holder_nip_nuptk}</div>}
+                                </TableCell>
+                              )}
+                              <TableCell className="text-sm max-w-[200px]">
+                                <div className="line-clamp-2">{a.organizer || <span className="italic text-slate-400">-</span>}</div>
+                              </TableCell>
+                              <TableCell className="text-sm">{levelLabel(a.level)}</TableCell>
+                              <TableCell className="text-sm font-semibold">{a.rank || '-'}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={catColor(a.category) + ' text-xs'}>{catLabel(a.category)}</Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {a.certificate_url ? (
+                                  <ImageIcon className="h-4 w-4 text-emerald-600 mx-auto" />
+                                ) : (
+                                  <span className="text-slate-300 text-xs">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {a.is_verified ? (
+                                  <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1 text-xs">
+                                    <CheckCircle2 className="h-3 w-3" /> Verified
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 gap-1 text-xs">
+                                    <Clock className="h-3 w-3" /> Menunggu
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex justify-end gap-1">
+                                  {canVerify && !a.is_verified && (
+                                    <Button size="icon" variant="ghost" onClick={() => handleVerify(a)} className="text-emerald-600 hover:text-emerald-700" title="Verifikasi" data-testid={`verify-achievement-${a.id}`}>
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {(isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
+                                    <Button size="icon" variant="ghost" onClick={() => openEdit(a)} title="Edit" data-testid={`edit-achievement-${a.id}`}>
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {(isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
+                                    <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title="Hapus" data-testid={`delete-achievement-${a.id}`}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filtered.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={holderTab === 'madrasah' ? 11 : 12} className="text-center py-12">
+                                <EmptyState
+                                  icon={Trophy}
+                                  title="Belum ada data prestasi"
+                                  subtitle={canAddInTab() ? "Klik 'Tambah Prestasi' untuk menambah data" : 'Belum ada prestasi pada filter ini'}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table data-testid="achievement-table">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Prestasi</TableHead>
-                        {!isSiswa && <TableHead>Siswa</TableHead>}
-                        <TableHead>Kategori</TableHead>
-                        <TableHead>Tingkat</TableHead>
-                        <TableHead>Peringkat</TableHead>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((a) => (
-                        <TableRow key={a.id} data-testid={`achievement-row-${a.id}`} className="cursor-pointer" onClick={() => setDetail(a)}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {a.certificate_url ? <ImageIcon className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : null}
-                              <span className="line-clamp-1">{a.name}</span>
-                            </div>
-                            {a.organizer && <div className="text-xs text-slate-500 mt-0.5">{a.organizer}</div>}
-                          </TableCell>
-                          {!isSiswa && (
-                            <TableCell>
-                              <div className="font-medium text-sm">{a.student_name || '-'}</div>
-                              {a.class_name && <div className="text-xs text-slate-500">{a.class_name}</div>}
-                            </TableCell>
-                          )}
-                          <TableCell>
-                            <Badge variant="outline" className={catColor(a.category)}>{catLabel(a.category)}</Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">{levelLabel(a.level)}</TableCell>
-                          <TableCell className="text-sm font-semibold">{a.rank || '-'}</TableCell>
-                          <TableCell className="text-sm text-slate-600">{a.date || '-'}</TableCell>
-                          <TableCell>
-                            {a.is_verified ? (
-                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1">
-                                <CheckCircle2 className="h-3 w-3" /> Terverifikasi
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 gap-1">
-                                <Clock className="h-3 w-3" /> Menunggu
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex justify-end gap-1">
-                              {canVerify && !a.is_verified && (
-                                <Button size="icon" variant="ghost" onClick={() => handleVerify(a)}
-                                  className="text-emerald-600 hover:text-emerald-700"
-                                  title="Verifikasi"
-                                  data-testid={`verify-achievement-${a.id}`}>
-                                  <CheckCircle2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {(isAdmin || (isSiswa && a.student_id === user?.id && !a.is_verified)) && (
-                                <Button size="icon" variant="ghost" onClick={() => openEdit(a)}
-                                  title="Edit"
-                                  data-testid={`edit-achievement-${a.id}`}>
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {(isAdmin || (isSiswa && a.student_id === user?.id && !a.is_verified)) && (
-                                <Button size="icon" variant="ghost" onClick={() => handleDelete(a)}
-                                  className="text-rose-600 hover:text-rose-700"
-                                  title="Hapus"
-                                  data-testid={`delete-achievement-${a.id}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filtered.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={isSiswa ? 7 : 8} className="text-center py-12">
-                            <EmptyState
-                              icon={Trophy}
-                              title={isSiswa ? "Belum ada prestasi" : "Tidak ada data"}
-                              subtitle={isSiswa ? "Klik 'Tambah Prestasi' untuk mulai mencatat prestasimu" : "Belum ada prestasi pada filter ini"}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
 
@@ -356,10 +452,28 @@ export default function AchievementsPage() {
             <DialogTitle>{editing ? 'Edit Prestasi' : 'Tambah Prestasi'}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            {canVerify && (
+            {/* Holder Type selector - locked for siswa/guru/tendik unless admin */}
+            <div className="sm:col-span-2">
+              <Label>Kategori Pemegang Prestasi *</Label>
+              <Select
+                value={form.holder_type}
+                onValueChange={(v) => setForm({ ...form, holder_type: v, holder_id: (isAdmin || (v === 'siswa' && isWaliKelas)) ? '' : user?.id })}
+                disabled={!isAdmin && editing}
+              >
+                <SelectTrigger data-testid="ach-form-holder-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {HOLDER_TABS.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Holder ID/Name selector based on type */}
+            {form.holder_type === 'siswa' && (isAdmin || isWaliKelas) && (
               <div className="sm:col-span-2">
                 <Label>Siswa *</Label>
-                <Select value={form.student_id || ''} onValueChange={(v) => setForm({ ...form, student_id: v })}>
+                <Select value={form.holder_id || ''} onValueChange={(v) => setForm({ ...form, holder_id: v })}>
                   <SelectTrigger data-testid="ach-form-student"><SelectValue placeholder="Pilih siswa..." /></SelectTrigger>
                   <SelectContent>
                     {students.map((s) => (
@@ -369,14 +483,49 @@ export default function AchievementsPage() {
                 </Select>
               </div>
             )}
+            {(form.holder_type === 'guru' || form.holder_type === 'tendik') && isAdmin && (
+              <div className="sm:col-span-2">
+                <Label>{form.holder_type === 'guru' ? 'Guru' : 'Tenaga Kependidikan'} *</Label>
+                <Select value={form.holder_id || ''} onValueChange={(v) => setForm({ ...form, holder_id: v })}>
+                  <SelectTrigger data-testid="ach-form-staff"><SelectValue placeholder="Pilih pemegang..." /></SelectTrigger>
+                  <SelectContent>
+                    {staff
+                      .filter((u) => form.holder_type === 'guru'
+                        ? (u.roles || []).some((r) => ['guru','wali_kelas','guru_piket','guru_bk','guru_tata_tertib','guru_ekstrakurikuler'].includes(r))
+                        : (u.roles || []).includes('tenaga_kependidikan'))
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.full_name} {s.nip_nuptk ? `(${s.nip_nuptk})` : ''}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {form.holder_type === 'madrasah' && (
+              <div className="sm:col-span-2">
+                <Label>Nama Pemegang (Opsional)</Label>
+                <Input
+                  value={form.holder_name || ''}
+                  onChange={(e) => setForm({ ...form, holder_name: e.target.value })}
+                  placeholder="Mis. Tim Robotik, Madrasah, atau biarkan kosong"
+                  data-testid="ach-form-holder-name"
+                />
+              </div>
+            )}
+
             <div className="sm:col-span-2">
-              <Label>Nama Prestasi *</Label>
+              <Label>Nama Lomba *</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Mis. Juara 1 Olimpiade Matematika"
+                placeholder="Mis. Olimpiade Matematika Madrasah 2025"
                 data-testid="ach-form-name" />
             </div>
+            <div className="sm:col-span-2">
+              <Label>Bidang Lomba</Label>
+              <Input value={form.bidang_lomba || ''} onChange={(e) => setForm({ ...form, bidang_lomba: e.target.value })}
+                placeholder="Mis. Matematika, Fisika, Lari 100m, Pidato Bahasa Arab..."
+                data-testid="ach-form-bidang" />
+            </div>
             <div>
-              <Label>Kategori</Label>
+              <Label>Kategori Lomba</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger data-testid="ach-form-category"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -385,7 +534,7 @@ export default function AchievementsPage() {
               </Select>
             </div>
             <div>
-              <Label>Tingkat</Label>
+              <Label>Tingkat Lomba</Label>
               <Select value={form.level} onValueChange={(v) => setForm({ ...form, level: v })}>
                 <SelectTrigger data-testid="ach-form-level"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -403,25 +552,36 @@ export default function AchievementsPage() {
               </Select>
             </div>
             <div>
-              <Label>Tanggal *</Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
+              <Label>Tanggal Lomba</Label>
+              <Input type="date" value={form.date || ''}
+                onChange={(e) => {
+                  const d = e.target.value;
+                  setForm({ ...form, date: d, year: d ? String(d).split('-')[0] : form.year });
+                }}
                 data-testid="ach-form-date" />
             </div>
+            <div>
+              <Label>Tahun *</Label>
+              <Input type="number" min="2000" max="2099" value={form.year || ''}
+                onChange={(e) => setForm({ ...form, year: e.target.value })}
+                placeholder="2025"
+                data-testid="ach-form-year" />
+            </div>
             <div className="sm:col-span-2">
-              <Label>Penyelenggara</Label>
+              <Label>Nama Penyelenggara</Label>
               <Input value={form.organizer || ''} onChange={(e) => setForm({ ...form, organizer: e.target.value })}
-                placeholder="Mis. Dinas Pendidikan Provinsi Jawa Timur"
+                placeholder="Mis. Kanwil Kemenag Provinsi Jawa Timur"
                 data-testid="ach-form-organizer" />
             </div>
             <div className="sm:col-span-2">
               <Label>Deskripsi</Label>
               <Textarea value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Detail tambahan, cerita, atau catatan tentang prestasi ini..."
+                placeholder="Detail tambahan / cerita prestasi..."
                 rows={3}
                 data-testid="ach-form-description" />
             </div>
             <div className="sm:col-span-2">
-              <Label>Sertifikat / Foto (max 2MB)</Label>
+              <Label>Sertifikat / Foto (opsional, maks 2MB)</Label>
               <div className="mt-2 flex items-start gap-3">
                 {form.certificate_url ? (
                   <div className="relative">
@@ -439,7 +599,7 @@ export default function AchievementsPage() {
                   </label>
                 )}
                 <div className="text-xs text-slate-500 max-w-[280px]">
-                  Upload foto sertifikat, piala, atau dokumentasi. Mendukung JPG/PNG/WebP.
+                  Foto sertifikat / piala / dokumentasi (JPG/PNG/WebP).
                 </div>
               </div>
             </div>
@@ -465,16 +625,23 @@ export default function AchievementsPage() {
                 <img src={detail.certificate_url} alt="Sertifikat" className="w-full max-h-96 object-contain rounded-lg border border-slate-200 bg-slate-50" />
               )}
               <div className="grid grid-cols-2 gap-3">
+                <DetailItem icon={Calendar} label="Tahun" value={detail.year || (detail.date ? String(detail.date).split('-')[0] : '-')} />
                 <DetailItem icon={Award} label="Peringkat" value={detail.rank} />
-                <DetailItem icon={MapPin} label="Tingkat" value={levelLabel(detail.level)} />
+                <DetailItem icon={MapPin} label="Tingkat Lomba" value={levelLabel(detail.level)} />
                 <DetailItem icon={Calendar} label="Tanggal" value={detail.date} />
                 <DetailItem icon={Building} label="Penyelenggara" value={detail.organizer} />
+                <DetailItem icon={Trophy} label="Bidang Lomba" value={detail.bidang_lomba} />
                 <div className="col-span-2"><Badge variant="outline" className={catColor(detail.category)}>{catLabel(detail.category)}</Badge></div>
-                {detail.student_name && (
+                {(detail.holder_full_name || detail.holder_name) && (
                   <div className="col-span-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-xs text-slate-500 uppercase tracking-wide">Siswa</div>
-                    <div className="font-semibold">{detail.student_name}</div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">
+                      {holderTypeOf(detail) === 'siswa' ? 'Siswa' :
+                       holderTypeOf(detail) === 'guru' ? 'Guru' :
+                       holderTypeOf(detail) === 'tendik' ? 'Tenaga Kependidikan' : 'Madrasah'}
+                    </div>
+                    <div className="font-semibold">{detail.holder_full_name || detail.holder_name}</div>
                     {detail.class_name && <div className="text-xs text-slate-600">Kelas {detail.class_name}</div>}
+                    {detail.holder_nip_nuptk && <div className="text-xs text-slate-600 font-mono">{detail.holder_nip_nuptk}</div>}
                   </div>
                 )}
                 {detail.description && (
@@ -507,19 +674,15 @@ export default function AchievementsPage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }) {
+function SmallStat({ icon: Icon, label, value, color }) {
   return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`h-10 w-10 rounded-lg ${color} flex items-center justify-center`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <div className="text-2xl font-bold text-slate-900">{value}</div>
-          <div className="text-xs text-slate-600 uppercase tracking-wide">{label}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className={`rounded-xl border p-3 ${color}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{label}</span>
+        <Icon className="h-4 w-4 opacity-70" />
+      </div>
+      <div className="text-2xl font-extrabold tabular-nums mt-1">{value}</div>
+    </div>
   );
 }
 
@@ -539,10 +702,14 @@ function GalleryCard({ a, onClick }) {
       </div>
       <div className="p-3">
         <div className="font-bold text-slate-900 line-clamp-2">{a.name}</div>
-        <div className="text-xs text-slate-600 mt-1">{a.student_name} • {a.class_name || '-'}</div>
-        <div className="flex items-center gap-2 mt-2">
+        <div className="text-xs text-slate-600 mt-1">
+          {a.holder_full_name || a.holder_name || '-'}
+          {a.year && ` • ${a.year}`}
+        </div>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           <Badge variant="outline" className={catColor(a.category) + ' text-[10px]'}>{catLabel(a.category)}</Badge>
           {a.rank && <Badge variant="secondary" className="text-[10px]">{a.rank}</Badge>}
+          {a.level && <Badge variant="outline" className="text-[10px]">{levelLabel(a.level)}</Badge>}
         </div>
       </div>
     </button>

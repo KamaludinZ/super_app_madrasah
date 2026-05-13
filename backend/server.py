@@ -1019,6 +1019,73 @@ async def admin_stats(user: Dict = Depends(require_role('admin'))):
     }
 
 
+@api_router.get("/admin/stats/students")
+async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
+    """Statistik siswa: total, per tingkat (7/8/9), mutasi di TP aktif."""
+    ay = await get_active_academic_year()
+    # Total siswa (semua role siswa, is_active=True)
+    total = await db.users.count_documents({'roles': 'siswa', 'is_active': True})
+    # Per tingkat — join via student_class_id -> classes.grade
+    classes = await db.classes.find({'academic_year_id': ay['id']} if ay else {}, {'_id': 0, 'id': 1, 'grade': 1}).to_list(500)
+    grade_map = {c['id']: c.get('grade') for c in classes}
+    per_grade = {7: 0, 8: 0, 9: 0}
+    siswa_users = await db.users.find({'roles': 'siswa', 'is_active': True}, {'_id': 0, 'student_class_id': 1}).to_list(5000)
+    for s in siswa_users:
+        g = grade_map.get(s.get('student_class_id'))
+        if g in per_grade:
+            per_grade[g] += 1
+    # Mutasi (masuk + keluar) di TP aktif
+    mutasi_q = {'roles': 'siswa'}
+    if ay:
+        mutasi_q['mutation_ay_id'] = ay['id']
+    mutasi_q['mutation_type'] = {'$in': ['masuk', 'keluar']}
+    total_mutasi = await db.users.count_documents(mutasi_q)
+    mutasi_masuk = await db.users.count_documents({**mutasi_q, 'mutation_type': 'masuk'})
+    mutasi_keluar = await db.users.count_documents({**mutasi_q, 'mutation_type': 'keluar'})
+    return {
+        'total': total,
+        'kelas_7': per_grade[7],
+        'kelas_8': per_grade[8],
+        'kelas_9': per_grade[9],
+        'mutasi_total': total_mutasi,
+        'mutasi_masuk': mutasi_masuk,
+        'mutasi_keluar': mutasi_keluar,
+        'academic_year': ay.get('name') if ay else None,
+    }
+
+
+@api_router.get("/admin/stats/achievements")
+async def admin_stats_achievements(user: Dict = Depends(require_role('admin'))):
+    """Statistik prestasi: total, per tingkat lomba."""
+    # Bisa filter hanya verified, atau semua. Default: semua (admin lihat).
+    total = await db.achievements.count_documents({})
+    verified = await db.achievements.count_documents({'is_verified': True})
+    # Per tingkat
+    levels = ['sekolah', 'kecamatan', 'kab_kota', 'kota', 'kabupaten', 'provinsi', 'nasional', 'internasional']
+    by_level = {}
+    for lvl in levels:
+        by_level[lvl] = await db.achievements.count_documents({'level': lvl})
+    # Group kab/kota: gabungan dari 'kab_kota', 'kota', 'kabupaten'
+    kab_kota = by_level.get('kab_kota', 0) + by_level.get('kota', 0) + by_level.get('kabupaten', 0)
+    # Per holder_type
+    by_holder = {}
+    for ht in ['siswa', 'guru', 'tendik', 'madrasah']:
+        by_holder[ht] = await db.achievements.count_documents({'holder_type': ht})
+    # Legacy: yang belum punya holder_type tapi punya student_id dianggap siswa
+    legacy_siswa = await db.achievements.count_documents({'holder_type': {'$exists': False}, 'student_id': {'$ne': None}})
+    by_holder['siswa'] = by_holder.get('siswa', 0) + legacy_siswa
+    return {
+        'total': total,
+        'verified': verified,
+        'kab_kota': kab_kota,
+        'provinsi': by_level.get('provinsi', 0),
+        'nasional': by_level.get('nasional', 0),
+        'internasional': by_level.get('internasional', 0),
+        'by_holder': by_holder,
+        'by_level': by_level,
+    }
+
+
 # ============================================================
 # STUDENT DATA (Data Siswa)
 # ============================================================
@@ -1832,31 +1899,53 @@ from models_phase4 import (
 
 @api_router.get("/achievements")
 async def list_achievements(student_id: Optional[str] = None,
+                             holder_type: Optional[str] = None,
+                             holder_id: Optional[str] = None,
                              only_verified: bool = False,
+                             year: Optional[int] = None,
+                             level: Optional[str] = None,
                              user: Dict = Depends(get_current_user)):
     q = {}
     if student_id:
         q['student_id'] = student_id
+    if holder_type:
+        q['holder_type'] = holder_type
+    if holder_id:
+        q['$or'] = [{'holder_id': holder_id}, {'student_id': holder_id}]
     if only_verified:
         q['is_verified'] = True
-    # Permission: students can only see their own; admin/wk see all
+    if year:
+        q['year'] = year
+    if level:
+        q['level'] = level
+    # Permission: pure students can only see their own; admin/wk/teacher see all
     is_admin = 'admin' in user.get('roles', [])
-    if not is_admin and 'wali_kelas' not in user.get('roles', []):
-        if student_id and student_id != user['id'] and user['id'] not in [user['id']]:
-            # Allow seeing own
-            if user['id'] != student_id:
-                raise HTTPException(403, "Tidak diizinkan")
-        if not student_id:
-            q['student_id'] = user['id']
-    items = await db.achievements.find(q, {'_id': 0}).sort('date', -1).to_list(500)
+    is_wk = 'wali_kelas' in user.get('roles', [])
+    is_pure_siswa = 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1
+    if is_pure_siswa and not is_admin and not is_wk:
+        if not student_id and not holder_id:
+            q['$or'] = [{'student_id': user['id']}, {'holder_id': user['id']}]
+    items = await db.achievements.find(q, {'_id': 0}).sort([('year', -1), ('date', -1)]).to_list(1000)
     enriched = []
     for a in items:
-        s = await db.users.find_one({'id': a.get('student_id')}, {'_id': 0, 'full_name': 1, 'nisn': 1, 'student_class_id': 1})
-        if s:
-            a['student_name'] = s.get('full_name')
-            a['student_nisn'] = s.get('nisn')
-            cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
-            a['class_name'] = cls.get('name') if cls else None
+        # Backward compat: pre-existing achievements without holder_type
+        if not a.get('holder_type'):
+            a['holder_type'] = 'siswa' if a.get('student_id') else 'madrasah'
+        # Resolve holder name (student/guru/tendik via user lookup)
+        holder_uid = a.get('holder_id') or a.get('student_id')
+        if holder_uid:
+            u = await db.users.find_one({'id': holder_uid}, {'_id': 0, 'full_name': 1, 'nisn': 1, 'nip_nuptk': 1, 'student_class_id': 1, 'roles': 1})
+            if u:
+                a['holder_full_name'] = u.get('full_name')
+                if a['holder_type'] == 'siswa':
+                    a['student_name'] = u.get('full_name')
+                    a['student_nisn'] = u.get('nisn')
+                    cls = await db.classes.find_one({'id': u.get('student_class_id')}, {'_id': 0, 'name': 1})
+                    a['class_name'] = cls.get('name') if cls else None
+                else:
+                    a['holder_nip_nuptk'] = u.get('nip_nuptk')
+        elif a['holder_type'] == 'madrasah':
+            a['holder_full_name'] = a.get('holder_name') or 'Madrasah'
         if a.get('verified_by'):
             v = await db.users.find_one({'id': a['verified_by']}, {'_id': 0, 'full_name': 1})
             a['verifier_name'] = v.get('full_name') if v else None
@@ -1864,20 +1953,56 @@ async def list_achievements(student_id: Optional[str] = None,
     return enriched
 
 
+def _derive_year_from_date(date_str: Optional[str]) -> Optional[int]:
+    if not date_str:
+        return None
+    try:
+        return int(date_str.split('-')[0])
+    except Exception:
+        return None
+
+
 @api_router.post("/achievements")
 async def create_achievement(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
-    # Siswa can self-submit; admin can submit for anyone
-    target_student = payload.get('student_id') or user['id']
-    if 'siswa' in user.get('roles', []) and target_student != user['id']:
-        raise HTTPException(403, "Siswa hanya bisa input prestasi sendiri")
+    holder_type = payload.get('holder_type', 'siswa')
+    if holder_type not in ('siswa', 'guru', 'tendik', 'madrasah'):
+        raise HTTPException(400, "holder_type tidak valid")
+    holder_id = payload.get('holder_id') or payload.get('student_id')
+    # Permission rules
+    is_admin = 'admin' in user.get('roles', [])
+    is_wk = 'wali_kelas' in user.get('roles', [])
+    if holder_type == 'siswa':
+        # Pure siswa hanya boleh untuk dirinya
+        if 'siswa' in user.get('roles', []) and not (is_admin or is_wk):
+            if holder_id and holder_id != user['id']:
+                raise HTTPException(403, "Siswa hanya bisa input prestasi sendiri")
+            holder_id = user['id']
+        if not holder_id and not (is_admin or is_wk):
+            holder_id = user['id']
+    elif holder_type in ('guru', 'tendik'):
+        # Guru/tendik bisa input prestasi sendiri; admin bisa untuk siapa saja
+        if not is_admin:
+            if holder_id and holder_id != user['id']:
+                raise HTTPException(403, "Anda hanya bisa input prestasi sendiri")
+            holder_id = user['id']
+    else:  # madrasah
+        if not is_admin:
+            raise HTTPException(403, "Hanya admin yang bisa input prestasi madrasah")
+        holder_id = None
+    year = payload.get('year') or _derive_year_from_date(payload.get('date'))
     a = StudentAchievementModel(
-        student_id=target_student,
+        holder_type=holder_type,
+        student_id=holder_id if holder_type == 'siswa' else None,
+        holder_id=holder_id if holder_type != 'siswa' else None,
+        holder_name=payload.get('holder_name'),
         name=payload.get('name', ''),
+        bidang_lomba=payload.get('bidang_lomba'),
         category=payload.get('category'),
         level=payload.get('level'),
         rank=payload.get('rank'),
         organizer=payload.get('organizer'),
         date=payload.get('date'),
+        year=year,
         description=payload.get('description'),
         certificate_url=payload.get('certificate_url'),
         submitted_by=user['id'],
@@ -1885,7 +2010,8 @@ async def create_achievement(payload: Dict, request: Request, user: Dict = Depen
     doc = a.model_dump()
     doc['submitted_at'] = doc['submitted_at'].isoformat()
     await db.achievements.insert_one(doc)
-    await log_audit(user, 'create', 'achievement', a.id, details={'name': a.name}, request=request)
+    await log_audit(user, 'create', 'achievement', a.id,
+                   details={'name': a.name, 'holder_type': holder_type}, request=request)
     return serialize_doc(doc)
 
 
@@ -1896,10 +2022,14 @@ async def update_achievement(aid: str, payload: Dict, request: Request,
     if not existing:
         raise HTTPException(404, "Tidak ditemukan")
     is_admin = 'admin' in user.get('roles', [])
-    is_owner = existing.get('submitted_by') == user['id'] or existing.get('student_id') == user['id']
+    holder_uid = existing.get('holder_id') or existing.get('student_id')
+    is_owner = existing.get('submitted_by') == user['id'] or holder_uid == user['id']
     if not (is_admin or is_owner):
         raise HTTPException(403, "Tidak diizinkan")
     payload.pop('_id', None); payload.pop('id', None)
+    # Derive year if date changed
+    if 'date' in payload and not payload.get('year'):
+        payload['year'] = _derive_year_from_date(payload.get('date'))
     await db.achievements.update_one({'id': aid}, {'$set': payload})
     await log_audit(user, 'update', 'achievement', aid, request=request)
     doc = await db.achievements.find_one({'id': aid}, {'_id': 0})

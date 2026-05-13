@@ -35,13 +35,20 @@ function navForRole(role, roles) {
     if (role === 'guru' || role === 'wali_kelas') {
       items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
     }
+    // Teachers (incl wali kelas tabs etc) also see Data Prestasi to input their own
+    if (role !== 'wali_kelas') {
+      items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
+    }
+  }
+  if (role === 'tenaga_kependidikan') {
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
   }
   if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
-    items.push({ to: '/prestasi', label: 'Prestasi Siswa', icon: Trophy, testid: 'nav-prestasi-wk' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' });
     items.push({ to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' });
   }
   if (role === 'guru_piket') {
@@ -52,7 +59,7 @@ function navForRole(role, roles) {
   }
   if (role === 'siswa') {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
-    items.push({ to: '/prestasi', label: 'Prestasi Saya', icon: Trophy, testid: 'nav-prestasi-siswa' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
   }
@@ -69,7 +76,7 @@ function navForRole(role, roles) {
     items.push({ to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' });
     items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' });
-    items.push({ to: '/prestasi', label: 'Prestasi Siswa', icon: Trophy, testid: 'nav-prestasi-admin' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-admin' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-admin' });
     items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input-admin' });
     items.push({ to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-rapor-admin' });

@@ -1,11 +1,10 @@
 """
-Phase 4 Backend API Tests for Super Apps MATSANDATAMA
-Tests Excel Import/Export, SMTP, Password Reset, Achievements, Extracurriculars, E-Rapor
+Phase 4 Backend API Test - Achievements & Admin Stats
+Tests all Phase 4 achievement endpoints and admin statistics.
 """
 import requests
 import sys
 import json
-import time
 import re
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -28,8 +27,14 @@ class Phase4Tester:
         self.guru1_token = None
         self.walas7a_token = None
         self.siswa1_token = None
+        self.tendik1_token = None
         self.siswa1_id = None
-        self.ek1_token = None
+        self.guru1_id = None
+        self.tendik1_id = None
+        self.achievement_siswa_id = None
+        self.achievement_guru_id = None
+        self.achievement_tendik_id = None
+        self.achievement_madrasah_id = None
         self.test_results = []
         
     def log(self, message: str, level: str = "info"):
@@ -58,13 +63,13 @@ class Phase4Tester:
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=req_headers, params=params, timeout=15)
+                response = requests.get(url, headers=req_headers, params=params, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=req_headers, params=params, timeout=15)
+                response = requests.post(url, json=data, headers=req_headers, params=params, timeout=10)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=req_headers, params=params, timeout=15)
+                response = requests.put(url, json=data, headers=req_headers, params=params, timeout=10)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=req_headers, params=params, timeout=15)
+                response = requests.delete(url, headers=req_headers, params=params, timeout=10)
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
@@ -104,636 +109,477 @@ class Phase4Tester:
                 
         except Exception as e:
             self.tests_failed += 1
-            self.log(f"  FAILED - Exception: {str(e)}", "error")
+            self.log(f"  EXCEPTION - {str(e)}", "error")
             result = {
                 "test": name,
-                "status": "FAILED",
+                "status": "EXCEPTION",
                 "expected": expected_status,
-                "actual": "EXCEPTION",
+                "actual": "N/A",
                 "error": str(e),
             }
             self.test_results.append(result)
             return False, {}
     
-    def login_users(self):
-        """Login all required users for Phase 4 tests"""
+    def get_captcha_and_answer(self):
+        """Get captcha and calculate answer"""
+        success, captcha_data = self.test(
+            "GET /api/auth/captcha",
+            "GET", "auth/captcha", 200
+        )
+        if not success:
+            return None, None
+        
+        question = captcha_data.get('question', '')
+        match = re.search(r'Berapa (\d+) ([+\-]) (\d+)', question)
+        if match:
+            a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
+            answer = a + b if op == '+' else a - b
+            return captcha_data['challenge_id'], answer
+        return None, None
+    
+    def login_user(self, username: str, password: str) -> Optional[str]:
+        """Login and return token"""
+        captcha_id, captcha_answer = self.get_captcha_and_answer()
+        if not captcha_id:
+            self.log(f"Failed to get captcha for {username}", "error")
+            return None
+        
+        success, login_data = self.test(
+            f"POST /api/auth/login as {username}",
+            "POST", "auth/login", 200,
+            data={
+                "username": username,
+                "password": password,
+                "captcha_id": captcha_id,
+                "captcha_answer": captcha_answer
+            }
+        )
+        if success:
+            token = login_data.get('access_token')
+            user_id = login_data.get('user', {}).get('id')
+            self.log(f"  {username} logged in successfully. ID: {user_id}", "success")
+            return token, user_id
+        return None, None
+    
+    def run_all_tests(self):
+        """Run all Phase 4 tests"""
         self.log("=" * 80, "info")
-        self.log("PHASE 4 BACKEND API TESTS - SUPER APPS MATSANDATAMA", "info")
+        self.log("PHASE 4 - ACHIEVEMENTS & ADMIN STATS TEST SUITE", "info")
         self.log("=" * 80, "info")
-        self.log("\n[SETUP] Logging in test users", "info")
         
-        # Login admin
-        success, captcha = self.test("GET /api/auth/captcha (admin)", "GET", "auth/captcha", 200)
-        if success:
-            question = captcha['question']
-            match = re.search(r'Berapa (\d+) ([+\-*]) (\d+)', question)
-            if match:
-                a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
-                if op == '+':
-                    answer = a + b
-                elif op == '-':
-                    answer = a - b
-                else:  # *
-                    answer = a * b
-                
-                success, login_data = self.test(
-                    "POST /api/auth/login as admin",
-                    "POST", "auth/login", 200,
-                    data={
-                        "username": "admin",
-                        "password": "admin123",
-                        "captcha_id": captcha['challenge_id'],
-                        "captcha_answer": answer
-                    }
-                )
-                if success:
-                    self.admin_token = login_data['access_token']
-                    self.log(f"  Admin logged in successfully", "success")
+        # ============================================================
+        # SECTION 1: LOGIN ALL USERS
+        # ============================================================
+        self.log("\n[SECTION 1] Login All Test Users", "info")
         
-        # Login guru1
-        success, captcha = self.test("GET /api/auth/captcha (guru1)", "GET", "auth/captcha", 200)
-        if success:
-            question = captcha['question']
-            match = re.search(r'Berapa (\d+) ([+\-*]) (\d+)', question)
-            if match:
-                a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
-                answer = a + b if op == '+' else (a - b if op == '-' else a * b)
-                
-                success, login_data = self.test(
-                    "POST /api/auth/login as guru1",
-                    "POST", "auth/login", 200,
-                    data={
-                        "username": "guru1",
-                        "password": "guru123",
-                        "captcha_id": captcha['challenge_id'],
-                        "captcha_answer": answer
-                    }
-                )
-                if success:
-                    self.guru1_token = login_data['access_token']
-        
-        # Login walas7a
-        success, captcha = self.test("GET /api/auth/captcha (walas7a)", "GET", "auth/captcha", 200)
-        if success:
-            question = captcha['question']
-            match = re.search(r'Berapa (\d+) ([+\-*]) (\d+)', question)
-            if match:
-                a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
-                answer = a + b if op == '+' else (a - b if op == '-' else a * b)
-                
-                success, login_data = self.test(
-                    "POST /api/auth/login as walas7a",
-                    "POST", "auth/login", 200,
-                    data={
-                        "username": "walas7a",
-                        "password": "walas123",
-                        "captcha_id": captcha['challenge_id'],
-                        "captcha_answer": answer
-                    }
-                )
-                if success:
-                    self.walas7a_token = login_data['access_token']
-        
-        # Login siswa1
-        success, captcha = self.test("GET /api/auth/captcha (siswa1)", "GET", "auth/captcha", 200)
-        if success:
-            question = captcha['question']
-            match = re.search(r'Berapa (\d+) ([+\-*]) (\d+)', question)
-            if match:
-                a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
-                answer = a + b if op == '+' else (a - b if op == '-' else a * b)
-                
-                success, login_data = self.test(
-                    "POST /api/auth/login as siswa1",
-                    "POST", "auth/login", 200,
-                    data={
-                        "username": "siswa1",
-                        "password": "siswa123",
-                        "captcha_id": captcha['challenge_id'],
-                        "captcha_answer": answer
-                    }
-                )
-                if success:
-                    self.siswa1_token = login_data['access_token']
-                    self.siswa1_id = login_data['user']['id']
-        
-        # Login ek1 (guru_ekstrakurikuler)
-        success, captcha = self.test("GET /api/auth/captcha (ek1)", "GET", "auth/captcha", 200)
-        if success:
-            question = captcha['question']
-            match = re.search(r'Berapa (\d+) ([+\-*]) (\d+)', question)
-            if match:
-                a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
-                answer = a + b if op == '+' else (a - b if op == '-' else a * b)
-                
-                success, login_data = self.test(
-                    "POST /api/auth/login as ek1",
-                    "POST", "auth/login", 200,
-                    data={
-                        "username": "ek1",
-                        "password": "ek123",
-                        "captcha_id": captcha['challenge_id'],
-                        "captcha_answer": answer
-                    }
-                )
-                if success:
-                    self.ek1_token = login_data['access_token']
-        
+        self.admin_token, _ = self.login_user("admin", "admin123")
         if not self.admin_token:
             self.log("CRITICAL: Admin login failed. Cannot proceed.", "error")
-            return False
-        
-        return True
-    
-    def run_phase4_tests(self):
-        """Run all Phase 4 tests"""
-        if not self.login_users():
             return
         
-        # ============================================================
-        # SECTION 1: EXCEL TEMPLATES & IMPORTS (Tests 1-10)
-        # ============================================================
-        self.log("\n[SECTION 1] Excel Import/Export", "info")
-        
-        # Test 1: GET /api/users/excel-template
-        try:
-            url = f"{BASE_URL}/users/excel-template"
-            headers = {'Authorization': f'Bearer {self.admin_token}'}
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            self.tests_run += 1
-            if response.status_code == 200 and 'application/vnd.openxmlformats' in response.headers.get('content-type', ''):
-                self.tests_passed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/users/excel-template - returns .xlsx file", "info")
-                self.log(f"  PASSED - Status: {response.status_code}, Size: {len(response.content)} bytes", "success")
-                self.test_results.append({"test": "GET /api/users/excel-template", "status": "PASSED", "expected": 200, "actual": 200})
-            else:
-                self.tests_failed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/users/excel-template", "info")
-                self.log(f"  FAILED - Expected 200 + xlsx, got {response.status_code}", "error")
-                self.test_results.append({"test": "GET /api/users/excel-template", "status": "FAILED", "expected": 200, "actual": response.status_code})
-        except Exception as e:
-            self.tests_run += 1
-            self.tests_failed += 1
-            self.log(f"Test #{self.tests_run}: GET /api/users/excel-template - Exception: {str(e)}", "error")
-            self.test_results.append({"test": "GET /api/users/excel-template", "status": "FAILED", "expected": 200, "actual": "EXCEPTION", "error": str(e)})
-        
-        # Test 2: POST /api/users/import-excel (will fail validation - expected)
-        # We'll test with empty file to check endpoint exists
-        self.log(f"Test #{self.tests_run + 1}: POST /api/users/import-excel - endpoint exists (expect 400 for invalid file)", "info")
-        self.tests_run += 1
-        self.log(f"  SKIPPED - Would require valid .xlsx file construction", "warning")
-        self.test_results.append({"test": "POST /api/users/import-excel", "status": "SKIPPED", "expected": 200, "actual": "SKIPPED"})
-        
-        # Test 3: GET /api/classes/excel-template
-        try:
-            url = f"{BASE_URL}/classes/excel-template"
-            headers = {'Authorization': f'Bearer {self.admin_token}'}
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            self.tests_run += 1
-            if response.status_code == 200 and 'application/vnd.openxmlformats' in response.headers.get('content-type', ''):
-                self.tests_passed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/classes/excel-template - returns .xlsx", "info")
-                self.log(f"  PASSED - Status: {response.status_code}", "success")
-                self.test_results.append({"test": "GET /api/classes/excel-template", "status": "PASSED", "expected": 200, "actual": 200})
-            else:
-                self.tests_failed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/classes/excel-template - FAILED", "error")
-                self.test_results.append({"test": "GET /api/classes/excel-template", "status": "FAILED", "expected": 200, "actual": response.status_code})
-        except Exception as e:
-            self.tests_run += 1
-            self.tests_failed += 1
-            self.log(f"Test #{self.tests_run}: GET /api/classes/excel-template - Exception: {str(e)}", "error")
-            self.test_results.append({"test": "GET /api/classes/excel-template", "status": "FAILED", "expected": 200, "actual": "EXCEPTION"})
-        
-        # Test 4: POST /api/classes/import-excel - SKIPPED
-        self.tests_run += 1
-        self.log(f"Test #{self.tests_run}: POST /api/classes/import-excel - SKIPPED", "warning")
-        self.test_results.append({"test": "POST /api/classes/import-excel", "status": "SKIPPED", "expected": 200, "actual": "SKIPPED"})
-        
-        # Test 5: GET /api/rooms/excel-template
-        try:
-            url = f"{BASE_URL}/rooms/excel-template"
-            headers = {'Authorization': f'Bearer {self.admin_token}'}
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            self.tests_run += 1
-            if response.status_code == 200:
-                self.tests_passed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/rooms/excel-template - PASSED", "success")
-                self.test_results.append({"test": "GET /api/rooms/excel-template", "status": "PASSED", "expected": 200, "actual": 200})
-            else:
-                self.tests_failed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/rooms/excel-template - FAILED", "error")
-                self.test_results.append({"test": "GET /api/rooms/excel-template", "status": "FAILED", "expected": 200, "actual": response.status_code})
-        except Exception as e:
-            self.tests_run += 1
-            self.tests_failed += 1
-            self.test_results.append({"test": "GET /api/rooms/excel-template", "status": "FAILED", "expected": 200, "actual": "EXCEPTION"})
-        
-        # Test 6: POST /api/rooms/import-excel - SKIPPED
-        self.tests_run += 1
-        self.log(f"Test #{self.tests_run}: POST /api/rooms/import-excel - SKIPPED", "warning")
-        self.test_results.append({"test": "POST /api/rooms/import-excel", "status": "SKIPPED", "expected": 200, "actual": "SKIPPED"})
-        
-        # Test 7: GET /api/subjects/excel-template
-        try:
-            url = f"{BASE_URL}/subjects/excel-template"
-            headers = {'Authorization': f'Bearer {self.admin_token}'}
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            self.tests_run += 1
-            if response.status_code == 200:
-                self.tests_passed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/subjects/excel-template - PASSED", "success")
-                self.test_results.append({"test": "GET /api/subjects/excel-template", "status": "PASSED", "expected": 200, "actual": 200})
-            else:
-                self.tests_failed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/subjects/excel-template - FAILED", "error")
-                self.test_results.append({"test": "GET /api/subjects/excel-template", "status": "FAILED", "expected": 200, "actual": response.status_code})
-        except Exception as e:
-            self.tests_run += 1
-            self.tests_failed += 1
-            self.test_results.append({"test": "GET /api/subjects/excel-template", "status": "FAILED", "expected": 200, "actual": "EXCEPTION"})
-        
-        # Test 8: POST /api/subjects/import-excel - SKIPPED
-        self.tests_run += 1
-        self.log(f"Test #{self.tests_run}: POST /api/subjects/import-excel - SKIPPED", "warning")
-        self.test_results.append({"test": "POST /api/subjects/import-excel", "status": "SKIPPED", "expected": 200, "actual": "SKIPPED"})
-        
-        # Test 9: GET /api/students/excel-template
-        try:
-            url = f"{BASE_URL}/students/excel-template"
-            headers = {'Authorization': f'Bearer {self.admin_token}'}
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            self.tests_run += 1
-            if response.status_code == 200:
-                self.tests_passed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/students/excel-template - PASSED", "success")
-                self.test_results.append({"test": "GET /api/students/excel-template", "status": "PASSED", "expected": 200, "actual": 200})
-            else:
-                self.tests_failed += 1
-                self.log(f"Test #{self.tests_run}: GET /api/students/excel-template - FAILED", "error")
-                self.test_results.append({"test": "GET /api/students/excel-template", "status": "FAILED", "expected": 200, "actual": response.status_code})
-        except Exception as e:
-            self.tests_run += 1
-            self.tests_failed += 1
-            self.test_results.append({"test": "GET /api/students/excel-template", "status": "FAILED", "expected": 200, "actual": "EXCEPTION"})
-        
-        # Test 10: POST /api/students/import-excel - SKIPPED
-        self.tests_run += 1
-        self.log(f"Test #{self.tests_run}: POST /api/students/import-excel - SKIPPED", "warning")
-        self.test_results.append({"test": "POST /api/students/import-excel", "status": "SKIPPED", "expected": 200, "actual": "SKIPPED"})
+        self.guru1_token, self.guru1_id = self.login_user("guru1", "guru123")
+        self.walas7a_token, _ = self.login_user("walas7a", "walas123")
+        self.siswa1_token, self.siswa1_id = self.login_user("siswa1", "siswa123")
+        self.tendik1_token, self.tendik1_id = self.login_user("tendik1", "tendik123")
         
         # ============================================================
-        # SECTION 2: SMTP & PASSWORD RESET (Tests 11-14)
+        # SECTION 2: ADMIN STATS ENDPOINTS
         # ============================================================
-        self.log("\n[SECTION 2] SMTP & Password Reset", "info")
+        self.log("\n[SECTION 2] Admin Stats Endpoints", "info")
         
-        # Test 11: POST /api/admin/settings/test-smtp (SMTP not configured - expect success:false)
-        success, smtp_result = self.test(
-            "POST /api/admin/settings/test-smtp - SMTP not configured (expect success:false)",
-            "POST", "admin/settings/test-smtp", 200,
-            data={"to_email": "test@example.com"},
+        # Test: GET /api/admin/stats/students (admin only)
+        success, stats_students = self.test(
+            "GET /api/admin/stats/students (admin only) - should return student statistics",
+            "GET", "admin/stats/students", 200,
             token=self.admin_token
         )
         if success:
-            if smtp_result.get('success') == False and 'belum dikonfigurasi' in smtp_result.get('error', '').lower():
-                self.log(f"  Correct: SMTP not configured message returned", "success")
-            else:
-                self.log(f"  WARNING: Expected success:false with 'belum dikonfigurasi' message", "warning")
+            assert 'total' in stats_students, "total missing"
+            assert 'kelas_7' in stats_students, "kelas_7 missing"
+            assert 'kelas_8' in stats_students, "kelas_8 missing"
+            assert 'kelas_9' in stats_students, "kelas_9 missing"
+            assert 'mutasi_total' in stats_students, "mutasi_total missing"
+            assert 'mutasi_masuk' in stats_students, "mutasi_masuk missing"
+            assert 'mutasi_keluar' in stats_students, "mutasi_keluar missing"
+            assert 'academic_year' in stats_students, "academic_year missing"
+            self.log(f"  Total students: {stats_students.get('total')}", "info")
+            self.log(f"  Kelas 7: {stats_students.get('kelas_7')}, Kelas 8: {stats_students.get('kelas_8')}, Kelas 9: {stats_students.get('kelas_9')}", "info")
+            self.log(f"  Mutasi: {stats_students.get('mutasi_total')} (Masuk: {stats_students.get('mutasi_masuk')}, Keluar: {stats_students.get('mutasi_keluar')})", "info")
         
-        # Test 12: POST /api/auth/forgot-password (anti-enumeration - always 200 OK)
-        success, forgot_result = self.test(
-            "POST /api/auth/forgot-password - returns 200 OK (anti-enumeration)",
-            "POST", "auth/forgot-password", 200,
-            data={"identifier": "admin"}
+        # Test: GET /api/admin/stats/students (non-admin) - should return 401 or 403
+        success, _ = self.test(
+            "GET /api/admin/stats/students (non-admin) - should return 401 or 403",
+            "GET", "admin/stats/students", 403,
+            token=self.siswa1_token
+        )
+        
+        # Test: GET /api/admin/stats/achievements (admin only)
+        success, stats_achievements = self.test(
+            "GET /api/admin/stats/achievements (admin only) - should return achievement statistics",
+            "GET", "admin/stats/achievements", 200,
+            token=self.admin_token
         )
         if success:
-            if 'message' in forgot_result:
-                self.log(f"  Message: {forgot_result.get('message')}", "info")
-        
-        # Test 13: POST /api/auth/forgot-password with non-existent user (still 200 OK)
-        success, forgot_result2 = self.test(
-            "POST /api/auth/forgot-password - non-existent user (still 200 OK)",
-            "POST", "auth/forgot-password", 200,
-            data={"identifier": "nonexistentuser12345"}
-        )
-        
-        # Test 14: GET /api/auth/reset-password/validate/{token} with invalid token (expect 400)
-        success, validate_result = self.test(
-            "GET /api/auth/reset-password/validate/INVALID_TOKEN - expect 400",
-            "GET", "auth/reset-password/validate/INVALID_TOKEN", 400
-        )
-        
-        # Test 15: POST /api/auth/reset-password with invalid token (expect 400)
-        success, reset_result = self.test(
-            "POST /api/auth/reset-password - invalid token (expect 400)",
-            "POST", "auth/reset-password", 400,
-            data={"token": "INVALID_TOKEN", "new_password": "newpass123"}
-        )
+            assert 'total' in stats_achievements, "total missing"
+            assert 'verified' in stats_achievements, "verified missing"
+            assert 'kab_kota' in stats_achievements, "kab_kota missing"
+            assert 'provinsi' in stats_achievements, "provinsi missing"
+            assert 'nasional' in stats_achievements, "nasional missing"
+            assert 'internasional' in stats_achievements, "internasional missing"
+            assert 'by_holder' in stats_achievements, "by_holder missing"
+            assert 'by_level' in stats_achievements, "by_level missing"
+            self.log(f"  Total achievements: {stats_achievements.get('total')}", "info")
+            self.log(f"  Verified: {stats_achievements.get('verified')}", "info")
+            self.log(f"  By level - Kab/Kota: {stats_achievements.get('kab_kota')}, Provinsi: {stats_achievements.get('provinsi')}, Nasional: {stats_achievements.get('nasional')}, Internasional: {stats_achievements.get('internasional')}", "info")
+            self.log(f"  By holder: {stats_achievements.get('by_holder')}", "info")
         
         # ============================================================
-        # SECTION 3: ACHIEVEMENTS (Tests 16-20)
+        # SECTION 3: ACHIEVEMENTS - GET WITH FILTERS
         # ============================================================
-        self.log("\n[SECTION 3] Prestasi Siswa (Achievements)", "info")
+        self.log("\n[SECTION 3] Achievements - GET with Filters", "info")
         
-        # Test 16: GET /api/achievements (siswa sees own)
-        success, achievements = self.test(
-            "GET /api/achievements as siswa1 - sees own achievements",
+        # Test: GET /api/achievements (no filter)
+        success, achievements_all = self.test(
+            "GET /api/achievements - should return all achievements",
             "GET", "achievements", 200,
-            token=self.siswa1_token
+            token=self.admin_token
         )
         if success:
-            self.log(f"  Siswa1 achievements: {len(achievements)}", "info")
+            self.log(f"  Total achievements: {len(achievements_all)}", "info")
         
-        # Test 17: POST /api/achievements (siswa submits own)
-        achievement_data = {
-            "name": "Juara 1 Olimpiade Matematika Kota Malang",
-            "category": "akademik",
-            "level": "kota",
-            "rank": "juara 1",
-            "organizer": "Dinas Pendidikan Kota Malang",
-            "date": "2025-08-15",
-            "description": "Olimpiade Matematika tingkat SMP se-Kota Malang"
-        }
-        success, created_achievement = self.test(
-            "POST /api/achievements as siswa1 - submits own achievement",
+        # Test: GET /api/achievements?holder_type=siswa
+        success, achievements_siswa = self.test(
+            "GET /api/achievements?holder_type=siswa - should filter siswa only",
+            "GET", "achievements", 200,
+            params={"holder_type": "siswa"},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  Siswa achievements: {len(achievements_siswa)}", "info")
+        
+        # Test: GET /api/achievements?holder_type=guru
+        success, achievements_guru = self.test(
+            "GET /api/achievements?holder_type=guru - should filter guru only",
+            "GET", "achievements", 200,
+            params={"holder_type": "guru"},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  Guru achievements: {len(achievements_guru)}", "info")
+        
+        # Test: GET /api/achievements?holder_type=tendik
+        success, achievements_tendik = self.test(
+            "GET /api/achievements?holder_type=tendik - should filter tendik only",
+            "GET", "achievements", 200,
+            params={"holder_type": "tendik"},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  Tendik achievements: {len(achievements_tendik)}", "info")
+        
+        # Test: GET /api/achievements?holder_type=madrasah
+        success, achievements_madrasah = self.test(
+            "GET /api/achievements?holder_type=madrasah - should filter madrasah only",
+            "GET", "achievements", 200,
+            params={"holder_type": "madrasah"},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  Madrasah achievements: {len(achievements_madrasah)}", "info")
+        
+        # Test: GET /api/achievements?year=2025
+        success, achievements_2025 = self.test(
+            "GET /api/achievements?year=2025 - should filter by year",
+            "GET", "achievements", 200,
+            params={"year": 2025},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  Achievements in 2025: {len(achievements_2025)}", "info")
+        
+        # Test: GET /api/achievements?level=nasional
+        success, achievements_nasional = self.test(
+            "GET /api/achievements?level=nasional - should filter by level",
+            "GET", "achievements", 200,
+            params={"level": "nasional"},
+            token=self.admin_token
+        )
+        if success:
+            self.log(f"  National level achievements: {len(achievements_nasional)}", "info")
+        
+        # ============================================================
+        # SECTION 4: ACHIEVEMENTS - POST (CREATE)
+        # ============================================================
+        self.log("\n[SECTION 4] Achievements - POST (Create)", "info")
+        
+        # Test: POST /api/achievements with holder_type='siswa' by siswa1 (for self)
+        success, achievement_siswa = self.test(
+            "POST /api/achievements - siswa creates achievement for self",
             "POST", "achievements", 200,
-            data=achievement_data,
+            data={
+                "holder_type": "siswa",
+                "name": "Juara 1 Olimpiade Matematika",
+                "bidang_lomba": "Matematika",
+                "category": "akademik",
+                "level": "nasional",
+                "rank": "Juara 1",
+                "organizer": "Kemendikbud",
+                "date": "2025-03-15",
+                "description": "Olimpiade Sains Nasional 2025"
+            },
             token=self.siswa1_token
         )
-        achievement_id = None
         if success:
-            achievement_id = created_achievement.get('id')
-            self.log(f"  Achievement created: {achievement_id}", "success")
-            assert created_achievement.get('is_verified') == False, "Should be unverified initially"
+            self.achievement_siswa_id = achievement_siswa.get('id')
+            self.log(f"  Achievement created: {self.achievement_siswa_id}", "success")
+            assert achievement_siswa.get('holder_type') == 'siswa', "holder_type should be siswa"
+            assert achievement_siswa.get('year') == 2025, "year should auto-derive to 2025"
         
-        # Test 18: PUT /api/achievements/{aid} (siswa edits own unverified)
-        if achievement_id:
-            success, updated_achievement = self.test(
-                "PUT /api/achievements/{aid} as siswa1 - edits own unverified achievement",
-                "PUT", f"achievements/{achievement_id}", 200,
-                data={"description": "UPDATED: Olimpiade Matematika tingkat SMP"},
-                token=self.siswa1_token
+        # Test: POST /api/achievements with holder_type='siswa' by siswa for OTHER student - should fail 403
+        success, _ = self.test(
+            "POST /api/achievements - siswa tries to create for OTHER student - should fail 403",
+            "POST", "achievements", 403,
+            data={
+                "holder_type": "siswa",
+                "holder_id": "other-student-id",
+                "name": "Test Achievement",
+                "level": "sekolah"
+            },
+            token=self.siswa1_token
+        )
+        
+        # Test: POST /api/achievements with holder_type='guru' by guru1 (for self)
+        if self.guru1_token and self.guru1_id:
+            success, achievement_guru = self.test(
+                "POST /api/achievements - guru creates achievement for self",
+                "POST", "achievements", 200,
+                data={
+                    "holder_type": "guru",
+                    "name": "Guru Berprestasi Tingkat Kota",
+                    "bidang_lomba": "Pendidikan",
+                    "category": "non-akademik",
+                    "level": "kab_kota",
+                    "rank": "Juara 1",
+                    "organizer": "Dinas Pendidikan Kota Malang",
+                    "date": "2025-05-20"
+                },
+                token=self.guru1_token
+            )
+            if success:
+                self.achievement_guru_id = achievement_guru.get('id')
+                self.log(f"  Guru achievement created: {self.achievement_guru_id}", "success")
+                assert achievement_guru.get('holder_type') == 'guru', "holder_type should be guru"
+        
+        # Test: POST /api/achievements with holder_type='guru' by non-admin for OTHER user - should fail 403
+        if self.guru1_token:
+            success, _ = self.test(
+                "POST /api/achievements - guru tries to create for OTHER guru - should fail 403",
+                "POST", "achievements", 403,
+                data={
+                    "holder_type": "guru",
+                    "holder_id": "other-guru-id",
+                    "name": "Test Achievement"
+                },
+                token=self.guru1_token
             )
         
-        # Test 19: PUT /api/achievements/{aid}/verify (admin/wali_kelas verifies)
-        if achievement_id:
+        # Test: POST /api/achievements with holder_type='tendik' by tendik1 (for self)
+        if self.tendik1_token and self.tendik1_id:
+            success, achievement_tendik = self.test(
+                "POST /api/achievements - tendik creates achievement for self",
+                "POST", "achievements", 200,
+                data={
+                    "holder_type": "tendik",
+                    "name": "Tenaga Kependidikan Teladan",
+                    "bidang_lomba": "Administrasi",
+                    "category": "non-akademik",
+                    "level": "provinsi",
+                    "rank": "Juara 2",
+                    "organizer": "Dinas Pendidikan Provinsi Jawa Timur",
+                    "date": "2025-06-10"
+                },
+                token=self.tendik1_token
+            )
+            if success:
+                self.achievement_tendik_id = achievement_tendik.get('id')
+                self.log(f"  Tendik achievement created: {self.achievement_tendik_id}", "success")
+                assert achievement_tendik.get('holder_type') == 'tendik', "holder_type should be tendik"
+        
+        # Test: POST /api/achievements with holder_type='madrasah' by admin
+        success, achievement_madrasah = self.test(
+            "POST /api/achievements - admin creates madrasah achievement",
+            "POST", "achievements", 200,
+            data={
+                "holder_type": "madrasah",
+                "holder_name": "MTsN 2 Kota Malang",
+                "name": "Madrasah Berprestasi Tingkat Nasional",
+                "bidang_lomba": "Kelembagaan",
+                "category": "non-akademik",
+                "level": "nasional",
+                "rank": "Juara 1",
+                "organizer": "Kementerian Agama RI",
+                "date": "2025-08-15"
+            },
+            token=self.admin_token
+        )
+        if success:
+            self.achievement_madrasah_id = achievement_madrasah.get('id')
+            self.log(f"  Madrasah achievement created: {self.achievement_madrasah_id}", "success")
+            assert achievement_madrasah.get('holder_type') == 'madrasah', "holder_type should be madrasah"
+            assert achievement_madrasah.get('holder_id') is None, "holder_id should be None for madrasah"
+        
+        # Test: POST /api/achievements with holder_type='madrasah' by non-admin - should fail 403
+        success, _ = self.test(
+            "POST /api/achievements - non-admin tries to create madrasah achievement - should fail 403",
+            "POST", "achievements", 403,
+            data={
+                "holder_type": "madrasah",
+                "holder_name": "Test Madrasah",
+                "name": "Test Achievement"
+            },
+            token=self.guru1_token
+        )
+        
+        # Test: POST /api/achievements with year auto-derive from date
+        success, achievement_auto_year = self.test(
+            "POST /api/achievements - year auto-derives from date when year is empty",
+            "POST", "achievements", 200,
+            data={
+                "holder_type": "siswa",
+                "name": "Test Auto Year",
+                "date": "2024-12-25",
+                "level": "sekolah"
+            },
+            token=self.siswa1_token
+        )
+        if success:
+            assert achievement_auto_year.get('year') == 2024, "year should auto-derive to 2024"
+            self.log(f"  Year auto-derived: {achievement_auto_year.get('year')}", "success")
+        
+        # Test: POST /api/achievements with invalid holder_type - should fail 400
+        success, _ = self.test(
+            "POST /api/achievements - invalid holder_type - should fail 400",
+            "POST", "achievements", 400,
+            data={
+                "holder_type": "invalid_type",
+                "name": "Test Achievement"
+            },
+            token=self.admin_token
+        )
+        
+        # ============================================================
+        # SECTION 5: ACHIEVEMENTS - PUT (UPDATE)
+        # ============================================================
+        self.log("\n[SECTION 5] Achievements - PUT (Update)", "info")
+        
+        # Test: PUT /api/achievements/{id} - owner can edit unverified achievement
+        if self.achievement_siswa_id:
+            success, updated = self.test(
+                "PUT /api/achievements/{id} - owner edits unverified achievement",
+                "PUT", f"achievements/{self.achievement_siswa_id}", 200,
+                data={
+                    "description": "Updated description by owner",
+                    "rank": "Juara 1 (Updated)"
+                },
+                token=self.siswa1_token
+            )
+            if success:
+                assert updated.get('description') == "Updated description by owner", "description should be updated"
+                self.log(f"  Achievement updated by owner", "success")
+        
+        # Test: PUT /api/achievements/{id}/verify - admin verifies achievement
+        if self.achievement_siswa_id:
             success, verified = self.test(
-                "PUT /api/achievements/{aid}/verify as walas7a - verifies achievement",
-                "PUT", f"achievements/{achievement_id}/verify", 200,
+                "PUT /api/achievements/{id}/verify - admin verifies achievement",
+                "PUT", f"achievements/{self.achievement_siswa_id}/verify", 200,
+                token=self.admin_token
+            )
+            if success:
+                assert verified.get('is_verified') == True, "should be verified"
+                assert verified.get('verified_by') is not None, "verified_by should be set"
+                self.log(f"  Achievement verified by admin", "success")
+        
+        # Test: PUT /api/achievements/{id}/verify - wali_kelas can verify
+        if self.achievement_guru_id and self.walas7a_token:
+            success, verified_wk = self.test(
+                "PUT /api/achievements/{id}/verify - wali_kelas verifies achievement",
+                "PUT", f"achievements/{self.achievement_guru_id}/verify", 200,
                 token=self.walas7a_token
             )
             if success:
-                assert verified.get('is_verified') == True, "Should be verified"
-                self.log(f"  Achievement verified successfully", "success")
+                assert verified_wk.get('is_verified') == True, "should be verified"
+                self.log(f"  Achievement verified by wali_kelas", "success")
         
-        # Test 20: DELETE /api/achievements/{aid} (admin can delete)
-        if achievement_id:
+        # ============================================================
+        # SECTION 6: ACHIEVEMENTS - DELETE
+        # ============================================================
+        self.log("\n[SECTION 6] Achievements - DELETE", "info")
+        
+        # Create a test achievement to delete
+        success, achievement_to_delete = self.test(
+            "POST /api/achievements - create achievement to test delete",
+            "POST", "achievements", 200,
+            data={
+                "holder_type": "siswa",
+                "name": "Test Achievement for Delete",
+                "level": "sekolah"
+            },
+            token=self.siswa1_token
+        )
+        
+        if success:
+            delete_id = achievement_to_delete.get('id')
+            
+            # Test: DELETE /api/achievements/{id} - owner can delete own achievement
             success, _ = self.test(
-                "DELETE /api/achievements/{aid} as admin - deletes achievement",
-                "DELETE", f"achievements/{achievement_id}", 200,
-                token=self.admin_token
-            )
-        
-        # ============================================================
-        # SECTION 4: EXTRACURRICULARS (Tests 21-30)
-        # ============================================================
-        self.log("\n[SECTION 4] Ekstrakurikuler", "info")
-        
-        # Test 21: GET /api/extracurriculars
-        success, extras = self.test(
-            "GET /api/extracurriculars - returns list",
-            "GET", "extracurriculars", 200,
-            token=self.admin_token
-        )
-        if success:
-            self.log(f"  Total ekstrakurikuler: {len(extras)}", "info")
-        
-        # Test 22: POST /api/extracurriculars (admin creates)
-        extra_data = {
-            "name": "Pramuka",
-            "description": "Gerakan Pramuka MTsN 2 Kota Malang",
-            "coach_id": self.ek1_token and self.ek1_token or None,  # Will use ek1 user ID
-            "schedule_day": "jumat",
-            "schedule_start": "14:00",
-            "schedule_end": "16:00",
-            "location": "Lapangan Sekolah"
-        }
-        
-        # Get ek1 user ID first
-        success, ek1_me = self.test(
-            "GET /api/auth/me as ek1 - get user ID",
-            "GET", "auth/me", 200,
-            token=self.ek1_token
-        )
-        if success:
-            extra_data['coach_id'] = ek1_me.get('id')
-        
-        success, created_extra = self.test(
-            "POST /api/extracurriculars as admin - creates ekstrakurikuler",
-            "POST", "extracurriculars", 200,
-            data=extra_data,
-            token=self.admin_token
-        )
-        extra_id = None
-        if success:
-            extra_id = created_extra.get('id')
-            self.log(f"  Ekstrakurikuler created: {extra_id}", "success")
-        
-        # Test 23: PUT /api/extracurriculars/{eid} (admin updates)
-        if extra_id:
-            success, updated_extra = self.test(
-                "PUT /api/extracurriculars/{eid} as admin - updates ekstrakurikuler",
-                "PUT", f"extracurriculars/{extra_id}", 200,
-                data={"description": "UPDATED: Gerakan Pramuka MTsN 2"},
-                token=self.admin_token
-            )
-        
-        # Test 24: GET /api/extracurriculars/{eid}/members
-        if extra_id:
-            success, members = self.test(
-                "GET /api/extracurriculars/{eid}/members - returns members list",
-                "GET", f"extracurriculars/{extra_id}/members", 200,
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Members: {len(members)}", "info")
-        
-        # Test 25: POST /api/extracurriculars/{eid}/members (add siswa1)
-        if extra_id and self.siswa1_id:
-            success, add_result = self.test(
-                "POST /api/extracurriculars/{eid}/members as admin - adds siswa1",
-                "POST", f"extracurriculars/{extra_id}/members", 200,
-                data={"student_ids": [self.siswa1_id]},
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Inserted: {add_result.get('inserted')}", "success")
-        
-        # Test 26: POST /api/extracurriculars/{eid}/attendance (coach records)
-        if extra_id and self.siswa1_id:
-            attendance_data = {
-                "date": "2025-08-22",
-                "records": [
-                    {"student_id": self.siswa1_id, "status": "hadir"}
-                ]
-            }
-            success, attendance_result = self.test(
-                "POST /api/extracurriculars/{eid}/attendance as ek1 - records attendance",
-                "POST", f"extracurriculars/{extra_id}/attendance", 200,
-                data=attendance_data,
-                token=self.ek1_token
-            )
-            if success:
-                self.log(f"  Attendance recorded: {attendance_result.get('id')}", "success")
-        
-        # Test 27: GET /api/extracurriculars/{eid}/attendance
-        if extra_id:
-            success, attendance_list = self.test(
-                "GET /api/extracurriculars/{eid}/attendance - returns attendance history",
-                "GET", f"extracurriculars/{extra_id}/attendance", 200,
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Attendance records: {len(attendance_list)}", "info")
-        
-        # Test 28: POST /api/extracurriculars/{eid}/grades (coach submits grades)
-        if extra_id and self.siswa1_id:
-            grades_data = {
-                "semester": "ganjil",
-                "grades": [
-                    {
-                        "student_id": self.siswa1_id,
-                        "predicate": "A",
-                        "description": "Sangat aktif dan disiplin"
-                    }
-                ]
-            }
-            success, grades_result = self.test(
-                "POST /api/extracurriculars/{eid}/grades as ek1 - submits grades",
-                "POST", f"extracurriculars/{extra_id}/grades", 200,
-                data=grades_data,
-                token=self.ek1_token
-            )
-            if success:
-                self.log(f"  Grades submitted: {grades_result.get('success')}", "success")
-        
-        # Test 29: GET /api/extracurriculars/{eid}/grades
-        if extra_id:
-            success, grades_list = self.test(
-                "GET /api/extracurriculars/{eid}/grades - returns grades",
-                "GET", f"extracurriculars/{extra_id}/grades", 200,
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Grade entries: {len(grades_list)}", "info")
-        
-        # Test 30: DELETE /api/extracurriculars/{eid} (admin deletes)
-        if extra_id:
-            success, _ = self.test(
-                "DELETE /api/extracurriculars/{eid} as admin - deletes ekstrakurikuler",
-                "DELETE", f"extracurriculars/{extra_id}", 200,
-                token=self.admin_token
-            )
-        
-        # ============================================================
-        # SECTION 5: E-RAPOR GRADES (Tests 31-33)
-        # ============================================================
-        self.log("\n[SECTION 5] E-Rapor Digital (Grades)", "info")
-        
-        # Get class and subject IDs first
-        success, classes = self.test(
-            "GET /api/classes - get class for grades test",
-            "GET", "classes", 200,
-            token=self.admin_token
-        )
-        class_id = classes[0]['id'] if success and len(classes) > 0 else None
-        
-        success, subjects = self.test(
-            "GET /api/subjects - get subject for grades test",
-            "GET", "subjects", 200,
-            token=self.admin_token
-        )
-        subject_id = subjects[0]['id'] if success and len(subjects) > 0 else None
-        
-        # Test 31: POST /api/grades/bulk (teacher submits bulk grades)
-        if class_id and subject_id and self.siswa1_id:
-            bulk_grades_data = {
-                "class_id": class_id,
-                "subject_id": subject_id,
-                "semester": "ganjil",
-                "entries": [
-                    {
-                        "student_id": self.siswa1_id,
-                        "nilai_pengetahuan": 85.0,
-                        "nilai_keterampilan": 88.0,
-                        "description": "Baik, perlu peningkatan di praktikum"
-                    }
-                ]
-            }
-            success, bulk_result = self.test(
-                "POST /api/grades/bulk as admin - submits bulk grades",
-                "POST", "grades/bulk", 200,
-                data=bulk_grades_data,
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Grades submitted: {bulk_result.get('success')}", "success")
-        
-        # Test 32: GET /api/grades (with filters)
-        if self.siswa1_id:
-            success, grades = self.test(
-                "GET /api/grades?student_id={sid} - returns student grades",
-                "GET", "grades", 200,
-                params={"student_id": self.siswa1_id},
-                token=self.admin_token
-            )
-            if success:
-                self.log(f"  Siswa1 grades: {len(grades)}", "info")
-                if len(grades) > 0:
-                    g = grades[0]
-                    self.log(f"  Sample: {g.get('subject_name')} - Nilai Akhir: {g.get('nilai_akhir')} ({g.get('predicate')})", "info")
-        
-        # Test 33: GET /api/grades/rapor/{student_id} (full rapor view)
-        if self.siswa1_id:
-            success, rapor = self.test(
-                "GET /api/grades/rapor/{student_id} as siswa1 - full rapor view",
-                "GET", f"grades/rapor/{self.siswa1_id}", 200,
+                "DELETE /api/achievements/{id} - owner deletes own achievement",
+                "DELETE", f"achievements/{delete_id}", 200,
                 token=self.siswa1_token
             )
             if success:
-                self.log(f"  Student: {rapor.get('student', {}).get('full_name')}", "info")
-                self.log(f"  Class: {rapor.get('class', {}).get('name')}", "info")
-                self.log(f"  Grades: {len(rapor.get('grades', []))}", "info")
-                self.log(f"  Average: {rapor.get('average')}", "info")
+                self.log(f"  Achievement deleted by owner", "success")
+        
+        # Test: DELETE /api/achievements/{id} - admin can delete any achievement
+        if self.achievement_tendik_id:
+            success, _ = self.test(
+                "DELETE /api/achievements/{id} - admin deletes any achievement",
+                "DELETE", f"achievements/{self.achievement_tendik_id}", 200,
+                token=self.admin_token
+            )
+            if success:
+                self.log(f"  Achievement deleted by admin", "success")
         
         # ============================================================
-        # SECTION 6: REGRESSION TESTS (Tests 34-36)
+        # SECTION 7: REGRESSION - OTHER ENDPOINTS STILL WORK
         # ============================================================
-        self.log("\n[SECTION 6] Regression Tests (Phase 1-3.5 endpoints)", "info")
+        self.log("\n[SECTION 7] Regression - Verify Other Endpoints Still Work", "info")
         
-        # Test 34: GET /api/health (regression)
+        # Test: GET /api/health
         success, health = self.test(
-            "GET /api/health - regression test",
+            "GET /api/health - should still work",
             "GET", "health", 200
         )
+        if success:
+            assert health.get('status') == 'healthy', "health status should be healthy"
+            self.log(f"  Health endpoint working", "success")
         
-        # Test 35: GET /api/schedules (regression)
+        # Test: GET /api/schedules
         success, schedules = self.test(
-            "GET /api/schedules - regression test",
+            "GET /api/schedules - should still work",
             "GET", "schedules", 200,
             token=self.admin_token
         )
+        if success:
+            self.log(f"  Schedules endpoint working ({len(schedules)} schedules)", "success")
         
-        # Test 36: GET /api/public/monitoring (regression)
-        success, monitoring = self.test(
-            "GET /api/public/monitoring - regression test",
-            "GET", "public/monitoring", 200
+        # Test: GET /api/users
+        success, users = self.test(
+            "GET /api/users - should still work",
+            "GET", "users", 200,
+            token=self.admin_token
         )
+        if success:
+            self.log(f"  Users endpoint working ({len(users)} users)", "success")
         
         # ============================================================
         # FINAL SUMMARY
@@ -756,24 +602,24 @@ class Phase4Tester:
         if self.tests_failed > 0:
             self.log("\nFailed Tests:", "error")
             for result in self.test_results:
-                if result['status'] == 'FAILED':
+                if result['status'] in ['FAILED', 'EXCEPTION']:
                     self.log(f"  - {result['test']}", "error")
         
         self.log("=" * 80, "info")
         
-        return success_rate >= 70  # 70%+ success rate (accounting for skipped import tests)
+        return success_rate >= 80  # Consider 80%+ as success
 
 
 def main():
     tester = Phase4Tester()
     
     try:
-        tester.run_phase4_tests()
+        tester.run_all_tests()
         
         # Save results to JSON
         results_summary = {
             "timestamp": datetime.now().isoformat(),
-            "phase": "Phase 4",
+            "test_suite": "Phase 4 - Achievements & Admin Stats",
             "total_tests": tester.tests_run,
             "passed": tester.tests_passed,
             "failed": tester.tests_failed,
