@@ -1,0 +1,317 @@
+{
+  "timestamp": "2026-05-13T12:16:54.604103",
+  "total_tests": 51,
+  "passed": 49,
+  "failed": 2,
+  "pass_rate": 96.07843137254902,
+  "test_results": [
+    {
+      "test": "Login as admin",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Login as guru1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Login as walas7a",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Login as piket1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Login as siswa1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Login as tendik1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/classes returns student_count + capacity",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/classes with capacity field",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/classes update capacity",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/weekly-holidays (all roles)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/weekly-holidays (admin only)",
+      "status": "FAILED",
+      "expected": 200,
+      "actual": 400,
+      "error": "{\"detail\":\"Hari minggu sudah terdaftar\"}"
+    },
+    {
+      "test": "POST /api/weekly-holidays duplicate day \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "POST /api/weekly-holidays by guru \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "GET /api/academic-holidays",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/academic-holidays?year=2026",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/academic-holidays (admin only)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/academic-holidays missing date \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "POST /api/academic-holidays by guru \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "PUT /api/academic-holidays/{id} (admin only)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/academic-holidays/{id} by guru \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "DELETE /api/academic-holidays/{id} (admin only)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/public/holidays/today (NO AUTH)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/backup/info (admin only)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/backup/export (download .json)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/admin/backup/import mode=merge",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/admin/backup/import invalid JSON \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/admin/backup/logs",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/users?role=siswa",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/admin/users/{uid}/mutation type=masuk",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/admin/users/{uid}/mutation type=keluar",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/admin/users/{uid}/mutation type=null (clear)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/admin/users/{uid}/mutation invalid type \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/schedules?teacher_id=guru1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/teacher-tasks (guru pengampu)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/teacher-tasks missing fields \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "POST /api/teacher-tasks by non-owner \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "POST /api/teacher-tasks by siswa \u2192 403",
+      "status": "FAILED",
+      "expected": 403,
+      "actual": 401,
+      "error": "{\"detail\":\"User tidak ditemukan atau dinonaktifkan\"}"
+    },
+    {
+      "test": "GET /api/teacher-tasks (teacher sees own)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/teacher-tasks (admin sees all)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/teacher-tasks/{tid} by owner",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/teacher-tasks/{tid} by non-owner \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "GET /api/piket/schedules/today (guru_piket)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/piket/schedules/today by pure guru \u2192 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "POST /api/piket/fill-journal (guru_piket)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "Verify task status = completed",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/piket/fill-journal duplicate \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "DELETE /api/teacher-tasks/{tid} completed \u2192 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/admin/jurnal (enriched with filled_by_name)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/me (regression)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/schedules (regression)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/stats (regression)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    }
+  ]
+}

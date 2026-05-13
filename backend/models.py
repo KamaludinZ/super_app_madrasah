@@ -100,7 +100,31 @@ class ClassModel(BaseModel):
     academic_year_id: str
     homeroom_teacher_id: Optional[str] = None
     room_id: Optional[str] = None
+    capacity: int = 40  # Kapasitas maksimal siswa per kelas
     is_accelerated: bool = False  # kelas percepatan flag
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WeeklyHolidayModel(BaseModel):
+    """Hari libur mingguan (Sab/Min/dll yang rutin libur per minggu)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    day: str  # 'senin' | 'selasa' | ... | 'minggu'
+    description: str = ''  # Keterangan (mis. "libur", "libur khusus tahfidz")
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AcademicHolidayModel(BaseModel):
+    """Hari libur akademik tahunan (libur nasional/keagamaan/semester/kegiatan)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: str  # YYYY-MM-DD
+    end_date: Optional[str] = None  # untuk libur multi-hari (mis. libur semester)
+    name: str  # mis. "Idul Fitri 1447H", "Hari Pancasila"
+    category: str = 'libur_nasional'  # 'libur_nasional' | 'libur_keagamaan' | 'libur_semester' | 'kegiatan_akademik'
+    description: Optional[str] = None
+    academic_year_id: Optional[str] = None  # opsional, untuk filter per TP
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -147,7 +171,7 @@ class JournalModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     schedule_id: str
-    teacher_id: str
+    teacher_id: str  # Guru pengajar terjadwal (subject teacher)
     class_id: str
     subject_id: str
     room_id: str
@@ -165,6 +189,29 @@ class JournalModel(BaseModel):
     validations: Dict[str, Any] = Field(default_factory=dict)
     qr_mode: str = 'static'
     is_locked: bool = False
+    # === Audit pengisian jurnal ===
+    fill_mode: str = 'self'  # 'self' (guru pengajar isi sendiri) | 'piket' (guru piket titipan) | 'admin' (admin override)
+    filled_by_user_id: Optional[str] = None  # Jika beda dari teacher_id (mis. piket)
+    filled_by_role: Optional[str] = None  # 'guru' | 'guru_piket' | 'admin'
+    task_id: Optional[str] = None  # Link ke TeacherTaskModel jika berbasis titipan
+    piket_note: Optional[str] = None  # Catatan piket (alasan titipan, dll)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TeacherTaskModel(BaseModel):
+    """Tugas titipan dari guru pengajar untuk guru piket.
+    Guru pengajar bisa create task ini sebelum hari H jika berhalangan."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    schedule_id: str  # Jadwal yang akan dititipkan
+    teacher_id: str  # Guru pengajar (yang menitipkan)
+    date: str  # YYYY-MM-DD tanggal pelaksanaan
+    task_content: str  # Detail tugas/materi titipan
+    notes: Optional[str] = None  # Catatan tambahan untuk piket
+    status: str = 'pending'  # 'pending' | 'completed' | 'cancelled'
+    completed_journal_id: Optional[str] = None  # Link ke journal jika sudah diisi
+    completed_by_user_id: Optional[str] = None  # Guru piket yang mengisi
+    completed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

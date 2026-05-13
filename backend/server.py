@@ -351,7 +351,21 @@ async def list_classes(academic_year_id: Optional[str] = None, user: Dict = Depe
     if academic_year_id:
         q['academic_year_id'] = academic_year_id
     items = await db.classes.find(q, {'_id': 0}).sort('name', 1).to_list(500)
-    return [serialize_doc(i) for i in items]
+    # Enrich with student_count, homeroom_teacher_name
+    enriched = []
+    for c in items:
+        c['student_count'] = await db.users.count_documents({
+            'roles': 'siswa', 'student_class_id': c['id'], 'is_active': True
+        })
+        c.setdefault('capacity', 40)
+        if c.get('homeroom_teacher_id'):
+            t = await db.users.find_one({'id': c['homeroom_teacher_id']}, {'_id': 0, 'full_name': 1})
+            c['homeroom_teacher_name'] = t.get('full_name') if t else None
+        if c.get('room_id'):
+            r = await db.rooms.find_one({'id': c['room_id']}, {'_id': 0, 'name': 1})
+            c['room_name'] = r.get('name') if r else None
+        enriched.append(serialize_doc(c))
+    return enriched
 
 
 @api_router.post("/classes")
@@ -1502,6 +1516,10 @@ async def admin_jurnal_rekap(
         j['subject_code'] = sub.get('code') if sub else None
         j['teacher_name'] = teacher.get('full_name') if teacher else None
         j['room_name'] = room.get('name') if room else None
+        # Enrich filled_by name (audit info)
+        if j.get('filled_by_user_id') and j.get('filled_by_user_id') != j.get('teacher_id'):
+            fb = await db.users.find_one({'id': j['filled_by_user_id']}, {'_id': 0, 'full_name': 1})
+            j['filled_by_name'] = fb.get('full_name') if fb else None
         enriched.append(serialize_doc(j))
 
     # Compute summary
@@ -2362,6 +2380,486 @@ async def get_student_rapor(student_id: str, semester: Optional[str] = None,
         'grades': enriched,
         'average': round(sum(g.get('nilai_akhir', 0) or 0 for g in enriched) / len(enriched), 2) if enriched else 0,
     }
+
+
+# ============================================================
+# WEEKLY HOLIDAYS (Hari Libur Mingguan)
+# ============================================================
+@api_router.get("/weekly-holidays")
+async def list_weekly_holidays(user: Dict = Depends(get_current_user)):
+    items = await db.weekly_holidays.find({}, {'_id': 0}).to_list(20)
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/weekly-holidays")
+async def create_weekly_holiday(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    from models import WeeklyHolidayModel
+    payload['day'] = (payload.get('day') or '').strip().lower()
+    if not payload['day']:
+        raise HTTPException(400, "Hari wajib diisi")
+    existing = await db.weekly_holidays.find_one({'day': payload['day']})
+    if existing:
+        raise HTTPException(400, f"Hari {payload['day']} sudah terdaftar")
+    h = WeeklyHolidayModel(**payload)
+    doc = h.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.weekly_holidays.insert_one(doc)
+    await log_audit(user, 'create', 'weekly_holiday', h.id, details={'day': h.day}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/weekly-holidays/{hid}")
+async def update_weekly_holiday(hid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    payload.pop('id', None); payload.pop('_id', None)
+    res = await db.weekly_holidays.update_one({'id': hid}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
+    await log_audit(user, 'update', 'weekly_holiday', hid, request=request)
+    doc = await db.weekly_holidays.find_one({'id': hid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/weekly-holidays/{hid}")
+async def delete_weekly_holiday(hid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    await db.weekly_holidays.delete_one({'id': hid})
+    await log_audit(user, 'delete', 'weekly_holiday', hid, request=request)
+    return {'message': 'Dihapus'}
+
+
+# ============================================================
+# ACADEMIC HOLIDAYS (Hari Libur Akademik Tahunan)
+# ============================================================
+@api_router.get("/academic-holidays")
+async def list_academic_holidays(year: Optional[int] = None,
+                                  academic_year_id: Optional[str] = None,
+                                  user: Dict = Depends(get_current_user)):
+    q = {}
+    if academic_year_id:
+        q['academic_year_id'] = academic_year_id
+    items = await db.academic_holidays.find(q, {'_id': 0}).sort('date', 1).to_list(1000)
+    if year:
+        items = [i for i in items if (i.get('date') or '').startswith(str(year))]
+    return [serialize_doc(i) for i in items]
+
+
+@api_router.post("/academic-holidays")
+async def create_academic_holiday(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    from models import AcademicHolidayModel
+    if not payload.get('date') or not payload.get('name'):
+        raise HTTPException(400, "Tanggal dan nama wajib diisi")
+    h = AcademicHolidayModel(**payload)
+    doc = h.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.academic_holidays.insert_one(doc)
+    await log_audit(user, 'create', 'academic_holiday', h.id, details={'date': h.date, 'name': h.name}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/academic-holidays/{hid}")
+async def update_academic_holiday(hid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    payload.pop('id', None); payload.pop('_id', None)
+    res = await db.academic_holidays.update_one({'id': hid}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
+    await log_audit(user, 'update', 'academic_holiday', hid, request=request)
+    doc = await db.academic_holidays.find_one({'id': hid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/academic-holidays/{hid}")
+async def delete_academic_holiday(hid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    await db.academic_holidays.delete_one({'id': hid})
+    await log_audit(user, 'delete', 'academic_holiday', hid, request=request)
+    return {'message': 'Dihapus'}
+
+
+@api_router.get("/public/holidays/today")
+async def public_holidays_today():
+    """Endpoint publik: cek apakah hari ini libur (info-only)."""
+    today = now_wib().strftime('%Y-%m-%d')
+    day_name = current_day_id()  # senin/selasa/etc
+    weekly = await db.weekly_holidays.find_one({'day': day_name, 'is_active': True}, {'_id': 0})
+    academic = await db.academic_holidays.find_one({'date': today}, {'_id': 0})
+    return {
+        'date': today,
+        'day': day_name,
+        'is_weekly_holiday': bool(weekly),
+        'weekly_holiday': serialize_doc(weekly) if weekly else None,
+        'is_academic_holiday': bool(academic),
+        'academic_holiday': serialize_doc(academic) if academic else None,
+    }
+
+
+# ============================================================
+# TEACHER TASKS (Tugas Titipan untuk Piket)
+# ============================================================
+@api_router.get("/teacher-tasks")
+async def list_teacher_tasks(date: Optional[str] = None,
+                              status: Optional[str] = None,
+                              schedule_id: Optional[str] = None,
+                              user: Dict = Depends(get_current_user)):
+    q = {}
+    if date:
+        q['date'] = date
+    if status:
+        q['status'] = status
+    if schedule_id:
+        q['schedule_id'] = schedule_id
+    is_piket = 'guru_piket' in user.get('roles', [])
+    is_admin = 'admin' in user.get('roles', [])
+    is_teacher = bool(set(user.get('roles', [])) & {'guru', 'wali_kelas'})
+    # Guru pengajar hanya lihat tugas miliknya. Piket/Admin lihat semua.
+    if not (is_admin or is_piket) and is_teacher:
+        q['teacher_id'] = user['id']
+    items = await db.teacher_tasks.find(q, {'_id': 0}).sort('date', -1).to_list(500)
+    enriched = []
+    for t in items:
+        sch = await db.schedules.find_one({'id': t.get('schedule_id')}, {'_id': 0})
+        if sch:
+            t['class_id'] = sch.get('class_id')
+            t['subject_id'] = sch.get('subject_id')
+            t['room_id'] = sch.get('room_id')
+            t['day'] = sch.get('day')
+            t['start_time'] = sch.get('start_time')
+            t['end_time'] = sch.get('end_time')
+            cls = await db.classes.find_one({'id': sch.get('class_id')}, {'_id': 0, 'name': 1})
+            t['class_name'] = cls.get('name') if cls else None
+            sub = await db.subjects.find_one({'id': sch.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+            if sub:
+                t['subject_name'] = sub.get('name')
+                t['subject_code'] = sub.get('code')
+            room = await db.rooms.find_one({'id': sch.get('room_id')}, {'_id': 0, 'name': 1})
+            t['room_name'] = room.get('name') if room else None
+        tch = await db.users.find_one({'id': t.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        t['teacher_name'] = tch.get('full_name') if tch else None
+        if t.get('completed_by_user_id'):
+            cb = await db.users.find_one({'id': t['completed_by_user_id']}, {'_id': 0, 'full_name': 1})
+            t['completed_by_name'] = cb.get('full_name') if cb else None
+        enriched.append(serialize_doc(t))
+    return enriched
+
+
+@api_router.post("/teacher-tasks")
+async def create_teacher_task(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    from models import TeacherTaskModel
+    if not payload.get('schedule_id') or not payload.get('date') or not payload.get('task_content'):
+        raise HTTPException(400, "schedule_id, date, task_content wajib")
+    sch = await db.schedules.find_one({'id': payload['schedule_id']})
+    if not sch:
+        raise HTTPException(404, "Jadwal tidak ditemukan")
+    # Permission: hanya guru pengampu atau admin
+    if not ('admin' in user.get('roles', [])) and sch.get('teacher_id') != user['id']:
+        raise HTTPException(403, "Hanya guru pengampu yang bisa menitipkan tugas pada jadwalnya")
+    task = TeacherTaskModel(
+        schedule_id=payload['schedule_id'],
+        teacher_id=sch.get('teacher_id'),
+        date=payload['date'],
+        task_content=payload['task_content'],
+        notes=payload.get('notes'),
+    )
+    doc = task.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.teacher_tasks.insert_one(doc)
+    await log_audit(user, 'create', 'teacher_task', task.id, details={'date': task.date}, request=request)
+    return serialize_doc(doc)
+
+
+@api_router.put("/teacher-tasks/{tid}")
+async def update_teacher_task(tid: str, payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
+    existing = await db.teacher_tasks.find_one({'id': tid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    if not is_admin and existing.get('teacher_id') != user['id']:
+        raise HTTPException(403, "Hanya guru pengampu/admin yang bisa edit")
+    if existing.get('status') == 'completed':
+        raise HTTPException(400, "Tugas yang sudah selesai tidak bisa diubah")
+    payload.pop('id', None); payload.pop('_id', None); payload.pop('status', None)
+    await db.teacher_tasks.update_one({'id': tid}, {'$set': payload})
+    doc = await db.teacher_tasks.find_one({'id': tid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@api_router.delete("/teacher-tasks/{tid}")
+async def delete_teacher_task(tid: str, request: Request, user: Dict = Depends(get_current_user)):
+    existing = await db.teacher_tasks.find_one({'id': tid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    if not is_admin and existing.get('teacher_id') != user['id']:
+        raise HTTPException(403, "Tidak diizinkan")
+    if existing.get('status') == 'completed':
+        raise HTTPException(400, "Tugas yang sudah selesai tidak bisa dihapus")
+    await db.teacher_tasks.delete_one({'id': tid})
+    await log_audit(user, 'delete', 'teacher_task', tid, request=request)
+    return {'message': 'Dihapus'}
+
+
+@api_router.get("/piket/schedules/today")
+async def piket_schedules_today(user: Dict = Depends(require_role('guru_piket', 'admin'))):
+    """Daftar jadwal mengajar hari ini yang BELUM dibuat jurnal — guru piket bisa isi titipan."""
+    today = current_day_id()
+    today_date = now_wib().strftime('%Y-%m-%d')
+    ay = await get_active_academic_year()
+    if not ay:
+        return []
+    schedules = await db.schedules.find({
+        'day': today, 'academic_year_id': ay['id']
+    }, {'_id': 0}).sort('start_time', 1).to_list(200)
+    # Tandai mana yang sudah ada jurnal hari ini
+    today_start = now_wib().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    journals_today = await db.journals.find({
+        'started_at': {'$gte': today_start}
+    }, {'_id': 0, 'schedule_id': 1, 'fill_mode': 1, 'filled_by_user_id': 1}).to_list(500)
+    journaled_set = {j['schedule_id']: j for j in journals_today}
+    tasks_today = await db.teacher_tasks.find({'date': today_date}, {'_id': 0}).to_list(200)
+    task_by_sched = {}
+    for t in tasks_today:
+        task_by_sched[t['schedule_id']] = t
+    enriched = []
+    for s in schedules:
+        s = serialize_doc(s)
+        s['has_journal'] = s['id'] in journaled_set
+        s['journal_info'] = serialize_doc(journaled_set[s['id']]) if s['has_journal'] else None
+        s['task'] = serialize_doc(task_by_sched.get(s['id'])) if s['id'] in task_by_sched else None
+        tch = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        s['teacher_name'] = tch.get('full_name') if tch else None
+        cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
+        s['class_name'] = cls.get('name') if cls else None
+        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        if sub:
+            s['subject_name'] = sub.get('name'); s['subject_code'] = sub.get('code')
+        room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
+        s['room_name'] = room.get('name') if room else None
+        enriched.append(s)
+    return enriched
+
+
+@api_router.post("/piket/fill-journal")
+async def piket_fill_journal(payload: Dict, request: Request,
+                              user: Dict = Depends(require_role('guru_piket', 'admin'))):
+    """Guru piket isi jurnal atas nama guru pengajar (titipan tugas)."""
+    schedule_id = payload.get('schedule_id')
+    if not schedule_id:
+        raise HTTPException(400, "schedule_id wajib")
+    sch = await db.schedules.find_one({'id': schedule_id})
+    if not sch:
+        raise HTTPException(404, "Jadwal tidak ditemukan")
+    # Cek jangan double-fill hari yang sama
+    today_start = now_wib().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    existing = await db.journals.find_one({
+        'schedule_id': schedule_id, 'started_at': {'$gte': today_start}
+    })
+    if existing:
+        raise HTTPException(400, "Jurnal hari ini untuk jadwal ini sudah ada")
+    ay = await get_active_academic_year()
+    j_id = str(uuid.uuid4())
+    fill_role = 'admin' if 'admin' in user.get('roles', []) and 'guru_piket' not in user.get('roles', []) else 'guru_piket'
+    journal_doc = {
+        'id': j_id,
+        'schedule_id': schedule_id,
+        'teacher_id': sch['teacher_id'],  # GURU PENGAJAR (terjadwal) — bukan piket
+        'class_id': sch['class_id'],
+        'subject_id': sch['subject_id'],
+        'room_id': sch['room_id'],
+        'academic_year_id': ay['id'] if ay else sch.get('academic_year_id'),
+        'semester': (ay or {}).get('active_semester', 'ganjil'),
+        'materi': payload.get('materi', ''),
+        'catatan': payload.get('catatan'),
+        'siswa_hadir': int(payload.get('siswa_hadir') or 0),
+        'siswa_tidak_hadir': int(payload.get('siswa_tidak_hadir') or 0),
+        'siswa_izin': int(payload.get('siswa_izin') or 0),
+        'siswa_sakit': int(payload.get('siswa_sakit') or 0),
+        'started_at': now_wib().isoformat(),
+        'scheduled_start': sch.get('start_time'),
+        'scheduled_end': sch.get('end_time'),
+        'validations': {'piket_fill': True},
+        'qr_mode': 'piket',
+        'is_locked': True,
+        # AUDIT
+        'fill_mode': 'piket',
+        'filled_by_user_id': user['id'],
+        'filled_by_role': fill_role,
+        'task_id': payload.get('task_id'),
+        'piket_note': payload.get('piket_note'),
+        'created_at': now_wib().isoformat(),
+    }
+    await db.journals.insert_one(journal_doc)
+    # Update teacher_task status jika ada
+    if payload.get('task_id'):
+        await db.teacher_tasks.update_one({'id': payload['task_id']}, {'$set': {
+            'status': 'completed',
+            'completed_journal_id': j_id,
+            'completed_by_user_id': user['id'],
+            'completed_at': now_wib().isoformat(),
+        }})
+    await log_audit(user, 'piket_fill_journal', 'journal', j_id, details={
+        'schedule_id': schedule_id, 'for_teacher_id': sch['teacher_id'],
+    }, request=request)
+    return serialize_doc(journal_doc)
+
+
+# ============================================================
+# BACKUP & RESTORE (Admin Tool)
+# ============================================================
+BACKUP_COLLECTIONS = [
+    'users', 'classes', 'rooms', 'subjects', 'schedules', 'academic_years',
+    'settings', 'journals', 'attendances', 'class_attendances', 'class_cleanliness',
+    'audit_logs', 'security_logs', 'piket_schedules', 'achievements',
+    'extracurriculars', 'extra_members', 'extra_attendance', 'extra_grades',
+    'student_grades', 'weekly_holidays', 'academic_holidays', 'teacher_tasks',
+    'password_reset_tokens',
+]
+
+
+@api_router.get("/admin/backup/info")
+async def backup_info(user: Dict = Depends(require_role('admin'))):
+    """Statistik untuk halaman backup: total dokumen per koleksi."""
+    info = {}
+    for coll in BACKUP_COLLECTIONS:
+        try:
+            info[coll] = await db[coll].count_documents({})
+        except Exception:
+            info[coll] = 0
+    last_backup = await db.backup_logs.find_one({}, {'_id': 0}, sort=[('created_at', -1)])
+    return {
+        'collections': info,
+        'total_documents': sum(info.values()),
+        'last_backup': serialize_doc(last_backup) if last_backup else None,
+    }
+
+
+@api_router.get("/admin/backup/export")
+async def backup_export(user: Dict = Depends(require_role('admin')), request: Request = None):
+    """Download backup .json semua koleksi (termasuk base64 sertifikat & logo)."""
+    from fastapi.responses import StreamingResponse
+    import json
+    dump = {
+        'version': 1,
+        'exported_at': now_wib().isoformat(),
+        'school_name': (await get_settings()).get('school_name', ''),
+        'collections': {},
+    }
+    for coll in BACKUP_COLLECTIONS:
+        try:
+            items = await db[coll].find({}, {'_id': 0}).to_list(100000)
+            # Serialize datetime objects
+            for it in items:
+                for k, v in list(it.items()):
+                    if isinstance(v, datetime):
+                        it[k] = v.isoformat()
+            dump['collections'][coll] = items
+        except Exception as e:
+            logger.error(f"Backup export error for {coll}: {e}")
+            dump['collections'][coll] = []
+    # Log backup
+    await db.backup_logs.insert_one({
+        'id': str(uuid.uuid4()),
+        'type': 'export',
+        'user_id': user['id'],
+        'user_name': user.get('full_name', user['username']),
+        'total_documents': sum(len(v) for v in dump['collections'].values()),
+        'created_at': now_wib().isoformat(),
+    })
+    if request:
+        await log_audit(user, 'backup_export', 'system', '-', details={
+            'total': sum(len(v) for v in dump['collections'].values())
+        }, request=request)
+    payload = json.dumps(dump, ensure_ascii=False, default=str).encode('utf-8')
+    filename = f"backup_matsandatama_{now_wib().strftime('%Y%m%d_%H%M%S')}.json"
+    return StreamingResponse(
+        io.BytesIO(payload),
+        media_type='application/json',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
+@api_router.post("/admin/backup/import")
+async def backup_import(file: UploadFile = File(...), mode: str = Form('merge'),
+                        user: Dict = Depends(require_role('admin')), request: Request = None):
+    """Restore dari backup .json.
+    Mode:
+      - 'merge': hanya tambah/update yang ada di file (preserve data lain) — DEFAULT, lebih aman
+      - 'replace': hapus semua koleksi lalu insert dari file (DESTRUCTIVE)
+    """
+    import json
+    if not file.filename.lower().endswith('.json'):
+        raise HTTPException(400, "Hanya file .json yang didukung")
+    if mode not in ('merge', 'replace'):
+        raise HTTPException(400, "Mode harus 'merge' atau 'replace'")
+    content = await file.read()
+    try:
+        dump = json.loads(content.decode('utf-8'))
+    except Exception:
+        raise HTTPException(400, "File backup tidak valid (bukan JSON)")
+    if 'collections' not in dump:
+        raise HTTPException(400, "Format backup tidak valid")
+    summary = {'restored': {}, 'errors': []}
+    for coll, items in dump['collections'].items():
+        if coll not in BACKUP_COLLECTIONS:
+            continue
+        try:
+            if mode == 'replace':
+                await db[coll].delete_many({})
+            count = 0
+            for it in items:
+                it.pop('_id', None)
+                if mode == 'merge' and it.get('id'):
+                    await db[coll].update_one({'id': it['id']}, {'$set': it}, upsert=True)
+                else:
+                    await db[coll].insert_one(it)
+                count += 1
+            summary['restored'][coll] = count
+        except Exception as e:
+            summary['errors'].append(f"{coll}: {str(e)[:100]}")
+    await db.backup_logs.insert_one({
+        'id': str(uuid.uuid4()),
+        'type': f'import_{mode}',
+        'user_id': user['id'],
+        'user_name': user.get('full_name', user['username']),
+        'total_documents': sum(summary['restored'].values()),
+        'created_at': now_wib().isoformat(),
+    })
+    if request:
+        await log_audit(user, f'backup_import_{mode}', 'system', '-', details=summary, request=request)
+    return summary
+
+
+@api_router.get("/admin/backup/logs")
+async def backup_logs(user: Dict = Depends(require_role('admin'))):
+    items = await db.backup_logs.find({}, {'_id': 0}).sort('created_at', -1).to_list(50)
+    return [serialize_doc(i) for i in items]
+
+
+# ============================================================
+# STUDENT MUTATION (Admin set mutation_type on user)
+# ============================================================
+@api_router.put("/admin/users/{uid}/mutation")
+async def set_student_mutation(uid: str, payload: Dict, request: Request,
+                                user: Dict = Depends(require_role('admin'))):
+    """Set/clear mutation status pada user (terutama siswa)."""
+    existing = await db.users.find_one({'id': uid})
+    if not existing:
+        raise HTTPException(404, "User tidak ditemukan")
+    mtype = payload.get('mutation_type')  # 'masuk' | 'keluar' | null/empty (clear)
+    if mtype and mtype not in ('masuk', 'keluar'):
+        raise HTTPException(400, "mutation_type harus 'masuk', 'keluar', atau kosong untuk clear")
+    ay = await get_active_academic_year()
+    update = {
+        'mutation_type': mtype or None,
+        'mutation_ay_id': ay['id'] if ay and mtype else None,
+        'mutation_date': payload.get('mutation_date') if mtype else None,
+        'mutation_note': payload.get('mutation_note') if mtype else None,
+    }
+    # Jika mutasi 'keluar', otomatis is_active=False; jika 'masuk' dan sebelumnya non-aktif, aktifkan
+    if mtype == 'keluar':
+        update['is_active'] = False
+    elif mtype == 'masuk':
+        update['is_active'] = True
+    await db.users.update_one({'id': uid}, {'$set': update})
+    await log_audit(user, 'set_mutation', 'user', uid, details=update, request=request)
+    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
+    return serialize_doc(doc)
 
 
 app.include_router(api_router)

@@ -148,10 +148,10 @@ export default function AdminJurnalRekapPage() {
           {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
             <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-jurnal-rekap-table">
               <TableHeader><TableRow>
-                <TableHead>Tanggal</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead className="text-center">Hadir</TableHead><TableHead className="text-center">S/I/A</TableHead>
+                <TableHead>Tanggal</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead className="text-center">Hadir</TableHead><TableHead className="text-center">S/I/A</TableHead><TableHead>Diisi oleh</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {data.items.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
+                {data.items.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
                   data.items.map((j) => (
                     <TableRow key={j.id}>
                       <TableCell className="text-xs whitespace-nowrap">{new Date(j.started_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
@@ -163,6 +163,17 @@ export default function AdminJurnalRekapPage() {
                       <TableCell className="text-center font-semibold text-emerald-700">{j.siswa_hadir}</TableCell>
                       <TableCell className="text-center text-xs">
                         <span className="text-amber-600">{j.siswa_sakit}</span>/<span className="text-blue-600">{j.siswa_izin}</span>/<span className="text-rose-600">{j.siswa_tidak_hadir}</span>
+                      </TableCell>
+                      <TableCell>
+                        {j.fill_mode === 'piket' ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1 text-xs" data-testid={`fill-badge-piket-${j.id}`}>
+                            ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
+                          </Badge>
+                        ) : j.fill_mode === 'admin' ? (
+                          <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-xs">Admin</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Pengajar</Badge>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

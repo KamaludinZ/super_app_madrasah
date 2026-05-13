@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Users, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,6 +17,7 @@ const EMPTY = {
   username: '', password: '', full_name: '', nip_nuptk: '', nisn: '', email: '', phone: '',
   roles: [], homeroom_class_id: '', student_class_id: '', parent_of: [],
   gender: '', birth_place: '', birth_date: '', address: '',
+  mutation_type: '', mutation_date: '', mutation_note: '',
 };
 
 const ROLE_TABS = [
@@ -72,6 +73,9 @@ export default function AdminUsersPage() {
       homeroom_class_id: u.homeroom_class_id || '',
       student_class_id: u.student_class_id || '',
       parent_of: u.parent_of || [], gender: u.gender || '',
+      mutation_type: u.mutation_type || '',
+      mutation_date: u.mutation_date || '',
+      mutation_note: u.mutation_note || '',
     });
   };
 
@@ -88,13 +92,30 @@ export default function AdminUsersPage() {
     try {
       if (editing) {
         const payload = { ...form };
+        // Mutation fields are saved via separate endpoint
+        const mutationPayload = {
+          mutation_type: payload.mutation_type || null,
+          mutation_date: payload.mutation_date || null,
+          mutation_note: payload.mutation_note || null,
+        };
+        delete payload.mutation_type;
+        delete payload.mutation_date;
+        delete payload.mutation_note;
         if (!payload.password) delete payload.password;
         else { payload.new_password = payload.password; delete payload.password; }
         await api.put(`/users/${editing.id}`, payload);
+        // Always update mutation if user has siswa role (so admin can clear it too)
+        if ((editing.roles || []).includes('siswa')) {
+          await api.put(`/admin/users/${editing.id}/mutation`, mutationPayload);
+        }
         toast.success('User berhasil diperbarui');
       } else {
         if (!form.password) { toast.error('Password wajib diisi untuk user baru'); return; }
-        await api.post('/users', form);
+        const payload = { ...form };
+        delete payload.mutation_type;
+        delete payload.mutation_date;
+        delete payload.mutation_note;
+        await api.post('/users', payload);
         toast.success('User berhasil dibuat');
       }
       setOpen(false); refresh();
@@ -179,8 +200,19 @@ export default function AdminUsersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {u.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> :
-                            <Badge variant="outline">Nonaktif</Badge>}
+                          {u.mutation_type === 'keluar' ? (
+                            <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1">
+                              <UserMinus className="h-3 w-3" /> Mutasi Keluar
+                            </Badge>
+                          ) : u.mutation_type === 'masuk' ? (
+                            <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1">
+                              <UserPlus className="h-3 w-3" /> Mutasi Masuk
+                            </Badge>
+                          ) : u.is_active ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+                          ) : (
+                            <Badge variant="outline">Nonaktif</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
@@ -267,6 +299,51 @@ export default function AdminUsersPage() {
                   <SelectTrigger><SelectValue placeholder="Pilih kelas..." /></SelectTrigger>
                   <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
+              </div>
+            )}
+            {form.roles.includes('siswa') && editing && (
+              <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" data-testid="mutation-section">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                    <ArrowRightLeft className="h-4 w-4 text-amber-700" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-amber-900">Status Mutasi Siswa</div>
+                    <div className="text-xs text-amber-800/80">Catat siswa pindah masuk / keluar di TP aktif</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Tipe Mutasi</Label>
+                    <Select value={form.mutation_type || '_none'} onValueChange={(v) => setForm({ ...form, mutation_type: v === '_none' ? '' : v })}>
+                      <SelectTrigger data-testid="mutation-type-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Tidak Ada Mutasi</SelectItem>
+                        <SelectItem value="masuk">Mutasi Masuk (dari sekolah lain)</SelectItem>
+                        <SelectItem value="keluar">Mutasi Keluar (pindah/keluar)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tanggal Mutasi</Label>
+                    <Input type="date" value={form.mutation_date || ''}
+                      onChange={(e) => setForm({ ...form, mutation_date: e.target.value })}
+                      disabled={!form.mutation_type}
+                      data-testid="mutation-date" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Keterangan</Label>
+                  <Input value={form.mutation_note || ''} onChange={(e) => setForm({ ...form, mutation_note: e.target.value })}
+                    placeholder="Mis. asal sekolah, alasan keluar, dll"
+                    disabled={!form.mutation_type}
+                    data-testid="mutation-note" />
+                </div>
+                {form.mutation_type && (
+                  <div className="text-xs text-amber-800 bg-white border border-amber-200 rounded-lg p-2">
+                    <strong>Catatan:</strong> Mutasi <strong>{form.mutation_type === 'masuk' ? 'Masuk' : 'Keluar'}</strong> akan tercatat di TP aktif & status akun otomatis di-{form.mutation_type === 'masuk' ? 'aktifkan' : 'nonaktifkan'}.
+                  </div>
+                )}
               </div>
             )}
           </div>

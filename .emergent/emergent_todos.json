@@ -1,34 +1,54 @@
 [
   {
-    "content": "Backend: Tambah field mutation_type/mutation_ay_id di UserModel + extend StudentAchievementModel dengan holder_type, holder_name, bidang_lomba, tahun",
+    "content": "Backend: Tambah field 'capacity' di ClassModel + endpoint /classes return student_count per kelas",
     "status": "completed"
   },
   {
-    "content": "Backend: Endpoint GET /api/admin/stats/students (total, kelas 7/8/9, mutasi) + GET /api/admin/stats/achievements (total, kab/kota/provinsi/nasional/internasional)",
+    "content": "Backend: Models WeeklyHolidayModel + AcademicHolidayModel + CRUD endpoints (info-only utk monitoring)",
     "status": "completed"
   },
   {
-    "content": "Backend: Update GET /api/achievements untuk filter holder_type + handle holder_type=madrasah (no user)",
+    "content": "Backend: Endpoints backup/export (.json + base64 files), backup/import (restore), backup/info",
     "status": "completed"
   },
   {
-    "content": "Frontend: Update AdminDashboard tampilkan 2 StatsOverview baru (Siswa + Prestasi)",
+    "content": "Backend: TeacherTaskModel (tugas titipan dari guru pengajar) + endpoints /piket/tasks (CRUD) + /piket/schedules/today + /piket/fill-journal (audit who filled)",
     "status": "completed"
   },
   {
-    "content": "Frontend: Rename menu \"Prestasi Siswa\" → \"Data Prestasi\" di AppShell semua role",
+    "content": "Backend: Update Journal model dengan filled_by_user_id + fill_mode (self/piket) + task_id; update validate-qr/journal endpoints",
     "status": "completed"
   },
   {
-    "content": "Frontend: Refactor AchievementsPage → 4 tabs (Siswa/Guru/Tendik/Madrasah) + tabel kolom baru (No, Tahun, Nama Lomba, Bidang, Penyelenggara, Tingkat, Peringkat, Kategori, Sertifikat)",
+    "content": "Backend: Endpoint /admin/users/{uid}/mutation (set/clear mutation status)",
     "status": "completed"
   },
   {
-    "content": "Frontend: Update form dialog tambah field Bidang Lomba + Tahun + Holder selector berdasarkan tab aktif",
+    "content": "Frontend: AdminClassesPage kolom Peserta + input capacity",
     "status": "completed"
   },
   {
-    "content": "Testing: verify stats endpoint + new fields backend, lalu frontend prestasi & dashboard",
+    "content": "Frontend: AdminUsersPage section Mutasi di edit dialog",
     "status": "completed"
+  },
+  {
+    "content": "Frontend: AdminHolidaysPage (Weekly CRUD + Academic kalender)",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: AdminBackupPage download/upload + info backup",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: PiketTasksPage + Form Titipan + AdminJurnalRekap badge filled_by",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: Public monitoring banner libur akademik info-only",
+    "status": "completed"
+  },
+  {
+    "content": "Testing agent: backend Batch A (capacity, holidays, backup, piket-tasks, audit, mutation)",
+    "status": "in_progress"
   }
 ]

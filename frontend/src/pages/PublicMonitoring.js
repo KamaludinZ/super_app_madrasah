@@ -1,20 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, AlertCircle, Circle, Radio, RefreshCw, Calendar, LogIn } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Circle, Radio, RefreshCw, Calendar, LogIn, CalendarDays, Star } from 'lucide-react';
 import { api, DAY_LABELS, STATUS_COLORS, STATUS_LABELS } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 
 const REFRESH_INTERVAL = 15000; // 15s
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 export default function PublicMonitoring() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [now, setNow] = useState(new Date());
+  const [holiday, setHoliday] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -27,11 +30,20 @@ export default function PublicMonitoring() {
     }
   };
 
+  const fetchHoliday = async () => {
+    try {
+      const { data } = await axios.get(`${BACKEND_URL}/api/public/holidays/today`);
+      setHoliday(data);
+    } catch (e) { /* ignore */ }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchHoliday();
     const t = setInterval(fetchData, REFRESH_INTERVAL);
     const t2 = setInterval(() => setNow(new Date()), 1000);
-    return () => { clearInterval(t); clearInterval(t2); };
+    const t3 = setInterval(fetchHoliday, 5 * 60 * 1000); // 5 min
+    return () => { clearInterval(t); clearInterval(t2); clearInterval(t3); };
   }, []);
 
   const filteredItems = (data?.classes || []).filter((c) => {
@@ -84,6 +96,33 @@ export default function PublicMonitoring() {
       </header>
 
       <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Holiday Banner */}
+        {(holiday?.is_academic_holiday || holiday?.is_weekly_holiday) && (
+          <div className="mb-4 rounded-2xl bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200 p-4 flex items-start gap-3" data-testid="holiday-banner">
+            {holiday?.is_academic_holiday ? <Star className="h-6 w-6 text-rose-600 mt-0.5 shrink-0" /> : <CalendarDays className="h-6 w-6 text-amber-600 mt-0.5 shrink-0" />}
+            <div className="flex-1">
+              {holiday?.is_academic_holiday ? (
+                <>
+                  <div className="font-bold text-rose-900">
+                    HARI INI LIBUR — {holiday.academic_holiday?.name || '-'}
+                  </div>
+                  <div className="text-xs text-rose-700 mt-0.5">
+                    <span className="capitalize">{holiday.academic_holiday?.category?.replace('_', ' ')}</span>
+                    {holiday.academic_holiday?.description && ` — ${holiday.academic_holiday.description}`}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="font-bold text-amber-900">
+                    HARI INI {DAY_LABELS[holiday?.day] || holiday?.day?.toUpperCase()} — {holiday.weekly_holiday?.description || 'Libur Mingguan'}
+                  </div>
+                  <div className="text-xs text-amber-700 mt-0.5">Tidak ada kegiatan pembelajaran rutin</div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Title */}
         <div className="mb-6">
           <Badge className="bg-amber-100 text-amber-900 border border-amber-200 mb-2">Transparansi Publik</Badge>

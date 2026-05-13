@@ -27,6 +27,9 @@ import KebersihanPage from '@/pages/KebersihanPage';
 import JadwalPiketPage from '@/pages/admin/JadwalPiketPage';
 import AdminJurnalRekapPage from '@/pages/admin/AdminJurnalRekapPage';
 import AdminImportPage from '@/pages/admin/AdminImportPage';
+import AdminHolidaysPage from '@/pages/admin/AdminHolidaysPage';
+import AdminBackupPage from '@/pages/admin/AdminBackupPage';
+import PiketTasksPage from '@/pages/PiketTasksPage';
 import AchievementsPage from '@/pages/AchievementsPage';
 import EkstrakurikulerPage from '@/pages/EkstrakurikulerPage';
 import GradesInputPage from '@/pages/GradesInputPage';
@@ -77,6 +80,9 @@ function App() {
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/academic-year" element={<AdminAcademicYearPage />} />
             <Route path="/admin/import" element={<AdminImportPage />} />
+            <Route path="/admin/holidays" element={<AdminHolidaysPage />} />
+            <Route path="/admin/backup" element={<AdminBackupPage />} />
+            <Route path="/piket/tugas" element={<PiketTasksPage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />
