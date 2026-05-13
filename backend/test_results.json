@@ -1,0 +1,418 @@
+{
+  "timestamp": "2026-05-13T06:27:33.664019",
+  "total_tests": 69,
+  "passed": 67,
+  "failed": 1,
+  "success_rate": "97.1%",
+  "test_results": [
+    {
+      "test": "GET /api/health - returns healthy + WIB time",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/settings - returns public branding info",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/public/monitoring - returns real-time class status (no auth)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha - returns math captcha challenge",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as admin - with valid captcha",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for wrong captcha test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login - with WRONG captcha should fail 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/auth/captcha (for wrong password test)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login - with WRONG password should fail 401",
+      "status": "PASSED",
+      "expected": 401,
+      "actual": 401
+    },
+    {
+      "test": "GET /api/auth/me with valid JWT - returns user profile",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for walas7a login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as walas7a (multi-role user)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/switch-role - switch from wali_kelas to guru",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/users (admin only) - returns all users",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/users - admin creates new user with multiple roles",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/users/{uid} - admin updates user",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /api/users/{uid} - admin deletes user",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/academic-years - returns list",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/academic-years - admin creates new AY",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/academic-years/{id}/activate - admin activates AY",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/academic-years/{id}/activate - reactivate original",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/classes - returns 7 seeded classes",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/classes - admin creates new class",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms - returns 8 seeded rooms with GPS coords",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/rooms - admin creates room with GPS lat/lon and radius",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/rooms/{id} - admin toggles GPS enabled + changes radius",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/subjects - returns 14 seeded subjects",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/subjects - admin creates subject",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/subjects/{id} - admin updates subject",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "DELETE /api/subjects/{id} - admin deletes subject",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/schedules - returns enriched with class/subject/teacher/room names",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for guru1 login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as guru1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/schedules/my-today as guru1 - returns today's schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/schedules - admin creates schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms/{rid}/qr?mode=static - returns encrypted QR token + b64 image",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms/{rid}/qr?mode=dynamic - returns TOTP-based dynamic QR",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal/validate as guru1 with valid QR for R-7A - should pass",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms/{rid}/qr for different room",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal/validate as guru1 with QR for wrong room - should fail schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal/validate with INVALID/TAMPERED qr_token - should fail QR validation",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/jurnal/my as guru1 - check existing journals",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal as guru1 - creates journal entry",
+      "status": "FAILED",
+      "expected": 200,
+      "actual": 400,
+      "error": "{\"detail\":{\"message\":\"Validasi gagal\",\"validation\":{\"overall_valid\":false,\"qr\":{\"valid\":true,\"reason\":\"QR berhasil divalidasi\",\"mode\":\"static\"},\"schedule\":{\"valid\":false,\"reason\":\"Tidak ada jadwal mengajar Anda di kelas ini pada hari rabu jam 13:27 WIB\",\"schedule\":null},\"gps\":{\"valid\":false,\"reason\":\"\"},\"context\":{}}}}"
+    },
+    {
+      "test": "POST /api/jurnal - DUPLICATE attempt should return 400",
+      "status": "PASSED",
+      "expected": 400,
+      "actual": 400
+    },
+    {
+      "test": "GET /api/jurnal/my as guru1 - returns history",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for walas7a re-login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as walas7a (for wali_kelas role)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/wali-kelas/my-class as walas7a - returns class info + students + today schedule",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/auth/captcha (for ortu1 login)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/auth/login as ortu1",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/parent/children as ortu1 - returns 2 children (siswa1, siswa2)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/student/{student_id}/today as ortu1 for own child - works",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/users - create temp student for access test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/student/{student_id}/today as ortu1 for OTHER student - should 403",
+      "status": "PASSED",
+      "expected": 403,
+      "actual": 403
+    },
+    {
+      "test": "POST /api/qr-templates - upload template",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/rooms/{rid}/qr-card - generate B5 card",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/audit-logs - returns recent audit entries",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/security-logs - returns security events",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/stats - returns stats dashboard data",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/admin/settings - returns full settings (admin)",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/admin/settings - admin updates settings",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/admin/settings/upload-logo",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/rooms/{id} - enable GPS for R-7A",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms/{rid}/qr for GPS test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal/validate with GPS FAR from room - should fail with distance info",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "PUT /api/rooms/{id} - disable GPS for R-7A",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "GET /api/rooms/{rid}/qr for GPS disabled test",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "test": "POST /api/jurnal/validate with GPS disabled - should pass regardless of location",
+      "status": "PASSED",
+      "expected": 200,
+      "actual": 200
+    }
+  ]
+}

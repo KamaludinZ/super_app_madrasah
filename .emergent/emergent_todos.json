@@ -1,10 +1,10 @@
 [
   {
-    "content": "Phase 1: Setup environment & install dependencies (cryptography, qrcode, Pillow)",
+    "content": "Phase 1: Setup environment & install dependencies",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Create POC script - validate Smart Journal core (QR encrypt/decrypt + Schedule + GPS + B5 overlay)",
+    "content": "Phase 1: Create POC script - validate Smart Journal core",
     "status": "completed"
   },
   {
@@ -13,63 +13,79 @@
   },
   {
     "content": "Phase 2: Get design guidelines from design_agent (Kemenag green theme)",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - Auth (username/password + math captcha + JWT + rate limit)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - User management with 9 roles + multi-role switching",
-    "status": "pending"
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Master Data (academic year, classes, rooms with GPS, subjects, schedules)",
-    "status": "pending"
+    "content": "Phase 2: Backend - Master Data (academic year, classes, rooms, subjects, schedules)",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Smart Journal endpoints (QR validation + schedule + GPS check)",
-    "status": "pending"
+    "content": "Phase 2: Backend - Smart Journal endpoints (QR validation + schedule + GPS)",
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - QR Code generator with B5 card template upload",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - Public real-time monitoring endpoint",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 2: Backend - Audit log + Security log + Branding settings",
-    "status": "pending"
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Backend - Seed demo accounts (admin, guru, walas, siswa, ortu, ek, tendik, piket, bk, tatib)",
-    "status": "pending"
+    "content": "Phase 2: Backend - Seed demo accounts (all 10+ accounts)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Frontend - Theme setup (Kemenag green, fonts, tokens)",
+    "status": "completed"
   },
   {
     "content": "Phase 2: Frontend - Login + Math Captcha + Role Switcher",
-    "status": "pending"
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Role-based Dashboards",
-    "status": "pending"
+    "content": "Phase 2: Frontend - Auth context + API client",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Smart Journal flow (QR Scan + Form)",
-    "status": "pending"
+    "content": "Phase 2: Frontend - Role-based Dashboards (Admin, Guru, Wali Kelas, Siswa, Ortu)",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Frontend - Admin CRUDs (Master data, QR Generator, Audit Log, Branding)",
-    "status": "pending"
+    "content": "Phase 2: Frontend - Smart Journal flow (QR Scan + Form + Validation)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Frontend - Admin CRUDs (Users, Classes, Rooms, Subjects, Schedules)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Frontend - Admin QR Generator + B5 Template",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Frontend - Admin Audit Log + Settings (Branding)",
+    "status": "completed"
   },
   {
     "content": "Phase 2: Frontend - Public Real-time Monitoring page",
-    "status": "pending"
+    "status": "completed"
   },
   {
-    "content": "Phase 2: E2E Testing via testing_agent_v3",
-    "status": "pending"
+    "content": "Phase 2: E2E Testing via testing_agent_v3 (all user stories)",
+    "status": "in_progress"
   },
   {
     "content": "Phase 2: Fix all bugs found by testing agent",
