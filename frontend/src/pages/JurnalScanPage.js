@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Html5Qrcode } from 'html5-qrcode';
+import CameraScanner from '@/components/scanner/CameraScanner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScanLine, MapPin, CheckCircle2, XCircle, Loader2, Camera, ArrowLeft, ShieldCheck, Clock, Send, RotateCw, AlertCircle, KeyRound, Hash } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,69 +43,8 @@ export default function JurnalScanPage() {
     );
   }, []);
 
-  // FIX: Start scanner AFTER DOM is ready (phase=='scanning' renders the div)
-  // Previously the constructor was called BEFORE the div was rendered, causing failure.
-  useEffect(() => {
-    let active = true;
-    if (phase !== 'scanning') return;
-
-    const initScanner = async () => {
-      setError(null);
-      try {
-        // Wait a tick for DOM
-        await new Promise((r) => setTimeout(r, 50));
-        if (!active) return;
-        const el = document.getElementById('qr-reader');
-        if (!el) {
-          setError('Elemen kamera tidak ditemukan');
-          setPhase('idle');
-          return;
-        }
-        const html5 = new Html5Qrcode('qr-reader', { verbose: false });
-        scannerRef.current = html5;
-        await html5.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decoded) => {
-            html5.stop().then(() => {
-              scannerRef.current = null;
-              setCameraReady(false);
-              handleQrDecoded(decoded);
-            }).catch(() => handleQrDecoded(decoded));
-          },
-          () => {}
-        );
-        if (active) setCameraReady(true);
-      } catch (e) {
-        if (!active) return;
-        setCameraReady(false);
-        const msg = e?.message || String(e);
-        let userMsg = 'Tidak dapat mengakses kamera.';
-        if (msg.includes('Permission') || msg.includes('NotAllowed')) {
-          userMsg = 'Izin kamera ditolak. Mohon izinkan akses kamera lalu coba lagi.';
-        } else if (msg.includes('NotFound') || msg.includes('No camera')) {
-          userMsg = 'Perangkat ini tidak memiliki kamera. Gunakan opsi Token Manual.';
-        } else if (msg.includes('NotReadable')) {
-          userMsg = 'Kamera sedang dipakai aplikasi lain.';
-        } else if (msg.includes('OverconstrainedError')) {
-          userMsg = 'Spesifikasi kamera tidak terpenuhi.';
-        } else if (msg.includes('SecurityError')) {
-          userMsg = 'Browser butuh HTTPS untuk akses kamera.';
-        }
-        setError(userMsg + ' Sebagai alternatif, gunakan Token QR / Token Kelas manual.');
-        setPhase('idle');
-      }
-    };
-
-    initScanner();
-    return () => {
-      active = false;
-      if (scannerRef.current) {
-        try { scannerRef.current.stop().catch(() => {}); } catch (_e) { /* noop */ }
-        scannerRef.current = null;
-      }
-    };
-  }, [phase]);
+  // FIX: kamera initialization sekarang di komponen CameraScanner — lihat di phase==='scanning' render.
+  // Komponen tsb menjamin DOM element ada SEBELUM Html5Qrcode di-init.
 
   const startScanner = useCallback(() => {
     setError(null);
@@ -322,8 +262,10 @@ export default function JurnalScanPage() {
                   <div className="text-sm font-semibold text-slate-900">Arahkan kamera ke QR Code ruangan</div>
                   <div className="text-xs text-slate-500">Sistem akan otomatis mendeteksi</div>
                 </div>
-                <div id="qr-reader" data-testid="jurnal-scan-camera" />
-                <Button variant="outline" onClick={async () => { await stopScanner(); resetFlow(); }} className="w-full mt-4" data-testid="jurnal-scan-cancel">Batal</Button>
+                <CameraScanner
+                  onDecoded={(token) => handleQrDecoded(token)}
+                  onCancel={() => resetFlow()}
+                />
               </CardContent>
             </Card>
           </motion.div>

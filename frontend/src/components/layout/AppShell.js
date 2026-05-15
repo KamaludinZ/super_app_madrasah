@@ -136,22 +136,35 @@ function ActivePeriodCard({ ctx, onClick }) {
         </div>
         <ChevronDown className="h-3 w-3 opacity-70 group-hover:opacity-100" />
       </div>
-      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight mt-0.5">{ctx.year_name}</div>
-      {ctx.curriculum_name && (
-        <div className="text-[10px] mt-0.5 opacity-90 truncate" title={ctx.curriculum_name}>
-          {ctx.curriculum_name}
-        </div>
-      )}
+      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight mt-0.5" data-testid="sidebar-tp-name">{ctx.year_name}</div>
+
+      {/* Semester */}
       <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider opacity-80">Semester</span>
-        <Badge className={`border-0 capitalize text-[10px] font-bold px-2 py-0 ${
-          isOverride ? 'bg-amber-300/95 text-amber-900' : 'bg-amber-300/95 text-amber-900'
-        }`}>
-          {ctx.semester}
+        <Badge data-testid="sidebar-semester" className="bg-amber-300/95 text-amber-900 border-0 capitalize text-[10px] font-bold px-2 py-0">
+          {ctx.semester || '-'}
         </Badge>
       </div>
+
+      {/* Kurikulum */}
+      <div className="mt-1 flex items-center justify-between gap-1">
+        <span className="text-[10px] uppercase tracking-wider opacity-80 shrink-0">Kurikulum</span>
+        {ctx.curriculum_name ? (
+          <Badge data-testid="sidebar-curriculum" className="bg-white/20 text-white border-white/30 text-[10px] font-semibold px-2 py-0 truncate max-w-[120px]" title={ctx.curriculum_name}>
+            {ctx.curriculum_name}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="bg-rose-100/90 text-rose-800 border-rose-200 text-[10px] font-semibold px-2 py-0" data-testid="sidebar-curriculum-empty">
+            Belum diset
+          </Badge>
+        )}
+      </div>
+
       {isOverride && (
         <div className="text-[9px] mt-1 italic opacity-90">Klik untuk ubah / reset</div>
+      )}
+      {!isOverride && (
+        <div className="text-[9px] mt-1 italic opacity-70">Klik untuk pindah TP lampau</div>
       )}
     </button>
   );

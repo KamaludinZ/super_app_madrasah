@@ -23,14 +23,24 @@ const ACCELERATED_SEMESTERS = [
 
 export default function AdminAcademicYearPage() {
   const [items, setItems] = useState([]);
+  const [curriculums, setCurriculums] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
     name: '', is_active: false, semester_type: 'regular', semesters: [], active_semester: 'ganjil',
+    curriculum_id: '',
   });
 
-  const refresh = async () => { const { data } = await api.get('/academic-years'); setItems(data); };
+  const refresh = async () => {
+    const [{ data }, { data: curs }] = await Promise.all([
+      api.get('/academic-years'),
+      api.get('/curriculums'),
+    ]);
+    setItems(data); setCurriculums(curs || []);
+  };
   useEffect(() => { refresh(); }, []);
+
+  const curriculumById = (id) => curriculums.find((c) => c.id === id);
 
   const openCreate = () => {
     setEditing(null);
@@ -38,6 +48,7 @@ export default function AdminAcademicYearPage() {
       name: '', is_active: false, semester_type: 'regular',
       semesters: REGULAR_SEMESTERS.map((s) => ({ ...s, is_active: s.name === 'ganjil' })),
       active_semester: 'ganjil',
+      curriculum_id: '',
     });
     setOpen(true);
   };
@@ -48,6 +59,7 @@ export default function AdminAcademicYearPage() {
       semester_type: ay.semester_type || 'regular',
       semesters: ay.semesters || [],
       active_semester: ay.active_semester || (ay.semesters?.find((s) => s.is_active)?.name || ''),
+      curriculum_id: ay.curriculum_id || '',
     });
     setOpen(true);
   };
@@ -104,13 +116,20 @@ export default function AdminAcademicYearPage() {
 
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table>
         <TableHeader><TableRow>
-          <TableHead>Nama</TableHead><TableHead>Tipe</TableHead><TableHead>Semester</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
+          <TableHead>Nama</TableHead><TableHead>Tipe</TableHead><TableHead>Kurikulum</TableHead><TableHead>Semester</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
         </TableRow></TableHeader>
         <TableBody>{items.map((ay) => (
           <TableRow key={ay.id} data-testid={`ay-row-${ay.name}`}>
             <TableCell className="font-mono font-semibold">{ay.name}</TableCell>
             <TableCell>
               <Badge variant="outline" className="capitalize">{ay.semester_type === 'accelerated' ? 'Percepatan (1-6)' : 'Regular (Ganjil/Genap)'}</Badge>
+            </TableCell>
+            <TableCell>
+              {ay.curriculum_id ? (
+                <Badge variant="outline" className="bg-[#006837]/5 text-[#006837] border-[#006837]/20" title={curriculumById(ay.curriculum_id)?.name || ''}>
+                  {curriculumById(ay.curriculum_id)?.code || curriculumById(ay.curriculum_id)?.name || '?'}
+                </Badge>
+              ) : <span className="text-xs text-slate-400 italic">Belum diset</span>}
             </TableCell>
             <TableCell>
               <div className="flex flex-wrap gap-1">
@@ -157,6 +176,24 @@ export default function AdminAcademicYearPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Kurikulum yang Digunakan</Label>
+              <Select value={form.curriculum_id || '__none__'} onValueChange={(v) => setForm({...form, curriculum_id: v === '__none__' ? '' : v})}>
+                <SelectTrigger data-testid="ay-form-curriculum"><SelectValue placeholder="Pilih kurikulum..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Belum diset</SelectItem>
+                  {curriculums.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                Kurikulum ini akan dipakai sebagai default untuk semua kelas di TP ini.
+                {curriculums.length === 0 && (
+                  <span className="block text-amber-700 mt-0.5">Belum ada kurikulum. Buat di menu Kurikulum dulu.</span>
+                )}
+              </p>
             </div>
             <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
               <Label className="text-xs text-slate-600">Daftar Semester:</Label>
