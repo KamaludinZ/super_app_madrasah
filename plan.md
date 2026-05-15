@@ -1,40 +1,22 @@
-# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 + Batch A + Iterasi 1 + Iterasi 2 Complete)
+# plan.md — Super Apps MATSANDATAMA (MVP → Phase 4 + Batch A + Iterasi 1 + Iterasi 2 + Iterasi 3/E Complete)
 
 ## 1. Objectives
 - ✅ Membuktikan **alur inti** “Jurnal Presisi” end-to-end: **QR (encrypted) → decrypt → validasi jadwal realtime → opsional GPS geofence (ruang) → create jurnal → auto-lock by time window**.
 - ✅ Menghadirkan **Super App Web** (FastAPI + React + MongoDB) dengan **multi-role switching** dan set peran:
   - Admin, Guru, Wali Kelas, Siswa, Tenaga Kependidikan, Guru Piket, Guru BK, Guru Tata Tertib, Guru Ekstrakurikuler.
-  - Catatan: role **orang_tua** telah dihapus sesuai permintaan (jangan dihidupkan kembali).
-- ✅ Menghadirkan master data + penjadwalan + QR card generator (B5 template upload), public realtime monitoring, audit/security log, dan branding Kemenag.
-- ✅ Menyelesaikan kebutuhan produksi Phase 3: UX sesi kerja guru (JWT 12 jam + idle timeout), schedule grid, active days & teaching slots, model semester reguler/percepatan, data siswa+kehadiran+kebersihan, user tabs, import jadwal via Excel.
-- ✅ Menyelesaikan **Phase 4** (fitur operasional besar) dan memastikan stabilitas:
-  - **A. Excel Imports** (Users, Students, Classes, Rooms, Subjects)
-  - **B. SMTP Settings + Email Reset Password (Forgot/Reset Password flow)**
-  - **C. Prestasi Siswa (Portfolio + Verifikasi)**
-  - **D. Ekstrakurikuler (CRUD + Members + Attendance + Grades)**
-  - **E. E-Rapor Digital (Input nilai + Rapor view)**
-- ✅ Menyelesaikan **Batch A** (fitur operasional tambahan) untuk kesiapan sekolah:
-  - **Hari Libur** (akademik & mingguan) + endpoint publik “hari ini”
-  - **Backup & Restore** database
-  - **Kapasitas Kelas** + student_count
-  - **Tugas Guru Piket** (task → fill jurnal → auto-complete)
-- ✅ Menyelesaikan **Iterasi 1 (Hardening + Workflow + Data Siswa detail)**:
-  - Perbaikan **sidebar role-switching**
-  - **Workflow Jadwal Guru** (Draft → Terkirim/Submitted → Terkunci/Locked)
-  - **Admin Mutasi** (filter role_group + mutation_type)
-  - **Detail Data Siswa** (tab Data Siswa / Orang Tua / Alamat)
-- ✅ Menyelesaikan **Iterasi 2 (Stabilization: Frontend E2E + Backend Refactor)**:
-  - **Frontend E2E** untuk Iterasi 1 (validasi UI/flow) → production-ready
-  - **Refactor backend**: memecah `server.py` monolitik menjadi `core.py` + `routers/*` per domain
-- ✅ Stabilitas terverifikasi (berbasis test report):
-  - Backend Phase 4: **89.8% (44/49)** pada `iteration_3.json` (5 test Excel import diskip karena konstruksi file xlsx pada test runner; endpoint dan template download terverifikasi)
-  - Frontend Phase 4: **85% (17/20)** pada `iteration_4.json`, **0 critical bug** (3 skenario parsial karena kendala sesi login saat E2E, bukan bug fungsional)
-  - Backend Batch A: **96.1% (49/51)** pada `iteration_6.json` (2 item adalah isu desain test/ekspektasi, bukan bug fungsional)
-  - Backend Iterasi 1: **100% (60/60)** pada `/app/backend/iterasi1_test_results.json`
-  - Frontend Iterasi 1 (E2E): **95% overall**, 9 skenario inti PASS, **0 bug kritikal** (`iteration_7.json`)
-  - Regression setelah refactor:
-    - Iterasi 1: **60/60 PASS (100%)**
-    - Batch A: **49/51 PASS (96.1%)**
+- ✅ Branding Kemenag + dashboard per role + master data + penjadwalan + QR card generator (B5 template upload).
+- ✅ Excel imports + SMTP reset password + prestasi + ekskul + e-rapor.
+- ✅ Batch A: holidays, backup/restore, class capacity, tugas guru piket.
+- ✅ Iterasi 1: hardening workflow jadwal guru, detail data siswa, mutasi, sidebar role-switch fix.
+- ✅ Iterasi 2: stabilisasi E2E FE dan refactor backend (server.py → core.py + routers/*).
+- ✅ **Iterasi 3 / Phase E — Stabilisasi Operasional + SOP & Dokumentasi**:
+  - Password policy (first login + 6 bulan) yang **disarankan** dan bisa di-snooze
+  - Sistem pengumuman + role targeting
+  - Sistem notifikasi di topbar (lebih jelas: notif apa)
+  - Halaman error (profesional) + mode maintenance (informatif) + gate maintenance
+  - Landing/login soft animated background bertema madrasah
+  - Export Excel (users/students/schedules/grades)
+  - Panduan pengguna in-app + dokumentasi offline
 
 ---
 
@@ -121,7 +103,7 @@
 ✅ RBAC admin/wali kelas/siswa; upsert attendance & cleanliness.
 
 #### 3.5 User Management Grouped by Role
-✅ Tabs per role (tanpa orang_tua).
+✅ Tabs per role (tanpa role orang_tua sebagai target utama produk).
 
 #### 3.6 Tahun Pelajaran: Regular vs Percepatan
 ✅ Semester reguler (ganjil/genap) dan percepatan (1–6).
@@ -199,7 +181,7 @@
 #### 4.6 Fix & Hardening (Phase 4 integration stability)
 ✅ Fixed backend crash (import `BaseModel` order) setelah injeksi endpoint Phase 4.
 ✅ RBAC improvement:
-- `_user_can_view_class` diperluas agar **guru mapel** dapat mengakses daftar siswa untuk kelas yang dia ampu (dibutuhkan untuk input nilai).
+- `user_can_view_class` diperluas agar **guru mapel** dapat mengakses daftar siswa untuk kelas yang dia ampu (dibutuhkan untuk input nilai).
 
 #### 4.7 Testing / Verification
 ✅ Backend Phase 4: `iteration_3.json`
@@ -221,7 +203,7 @@
 - CRUD hari libur mingguan: `GET/POST/PUT/DELETE /api/weekly-holidays`
 - Endpoint publik ringkas: `GET /api/public/holidays/today` (tanpa auth)
 ✅ Frontend:
-- UI pengelolaan hari libur (admin) + konsumsi informasi hari libur bila diperlukan.
+- UI pengelolaan hari libur (admin).
 
 #### A2. Kapasitas Kelas + Student Count
 ✅ Backend:
@@ -267,9 +249,9 @@
 - Endpoint workflow:
   - `GET /api/schedules/my-schedules`
   - `PUT /api/schedules/{id}/submit`
-  - `PUT /api/schedules/{id}/lock` (admin)
-  - `PUT /api/schedules/{id}/unlock` (admin)
-  - `PUT /api/schedules/bulk-lock` (admin)
+  - `PUT /api/schedules/{id}/lock`
+  - `PUT /api/schedules/{id}/unlock`
+  - `PUT /api/schedules/bulk-lock`
 - RBAC:
   - Guru hanya bisa buat/edit/hapus saat draft miliknya
   - Admin bisa override edit dan lock/unlock
@@ -284,11 +266,7 @@
 - Endpoint detail siswa: `GET/PUT /api/students/{id}/detail` (upsert, merge)
 - Skema nested: `data_siswa`, `data_ayah`, `data_ibu`, `data_wali`, `data_alamat`
 ✅ Frontend:
-- Dialog detail siswa bertab:
-  - **Data Siswa**
-  - **Data Orang Tua/Wali**
-  - **Data Alamat**
-- Integrasi dari Data Siswa page.
+- Dialog detail siswa bertab: **Data Siswa**, **Data Orang Tua/Wali**, **Data Alamat**.
 
 #### I4. Admin Mutations Page
 ✅ Backend:
@@ -316,49 +294,134 @@
 ✅ Status: production-ready
 - Hasil: **95% overall**, 9 skenario inti PASS, **0 bug kritikal**
 - Report: `/app/test_reports/iteration_7.json`
-- Skenario utama yang tervalidasi:
-  - Login math captcha (admin/guru/walas)
-  - Role switch (walas7a wali_kelas ↔ guru)
-  - My Schedules guru (status badge, aksi submit)
-  - Admin Schedules (lock/unlock UI)
-  - Admin Mutasi (render + filter)
 
 #### II-D. Refactor Backend (server.py → core.py + routers/*)
 ✅ Status: completed
 - `server.py` dari **3.173 baris → 90 baris** (≈97% reduksi)
 - Struktur baru:
-  - `core.py` (±136 baris): DB, deps auth/RBAC, helper serialize, audit/security logging
-  - `routers/*` (per domain):
-    - `health.py`, `auth.py`, `admin_settings.py`, `academic.py`, `classes.py`, `subjects.py`, `rooms.py`,
-      `users.py`, `students.py`, `schedules.py`, `journals.py`, `wali_parent.py`, `admin.py`,
-      `public.py`, `holidays_tasks.py`, `phase4.py`
-    - `_shared.py`: helper RBAC `user_can_view_class`
+  - `core.py`: DB, deps auth/RBAC, helper serialize, audit/security logging
+  - `routers/*` per domain + `_shared.py` (helper RBAC)
 
 #### II-D2. Regression Tests setelah Refactor
 ✅ Iterasi 1: **60/60 PASS (100%)**
-✅ Batch A: **49/51 PASS (96.1%)** (sama seperti sebelum refactor; 2 item adalah desain test)
+✅ Batch A: **49/51 PASS (96.1%)**
+
+---
+
+### Iterasi 3 / Phase E — Stabilisasi Operasional + SOP & Dokumentasi
+**Goal:** kesiapan operasional sekolah: onboarding user, notifikasi jelas, pengumuman terarah per role, maintenance profesional, export data untuk laporan, dan SOP/handbook in-app.
+
+✅ **COMPLETED — Backend + Frontend + Docs + Tests**
+
+#### E1. Password Policy (Saran Ubah Password)
+✅ Backend:
+- Field user baru:
+  - `password_changed_at`, `password_change_dismissed_until`
+- `GET /api/auth/me` mengembalikan `password_status`:
+  - `reason`: `first_login` atau `expired`
+  - `should_prompt`: true/false
+- Endpoint:
+  - `POST /api/auth/change-password`
+  - `POST /api/auth/dismiss-password-reminder?days=30`
+✅ Frontend:
+- `ChangePasswordDialog` auto-prompt (first login + reminder 6 bulan)
+- Tombol: **Ubah Sekarang** atau **Nanti Saja (tunda 30 hari)**
+
+#### E2. Sistem Pengumuman (Announcements)
+✅ Backend:
+- `AnnouncementModel`
+- Admin CRUD:
+  - `GET/POST/PUT/DELETE /api/admin/announcements`
+- User feed:
+  - `GET /api/announcements` (filter by role, active window, pin)
+✅ Frontend:
+- `AnnouncementsCard` muncul di dashboard semua role non-admin
+- Halaman list: `/pengumuman`
+- Admin management page: `/admin/pengumuman` dengan target role (multi select) + severity + pin + aktif/nonaktif
+
+#### E3. Sistem Notifikasi (Topbar Bell)
+✅ Backend:
+- Feed gabungan:
+  - `GET /api/notifications`
+  - `GET /api/notifications/unread-count`
+  - `POST /api/notifications/{source}/{source_id}/read`
+  - `POST /api/notifications/mark-all-read`
+- Sumber: announcements + password reminder (synthetic)
+✅ Frontend:
+- `NotificationBell` di topbar (sebelah role switcher)
+- Badge unread, dropdown, tombol mark-all-read
+- Polling unread count tiap 60 detik
+
+#### E4. Halaman Error & Maintenance
+✅ Frontend:
+- `ErrorPage` profesional (404/403/500/generic) + catch-all route
+- `MaintenancePage` informatif + auto-refresh
+- `MaintenanceGate` (non-admin diblokir jika maintenance_mode aktif)
+✅ Backend:
+- Public `GET /api/settings` expose:
+  - `maintenance_mode`, `maintenance_message`, `maintenance_ends_at`
+
+#### E5. Landing/Login Soft Animated Background
+✅ Frontend:
+- `MadrasahBackdrop` (SVG ornaments): bintang 8-titik, bulan sabit, ikon buku, pena, arabesque
+- Opacity rendah agar tidak mengganggu form
+
+#### E6. Export Excel (Laporan)
+✅ Backend:
+- Export .xlsx:
+  - `GET /api/admin/export/users-excel`
+  - `GET /api/admin/export/students-excel`
+  - `GET /api/admin/export/schedules-excel`
+  - `GET /api/admin/export/grades-excel`
+✅ Frontend:
+- Tambahan section di `AdminBackupPage` untuk download Excel export
+
+#### E7. Panduan Pengguna In-App
+✅ Frontend:
+- `/panduan` dan `/panduan/:slug`
+- 12 topik markdown internal, filter sesuai role (non-admin hanya melihat yang relevan + keamanan)
+
+#### E8. Dokumentasi Markdown Standalone (Offline)
+✅ Output:
+- `/app/docs/README.md`
+- `/app/docs/PANDUAN_ADMIN.md`
+- `/app/docs/PANDUAN_GURU.md`
+- `/app/docs/PANDUAN_WALI_KELAS.md`
+- `/app/docs/PANDUAN_SISWA.md`
+- `/app/docs/PANDUAN_GURU_PIKET.md`
+- `/app/docs/SETUP_SMTP.md`
+- `/app/docs/BACKUP_RESTORE.md`
+- `/app/docs/KEAMANAN_PASSWORD.md`
+
+#### E9. Maintenance Mode Toggle UI
+✅ Frontend:
+- Admin Settings: tab **Maintenance**
+- Toggle `maintenance_mode`, input message, estimasi selesai
+✅ Backend:
+- Persist via `PUT /api/admin/settings`
+
+#### E10. Testing / Verification
+✅ Regression:
+- Iterasi 1 regression: **60/60 PASS (100%)**
+✅ Smoke test fitur baru:
+- **21/21 PASS (100%)** (password policy, announcements, notifications, maintenance toggle, export excel)
+✅ Visual verification:
+- Screenshot verified untuk Admin Pengumuman + Panduan + Maintenance + Login backdrop
 
 ---
 
 ## 3. Next Actions (Immediate)
-1. **Stabilisasi operasional (disarankan sebelum Phase 5 Mobile):**
-   - Import Excel menggunakan data nyata sekolah
-   - Konfigurasi SMTP real + uji forgot/reset password end-to-end
-   - Uji scan jurnal presisi di titik lokasi ruang (akurasi GPS & geofence)
-   - SOP penggunaan:
-     - Verifikasi prestasi oleh wali kelas/admin
-     - Proses piket (tugas → isi jurnal → selesai)
-     - Input nilai rapor per mapel dan cetak rapor
-2. **Dokumentasi & SOP (handover readiness):**
-   - Panduan admin: setup TP aktif, jam mengajar, import Excel, jadwal, QR generator, backup/restore
-   - Panduan guru: scan jurnal, My Schedules workflow, input nilai
-   - Panduan wali kelas: verifikasi prestasi, monitoring siswa
-   - Panduan siswa: prestasi + rapor
-3. **Pilih prioritas lanjutan (mohon konfirmasi):**
-   - **Phase 6:** Advanced scheduling — conflict detection + approval workflow
-   - **Phase 5:** Mobile App Expo (Android/iOS) — scan QR offline + push notif (mulai setelah web stabil)
-   - **Phase 7:** SSE/WebSocket realtime monitoring + notifikasi
-   - **Phase 8:** Integrasi eksternal + analytics
+Pilih prioritas berikutnya:
+1. **Phase 6 — Advanced Scheduling**
+   - Conflict detection jadwal (guru/ruang/kelas bentrok)
+   - Approval workflow lebih formal (review queue + komentar)
+2. **Phase 5 — Mobile App Expo** (setelah web benar-benar stabil)
+   - Scan QR offline queue + sync
+   - Push notification (pengumuman/alert)
+3. **Phase 7 — Realtime Monitoring**
+   - SSE/WebSocket untuk monitoring kelas real-time, notifikasi otomatis
+4. **Phase 8 — Integrasi Eksternal + Analytics**
+   - Dapodik/EMIS, SIMPATIKA, WA gateway, insight
 
 ---
 
@@ -366,31 +429,17 @@
 - ✅ **POC:** validasi benar, B5 export benar.
 - ✅ **V1:** multi-role + jurnal presisi + monitoring publik + admin CRUD + QR.
 - ✅ **Phase 3:** UX sesi kerja guru, grid jadwal, semester reguler/percepatan, data siswa/kehadiran/kebersihan, import jadwal.
-- ✅ **Phase 4:**
-  - Excel imports master data berfungsi
-  - SMTP + reset password via email berfungsi
-  - Prestasi siswa + verifikasi + galeri berfungsi
-  - Ekstrakurikuler (anggota/absensi/nilai) berfungsi
-  - E-Rapor (input nilai + rapor view + print) berfungsi
-  - Tidak ada bug kritikal, tidak ada regresi pada modul Phase 1–3.5
-- ✅ **Batch A:**
-  - Hari libur akademik/mingguan & endpoint publik “hari ini” berfungsi
-  - Backup/restore dapat dipakai untuk pemeliharaan dan pemindahan data
-  - Kapasitas kelas + student_count membantu monitoring daya tampung
-  - Tugas guru piket terintegrasi dengan pengisian jurnal dan penyelesaian tugas
-- ✅ **Iterasi 1:**
-  - Role-switching sidebar stabil
-  - Workflow jadwal guru (draft→submit→lock) konsisten & aman (RBAC)
-  - Admin mutasi siap dipakai untuk monitoring status masuk/keluar
-  - Detail data siswa lengkap tersimpan dan dapat diakses sesuai RBAC
-- ✅ **Iterasi 2:**
-  - Frontend tervalidasi E2E (tidak ada bug kritikal)
-  - Backend maintainable (server.py tipis, router per domain)
-  - Regression test utama lulus setelah refactor
-- 🔜 **Operational quality (target berikutnya):**
-  - SOP digunakan staf sekolah
-  - Pengujian lapangan (GPS, jadwal, email SMTP, backup/restore) lulus
-  - Observasi 1–2 minggu, kemudian freeze untuk Phase 5 mobile.
+- ✅ **Phase 4:** Excel imports, SMTP reset password, prestasi, ekskul, e-rapor berjalan tanpa bug kritikal.
+- ✅ **Batch A:** libur, backup/restore, kapasitas kelas, tugas guru piket berjalan.
+- ✅ **Iterasi 1:** workflow jadwal, data siswa detail, mutasi, sidebar fix stabil.
+- ✅ **Iterasi 2:** FE tervalidasi E2E, backend maintainable, regression lulus.
+- ✅ **Iterasi 3 / Phase E:**
+  - Password policy disarankan (first login + 6 bulan) dan bisa di-snooze
+  - Pengumuman terarah per role (admin kelola)
+  - Notifikasi jelas di topbar dengan badge + mark read
+  - Maintenance mode profesional + gate non-admin
+  - Export Excel untuk laporan
+  - Panduan in-app + docs offline tersedia
 
 ---
 
