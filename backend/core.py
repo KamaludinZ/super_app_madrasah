@@ -28,10 +28,21 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ============================================================
+# DNS RESOLVER FIX FOR MONGODB ATLAS
+# ============================================================
+# Fix DNS resolution issues by using Google DNS
+try:
+    import dns.resolver
+    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
+except Exception as e:
+    print(f"DNS resolver config warning: {e}")
+
+# ============================================================
 # DATABASE
 # ============================================================
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
 db = client[os.environ['DB_NAME']]
 
 # ============================================================

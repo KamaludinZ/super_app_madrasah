@@ -76,6 +76,10 @@ class UserModel(BaseModel):
     mutation_ay_id: Optional[str] = None  # TP saat mutasi
     mutation_date: Optional[str] = None  # tanggal mutasi (YYYY-MM-DD)
     mutation_note: Optional[str] = None  # alasan/keterangan
+    # Additional mutation details for keluar
+    mutation_keluar_type: Optional[str] = None  # For staff: 'pindah' | 'keluar' | 'pensiun' | 'berhenti'
+    mutation_destination: Optional[str] = None  # Sekolah/instansi tujuan (untuk pindah)
+    mutation_document_url: Optional[str] = None  # Upload dokumen pendukung
     # Password policy (suggest change at first login + every 6 months)
     password_changed_at: Optional[str] = None  # ISO datetime when user last changed password
     password_change_dismissed_until: Optional[str] = None  # snooze reminder until this ISO datetime
@@ -190,10 +194,13 @@ class ScheduleModel(BaseModel):
     slot_index: Optional[int] = None  # references teaching_slots index
     is_published: bool = True
     # === Workflow status ===
-    status: str = 'draft'  # 'draft' (editable by creator) | 'submitted' (waiting admin review) | 'locked' (admin locked, read-only)
+    # Flow: draft → submitted → approved → locked
+    status: str = 'draft'  # 'draft' | 'submitted' | 'approved' | 'locked'
     created_by: Optional[str] = None  # user_id pembuat (admin atau guru/wali)
     submitted_at: Optional[datetime] = None
     submitted_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
     locked_at: Optional[datetime] = None
     locked_by: Optional[str] = None
     locked_by_role: Optional[str] = None  # 'admin' | 'wali_kelas' — siapa role yang lock
@@ -512,3 +519,81 @@ class ClassCleanlinessSubmit(BaseModel):
     notes: Optional[str] = None
     piket_students: List[str] = Field(default_factory=list)
     photo_url: Optional[str] = None
+
+
+# ============================================================
+# REPORTS (Laporan)
+# ============================================================
+class ReportModel(BaseModel):
+    """Report for infrastructure damage or student issues"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal['sarana_prasarana', 'siswa', 'catatan'] = 'catatan'  # Type of report
+    title: str  # Report title/summary
+    description: str  # Detailed description
+    class_id: Optional[str] = None  # Related class (optional)
+    student_id: Optional[str] = None  # Related student (for siswa type)
+    location: Optional[str] = None  # Location for infrastructure issues
+    priority: Literal['rendah', 'sedang', 'tinggi', 'mendesak'] = 'sedang'
+    status: Literal['baru', 'ditinjau', 'dalam_proses', 'selesai', 'ditolak'] = 'baru'
+    reported_by: str  # user_id of reporter
+    reported_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_by: Optional[str] = None  # admin who reviewed
+    reviewed_at: Optional[datetime] = None
+    response: Optional[str] = None  # Admin response/notes
+    resolved_at: Optional[datetime] = None
+    photo_url: Optional[str] = None  # base64 encoded photo
+
+
+class ReportSubmit(BaseModel):
+    type: str = 'catatan'
+    title: str
+    description: str
+    class_id: Optional[str] = None
+    student_id: Optional[str] = None
+    location: Optional[str] = None
+    priority: str = 'sedang'
+    photo_url: Optional[str] = None
+
+
+class ReportUpdate(BaseModel):
+    status: Optional[str] = None
+    response: Optional[str] = None
+
+
+class MutationMasukSubmit(BaseModel):
+    """Form untuk mutasi masuk (siswa atau staff)."""
+    model_config = ConfigDict(extra="ignore")
+    # Common fields
+    full_name: str
+    mutation_date: str  # YYYY-MM-DD
+    mutation_note: Optional[str] = None
+    mutation_document_url: Optional[str] = None
+
+    # Siswa-specific fields
+    nisn: Optional[str] = None
+    nis: Optional[str] = None
+    gender: Optional[str] = None  # 'L' / 'P'
+    birth_place: Optional[str] = None
+    birth_date: Optional[str] = None  # YYYY-MM-DD
+    address: Optional[str] = None
+    class_id: Optional[str] = None
+
+    # Staff-specific fields
+    nip_nuptk: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    roles: Optional[List[str]] = None
+
+
+class MutationKeluarSubmit(BaseModel):
+    """Form untuk mutasi keluar."""
+    model_config = ConfigDict(extra="ignore")
+    user_id: str
+    mutation_date: str  # YYYY-MM-DD
+    mutation_note: str  # Alasan mutasi (wajib)
+
+    # For staff only
+    mutation_keluar_type: Optional[str] = None  # 'pindah' | 'keluar' | 'pensiun' | 'berhenti'
+    mutation_destination: Optional[str] = None  # Instansi tujuan (wajib jika pindah)
+    mutation_document_url: Optional[str] = None

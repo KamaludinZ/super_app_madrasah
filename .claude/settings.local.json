@@ -10,7 +10,10 @@
       "Bash(python:*)",
       "Bash(npm start)",
       "Bash(curl:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(timeout /t 3)",
+      "Bash(nul)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

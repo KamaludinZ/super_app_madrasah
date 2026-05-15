@@ -46,6 +46,8 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
+    items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-guru-kebersihan' });
+    items.push({ to: '/guru/laporan', label: 'Laporan', icon: FileText, testid: 'nav-guru-laporan' });
     items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
     items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
@@ -54,6 +56,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
+    items.push({ to: '/wali-kelas/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-wk-laporan' });
     items.push({ to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Kelas', icon: ClipboardEdit, testid: 'nav-wk-my-schedule' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' });
@@ -122,7 +125,8 @@ function navForRole(role, userRoles = []) {
         items: [
           { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-admin' },
           { to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-admin' },
-          { to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-admin-kebersihan' },
+          { to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-admin-kebersihan' },
+          { to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-admin-laporan' },
           { to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' },
           { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' },
         ],

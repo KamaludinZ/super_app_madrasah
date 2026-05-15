@@ -464,6 +464,31 @@ async def submit_schedule(sid: str, request: Request, user: Dict = Depends(get_c
     return serialize_doc(doc)
 
 
+@router.put("/schedules/{sid}/approve")
+async def approve_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    """Admin menyetujui jadwal yang sudah di-submit oleh guru."""
+    print(f"[APPROVE] Mencari jadwal dengan id: {sid}")
+    existing = await db.schedules.find_one({'id': sid})
+    print(f"[APPROVE] Hasil pencarian: {existing is not None}")
+    if existing:
+        print(f"[APPROVE] Status jadwal: {existing.get('status')}")
+    if not existing:
+        # Coba cari dengan _id juga untuk debugging
+        by_object_id = await db.schedules.find_one({'_id': sid})
+        print(f"[APPROVE] Coba cari dengan _id: {by_object_id is not None}")
+        raise HTTPException(404, "Tidak ditemukan")
+    if existing.get('status') not in ['submitted', 'draft']:
+        raise HTTPException(400, f"Jadwal dengan status '{existing.get('status')}' tidak bisa disetujui")
+    await db.schedules.update_one({'id': sid}, {'$set': {
+        'status': 'approved',
+        'approved_at': now_wib().isoformat(),
+        'approved_by': user['id'],
+    }})
+    await log_audit(user, 'approve', 'schedule', sid, request=request)
+    doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
 @router.put("/schedules/{sid}/lock")
 async def lock_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
     """Lock jadwal. Admin bisa kunci semua. Wali kelas bisa kunci jadwal di kelasnya saja.
@@ -481,6 +506,10 @@ async def lock_schedule(sid: str, request: Request, user: Dict = Depends(get_cur
         can_lock = cls and cls.get('homeroom_teacher_id') == user['id']
     if not can_lock:
         raise HTTPException(403, "Tidak diizinkan mengunci jadwal ini")
+
+    # Validasi: hanya bisa lock jadwal yang sudah approved
+    if sch.get('status') not in ['approved', 'locked']:
+        raise HTTPException(400, f"Jadwal harus disetujui terlebih dahulu sebelum dikunci. Status saat ini: {sch.get('status')}")
 
     # Conflict re-check (final guard before locking)
     force = request.query_params.get('force', '').lower() in ('true', '1', 'yes') if request else False

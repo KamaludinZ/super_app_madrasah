@@ -23,10 +23,12 @@ export default function AdminSchedulesPage() {
   const [rooms, setRooms] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [activeAY, setActiveAY] = useState(null);
+  const [teachingSlots, setTeachingSlots] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filterMode, setFilterMode] = useState('class'); // class | teacher
   const [filterValue, setFilterValue] = useState('all');
+  const [viewMode, setViewMode] = useState('grid'); // grid | list
   const [form, setForm] = useState({ class_id: '', subject_id: '', teacher_id: '', room_id: '', day: 'senin', start_time: '07:00', end_time: '08:30', semester: 'ganjil', academic_year_id: '' });
   const [importOpen, setImportOpen] = useState(false);
   const fileRef = useRef(null);
@@ -52,11 +54,14 @@ export default function AdminSchedulesPage() {
     (async () => {
       const ay = await api.get('/academic-years/active');
       setActiveAY(ay.data);
-      const [c, sub, r, u] = await Promise.all([
-        api.get('/classes'), api.get('/subjects'), api.get('/rooms'), api.get('/users'),
+      const [c, sub, r, u, settings] = await Promise.all([
+        api.get('/classes'), api.get('/subjects'), api.get('/rooms'), api.get('/users'), api.get('/settings'),
       ]);
       setClasses(c.data); setSubjects(sub.data); setRooms(r.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(rr))));
+      // Get teaching slots from settings, filter out break times
+      const slots = settings.data?.teaching_slots || [];
+      setTeachingSlots(slots.filter(slot => !slot.is_break));
       await loadGrid('class', 'all');
     })();
   }, []);
@@ -98,7 +103,7 @@ export default function AdminSchedulesPage() {
   };
   const handleApprove = async (s) => {
     if (!window.confirm(`Setujui jadwal ini?`)) return;
-    try { await api.put(`/schedules/${s.id}/submit`); toast.success('Jadwal disetujui'); await loadGrid(filterMode, filterValue); }
+    try { await api.put(`/schedules/${s.id}/approve`); toast.success('Jadwal disetujui'); await loadGrid(filterMode, filterValue); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleLock = async (s) => {
@@ -164,7 +169,9 @@ export default function AdminSchedulesPage() {
         <div className="flex gap-2 flex-wrap">
           <Button onClick={downloadTemplate} variant="outline" className="gap-2" data-testid="download-template-button"><Download className="h-4 w-4" /> Template Excel</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline" className="gap-2" data-testid="import-excel-button"><Upload className="h-4 w-4" /> Import Excel</Button>
-          <Button onClick={() => openCreate()} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-schedule-button"><Plus className="h-4 w-4" /> Tambah</Button>
+          {viewMode === 'list' && (
+            <Button onClick={() => openCreate()} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-schedule-button"><Plus className="h-4 w-4" /> Tambah</Button>
+          )}
         </div>
       </div>
 
@@ -196,7 +203,7 @@ export default function AdminSchedulesPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="grid">
+      <Tabs defaultValue="grid" onValueChange={setViewMode}>
         <TabsList>
           <TabsTrigger value="grid" data-testid="view-tab-grid"><LayoutGrid className="h-4 w-4 mr-1" /> Grid (Hari & Jam)</TabsTrigger>
           <TabsTrigger value="list" data-testid="view-tab-list"><List className="h-4 w-4 mr-1" /> List</TabsTrigger>
@@ -295,6 +302,8 @@ export default function AdminSchedulesPage() {
                     <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1" data-testid={`status-locked-${s.id}`}>
                       <Lock className="h-3 w-3" /> Terkunci
                     </Badge>
+                  ) : s.status === 'approved' ? (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Disetujui</Badge>
                   ) : s.status === 'submitted' ? (
                     <Badge className="bg-blue-100 text-blue-700 border-blue-200">Terkirim</Badge>
                   ) : (
@@ -303,13 +312,14 @@ export default function AdminSchedulesPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {/* Status: draft → submitted → approved → locked */}
                     {s.status === 'locked' ? (
                       <span className="text-xs text-slate-500 italic mr-2">Terkunci</span>
-                    ) : s.status === 'draft' ? (
-                      <Button size="sm" variant="outline" onClick={() => handleApprove(s)} className="text-blue-600 border-blue-300" title="Setujui" data-testid={`approve-${s.id}`}>
+                    ) : s.status === 'submitted' ? (
+                      <Button size="sm" variant="outline" onClick={() => handleApprove(s)} className="text-blue-600 border-blue-300" title="Setujui Jadwal" data-testid={`approve-${s.id}`}>
                         Setujui
                       </Button>
-                    ) : s.status === 'submitted' ? (
+                    ) : s.status === 'approved' ? (
                       <Button size="sm" variant="outline" onClick={() => handleLock(s)} className="text-rose-600 border-rose-300" title="Kunci Jadwal" data-testid={`lock-${s.id}`}>
                         <Lock className="h-3.5 w-3.5 mr-1" /> Kunci
                       </Button>
@@ -340,8 +350,25 @@ export default function AdminSchedulesPage() {
                 <SelectContent>{ALL_DAYS.map((d) => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Jam Mulai</Label><Input type="time" value={form.start_time} onChange={(e) => setForm({...form, start_time: e.target.value})} data-testid="schedule-form-start" /></div>
-            <div><Label>Jam Selesai</Label><Input type="time" value={form.end_time} onChange={(e) => setForm({...form, end_time: e.target.value})} data-testid="schedule-form-end" /></div>
+            <div className="col-span-2">
+              <Label>Jam Mengajar *</Label>
+              <Select
+                value={`${form.start_time}-${form.end_time}`}
+                onValueChange={(v) => {
+                  const [start, end] = v.split('-');
+                  setForm({ ...form, start_time: start, end_time: end });
+                }}
+              >
+                <SelectTrigger data-testid="schedule-form-time-slot"><SelectValue placeholder="Pilih jam mengajar..." /></SelectTrigger>
+                <SelectContent>
+                  {teachingSlots.map((slot, idx) => (
+                    <SelectItem key={idx} value={`${slot.start_time}-${slot.end_time}`}>
+                      {slot.name} ({slot.start_time} - {slot.end_time})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="col-span-2"><Label>Kelas</Label>
               <Select value={form.class_id} onValueChange={(v) => setForm({...form, class_id: v})}>
                 <SelectTrigger data-testid="schedule-form-class"><SelectValue placeholder="Pilih kelas" /></SelectTrigger>

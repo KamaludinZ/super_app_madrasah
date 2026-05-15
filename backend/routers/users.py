@@ -15,7 +15,7 @@ from core import (
     serialize_doc,
 )
 from excel_io import parse_user_rows, user_template
-from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest
+from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest, MutationMasukSubmit, MutationKeluarSubmit
 
 router = APIRouter()
 
@@ -206,4 +206,158 @@ async def list_mutations(mutation_type: str, role_group: str = 'siswa',
             cls = await db.classes.find_one({'id': u['student_class_id']}, {'_id': 0, 'name': 1})
             u['class_name'] = cls.get('name') if cls else None
         enriched.append(serialize_doc(u))
+    return enriched
+
+
+@router.post("/admin/mutations/masuk")
+async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
+                                   user: Dict = Depends(require_role('admin'))):
+    """Proses mutasi masuk (create new user or update existing)."""
+    ay = await get_active_academic_year()
+    if not ay:
+        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
+
+    # Determine role group from the request data
+    is_siswa = bool(req.nisn or req.class_id)
+
+    # Generate username based on type
+    if is_siswa:
+        username = req.nisn or f"siswa_{req.nis or datetime.now().strftime('%Y%m%d%H%M%S')}"
+        default_roles = ['siswa']
+    else:
+        username = req.nip_nuptk or f"staff_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        default_roles = req.roles or ['guru']
+
+    # Check if user already exists
+    existing = await db.users.find_one({'username': username})
+
+    user_data = {
+        'full_name': req.full_name,
+        'mutation_type': 'masuk',
+        'mutation_ay_id': ay['id'],
+        'mutation_date': req.mutation_date,
+        'mutation_note': req.mutation_note,
+        'mutation_document_url': req.mutation_document_url,
+        'is_active': True,
+    }
+
+    if is_siswa:
+        user_data.update({
+            'nisn': req.nisn,
+            'nis': req.nis,
+            'gender': req.gender,
+            'birth_place': req.birth_place,
+            'birth_date': req.birth_date,
+            'address': req.address,
+            'student_class_id': req.class_id,
+        })
+    else:
+        user_data.update({
+            'nip_nuptk': req.nip_nuptk,
+            'email': req.email,
+            'phone': req.phone,
+        })
+
+    if existing:
+        # Update existing user
+        await db.users.update_one({'id': existing['id']}, {'$set': user_data})
+        await log_audit(request, user, 'update', 'users', existing['id'],
+                       f"Update mutasi masuk: {req.full_name}")
+        result_user = await db.users.find_one({'id': existing['id']}, {'_id': 0, 'password_hash': 0})
+    else:
+        # Create new user
+        import uuid
+        new_user = UserModel(
+            id=str(uuid.uuid4()),
+            username=username,
+            password_hash=hash_password('12345678'),  # default password
+            roles=default_roles,
+            **user_data
+        )
+        await db.users.insert_one(new_user.model_dump())
+        await log_audit(request, user, 'create', 'users', new_user.id,
+                       f"Create mutasi masuk: {req.full_name}")
+        result_user = new_user.model_dump()
+        del result_user['password_hash']
+
+    return serialize_doc(result_user)
+
+
+@router.post("/admin/mutations/keluar")
+async def process_mutation_keluar(req: MutationKeluarSubmit, request: Request,
+                                    user: Dict = Depends(require_role('admin'))):
+    """Proses mutasi keluar (set user as inactive and mark mutation)."""
+    ay = await get_active_academic_year()
+    if not ay:
+        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
+
+    # Get user
+    target_user = await db.users.find_one({'id': req.user_id})
+    if not target_user:
+        raise HTTPException(404, "User tidak ditemukan")
+
+    # Determine if siswa or staff
+    is_siswa = 'siswa' in target_user.get('roles', [])
+
+    update_data = {
+        'mutation_type': 'keluar',
+        'mutation_ay_id': ay['id'],
+        'mutation_date': req.mutation_date,
+        'mutation_note': req.mutation_note,
+        'mutation_document_url': req.mutation_document_url,
+        'is_active': False,  # Set user as inactive
+    }
+
+    # For staff, add keluar type and destination
+    if not is_siswa:
+        if not req.mutation_keluar_type:
+            raise HTTPException(400, "mutation_keluar_type wajib diisi untuk staff")
+        update_data['mutation_keluar_type'] = req.mutation_keluar_type
+        if req.mutation_keluar_type == 'pindah':
+            if not req.mutation_destination:
+                raise HTTPException(400, "mutation_destination wajib diisi untuk mutasi pindah")
+            update_data['mutation_destination'] = req.mutation_destination
+
+    await db.users.update_one({'id': req.user_id}, {'$set': update_data})
+    await log_audit(request, user, 'update', 'users', req.user_id,
+                   f"Mutasi keluar: {target_user.get('full_name')}")
+
+    result_user = await db.users.find_one({'id': req.user_id}, {'_id': 0, 'password_hash': 0})
+    return serialize_doc(result_user)
+
+
+@router.get("/admin/mutations/eligible-users")
+async def get_eligible_users_for_keluar(role_group: str = 'siswa',
+                                         user: Dict = Depends(require_role('admin'))):
+    """Get list of active users yang bisa di-mutasi keluar."""
+    if role_group not in ('siswa', 'staff'):
+        raise HTTPException(400, "role_group harus 'siswa' atau 'staff'")
+
+    q = {
+        'is_active': True,
+        '$or': [
+            {'mutation_type': {'$exists': False}},
+            {'mutation_type': None},
+            {'mutation_type': 'masuk'}
+        ]
+    }
+
+    if role_group == 'siswa':
+        q['roles'] = 'siswa'
+    else:
+        staff_roles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
+                       'guru_ekstrakurikuler', 'tenaga_kependidikan']
+        q['roles'] = {'$in': staff_roles}
+
+    items = await db.users.find(q, {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'nip_nuptk': 1,
+                                      'student_class_id': 1, 'roles': 1}).sort('full_name', 1).to_list(500)
+
+    # Enrich with class name for siswa
+    enriched = []
+    for u in items:
+        if u.get('student_class_id'):
+            cls = await db.classes.find_one({'id': u['student_class_id']}, {'_id': 0, 'name': 1})
+            u['class_name'] = cls.get('name') if cls else None
+        enriched.append(serialize_doc(u))
+
     return enriched

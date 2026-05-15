@@ -20,24 +20,61 @@ const CONDITION_OPTIONS = [
 
 export default function KebersihanPage() {
   const { activeRole, user } = useAuth();
-  const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
+  const isGuru = activeRole === 'guru';
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // Always use today's date for guru
+  const today = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(today);
   const [form, setForm] = useState({ rating: 3, condition: 'bersih', notes: '', piket_students: [] });
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
 
+  // Load classes based on today's date (for guru: classes they teach today)
   useEffect(() => {
-    (async () => {
-      if (isAdmin) { const c = await api.get('/classes'); setClasses(c.data); }
-      else {
-        const wk = await api.get('/wali-kelas/my-class');
-        if (wk.data?.class) { setClasses([wk.data.class]); setSelectedClass(wk.data.class.id); }
-      }
-    })();
-  }, [isAdmin]);
+    if (isGuru) {
+      setLoadingClasses(true);
+      (async () => {
+        try {
+          const res = await api.get('/cleanliness/guru/classes', { params: { date: today } });
+          setClasses(res.data);
+          // Auto-select first class if only one class available
+          if (res.data.length === 1) {
+            setSelectedClass(res.data[0].id);
+          }
+          // If currently selected class is not in the new list, reset selection
+          if (selectedClass && !res.data.find(c => c.id === selectedClass)) {
+            setSelectedClass('');
+          }
+        } catch (e) {
+          toast.error('Gagal memuat kelas yang diajar hari ini');
+          setClasses([]);
+        } finally {
+          setLoadingClasses(false);
+        }
+      })();
+    } else {
+      // For wali_kelas, load all classes (they manage their own class)
+      setLoadingClasses(true);
+      (async () => {
+        try {
+          const res = await api.get('/classes');
+          setClasses(res.data);
+          // Auto-select homeroom class if wali_kelas
+          if (user?.homeroom_class_id) {
+            setSelectedClass(user.homeroom_class_id);
+          }
+        } catch (e) {
+          toast.error('Gagal memuat kelas');
+          setClasses([]);
+        } finally {
+          setLoadingClasses(false);
+        }
+      })();
+    }
+  }, [isGuru, user]); // Only run once on mount
 
   useEffect(() => {
     if (!selectedClass) return;
@@ -80,23 +117,63 @@ export default function KebersihanPage() {
       <div>
         <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><Sparkles className="h-3 w-3 mr-1" /> Kebersihan Kelas</Badge>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Catatan Kebersihan Kelas</h1>
-        <p className="text-sm text-slate-600 mt-1">Kondisi kebersihan + daftar piket harian</p>
+        <p className="text-sm text-slate-600 mt-1">
+          {isGuru
+            ? 'Isi kebersihan kelas yang Anda ajar (sesuai jadwal mengajar)'
+            : 'Kondisi kebersihan + daftar piket harian'}
+        </p>
       </div>
 
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <Label>Kelas</Label>
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
-              <SelectTrigger data-testid="kebersihan-class-select"><SelectValue placeholder="Pilih kelas..." /></SelectTrigger>
-              <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-            </Select>
+        <CardContent className="p-4 space-y-4">
+          {isGuru && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <strong>Info:</strong> Form kebersihan hanya dapat diisi untuk kelas yang Anda ajar pada hari ini sesuai jadwal mengajar.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Kelas</Label>
+              {loadingClasses ? (
+                <div className="h-10 border border-slate-200 rounded-md flex items-center justify-center text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Memuat kelas...
+                </div>
+              ) : classes.length === 0 ? (
+                <div className="h-10 border border-amber-200 bg-amber-50 rounded-md flex items-center px-3 text-sm text-amber-700">
+                  Tidak ada kelas yang diajar hari ini
+                </div>
+              ) : (
+                <Select value={selectedClass} onValueChange={setSelectedClass} disabled={classes.length === 0}>
+                  <SelectTrigger data-testid="kebersihan-class-select">
+                    <SelectValue placeholder="Pilih kelas..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div>
+              <Label>Tanggal</Label>
+              <Input
+                type="date"
+                value={date}
+                readOnly={isGuru}
+                onChange={(e) => !isGuru && setDate(e.target.value)}
+                className={isGuru ? 'bg-slate-100 cursor-not-allowed' : ''}
+                data-testid="kebersihan-date"
+              />
+              {isGuru && (
+                <p className="text-xs text-slate-500 mt-1">Tanggal otomatis mengikuti hari ini</p>
+              )}
+            </div>
           </div>
-          <div><Label>Tanggal</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="kebersihan-date" /></div>
         </CardContent>
       </Card>
 
-      {selectedClass && (
+      {selectedClass && classes.length > 0 && (
         <>
           <Card>
             <CardContent className="p-5 space-y-4">

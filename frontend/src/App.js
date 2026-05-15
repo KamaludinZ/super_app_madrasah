@@ -24,6 +24,7 @@ import WaliKelasDashboard from '@/pages/WaliKelasDashboard';
 import DataSiswaPage from '@/pages/DataSiswaPage';
 import KehadiranPage from '@/pages/KehadiranPage';
 import KebersihanPage from '@/pages/KebersihanPage';
+import AdminKebersihanPage from '@/pages/admin/AdminKebersihanPage';
 import JadwalPiketPage from '@/pages/admin/JadwalPiketPage';
 import AdminJurnalRekapPage from '@/pages/admin/AdminJurnalRekapPage';
 import AdminImportPage from '@/pages/admin/AdminImportPage';
@@ -40,6 +41,9 @@ import AnnouncementsListPage from '@/pages/AnnouncementsListPage';
 import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage';
 import AdminCurriculumsPage from '@/pages/admin/AdminCurriculumsPage';
 import AdminGTKPage from '@/pages/admin/AdminGTKPage';
+import ReportPage from '@/pages/ReportPage';
+import WaliKelasReportsPage from '@/pages/WaliKelasReportsPage';
+import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -88,9 +92,13 @@ function App() {
             <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
             <Route path="/wali-kelas/kehadiran" element={<KehadiranPage />} />
             <Route path="/wali-kelas/kebersihan" element={<KebersihanPage />} />
+            <Route path="/wali-kelas/laporan" element={<WaliKelasReportsPage />} />
+            <Route path="/guru/kebersihan" element={<KebersihanPage />} />
+            <Route path="/guru/laporan" element={<ReportPage />} />
             <Route path="/admin/siswa" element={<DataSiswaPage />} />
             <Route path="/admin/kehadiran" element={<KehadiranPage />} />
-            <Route path="/admin/kebersihan" element={<KebersihanPage />} />
+            <Route path="/admin/kebersihan" element={<AdminKebersihanPage />} />
+            <Route path="/admin/laporan" element={<AdminReportsPage />} />
             <Route path="/admin/jadwal-piket" element={<JadwalPiketPage />} />
             <Route path="/admin/jurnal" element={<AdminJurnalRekapPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />

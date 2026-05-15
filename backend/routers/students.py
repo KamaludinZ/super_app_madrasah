@@ -135,6 +135,85 @@ async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
 # ============================================================
 # CLASS CLEANLINESS (Kebersihan Kelas)
 # ============================================================
+@router.get("/cleanliness/admin/recap")
+async def get_cleanliness_recap(user: Dict = Depends(require_role('admin'))):
+    """Admin: rekapitulasi penilaian kebersihan semua kelas."""
+    # Get all classes
+    ay = await get_active_academic_year()
+    classes = await db.classes.find(
+        {'academic_year_id': ay['id'] if ay else None},
+        {'_id': 0}
+    ).sort('name', 1).to_list(500)
+
+    result = []
+    for cls in classes:
+        # Get latest cleanliness records for this class
+        records = await db.class_cleanliness.find(
+            {'class_id': cls['id']},
+            {'_id': 0}
+        ).sort('date', -1).limit(7).to_list(7)
+
+        # Calculate stats
+        if records:
+            avg_rating = sum(r.get('rating', 0) for r in records) / len(records)
+            condition_count = {'bersih': 0, 'cukup': 0, 'kotor': 0}
+            for r in records:
+                cond = r.get('condition', 'bersih')
+                condition_count[cond] = condition_count.get(cond, 0) + 1
+            latest = records[0]
+        else:
+            avg_rating = 0
+            condition_count = {'bersih': 0, 'cukup': 0, 'kotor': 0}
+            latest = None
+
+        result.append({
+            'class': serialize_doc(cls),
+            'latest': serialize_doc(latest) if latest else None,
+            'avg_rating_7days': round(avg_rating, 2),
+            'condition_count_7days': condition_count,
+            'total_records': len(records),
+        })
+
+    return result
+
+
+@router.get("/cleanliness/guru/classes")
+async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_role('guru'))):
+    """Guru: get classes they teach on a specific date based on schedule."""
+    # Parse date to get day of week
+    try:
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        day_names = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
+        day = day_names[date_obj.weekday()]
+    except ValueError:
+        raise HTTPException(400, "Format tanggal salah, gunakan YYYY-MM-DD")
+
+    # Get active academic year
+    ay = await get_active_academic_year()
+    if not ay:
+        return []
+
+    # Get schedules for this teacher on this day
+    schedules = await db.schedules.find({
+        'teacher_id': user['id'],
+        'day': day,
+        'academic_year_id': ay['id'],
+        'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
+    }, {'_id': 0, 'class_id': 1}).to_list(500)
+
+    # Get unique class IDs
+    class_ids = list(set(s['class_id'] for s in schedules))
+
+    # Get class details
+    classes = []
+    for cid in class_ids:
+        cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+        if cls:
+            classes.append(serialize_doc(cls))
+
+    return classes
+
+
 @router.get("/cleanliness/class/{class_id}")
 async def get_class_cleanliness(class_id: str, limit: int = 30,
                                 user: Dict = Depends(get_current_user)):
@@ -147,8 +226,40 @@ async def get_class_cleanliness(class_id: str, limit: int = 30,
 @router.post("/cleanliness/class")
 async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request,
                                    user: Dict = Depends(get_current_user)):
-    if not await user_can_view_class(user, req.class_id):
+    """Submit cleanliness record. For guru: validates schedule on that date."""
+    is_guru = 'guru' in user.get('roles', []) and 'admin' not in user.get('roles', []) and 'wali_kelas' not in user.get('roles', [])
+
+    # For guru: validate they have schedule to teach this class on this date
+    if is_guru:
+        # Parse date to get day of week
+        try:
+            date_obj = datetime.strptime(req.date, '%Y-%m-%d')
+            day_names = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
+            day = day_names[date_obj.weekday()]
+        except ValueError:
+            raise HTTPException(400, "Format tanggal salah")
+
+        # Get active academic year
+        ay = await get_active_academic_year()
+        if not ay:
+            raise HTTPException(400, "Tidak ada tahun akademik aktif")
+
+        # Check if guru has schedule on this day for this class
+        schedule = await db.schedules.find_one({
+            'teacher_id': user['id'],
+            'class_id': req.class_id,
+            'day': day,
+            'academic_year_id': ay['id'],
+            'status': {'$in': ['approved', 'locked']}
+        })
+
+        if not schedule:
+            raise HTTPException(403, f"Anda tidak mengajar di kelas ini pada hari {day.capitalize()}")
+
+    # For admin and wali_kelas: use existing permission check
+    elif not await user_can_view_class(user, req.class_id):
         raise HTTPException(403, "Tidak diizinkan")
+
     existing = await db.class_cleanliness.find_one({'class_id': req.class_id, 'date': req.date})
     doc = req.model_dump()
     doc['recorded_by'] = user['id']

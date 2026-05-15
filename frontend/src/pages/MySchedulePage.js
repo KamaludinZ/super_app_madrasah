@@ -21,6 +21,7 @@ const EMPTY = { day: 'senin', start_time: '07:00', end_time: '08:00', class_id: 
 
 function StatusBadge({ status }) {
   if (status === 'locked') return <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1"><Lock className="h-3 w-3" /> Terkunci</Badge>;
+  if (status === 'approved') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="h-3 w-3" /> Disetujui</Badge>;
   if (status === 'submitted') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1"><Send className="h-3 w-3" /> Terkirim</Badge>;
   return <Badge variant="outline" className="text-amber-600 border-amber-300 gap-1"><FileText className="h-3 w-3" /> Draft</Badge>;
 }
@@ -30,36 +31,95 @@ export default function MySchedulePage() {
   const [items, setItems] = useState([]);
   const [grid, setGrid] = useState({ days: [], slots: [], grid: {} });
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
+  const [gridMode, setGridMode] = useState('view'); // 'view' (own schedule) | 'input' (by class for conflict checking)
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [activeAY, setActiveAY] = useState(null);
+  const [teachingSlots, setTeachingSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
 
+  const loadGridData = async () => {
+    // In view mode: show teacher's own schedule
+    // In input mode: show selected class schedule with all teachers
+    const params = {};
+    if (gridMode === 'view') {
+      params.teacher_id = user?.id;
+    } else if (gridMode === 'input' && selectedClassId) {
+      params.class_id = selectedClassId;
+    }
+    const g = await api.get('/schedules/grid', { params });
+
+    // Process grid data to ensure status field in grid items
+    const gridData = g.data || { days: [], slots: [], grid: {} };
+    console.log('Grid days:', gridData.days);
+    console.log('Grid slots:', gridData.slots);
+    console.log('Grid grid object:', gridData.grid);
+
+    if (gridData.grid) {
+      console.log('=== GRID DEBUG ===');
+      console.log('Available slot times:', gridData.slots.map(s => s.start_time));
+      Object.keys(gridData.grid).forEach(day => {
+        const dayTimes = Object.keys(gridData.grid[day]);
+        console.log(`Day ${day} has ${dayTimes.length} schedules at times:`, dayTimes);
+        Object.keys(gridData.grid[day]).forEach(time => {
+          if (gridData.grid[day][time]) {
+            const sch = gridData.grid[day][time];
+            console.log(`  - Schedule at ${time}:`, {
+              subject: sch.subject_name,
+              class: sch.class_name,
+              teacher: sch.teacher_name,
+              start: sch.start_time,
+              status: sch.status
+            });
+            gridData.grid[day][time].status = gridData.grid[day][time].status || 'draft';
+          }
+        });
+      });
+      console.log('=== END GRID DEBUG ===');
+    }
+    setGrid(gridData);
+  };
+
   const refresh = async () => {
     try {
-      const [s, g, c, sub, r, ay] = await Promise.all([
+      const [s, c, sub, r, ay, settings] = await Promise.all([
         api.get('/schedules', { params: { teacher_id: user?.id } }),
-        api.get('/schedules/grid', { params: { teacher_id: user?.id } }),
         api.get('/classes'),
         api.get('/subjects'),
         api.get('/rooms'),
         api.get('/academic-years/active'),
+        api.get('/settings'),
       ]);
-      setItems(s.data || []);
-      setGrid(g.data || { days: [], slots: [], grid: {} });
+      console.log('MySchedulePage - items:', s.data);
+
+      // Ensure status field exists with default 'draft'
+      const itemsWithStatus = (s.data || []).map(item => ({
+        ...item,
+        status: item.status || 'draft'
+      }));
+      setItems(itemsWithStatus);
       setClasses(c.data || []);
       setSubjects(sub.data || []);
       setRooms(r.data || []);
       setActiveAY(ay.data);
+      // Get teaching slots from settings, filter out break times
+      const slots = settings.data?.teaching_slots || [];
+      setTeachingSlots(slots.filter(slot => !slot.is_break));
+
+      // Load initial grid data
+      await loadGridData();
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => { refresh(); }, [user?.id]);
+  useEffect(() => { if (viewMode === 'grid') loadGridData(); }, [gridMode, selectedClassId]);
 
   const openCreate = () => {
     setEditing(null);
@@ -114,6 +174,7 @@ export default function MySchedulePage() {
 
   const drafts = items.filter((s) => s.status === 'draft');
   const submitted = items.filter((s) => s.status === 'submitted');
+  const approved = items.filter((s) => s.status === 'approved');
   const locked = items.filter((s) => s.status === 'locked');
 
   return (
@@ -127,27 +188,30 @@ export default function MySchedulePage() {
           <p className="text-sm text-slate-600 mt-1">Atur jadwal Anda sendiri (draft), kirim ke Admin, lalu Admin akan mengunci jadwal final</p>
         </div>
         <div className="flex gap-2">
-          {drafts.length > 0 && (
+          {drafts.length > 0 && viewMode === 'list' && (
             <Button onClick={handleSubmitAllDrafts} variant="outline" className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50" data-testid="submit-all-button">
               <Send className="h-4 w-4" /> Kirim Semua Draft ({drafts.length})
             </Button>
           )}
-          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-schedule-button">
-            <Plus className="h-4 w-4" /> Tambah Jadwal
-          </Button>
+          {viewMode === 'list' && (
+            <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-schedule-button">
+              <Plus className="h-4 w-4" /> Tambah Jadwal
+            </Button>
+          )}
         </div>
       </div>
 
       <Alert className="border-blue-200 bg-blue-50">
         <Info className="h-4 w-4 text-blue-700" />
         <AlertDescription className="text-blue-900 text-sm">
-          <strong>Alur Jadwal:</strong> 1️⃣ <strong>Draft</strong> (Anda bisa edit) → 2️⃣ Klik <strong>Kirim</strong> ke Admin → 3️⃣ <strong>Terkirim</strong> (Anda tidak bisa edit) → 4️⃣ Admin <strong>mengunci</strong> jadwal final (status: <strong>Terkunci</strong>)
+          <strong>Alur Jadwal:</strong> 1️⃣ <strong>Draft</strong> (Anda bisa edit) → 2️⃣ Klik <strong>Kirim</strong> ke Admin → 3️⃣ <strong>Terkirim</strong> (menunggu persetujuan) → 4️⃣ Admin <strong>Menyetujui</strong> → 5️⃣ Admin <strong>Mengunci</strong> jadwal final (status: <strong>Terkunci</strong>)
         </AlertDescription>
       </Alert>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <StatCard icon={FileText} label="Draft" value={drafts.length} color="bg-amber-50 border-amber-200 text-amber-700" />
         <StatCard icon={Send} label="Terkirim" value={submitted.length} color="bg-blue-50 border-blue-200 text-blue-700" />
+        <StatCard icon={CheckCircle2} label="Disetujui" value={approved.length} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
         <StatCard icon={Lock} label="Terkunci" value={locked.length} color="bg-rose-50 border-rose-200 text-rose-700" />
       </div>
 
@@ -162,7 +226,53 @@ export default function MySchedulePage() {
       </div>
 
       {viewMode === 'grid' ? (
-        <Card>
+        <>
+          {/* Grid Mode Controls */}
+          <Card>
+            <CardContent className="p-4 flex flex-wrap items-center gap-3">
+              <div className="flex gap-2">
+                <Button
+                  variant={gridMode === 'view' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setGridMode('view')}
+                  className={gridMode === 'view' ? 'bg-[#006837]' : ''}
+                >
+                  Lihat Jadwal Saya
+                </Button>
+                <Button
+                  variant={gridMode === 'input' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setGridMode('input')}
+                  className={gridMode === 'input' ? 'bg-[#006837]' : ''}
+                >
+                  Input Jadwal (Per Kelas)
+                </Button>
+              </div>
+              {gridMode === 'input' && (
+                <div className="flex-1 min-w-[200px]">
+                  <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kelas untuk input jadwal..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {classes.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {gridMode === 'input' && !selectedClassId && (
+            <Alert className="border-amber-200 bg-amber-50">
+              <Info className="h-4 w-4 text-amber-700" />
+              <AlertDescription className="text-amber-900 text-sm">
+                Pilih kelas terlebih dahulu untuk melihat jadwal kelas dan menghindari bentrok dengan guru lain.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Card>
           <CardContent className="p-3">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
@@ -189,6 +299,7 @@ export default function MySchedulePage() {
                         const statusColors = {
                           draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
                           submitted: 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-900',
+                          approved: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
                           locked: 'bg-rose-100 hover:bg-rose-200 border-rose-400 text-rose-900',
                         };
                         const sStatus = s?.status || 'draft';
@@ -196,17 +307,52 @@ export default function MySchedulePage() {
                         return (
                           <td key={day} className="border border-slate-200 p-1 align-top">
                             {s ? (
-                              <button type="button" onClick={() => openEdit(s)} disabled={s.status !== 'draft'} className={`w-full text-left p-2 rounded border ${cellClass} transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // In view mode: only edit if it's user's own schedule and draft
+                                  // In input mode: only edit if it's user's own schedule and draft
+                                  if (s.teacher_id === user?.id && s.status === 'draft') {
+                                    openEdit(s);
+                                  }
+                                }}
+                                disabled={gridMode === 'view' ? s.status !== 'draft' : s.teacher_id !== user?.id || s.status !== 'draft'}
+                                className={`w-full text-left p-2 rounded border ${cellClass} transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}
+                              >
                                 <div className="font-semibold truncate flex items-center gap-1">
                                   <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
                                   {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block" />}
+                                  {sStatus === 'approved' && <CheckCircle2 className="h-2.5 w-2.5 inline-block" />}
                                   {sStatus === 'submitted' && <Send className="h-2.5 w-2.5 inline-block" />}
                                 </div>
+                                {gridMode === 'input' && (
+                                  <div className="text-[10px] truncate opacity-90 font-semibold text-blue-700">{s.teacher_name}</div>
+                                )}
                                 <div className="text-[10px] truncate opacity-90">{s.class_name}</div>
                                 <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
                               </button>
                             ) : (
-                              <button type="button" onClick={() => { setForm({ ...EMPTY, day, start_time: slot.start_time, end_time: slot.end_time, academic_year_id: activeAY?.id, semester: activeAY?.active_semester || 'ganjil', teacher_id: user?.id }); setOpen(true); }} className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs">+</button>
+                              gridMode === 'input' && selectedClassId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setForm({
+                                      ...EMPTY,
+                                      day,
+                                      start_time: slot.start_time,
+                                      end_time: slot.end_time,
+                                      class_id: selectedClassId,
+                                      academic_year_id: activeAY?.id,
+                                      semester: activeAY?.active_semester || 'ganjil',
+                                      teacher_id: user?.id
+                                    });
+                                    setOpen(true);
+                                  }}
+                                  className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs"
+                                >
+                                  +
+                                </button>
+                              ) : null
                             )}
                           </td>
                         );
@@ -221,6 +367,7 @@ export default function MySchedulePage() {
             </div>
           </CardContent>
         </Card>
+        </>
       ) : (
         <Card>
         <CardContent className="p-0">
@@ -263,7 +410,12 @@ export default function MySchedulePage() {
                       )}
                       {s.status === 'submitted' && (
                         <Badge variant="outline" className="text-xs gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-blue-600" /> Menunggu Admin
+                          <Send className="h-3 w-3 text-blue-600" /> Menunggu Persetujuan
+                        </Badge>
+                      )}
+                      {s.status === 'approved' && (
+                        <Badge variant="outline" className="text-xs gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Disetujui
                         </Badge>
                       )}
                       {s.status === 'locked' && (
@@ -299,8 +451,25 @@ export default function MySchedulePage() {
                 <SelectContent>{ALL_DAYS.map((d) => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Jam Mulai</Label><Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} data-testid="form-start" /></div>
-            <div><Label>Jam Selesai</Label><Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} data-testid="form-end" /></div>
+            <div className="col-span-2">
+              <Label>Jam Mengajar *</Label>
+              <Select
+                value={`${form.start_time}-${form.end_time}`}
+                onValueChange={(v) => {
+                  const [start, end] = v.split('-');
+                  setForm({ ...form, start_time: start, end_time: end });
+                }}
+              >
+                <SelectTrigger data-testid="form-time-slot"><SelectValue placeholder="Pilih jam mengajar..." /></SelectTrigger>
+                <SelectContent>
+                  {teachingSlots.map((slot, idx) => (
+                    <SelectItem key={idx} value={`${slot.start_time}-${slot.end_time}`}>
+                      {slot.name} ({slot.start_time} - {slot.end_time})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="col-span-2">
               <Label>Kelas *</Label>
               <Select value={form.class_id} onValueChange={(v) => setForm({ ...form, class_id: v })}>

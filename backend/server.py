@@ -26,6 +26,7 @@ from routers import (
     notifications,
     phase4,
     public,
+    reports,
     rooms,
     schedules,
     students,
@@ -60,6 +61,7 @@ api_router.include_router(public.router)
 api_router.include_router(holidays_tasks.router)
 api_router.include_router(phase4.router)
 api_router.include_router(notifications.router)
+api_router.include_router(reports.router)
 
 app.include_router(api_router)
 
