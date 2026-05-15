@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(yarn:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(pip install:*)",
+      "Bash(mongod:*)",
+      "Bash(python:*)",
+      "Bash(npm start)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

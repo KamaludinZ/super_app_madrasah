@@ -173,3 +173,36 @@ code, .font-mono {
         gap: inherit;
     }
 }
+
+/* QR Scanner Camera Styling */
+#qr-reader-mount video {
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 0.5rem;
+    object-fit: cover;
+}
+
+#qr-reader-mount {
+    position: relative;
+    width: 100%;
+}
+
+/* QR Scanner overlay box styling */
+#qr-reader-mount canvas {
+    border-radius: 0.5rem;
+}
+
+/* Ensure html5-qrcode renders properly */
+#qr-reader-mount > div {
+    width: 100% !important;
+    border: none !important;
+}
+
+#qr-reader-mount > div > div {
+    border: none !important;
+}
+
+/* Hide default camera select if present */
+#qr-reader-mount select {
+    display: none;
+}

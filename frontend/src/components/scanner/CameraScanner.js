@@ -50,15 +50,25 @@ export default function CameraScanner({ onDecoded, onCancel }) {
         const html5 = new Html5Qrcode(elId, { verbose: false });
         scannerRef.current = html5;
 
+        // Try environment camera first, fallback to any camera
+        const cameraConfig = { facingMode: 'environment' };
+        const scanConfig = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
+        };
+
         await html5.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          cameraConfig,
+          scanConfig,
           (decodedText) => {
             // Stop and pass result up
-            html5.stop()
-              .then(() => { scannerRef.current = null; })
-              .catch(() => {})
-              .finally(() => onDecoded?.(decodedText));
+            if (scannerRef.current) {
+              html5.stop()
+                .then(() => { scannerRef.current = null; })
+                .catch(() => {})
+                .finally(() => onDecoded?.(decodedText));
+            }
           },
           () => { /* ignore per-frame failures */ }
         );
@@ -129,8 +139,8 @@ export default function CameraScanner({ onDecoded, onCancel }) {
         ref={containerRef}
         id="qr-reader-mount"
         data-testid="jurnal-scan-camera"
-        className={status === 'ready' ? 'rounded-lg overflow-hidden' : 'hidden'}
-        style={{ minHeight: status === 'ready' ? 280 : 0 }}
+        className={status === 'ready' ? 'rounded-lg overflow-hidden border-2 border-[#006837]/20' : (status === 'starting' ? 'opacity-0 h-0' : 'hidden')}
+        style={{ minHeight: status === 'ready' ? 320 : 0, maxWidth: '100%' }}
       />
 
       {status === 'ready' && (
