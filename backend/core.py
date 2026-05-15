@@ -121,6 +121,28 @@ async def log_security(event_type, username=None, details=None, request: Request
     await db.security_logs.insert_one(doc)
 
 
+async def log_error(error_type, message, details=None, user=None, request: Request = None):
+    """Log application errors for monitoring and debugging"""
+    import traceback
+
+    # Use audit logs with action='error' for error tracking
+    error_details = {
+        'error_type': error_type,
+        'message': str(message),
+        'traceback': traceback.format_exc() if details and details.get('include_traceback') else None,
+        **(details or {})
+    }
+
+    await log_audit(
+        user=user,
+        action='error',
+        entity='system',
+        entity_id=None,
+        details=error_details,
+        request=request
+    )
+
+
 async def get_active_academic_year():
     ay = await db.academic_years.find_one({'is_active': True})
     return serialize_doc(ay) if ay else None

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Calendar, Plus, Pencil, Trash2, Send, Lock, Info,
-  CheckCircle2, AlertCircle, FileText,
+  CheckCircle2, AlertCircle, FileText, LayoutGrid, List,
 } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -28,6 +28,8 @@ function StatusBadge({ status }) {
 export default function MySchedulePage() {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
+  const [grid, setGrid] = useState({ days: [], slots: [], grid: {} });
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -39,14 +41,16 @@ export default function MySchedulePage() {
 
   const refresh = async () => {
     try {
-      const [s, c, sub, r, ay] = await Promise.all([
+      const [s, g, c, sub, r, ay] = await Promise.all([
         api.get('/schedules', { params: { teacher_id: user?.id } }),
+        api.get('/schedules/grid', { params: { teacher_id: user?.id } }),
         api.get('/classes'),
         api.get('/subjects'),
         api.get('/rooms'),
         api.get('/academic-years/active'),
       ]);
       setItems(s.data || []);
+      setGrid(g.data || { days: [], slots: [], grid: {} });
       setClasses(c.data || []);
       setSubjects(sub.data || []);
       setRooms(r.data || []);
@@ -147,7 +151,78 @@ export default function MySchedulePage() {
         <StatCard icon={Lock} label="Terkunci" value={locked.length} color="bg-rose-50 border-rose-200 text-rose-700" />
       </div>
 
-      <Card>
+      {/* View Mode Toggle */}
+      <div className="flex justify-end gap-2">
+        <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')} className={viewMode === 'grid' ? 'bg-[#006837]' : ''}>
+          <LayoutGrid className="h-4 w-4 mr-1" /> Grid
+        </Button>
+        <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'bg-[#006837]' : ''}>
+          <List className="h-4 w-4 mr-1" /> List
+        </Button>
+      </div>
+
+      {viewMode === 'grid' ? (
+        <Card>
+          <CardContent className="p-3">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 bg-slate-100 border border-slate-200 p-2 text-left w-32">Jam</th>
+                    {(grid.days || []).map((d) => (
+                      <th key={d} className="bg-slate-100 border border-slate-200 p-2 capitalize min-w-[140px]">{DAY_LABELS[d]}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(grid.slots || []).map((slot, idx) => (
+                    <tr key={idx}>
+                      <td className={`sticky left-0 border border-slate-200 p-2 ${slot.is_break ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                        <div className="font-semibold text-slate-800">{slot.name}</div>
+                        <div className="font-mono text-[10px] text-slate-500">{slot.start_time}-{slot.end_time}</div>
+                      </td>
+                      {(grid.days || []).map((day) => {
+                        const s = grid.grid?.[day]?.[slot.start_time];
+                        if (slot.is_break) {
+                          return <td key={day} className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>;
+                        }
+                        const statusColors = {
+                          draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
+                          submitted: 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-900',
+                          locked: 'bg-rose-100 hover:bg-rose-200 border-rose-400 text-rose-900',
+                        };
+                        const sStatus = s?.status || 'draft';
+                        const cellClass = statusColors[sStatus];
+                        return (
+                          <td key={day} className="border border-slate-200 p-1 align-top">
+                            {s ? (
+                              <button type="button" onClick={() => openEdit(s)} disabled={s.status !== 'draft'} className={`w-full text-left p-2 rounded border ${cellClass} transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}>
+                                <div className="font-semibold truncate flex items-center gap-1">
+                                  <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
+                                  {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block" />}
+                                  {sStatus === 'submitted' && <Send className="h-2.5 w-2.5 inline-block" />}
+                                </div>
+                                <div className="text-[10px] truncate opacity-90">{s.class_name}</div>
+                                <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => { setForm({ ...EMPTY, day, start_time: slot.start_time, end_time: slot.end_time, academic_year_id: activeAY?.id, semester: activeAY?.active_semester || 'ganjil', teacher_id: user?.id }); setOpen(true); }} className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs">+</button>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(grid.days || []).length === 0 && (
+                <div className="text-center py-8 text-slate-500">Loading grid...</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
         <CardContent className="p-0">
           <Table data-testid="my-schedule-table">
             <TableHeader><TableRow>
@@ -211,6 +286,7 @@ export default function MySchedulePage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">

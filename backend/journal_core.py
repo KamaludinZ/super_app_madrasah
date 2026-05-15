@@ -186,7 +186,8 @@ def _wrap_text(text: str, font, max_width: int, draw) -> List[str]:
 def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     template_bytes: Optional[bytes] = None,
                     school_name: str = "MTsN 2 Kota Malang",
-                    app_name: str = "Super Apps MATSANDATAMA") -> bytes:
+                    app_name: str = "Super Apps MATSANDATAMA",
+                    class_token: Optional[str] = None) -> bytes:
     """Generate B5 portrait card (1386x1969 @ 200dpi) with optimized text sizing."""
     W, H = 1386, 1969
 
@@ -202,6 +203,17 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         bg = Image.new("RGB", (W, H), color=(251, 247, 238))
 
     draw = ImageDraw.Draw(bg)
+
+    # Allow runtime scaling of fonts via environment variables for quick tuning
+    # DEFAULT: 1.8x scale for much better readability when printed
+    try:
+        FONT_SCALE = max(0.5, min(3.0, float(os.environ.get('QR_FONT_SCALE', '1.8'))))
+    except Exception:
+        FONT_SCALE = 1.8
+    try:
+        TOKEN_SCALE = max(0.5, min(3.0, float(os.environ.get('QR_TOKEN_SCALE', '1.8'))))
+    except Exception:
+        TOKEN_SCALE = 1.8
 
     # Try to find best available font - bumped sizes significantly
     font_paths_bold = [
@@ -222,14 +234,22 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     pass
         return ImageFont.load_default()
 
-    # MUCH bigger fonts for B5 print clarity
-    font_app_name = load_font(font_paths_bold, 64)
-    font_school = load_font(font_paths_regular, 44)
-    font_class_huge = load_font(font_paths_bold, 200)  # The big "7A" - very prominent
-    font_room_label = load_font(font_paths_bold, 56)
-    font_instruction_main = load_font(font_paths_bold, 56)
-    font_instruction_sub = load_font(font_paths_regular, 38)
-    font_footer = load_font(font_paths_bold, 32)
+    # Base sizes (will be scaled by FONT_SCALE / TOKEN_SCALE) - MUCH LARGER
+    base_app_name = 90        # Was 80
+    base_school = 65          # Was 56
+    base_class_huge = 320     # Was 280 - The huge class name
+    base_room_label = 85      # Was 72
+    base_instruction_main = 80   # Was 70
+    base_instruction_sub = 58    # Was 50
+    base_footer = 48          # Was 40
+
+    font_app_name = load_font(font_paths_bold, int(base_app_name * FONT_SCALE))      # App name in header
+    font_school = load_font(font_paths_regular, int(base_school * FONT_SCALE))     # School name
+    font_class_huge = load_font(font_paths_bold, int(base_class_huge * FONT_SCALE))   # The big "7A" - EXTRA prominent
+    font_room_label = load_font(font_paths_bold, int(base_room_label * FONT_SCALE))    # "RUANGAN: X"
+    font_instruction_main = load_font(font_paths_bold, int(base_instruction_main * FONT_SCALE))  # Main instruction
+    font_instruction_sub = load_font(font_paths_regular, int(base_instruction_sub * FONT_SCALE))  # Sub instruction
+    font_footer = load_font(font_paths_bold, int(base_footer * FONT_SCALE))        # Footer text
 
     BRAND = (0, 104, 55)
     GOLD = (200, 162, 74)
@@ -248,12 +268,12 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         draw.text((W // 2, 110), app_name.upper(), fill="white", font=font_app_name, anchor="mm")
         draw.text((W // 2, 200), school_name, fill="white", font=font_school, anchor="mm")
 
-    # Class name (BIG and prominent)
-    class_y = 460 if not use_template else 350
+    # Class name (BIG and prominent) - adjusted spacing for larger font
+    class_y = 490 if not use_template else 370
     draw.text((W // 2, class_y), class_name, fill=BRAND, font=font_class_huge, anchor="mm")
 
-    # Room label below
-    room_y = class_y + 170
+    # Room label below - more space due to larger fonts
+    room_y = class_y + 210
     draw.text((W // 2, room_y), f"RUANGAN: {room_name}", fill=INK, font=font_room_label, anchor="mm")
 
     # QR Code (large, well-spaced)
@@ -272,11 +292,21 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                    fill="white", outline=GOLD, width=6)
     bg.paste(qr_img, (qr_x, qr_y))
 
-    # Instructions below QR (much larger now)
-    inst_y = qr_y + qr_size + 90
+    # Class token below QR (if provided) - MUCH LARGER for easy reading
+    token_y = qr_y + qr_size + 70
+    if class_token:
+        # Token fonts can be scaled separately using TOKEN_SCALE (default 1.8x)
+        font_token_label = load_font(font_paths_regular, int(55 * TOKEN_SCALE))    # Label "TOKEN KELAS:" - was 44
+        font_token_value = load_font(font_paths_bold, int(90 * TOKEN_SCALE))       # Actual token value - HUGE! was 72
+        draw.text((W // 2, token_y), "TOKEN KELAS:", fill=SOFT, font=font_token_label, anchor="mm")
+        draw.text((W // 2, token_y + 80), class_token, fill=BRAND, font=font_token_value, anchor="mm")
+        token_y += 170
+
+    # Instructions below QR/token - adjusted spacing for larger fonts
+    inst_y = token_y + 40
     draw.text((W // 2, inst_y), "Scan dengan aplikasi", fill=SOFT, font=font_instruction_sub, anchor="mm")
-    draw.text((W // 2, inst_y + 65), app_name.upper(), fill=BRAND, font=font_instruction_main, anchor="mm")
-    draw.text((W // 2, inst_y + 130), "untuk mengisi Jurnal Mengajar", fill=SOFT, font=font_instruction_sub, anchor="mm")
+    draw.text((W // 2, inst_y + 80), app_name.upper(), fill=BRAND, font=font_instruction_main, anchor="mm")
+    draw.text((W // 2, inst_y + 160), "untuk mengisi Jurnal Mengajar", fill=SOFT, font=font_instruction_sub, anchor="mm")
 
     if not use_template:
         draw.text((W // 2, H - 65),

@@ -26,18 +26,24 @@ export default function AdminSchedulesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filterMode, setFilterMode] = useState('class'); // class | teacher
-  const [filterValue, setFilterValue] = useState('');
+  const [filterValue, setFilterValue] = useState('all');
   const [form, setForm] = useState({ class_id: '', subject_id: '', teacher_id: '', room_id: '', day: 'senin', start_time: '07:00', end_time: '08:30', semester: 'ganjil', academic_year_id: '' });
   const [importOpen, setImportOpen] = useState(false);
   const fileRef = useRef(null);
 
   const loadGrid = async (mode, val) => {
     const params = {};
-    if (val && val !== 'all') {
+    if (val && val !== 'all' && val !== '') {
       if (mode === 'class') params.class_id = val;
       else params.teacher_id = val;
     }
+    console.log('Loading grid with params:', params);
     const { data } = await api.get('/schedules/grid', { params });
+    console.log('Grid data received:', data);
+    console.log('Grid.days:', data.days);
+    console.log('Grid.slots:', data.slots);
+    console.log('Grid.grid:', data.grid);
+    console.log('Grid.schedules length:', data.schedules?.length);
     setGrid(data);
     setItems(data.schedules || []);
   };
@@ -51,7 +57,7 @@ export default function AdminSchedulesPage() {
       ]);
       setClasses(c.data); setSubjects(sub.data); setRooms(r.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(rr))));
-      await loadGrid('class', '');
+      await loadGrid('class', 'all');
     })();
   }, []);
 
@@ -89,6 +95,11 @@ export default function AdminSchedulesPage() {
   const handleDelete = async (s) => {
     if (!window.confirm('Hapus jadwal?')) return;
     await api.delete(`/schedules/${s.id}`); toast.success('Dihapus'); await loadGrid(filterMode, filterValue);
+  };
+  const handleApprove = async (s) => {
+    if (!window.confirm(`Setujui jadwal ini?`)) return;
+    try { await api.put(`/schedules/${s.id}/submit`); toast.success('Jadwal disetujui'); await loadGrid(filterMode, filterValue); }
+    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleLock = async (s) => {
     if (!window.confirm(`Kunci jadwal ini? Setelah dikunci tidak bisa diedit kecuali dibuka kunci.`)) return;
@@ -161,7 +172,7 @@ export default function AdminSchedulesPage() {
         <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs uppercase tracking-wide">Tampilkan Per</Label>
-            <Select value={filterMode} onValueChange={(v) => { setFilterMode(v); setFilterValue(''); }}>
+            <Select value={filterMode} onValueChange={(v) => { setFilterMode(v); setFilterValue('all'); }}>
               <SelectTrigger data-testid="schedule-filter-mode"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="class">Per Kelas</SelectItem>
@@ -291,17 +302,26 @@ export default function AdminSchedulesPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  {s.status === 'locked' ? (
-                    <Button size="icon" variant="ghost" onClick={() => handleUnlock(s)} className="text-emerald-600" title="Buka Kunci" data-testid={`unlock-${s.id}`}>
-                      <Unlock className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button size="icon" variant="ghost" onClick={() => handleLock(s)} className="text-rose-600" title="Kunci Jadwal" data-testid={`lock-${s.id}`}>
-                      <Lock className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(s)} disabled={s.status === 'locked'}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600" disabled={s.status === 'locked'}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex items-center justify-end gap-1">
+                    {s.status === 'locked' ? (
+                      <span className="text-xs text-slate-500 italic mr-2">Terkunci</span>
+                    ) : s.status === 'draft' ? (
+                      <Button size="sm" variant="outline" onClick={() => handleApprove(s)} className="text-blue-600 border-blue-300" title="Setujui" data-testid={`approve-${s.id}`}>
+                        Setujui
+                      </Button>
+                    ) : s.status === 'submitted' ? (
+                      <Button size="sm" variant="outline" onClick={() => handleLock(s)} className="text-rose-600 border-rose-300" title="Kunci Jadwal" data-testid={`lock-${s.id}`}>
+                        <Lock className="h-3.5 w-3.5 mr-1" /> Kunci
+                      </Button>
+                    ) : null}
+                    {s.status === 'locked' && (
+                      <Button size="sm" variant="ghost" onClick={() => handleUnlock(s)} className="text-emerald-600" title="Buka Kunci" data-testid={`unlock-${s.id}`}>
+                        <Unlock className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" onClick={() => openEdit(s)} disabled={s.status === 'locked'} title="Edit"><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600" disabled={s.status === 'locked'} title="Hapus"><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}</TableBody>

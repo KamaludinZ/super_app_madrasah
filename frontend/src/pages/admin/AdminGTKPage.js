@@ -207,6 +207,7 @@ export default function AdminGTKPage() {
           student={accountUser}
           open={!!accountUser}
           onClose={() => { setAccountUser(null); refresh(); }}
+          isGTK={true}
         />
       )}
     </div>

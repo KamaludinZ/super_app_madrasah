@@ -8,7 +8,9 @@
       "Bash(pip install:*)",
       "Bash(mongod:*)",
       "Bash(python:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(curl:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

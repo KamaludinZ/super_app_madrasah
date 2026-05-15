@@ -22,7 +22,21 @@ export default function JadwalPage() {
             const { data: all } = await api.get('/schedules', { params: { class_id: data.class.id } });
             setWeekly(all);
           }
+        } else if (activeRole === 'wali_kelas') {
+          // Wali kelas: get jadwal kelasnya
+          const { data: classes } = await api.get('/classes');
+          const myClass = classes.find(c => c.homeroom_teacher_id === user.id);
+          if (myClass) {
+            const { data: todayData } = await api.get('/schedules', { params: { class_id: myClass.id, day: getDayId() } });
+            setToday(todayData || []);
+            const { data: all } = await api.get('/schedules', { params: { class_id: myClass.id } });
+            setWeekly(all || []);
+          } else {
+            setToday([]);
+            setWeekly([]);
+          }
         } else {
+          // Guru: jadwal mengajar mereka sendiri
           const { data } = await api.get('/schedules/my-today');
           setToday(data);
           const { data: all } = await api.get('/schedules', { params: { teacher_id: user.id } });
@@ -35,6 +49,12 @@ export default function JadwalPage() {
       }
     })();
   }, [user.id, activeRole]);
+
+  // Helper function to get current day ID (senin, selasa, etc)
+  function getDayId() {
+    const days = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+    return days[new Date().getDay()];
+  }
 
   // Group weekly by day
   const byDay = (weekly || []).reduce((acc, s) => {

@@ -144,17 +144,124 @@ async def generate_qr_card(rid: str, template_id: Optional[str] = Form(None),
             if ',' in b64:
                 b64 = b64.split(',', 1)[1]
             template_bytes = base64.b64decode(b64)
+    cls = None
+    class_token_val = None
     if not class_name:
         cls = await db.classes.find_one({'room_id': rid}, {'_id': 0})
         class_name = cls.get('name') if cls else room.get('name', '')
+    if cls:
+        class_token_val = cls.get('token')
+    elif class_name:
+        # Try to find class by name if room_id didn't match
+        cls = await db.classes.find_one({'name': class_name}, {'_id': 0})
+        if cls:
+            class_token_val = cls.get('token')
+
     png_bytes = create_b5_card(
         qr_data=token, room_name=room.get('name', rid), class_name=class_name,
         template_bytes=template_bytes,
         school_name=settings.get('school_name', 'MTsN 2 Kota Malang'),
         app_name=settings.get('app_name', 'Super Apps MATSANDATAMA'),
+        class_token=class_token_val,
     )
     return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png",
                              headers={"Content-Disposition": f'inline; filename="qr-card-{rid}.png"'})
+
+
+@router.post("/qr-cards/bulk-by-grade")
+async def generate_bulk_qr_cards_by_grade(grade: int = Form(...),
+                                           template_id: Optional[str] = Form(None),
+                                           user: Dict = Depends(require_role('admin'))):
+    """Generate QR cards for all classes in a specific grade level"""
+    from PIL import Image as PILImage
+
+    # Get all classes for this grade
+    classes_list = await db.classes.find({'grade': grade}, {'_id': 0}).to_list(100)
+    if not classes_list:
+        raise HTTPException(404, f"Tidak ada kelas untuk jenjang {grade}")
+
+    settings = await get_settings()
+    template_bytes = None
+    if template_id:
+        tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
+        if tpl and tpl.get('image_b64'):
+            b64 = tpl['image_b64']
+            if ',' in b64:
+                b64 = b64.split(',', 1)[1]
+            template_bytes = base64.b64decode(b64)
+
+    # Generate cards for each class
+    card_images = []
+    for cls in sorted(classes_list, key=lambda x: x.get('name', '')):
+        room_id = cls.get('room_id')
+        if not room_id:
+            continue
+
+        room = await db.rooms.find_one({'id': room_id}, {'_id': 0})
+        if not room:
+            continue
+
+        token = encrypt_qr_payload(room_id)
+        png_bytes = create_b5_card(
+            qr_data=token,
+            room_name=room.get('name', room_id),
+            class_name=cls.get('name', ''),
+            template_bytes=template_bytes,
+            school_name=settings.get('school_name', 'MTsN 2 Kota Malang'),
+            app_name=settings.get('app_name', 'Super Apps MATSANDATAMA'),
+            class_token=cls.get('token'),
+        )
+        card_images.append(PILImage.open(io.BytesIO(png_bytes)))
+
+    if not card_images:
+        raise HTTPException(404, f"Tidak ada kartu yang bisa dibuat untuk jenjang {grade}")
+
+    # Create A4 layout (2 cards per page in portrait)
+    # A4 @ 200 DPI = 1654 x 2339 px
+    # B5 card = 1386 x 1969 px
+    # We'll fit 2 B5 cards vertically on A4 with margins
+    A4_W, A4_H = 1654, 2339
+    CARD_W, CARD_H = 1386, 1969
+
+    # Calculate scaling to fit 2 cards on A4
+    scale = min((A4_W - 100) / CARD_W, (A4_H - 100) / (CARD_H * 2))
+    scaled_w = int(CARD_W * scale)
+    scaled_h = int(CARD_H * scale)
+
+    pages = []
+    for i in range(0, len(card_images), 2):
+        page = PILImage.new('RGB', (A4_W, A4_H), color=(255, 255, 255))
+
+        # First card (top)
+        card1 = card_images[i].resize((scaled_w, scaled_h), PILImage.Resampling.LANCZOS)
+        x1 = (A4_W - scaled_w) // 2
+        y1 = 50
+        page.paste(card1, (x1, y1))
+
+        # Second card (bottom) if exists
+        if i + 1 < len(card_images):
+            card2 = card_images[i + 1].resize((scaled_w, scaled_h), PILImage.Resampling.LANCZOS)
+            x2 = (A4_W - scaled_w) // 2
+            y2 = y1 + scaled_h + 50
+            page.paste(card2, (x2, y2))
+
+        pages.append(page)
+
+    # Save all pages as multi-page PDF or combine to single large image
+    output = io.BytesIO()
+    if len(pages) == 1:
+        pages[0].save(output, format='PNG', optimize=True)
+        media_type = 'image/png'
+        filename = f'qr-cards-grade-{grade}.png'
+    else:
+        # Save as PDF for multiple pages
+        pages[0].save(output, format='PDF', save_all=True, append_images=pages[1:], optimize=True)
+        media_type = 'application/pdf'
+        filename = f'qr-cards-grade-{grade}.pdf'
+
+    output.seek(0)
+    return StreamingResponse(output, media_type=media_type,
+                             headers={"Content-Disposition": f'inline; filename="{filename}"'})
 
 
 # ============================================================

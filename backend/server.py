@@ -73,6 +73,45 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
+# Error logging middleware - log all unhandled exceptions
+from fastapi import Request as FastAPIRequest
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
+
+class ErrorLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: FastAPIRequest, call_next):
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as exc:
+            # Log the error
+            from core import log_error
+            try:
+                # Try to get current user from request state
+                user = getattr(request.state, 'user', None)
+                await log_error(
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                    details={
+                        'path': request.url.path,
+                        'method': request.method,
+                        'include_traceback': True
+                    },
+                    user=user,
+                    request=request
+                )
+            except Exception as log_err:
+                # If logging fails, at least log to console
+                logger.error(f"Failed to log error: {log_err}")
+                logger.error(f"Original error: {exc}")
+
+            # Re-raise the exception to let FastAPI handle it
+            raise exc
+
+
+app.add_middleware(ErrorLoggingMiddleware)
+
 
 # ============================================================
 # LIFECYCLE

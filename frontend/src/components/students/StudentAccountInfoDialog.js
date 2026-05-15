@@ -16,7 +16,7 @@ import {
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
-export default function StudentAccountInfoDialog({ student, open, onClose }) {
+export default function StudentAccountInfoDialog({ student, open, onClose, isGTK = false }) {
   const [tab, setTab] = useState('akun');
   const [data, setData] = useState(student);
   const [logs, setLogs] = useState([]);
@@ -25,6 +25,9 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Auto-detect if this is GTK based on roles
+  const isStaff = isGTK || (data?.roles || []).some(r => !['siswa', 'orang_tua'].includes(r));
 
   useEffect(() => {
     if (!student?.id) return;
@@ -126,7 +129,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
                   <h3 className="font-semibold text-sm uppercase tracking-wide text-slate-700">Informasi Akun</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <InfoItem icon={User} label="Username" value={data?.username} mono copy onCopy={() => copyText(data.username)} />
-                    <InfoItem icon={Hash} label="NISN" value={data?.nisn} mono />
+                    <InfoItem icon={Hash} label={isStaff ? "NIP/NUPTK" : "NISN"} value={isStaff ? (data?.nip_nuptk || '-') : (data?.nisn || '-')} mono />
                     <InfoItem icon={Mail} label="Email" value={data?.email || '-'} />
                     <InfoItem icon={Phone} label="No HP" value={data?.phone || '-'} mono />
                   </div>
@@ -134,7 +137,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
                     <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200">
                       <div>
                         <div className="font-semibold text-sm">Status Akun</div>
-                        <div className="text-xs text-slate-500">Saat nonaktif, siswa tidak bisa login</div>
+                        <div className="text-xs text-slate-500">Saat nonaktif, pengguna tidak bisa login</div>
                       </div>
                       <Switch checked={!!data?.is_active} onCheckedChange={handleToggleActive} disabled={busy} data-testid="toggle-active" />
                     </div>
@@ -151,7 +154,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
                   <Alert className="border-amber-200 bg-amber-50">
                     <AlertCircle className="h-4 w-4 text-amber-700" />
                     <AlertDescription className="text-amber-900 text-xs">
-                      Password lama akan langsung tidak berlaku setelah reset. Beritahukan password baru kepada siswa secara langsung.
+                      Password lama akan langsung tidak berlaku setelah reset. Beritahukan password baru kepada {isStaff ? 'GTK' : 'siswa'} secara langsung.
                     </AlertDescription>
                   </Alert>
                   <div className="flex items-end gap-2">
@@ -199,7 +202,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
                 <CardContent className="p-6 text-center space-y-4">
                   <div>
                     <h3 className="font-semibold text-slate-900">QR Akses Cepat</h3>
-                    <p className="text-xs text-slate-600 mt-1">Cetak & tempelkan di buku, siswa scan untuk login cepat</p>
+                    <p className="text-xs text-slate-600 mt-1">Cetak & tempelkan untuk kemudahan akses login cepat</p>
                   </div>
                   <div className="inline-block p-4 bg-white border-2 border-slate-300 rounded-2xl">
                     <img
@@ -231,7 +234,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose }) {
                 <CardContent className="p-0">
                   <div className="p-4 border-b border-slate-100">
                     <h3 className="font-semibold text-sm">Log Aktivitas Terkait Akun Ini</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Daftar perubahan & aksi terhadap data siswa ini</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Daftar perubahan & aksi terhadap data pengguna ini</p>
                   </div>
                   <div className="overflow-x-auto max-h-96">
                     <Table>

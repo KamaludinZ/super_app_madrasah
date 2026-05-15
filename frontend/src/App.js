@@ -39,6 +39,7 @@ import RaporPage from '@/pages/RaporPage';
 import AnnouncementsListPage from '@/pages/AnnouncementsListPage';
 import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage';
 import AdminCurriculumsPage from '@/pages/admin/AdminCurriculumsPage';
+import AdminGTKPage from '@/pages/admin/AdminGTKPage';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -93,6 +94,7 @@ function App() {
             <Route path="/admin/jadwal-piket" element={<JadwalPiketPage />} />
             <Route path="/admin/jurnal" element={<AdminJurnalRekapPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/gtk" element={<AdminGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />
             <Route path="/admin/subjects" element={<AdminSubjectsPage />} />

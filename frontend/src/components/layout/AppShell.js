@@ -11,7 +11,7 @@ import {
   Trophy,
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
-  Megaphone, ChevronDown,
+  Megaphone, ChevronDown, Briefcase,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -33,6 +33,10 @@ import { HelpCircle } from 'lucide-react';
  * Build sidebar items based ONLY on activeRole.
  * STRICT: tiap role hanya menampilkan menu yang relevan dengan peran tersebut.
  * Jika user punya banyak peran, dia harus switch role untuk akses menu peran lain.
+ *
+ * Returns either:
+ * - Array of items (for roles without groups)
+ * - Array of groups with {title, items} structure (for admin with groups)
  */
 function navForRole(role, userRoles = []) {
   const items = [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' }];
@@ -78,31 +82,61 @@ function navForRole(role, userRoles = []) {
   } else if (role === 'orang_tua') {
     items.push({ to: '/dashboard', label: 'Anak Saya', icon: Users, testid: 'nav-ortu-anak' });
   } else if (role === 'admin') {
-    items.push({ to: '/admin/academic-year', label: 'Tahun Pelajaran', icon: GraduationCap, testid: 'nav-academic-year' });
-    items.push({ to: '/admin/kurikulum', label: 'Kurikulum', icon: BookOpen, testid: 'nav-curriculums' });
-    items.push({ to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' });
-    items.push({ to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' });
-    items.push({ to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' });
-    items.push({ to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' });
-    items.push({ to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' });
-    items.push({ to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' });
-    items.push({ to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' });
-    items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' });
-    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' });
-    items.push({ to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-admin-kebersihan' });
-    items.push({ to: '/admin/classes', label: 'Kelas', icon: BookOpen, testid: 'nav-classes' });
-    items.push({ to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' });
-    items.push({ to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' });
-    items.push({ to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' });
-    items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' });
-    items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' });
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-admin' });
-    items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-admin' });
-    items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input-admin' });
-    items.push({ to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-rapor-admin' });
-    items.push({ to: '/admin/qr-generator', label: 'QR Generator', icon: QrCode, testid: 'nav-qr' });
-    items.push({ to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' });
-    items.push({ to: '/admin/settings', label: 'Pengaturan', icon: Settings, testid: 'nav-settings' });
+    // Admin uses grouped menu structure
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      {
+        title: 'Master App',
+        items: [
+          { to: '/admin/academic-year', label: 'Tahun Pelajaran', icon: GraduationCap, testid: 'nav-academic-year' },
+          { to: '/admin/kurikulum', label: 'Kurikulum', icon: BookOpen, testid: 'nav-curriculums' },
+          { to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' },
+          { to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' },
+          { to: '/admin/classes', label: 'Kelas', icon: BookOpen, testid: 'nav-classes' },
+          { to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' },
+          { to: '/admin/qr-generator', label: 'QR Generator', icon: QrCode, testid: 'nav-qr' },
+        ],
+      },
+      {
+        title: 'Manajemen Pengguna',
+        items: [
+          { to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' },
+          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
+          { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' },
+        ],
+      },
+      {
+        title: 'Akademik',
+        items: [
+          { to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' },
+          { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' },
+          { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' },
+          { to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input-admin' },
+          { to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-rapor-admin' },
+        ],
+      },
+      {
+        title: 'Aktivitas & Program',
+        items: [
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-admin' },
+          { to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-admin' },
+          { to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-admin-kebersihan' },
+          { to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' },
+          { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' },
+        ],
+      },
+      {
+        title: 'Sistem & Utilitas',
+        items: [
+          { to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' },
+          { to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' },
+          { to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' },
+          { to: '/admin/settings', label: 'Pengaturan', icon: Settings, testid: 'nav-settings' },
+        ],
+      },
+    ];
   }
   return items;
 }
@@ -171,31 +205,83 @@ function ActivePeriodCard({ ctx, onClick }) {
 }
 
 function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
+  // Check if items is grouped (has title property) or flat
+  const isGrouped = items.some((item) => item.title);
+
+  // State to track which groups are expanded (default all expanded)
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    const groups = {};
+    items.forEach((item, idx) => {
+      if (item.title) {
+        groups[item.title || idx] = true;
+      }
+    });
+    return groups;
+  });
+
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupKey]: !prev[groupKey],
+    }));
+  };
+
+  const renderMenuItem = (it) => {
+    const Icon = it.icon;
+    const active = current === it.to;
+    return (
+      <Link
+        key={it.to}
+        to={it.to}
+        data-testid={it.testid}
+        onClick={onItemClick}
+        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+          active
+            ? 'bg-[#006837] text-white shadow-sm'
+            : 'text-slate-700 hover:bg-[#006837]/8 hover:text-[#006837]'
+        } ${it.highlight && !active ? 'bg-amber-50 text-amber-900 border border-amber-200' : ''}`}
+      >
+        <Icon className="h-4 w-4" />
+        <span className="flex-1">{it.label}</span>
+        {active && <ChevronRight className="h-3.5 w-3.5" />}
+      </Link>
+    );
+  };
+
   return (
     <div className="flex flex-col">
       <ActivePeriodCard ctx={viewCtx} onClick={onTPClick} />
       <nav className="flex flex-col gap-1 px-3 py-3" data-testid="sidebar-nav">
-        {items.map((it) => {
-          const Icon = it.icon;
-          const active = current === it.to;
-          return (
-            <Link
-              key={it.to}
-              to={it.to}
-              data-testid={it.testid}
-              onClick={onItemClick}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-[#006837] text-white shadow-sm'
-                  : 'text-slate-700 hover:bg-[#006837]/8 hover:text-[#006837]'
-              } ${it.highlight && !active ? 'bg-amber-50 text-amber-900 border border-amber-200' : ''}`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="flex-1">{it.label}</span>
-              {active && <ChevronRight className="h-3.5 w-3.5" />}
-            </Link>
-          );
-        })}
+        {isGrouped ? (
+          items.map((item, idx) => {
+            // If item has 'to' property, it's a regular menu item
+            if (item.to) {
+              return renderMenuItem(item);
+            }
+            // Otherwise it's a group
+            const groupKey = item.title || idx;
+            const isExpanded = expandedGroups[groupKey];
+            return (
+              <div key={groupKey} className="mt-3 first:mt-0">
+                <button
+                  onClick={() => toggleGroup(groupKey)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#006837] transition-colors rounded-lg hover:bg-slate-50"
+                  data-testid={`group-toggle-${groupKey}`}
+                >
+                  <span>{item.title}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                </button>
+                {isExpanded && (
+                  <div className="flex flex-col gap-1 mt-1">
+                    {item.items.map((it) => renderMenuItem(it))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          items.map((it) => renderMenuItem(it))
+        )}
       </nav>
     </div>
   );

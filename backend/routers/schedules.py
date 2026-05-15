@@ -269,7 +269,20 @@ async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[st
     if not ay:
         return {'days': [], 'slots': [], 'grid': {}}
     active_days = settings.get('active_days', ['senin','selasa','rabu','kamis','jumat'])
-    slots = settings.get('teaching_slots', [])
+    # Default slots jika belum ada di settings
+    default_slots = [
+        {'name': 'Jam 1', 'start_time': '07:00', 'end_time': '07:45', 'is_break': False},
+        {'name': 'Jam 2', 'start_time': '07:45', 'end_time': '08:30', 'is_break': False},
+        {'name': 'Jam 3', 'start_time': '08:30', 'end_time': '09:15', 'is_break': False},
+        {'name': 'Istirahat 1', 'start_time': '09:15', 'end_time': '09:30', 'is_break': True},
+        {'name': 'Jam 4', 'start_time': '09:30', 'end_time': '10:15', 'is_break': False},
+        {'name': 'Jam 5', 'start_time': '10:15', 'end_time': '11:00', 'is_break': False},
+        {'name': 'Jam 6', 'start_time': '11:00', 'end_time': '11:45', 'is_break': False},
+        {'name': 'Istirahat 2', 'start_time': '11:45', 'end_time': '12:15', 'is_break': True},
+        {'name': 'Jam 7', 'start_time': '12:15', 'end_time': '13:00', 'is_break': False},
+        {'name': 'Jam 8', 'start_time': '13:00', 'end_time': '13:45', 'is_break': False},
+    ]
+    slots = settings.get('teaching_slots', default_slots)
     q = {'academic_year_id': ay['id']}
     if class_id: q['class_id'] = class_id
     if teacher_id: q['teacher_id'] = teacher_id
