@@ -11,8 +11,9 @@ import {
   Trophy,
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
-  Megaphone,
+  Megaphone, ChevronDown,
 } from 'lucide-react';
+import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,55 +29,57 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
 import { HelpCircle } from 'lucide-react';
 
-function navForRole(role, roles) {
-  const items = [
-    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
-  ];
-  const teacherRoles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
-  if (role === 'guru_piket') {
-    items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
-  }
-  if (teacherRoles.includes(role)) {
+/**
+ * Build sidebar items based ONLY on activeRole.
+ * STRICT: tiap role hanya menampilkan menu yang relevan dengan peran tersebut.
+ * Jika user punya banyak peran, dia harus switch role untuk akses menu peran lain.
+ */
+function navForRole(role, userRoles = []) {
+  const items = [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' }];
+
+  if (role === 'guru') {
     items.push({ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
-    if (role !== 'guru_piket') {
-      items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
-    }
-    if (role === 'guru' || role === 'wali_kelas') {
-      items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
-    }
-    // Teachers (incl wali kelas tabs etc) also see Data Prestasi to input their own
-    if (role !== 'wali_kelas') {
-      items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
-    }
-  }
-  if (role === 'tenaga_kependidikan') {
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
-  }
-  if (role === 'wali_kelas') {
+    items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
+    items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
+  } else if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
+    items.push({ to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' });
+    items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Kelas', icon: ClipboardEdit, testid: 'nav-wk-my-schedule' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' });
     items.push({ to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' });
-  }
-  if (role === 'guru_piket') {
+  } else if (role === 'guru_piket') {
+    items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket' });
-  }
-  if (role === 'guru_ekstrakurikuler') {
+    items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal Piket', icon: History, testid: 'nav-jurnal-history-piket' });
+  } else if (role === 'guru_bk') {
+    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' });
+    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' });
+  } else if (role === 'guru_tata_tertib') {
+    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' });
+    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' });
+  } else if (role === 'guru_ekstrakurikuler') {
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler Saya', icon: Sparkles, testid: 'nav-ekstra-coach' });
-  }
-  if (role === 'siswa') {
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });
+  } else if (role === 'tenaga_kependidikan') {
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
+  } else if (role === 'siswa') {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
-  }
-  if (role === 'admin') {
+  } else if (role === 'orang_tua') {
+    items.push({ to: '/dashboard', label: 'Anak Saya', icon: Users, testid: 'nav-ortu-anak' });
+  } else if (role === 'admin') {
     items.push({ to: '/admin/academic-year', label: 'Tahun Pelajaran', icon: GraduationCap, testid: 'nav-academic-year' });
+    items.push({ to: '/admin/kurikulum', label: 'Kurikulum', icon: BookOpen, testid: 'nav-curriculums' });
     items.push({ to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' });
     items.push({ to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' });
     items.push({ to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' });
@@ -104,36 +107,60 @@ function navForRole(role, roles) {
   return items;
 }
 
-function ActivePeriodCard({ ay }) {
-  if (!ay || !ay.name) {
+function ActivePeriodCard({ ctx, onClick }) {
+  if (!ctx || !ctx.year_name) {
     return (
       <div className="mx-3 mt-3 mb-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
         Belum ada Tahun Pelajaran aktif. Buat di menu Tahun Pelajaran.
       </div>
     );
   }
-  const activeSem = (ay.semesters || []).find((s) => s.is_active) || { label: '-', name: '-' };
+  const isOverride = ctx.is_override;
   return (
-    <div className="mx-3 mt-3 mb-1 rounded-xl bg-gradient-to-br from-[#006837] to-[#0B7A3B] p-3 text-white shadow-sm" data-testid="sidebar-active-period">
-      <div className="flex items-center gap-1.5">
-        <GraduationCap className="h-3.5 w-3.5 opacity-80" />
-        <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">Tahun Pelajaran Aktif</div>
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="sidebar-active-period"
+      className={`group mx-3 mt-3 mb-1 rounded-xl p-3 text-white shadow-sm w-[calc(100%-1.5rem)] text-left transition-all hover:shadow-md ${
+        isOverride
+          ? 'bg-gradient-to-br from-amber-600 to-amber-700 ring-2 ring-amber-300/50'
+          : 'bg-gradient-to-br from-[#006837] to-[#0B7A3B]'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <GraduationCap className="h-3.5 w-3.5 opacity-80" />
+          <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">
+            {isOverride ? 'Mode Lihat' : 'TP Aktif'}
+          </div>
+        </div>
+        <ChevronDown className="h-3 w-3 opacity-70 group-hover:opacity-100" />
       </div>
-      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight">{ay.name}</div>
+      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight mt-0.5">{ctx.year_name}</div>
+      {ctx.curriculum_name && (
+        <div className="text-[10px] mt-0.5 opacity-90 truncate" title={ctx.curriculum_name}>
+          {ctx.curriculum_name}
+        </div>
+      )}
       <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider opacity-80">Semester</span>
-        <Badge className="bg-amber-300/95 text-amber-900 border-0 capitalize text-[10px] font-bold px-2 py-0">
-          {activeSem.label || activeSem.name}
+        <Badge className={`border-0 capitalize text-[10px] font-bold px-2 py-0 ${
+          isOverride ? 'bg-amber-300/95 text-amber-900' : 'bg-amber-300/95 text-amber-900'
+        }`}>
+          {ctx.semester}
         </Badge>
       </div>
-    </div>
+      {isOverride && (
+        <div className="text-[9px] mt-1 italic opacity-90">Klik untuk ubah / reset</div>
+      )}
+    </button>
   );
 }
 
-function Sidebar({ items, current, onItemClick, activeAY }) {
+function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
   return (
     <div className="flex flex-col">
-      <ActivePeriodCard ay={activeAY} />
+      <ActivePeriodCard ctx={viewCtx} onClick={onTPClick} />
       <nav className="flex flex-col gap-1 px-3 py-3" data-testid="sidebar-nav">
         {items.map((it) => {
           const Icon = it.icon;
@@ -166,7 +193,8 @@ export default function AppShell({ children }) {
   const nav = useNavigate();
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeAY, setActiveAY] = useState(null);
+  const [viewCtx, setViewCtx] = useState(null);
+  const [vcDialogOpen, setVcDialogOpen] = useState(false);
   const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const items = navForRole(activeRole, user?.roles || []);
 
@@ -182,9 +210,13 @@ export default function AppShell({ children }) {
     }
   }, [user?.id]);
 
+  const refreshViewCtx = React.useCallback(() => {
+    api.get('/auth/view-context').then(({ data }) => setViewCtx(data)).catch(() => {});
+  }, []);
+
   useEffect(() => {
-    api.get('/academic-years/active').then(({ data }) => setActiveAY(data)).catch(() => {});
-  }, [activeRole]);
+    refreshViewCtx();
+  }, [activeRole, refreshViewCtx]);
 
   const handleLogout = async () => {
     await logout();
@@ -223,7 +255,7 @@ export default function AppShell({ children }) {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <Sidebar items={items} current={loc.pathname} activeAY={activeAY} />
+          <Sidebar items={items} current={loc.pathname} viewCtx={viewCtx} onTPClick={() => setVcDialogOpen(true)} />
         </div>
         <div className="p-3 border-t border-slate-100 text-xs text-slate-500">
           {schoolName}
@@ -257,7 +289,7 @@ export default function AppShell({ children }) {
                     </div>
                   </div>
                   <div className="overflow-y-auto h-[calc(100vh-90px)]">
-                    <Sidebar items={items} current={loc.pathname} onItemClick={() => setMobileOpen(false)} activeAY={activeAY} />
+                    <Sidebar items={items} current={loc.pathname} onItemClick={() => setMobileOpen(false)} viewCtx={viewCtx} onTPClick={() => { setVcDialogOpen(true); setMobileOpen(false); }} />
                   </div>
                 </SheetContent>
               </Sheet>
@@ -380,6 +412,13 @@ export default function AppShell({ children }) {
         message={user?.password_status?.message}
         onSuccess={() => refreshMe?.()}
         onDismiss={() => refreshMe?.()}
+      />
+
+      {/* View Context dialog (per-user TP/Semester override) */}
+      <ViewContextDialog
+        open={vcDialogOpen}
+        onOpenChange={setVcDialogOpen}
+        onUpdated={() => { refreshViewCtx(); refreshMe?.(); }}
       />
     </div>
   );

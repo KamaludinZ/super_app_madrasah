@@ -1,6 +1,6 @@
 """Authentication: captcha, login, role switch, me, logout, forgot/reset password."""
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -193,6 +193,90 @@ async def dismiss_password_reminder(request: Request, days: int = 30,
     await log_audit(user, 'dismiss_password_reminder', 'user', user['id'],
                     details={'snooze_days': days}, request=request)
     return {'message': f'Pengingat ditunda {days} hari.', 'dismissed_until': snooze_until}
+
+
+# ============================================================
+# VIEW CONTEXT (Per-user TP/Semester override)
+# ============================================================
+class ViewContextRequest(BaseModel):
+    academic_year_id: Optional[str] = None  # None = clear (ikut TP aktif global)
+    semester: Optional[str] = None  # None = ikut semester aktif global
+
+
+async def _resolve_view_context(user: Dict) -> Dict:
+    """Return effective view context: { academic_year_id, semester, year_name, semester_name, is_override, curriculum_name }.
+
+    Priority:
+    1. User override (view_academic_year_id, view_semester) if set
+    2. Active academic year + active semester
+    """
+    override_ay = user.get('view_academic_year_id')
+    override_sem = user.get('view_semester')
+    active_ay = await db.academic_years.find_one({'is_active': True}, {'_id': 0})
+
+    if override_ay:
+        ay = await db.academic_years.find_one({'id': override_ay}, {'_id': 0})
+        if not ay:
+            ay = active_ay
+            override_ay = None
+            override_sem = None
+    else:
+        ay = active_ay
+
+    if not ay:
+        return {'academic_year_id': None, 'semester': None, 'year_name': None,
+                'semester_name': None, 'is_override': False, 'curriculum_name': None,
+                'curriculum_id': None}
+
+    semester = override_sem or ay.get('active_semester')
+    curriculum_name = None
+    if ay.get('curriculum_id'):
+        c = await db.curriculums.find_one({'id': ay['curriculum_id']}, {'_id': 0, 'name': 1, 'code': 1})
+        curriculum_name = c.get('name') if c else None
+    return {
+        'academic_year_id': ay['id'],
+        'semester': semester,
+        'year_name': ay.get('name'),
+        'semester_name': semester,
+        'is_override': bool(override_ay or override_sem),
+        'is_active_global': not (override_ay or override_sem),
+        'curriculum_name': curriculum_name,
+        'curriculum_id': ay.get('curriculum_id'),
+        'available_semesters': [s.get('name') if isinstance(s, dict) else s
+                                for s in ay.get('semesters', [])] or (['ganjil', 'genap'] if ay.get('semester_type') == 'regular'
+                                                                       else ['1', '2', '3', '4', '5', '6']),
+    }
+
+
+@router.get("/auth/view-context")
+async def get_view_context(user: Dict = Depends(get_current_user)):
+    """Get current effective view context (TP + semester) for the logged-in user."""
+    ctx = await _resolve_view_context(user)
+    # Also include list of all TPs so frontend bisa tampilkan dropdown
+    all_ays = await db.academic_years.find({}, {'_id': 0}).sort('name', -1).to_list(50)
+    ctx['available_academic_years'] = [
+        {'id': a['id'], 'name': a.get('name'), 'is_active': a.get('is_active', False),
+         'semester_type': a.get('semester_type', 'regular'),
+         'semesters': [s.get('name') if isinstance(s, dict) else s for s in a.get('semesters', [])]}
+        for a in all_ays
+    ]
+    return ctx
+
+
+@router.put("/auth/view-context")
+async def set_view_context(req: ViewContextRequest, request: Request,
+                           user: Dict = Depends(get_current_user)):
+    """Set per-user view override (TP + semester). Pass null/empty to clear (back to active)."""
+    update = {
+        'view_academic_year_id': req.academic_year_id or None,
+        'view_semester': req.semester or None,
+    }
+    await db.users.update_one({'id': user['id']}, {'$set': update})
+    await log_audit(user, 'set_view_context', 'user', user['id'],
+                    details=update, request=request)
+    fresh = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
+    ctx = await _resolve_view_context(fresh)
+    return ctx
 
 
 class ForgotPasswordRequest(BaseModel):

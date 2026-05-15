@@ -79,6 +79,10 @@ class UserModel(BaseModel):
     # Password policy (suggest change at first login + every 6 months)
     password_changed_at: Optional[str] = None  # ISO datetime when user last changed password
     password_change_dismissed_until: Optional[str] = None  # snooze reminder until this ISO datetime
+    # Per-user view context (override aktif TP/semester untuk view data lampau, per user)
+    # Tidak mempengaruhi user lain dan tidak mengubah TP aktif global.
+    view_academic_year_id: Optional[str] = None  # None = ikut TP aktif global
+    view_semester: Optional[str] = None  # None = ikut semester aktif global
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
 
@@ -118,6 +122,10 @@ class ClassModel(BaseModel):
     room_id: Optional[str] = None
     capacity: int = 40  # Kapasitas maksimal siswa per kelas
     is_accelerated: bool = False  # kelas percepatan flag
+    # Phase E2 additions
+    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di kelas ini (boleh override TP)
+    semester: Optional[str] = None  # semester aktif untuk kelas ini (boleh beda dari TP utama)
+    token: Optional[str] = None  # token kelas unik (format: <name>-<year>-<rand4>)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

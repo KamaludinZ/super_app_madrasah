@@ -1,18 +1,50 @@
 [
   {
-    "content": "Backend (password policy, announcements, notifications, maintenance, Excel exports) — 21/21 PASS",
-    "status": "completed"
+    "content": "Backend: Models update (User.view_ay/semester, Class.token+curriculum_id+semester)",
+    "status": "in_progress"
   },
   {
-    "content": "Frontend semua komponen — DONE & TERVERIFIKASI lewat screenshot",
-    "status": "completed"
+    "content": "Backend: /auth/view-context GET+PUT",
+    "status": "pending"
   },
   {
-    "content": "Dokumentasi 9 file Markdown di /app/docs/",
-    "status": "completed"
+    "content": "Backend: Class token auto-generation + endpoint regenerate",
+    "status": "pending"
   },
   {
-    "content": "Regression test Iterasi 1 — 60/60 PASS (100%) setelah semua refactor + fitur baru",
-    "status": "completed"
+    "content": "Backend: Schedule conflict check (guru + ruang) + endpoint conflict-check",
+    "status": "pending"
+  },
+  {
+    "content": "Backend: Jurnal validate-by-class-token + by-class-token endpoints (fallback scan QR)",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: AdminCurriculumsPage /admin/kurikulum",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: AdminClassesPage tambah token + curriculum + semester columns",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: navForRole STRICT activeRole only (fix wali kelas masih lihat menu guru)",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: Sidebar TP card clickable + show kurikulum name + ViewContextDialog",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: JurnalScanPage fix camera + tab token manual",
+    "status": "pending"
+  },
+  {
+    "content": "Frontend: AdminSchedulesPage tampilkan nama guru+mapel di cell + color coding (kuning/hijau/biru)",
+    "status": "pending"
+  },
+  {
+    "content": "Testing: regression + endpoint baru",
+    "status": "pending"
   }
 ]

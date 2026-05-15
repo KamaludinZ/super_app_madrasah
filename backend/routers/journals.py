@@ -15,7 +15,9 @@ from core import (
     serialize_doc,
 )
 from journal_core import (
+    current_day_id,
     decrypt_qr_payload,
+    now_wib,
     validate_dynamic_qr,
     validate_gps,
     validate_schedule,
@@ -135,6 +137,154 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
     await log_audit(user, 'create', 'journal', journal.id,
                     details={'class_id': sched['class_id'], 'subject_id': sched['subject_id']}, request=request)
     return serialize_doc(doc)
+
+
+# ============================================================
+# CLASS TOKEN FALLBACK (alternatif scan QR)
+# ============================================================
+import uuid
+from pydantic import BaseModel
+
+
+async def _validate_by_class_token(class_token: str, user_lat, user_lon, teacher_id: str) -> Dict:
+    """Validate journal context using class TOKEN (not QR token).
+    Fallback ketika kamera gagal — guru input token kelas manual.
+    """
+    settings = await get_settings()
+    result = {
+        'overall_valid': False,
+        'qr': {'valid': True, 'reason': 'Mode token kelas (bukan QR)', 'mode': 'class_token'},
+        'schedule': {'valid': False, 'reason': 'Belum diperiksa'},
+        'gps': {'valid': False, 'reason': 'Belum diperiksa'},
+        'context': {},
+    }
+    cls = await db.classes.find_one({'token': class_token}, {'_id': 0})
+    if not cls:
+        result['qr'] = {'valid': False, 'reason': 'Token kelas tidak ditemukan'}
+        return result
+    room_id = cls.get('room_id')
+    if not room_id:
+        result['qr'] = {'valid': False, 'reason': 'Kelas belum punya ruang utama. Hubungi admin.'}
+        return result
+    room = await db.rooms.find_one({'id': room_id}, {'_id': 0})
+    if not room:
+        result['qr'] = {'valid': False, 'reason': 'Ruangan tidak ditemukan'}
+        return result
+
+    ay = await get_active_academic_year()
+    if not ay:
+        result['schedule'] = {'valid': False, 'reason': 'Tidak ada tahun pelajaran aktif'}
+        return result
+    schedules = await db.schedules.find({
+        'academic_year_id': ay['id'], 'teacher_id': teacher_id, 'class_id': cls['id'],
+    }, {'_id': 0}).to_list(100)
+    for s in schedules:
+        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
+        if sub:
+            s['subject_name'] = sub.get('name')
+    grace = settings.get('grace_minutes', 15)
+    now = now_wib()
+    cur_day_id = current_day_id()
+    matched = None
+    from datetime import timedelta as _td
+    for s in schedules:
+        if s.get('day') != cur_day_id:
+            continue
+        try:
+            sh, sm = map(int, s['start_time'].split(':'))
+            eh, em = map(int, s['end_time'].split(':'))
+            start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            end_dt = now.replace(hour=eh, minute=em, second=0, microsecond=0)
+            if (start_dt - _td(minutes=grace)) <= now <= (end_dt + _td(minutes=grace)):
+                matched = s
+                break
+        except Exception:
+            continue
+    if not matched:
+        result['schedule'] = {'valid': False,
+                              'reason': f'Tidak ada jadwal Anda di kelas ini saat ini (toleransi \u00b1{grace}m)'}
+        return result
+    result['schedule'] = {
+        'valid': True, 'reason': 'Jadwal cocok',
+        'schedule': serialize_doc(matched),
+        'start_time': matched.get('start_time'),
+        'end_time': matched.get('end_time'),
+    }
+
+    gps_enabled = room.get('gps_enabled', settings.get('gps_default_enabled', True))
+    radius = room.get('gps_radius_meters', settings.get('gps_default_radius', 20))
+    from journal_core import validate_gps
+    gps_result = validate_gps(user_lat, user_lon, room.get('gps_lat'), room.get('gps_lon'),
+                              radius, gps_enabled=gps_enabled)
+    result['gps'] = gps_result
+    if not gps_result['valid']:
+        return result
+
+    result['overall_valid'] = True
+    result['context'] = {
+        'room': serialize_doc(room), 'class': serialize_doc(cls),
+        'schedule': serialize_doc(matched),
+        'start_time': matched.get('start_time'), 'end_time': matched.get('end_time'),
+    }
+    return result
+
+
+class ClassTokenValidateRequest(BaseModel):
+    class_token: str
+    user_lat: Optional[float] = None
+    user_lon: Optional[float] = None
+
+
+class ClassTokenJournalRequest(BaseModel):
+    class_token: str
+    user_lat: Optional[float] = None
+    user_lon: Optional[float] = None
+    materi: str
+    catatan: Optional[str] = None
+    siswa_hadir: int = 0
+    siswa_tidak_hadir: int = 0
+    siswa_izin: int = 0
+    siswa_sakit: int = 0
+
+
+@router.post("/jurnal/validate-by-class-token")
+async def validate_by_class_token(req: ClassTokenValidateRequest, user: Dict = Depends(get_current_user)):
+    return await _validate_by_class_token(req.class_token, req.user_lat, req.user_lon, user['id'])
+
+
+@router.post("/jurnal/by-class-token")
+async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: Request,
+                                        user: Dict = Depends(get_current_user)):
+    validation = await _validate_by_class_token(req.class_token, req.user_lat, req.user_lon, user['id'])
+    if not validation['overall_valid']:
+        raise HTTPException(status_code=400, detail={'message': 'Validasi gagal', 'validation': validation})
+    sched = validation['context']['schedule']
+    room = validation['context']['room']
+    ay = await get_active_academic_year()
+    existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
+    if existing:
+        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+    j_id = str(uuid.uuid4())
+    doc = {
+        'id': j_id, 'schedule_id': sched['id'], 'teacher_id': user['id'],
+        'class_id': sched['class_id'], 'subject_id': sched['subject_id'],
+        'room_id': room['id'], 'academic_year_id': ay['id'] if ay else sched.get('academic_year_id'),
+        'semester': sched.get('semester', 'ganjil'),
+        'materi': req.materi, 'catatan': req.catatan,
+        'siswa_hadir': req.siswa_hadir, 'siswa_tidak_hadir': req.siswa_tidak_hadir,
+        'siswa_izin': req.siswa_izin, 'siswa_sakit': req.siswa_sakit,
+        'started_at': now_wib().isoformat(),
+        'scheduled_start': validation['context'].get('start_time'),
+        'scheduled_end': validation['context'].get('end_time'),
+        'validations': validation, 'qr_mode': 'class_token',
+        'created_at': now_wib().isoformat(),
+    }
+    await db.journals.insert_one(doc)
+    await log_audit(user, 'create', 'journal', j_id,
+                    details={'class_id': sched['class_id'], 'subject_id': sched['subject_id'], 'method': 'class_token'},
+                    request=request)
+    return serialize_doc(doc)
+
 
 
 @router.get("/jurnal/my")

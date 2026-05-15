@@ -1,8 +1,8 @@
-"""Schedules: CRUD + workflow (draft/submit/lock/unlock) + grid + my-today + Excel import + Piket schedules CRUD."""
+"""Schedules: CRUD + workflow (draft/submit/lock/unlock) + grid + my-today + Excel import + Piket schedules CRUD + Conflict detection."""
 import io
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -20,6 +20,116 @@ from journal_core import current_day_id, now_wib
 from models import ScheduleModel
 
 router = APIRouter()
+
+
+# ============================================================
+# CONFLICT DETECTION (Phase 6)
+# ============================================================
+def _times_overlap(start_a: str, end_a: str, start_b: str, end_b: str) -> bool:
+    """Two HH:MM ranges overlap? Inclusive boundary touches are NOT considered overlap.
+    Example: 07:00-07:45 vs 07:45-08:30 = no overlap.
+    """
+    try:
+        return start_a < end_b and start_b < end_a
+    except Exception:
+        return False
+
+
+async def _find_conflicts(
+    academic_year_id: str,
+    day: str,
+    start_time: str,
+    end_time: str,
+    teacher_id: Optional[str] = None,
+    room_id: Optional[str] = None,
+    class_id: Optional[str] = None,
+    exclude_id: Optional[str] = None,
+) -> Dict[str, List[Dict]]:
+    """Find conflicts grouped by type. Returns:
+    { 'teacher': [...], 'room': [...], 'class': [...] }
+    Each entry includes: id, day, start_time, end_time, teacher_name, subject_name,
+    class_name, room_name, status (draft/submitted/locked).
+    """
+    q = {'academic_year_id': academic_year_id, 'day': day}
+    if exclude_id:
+        q['id'] = {'$ne': exclude_id}
+    candidates = await db.schedules.find(q, {'_id': 0}).to_list(500)
+    overlapping = [s for s in candidates if _times_overlap(start_time, end_time,
+                                                            s.get('start_time', ''),
+                                                            s.get('end_time', ''))]
+
+    async def _enrich(s):
+        out = dict(s)
+        if s.get('teacher_id'):
+            t = await db.users.find_one({'id': s['teacher_id']}, {'_id': 0, 'full_name': 1})
+            out['teacher_name'] = t.get('full_name') if t else None
+        if s.get('subject_id'):
+            sub = await db.subjects.find_one({'id': s['subject_id']}, {'_id': 0, 'name': 1, 'code': 1})
+            if sub:
+                out['subject_name'] = sub.get('name')
+                out['subject_code'] = sub.get('code')
+        if s.get('class_id'):
+            cls = await db.classes.find_one({'id': s['class_id']}, {'_id': 0, 'name': 1})
+            out['class_name'] = cls.get('name') if cls else None
+        if s.get('room_id'):
+            r = await db.rooms.find_one({'id': s['room_id']}, {'_id': 0, 'name': 1})
+            out['room_name'] = r.get('name') if r else None
+        return serialize_doc(out)
+
+    result = {'teacher': [], 'room': [], 'class': []}
+    for s in overlapping:
+        enriched = await _enrich(s)
+        if teacher_id and s.get('teacher_id') == teacher_id:
+            result['teacher'].append(enriched)
+        if room_id and s.get('room_id') == room_id:
+            result['room'].append(enriched)
+        if class_id and s.get('class_id') == class_id:
+            result['class'].append(enriched)
+    return result
+
+
+def _conflict_message(conflicts: Dict[str, List[Dict]]) -> str:
+    parts = []
+    for c in conflicts.get('teacher', []):
+        parts.append(f"Guru '{c.get('teacher_name', '-')}' sudah ada di {c.get('class_name', '-')} "
+                     f"({c.get('subject_name', '-')}) {c.get('start_time')}-{c.get('end_time')} [{c.get('status', '-')}]")
+    for c in conflicts.get('room', []):
+        parts.append(f"Ruang '{c.get('room_name', '-')}' sudah dipakai {c.get('teacher_name', '-')} "
+                     f"({c.get('class_name', '-')}) {c.get('start_time')}-{c.get('end_time')} [{c.get('status', '-')}]")
+    return ' | '.join(parts) if parts else ''
+
+
+@router.get("/schedules/conflict-check")
+async def schedules_conflict_check(
+    day: str, start_time: str, end_time: str,
+    academic_year_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    room_id: Optional[str] = None,
+    class_id: Optional[str] = None,
+    exclude_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Cek konflik jadwal: bentrok guru / ruang / kelas pada hari & jam tertentu.
+
+    Returns: { has_conflict: bool, teacher: [...], room: [...], class: [...], message: str }
+    """
+    ay_id = academic_year_id
+    if not ay_id:
+        ay = await get_active_academic_year()
+        if not ay:
+            return {'has_conflict': False, 'teacher': [], 'room': [], 'class': [], 'message': ''}
+        ay_id = ay['id']
+    conflicts = await _find_conflicts(ay_id, day, start_time, end_time,
+                                       teacher_id=teacher_id, room_id=room_id, class_id=class_id,
+                                       exclude_id=exclude_id)
+    has = bool(conflicts['teacher'] or conflicts['room'])  # only guru + ruang BLOCK
+    return {
+        'has_conflict': has,
+        'teacher': conflicts['teacher'],
+        'room': conflicts['room'],
+        'class': conflicts['class'],  # informational only
+        'message': _conflict_message(conflicts),
+    }
 
 
 # ============================================================
@@ -58,7 +168,10 @@ async def list_schedules(
 
 @router.post("/schedules")
 async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
-    """Create schedule. Admin can create for any teacher. Guru/wali_kelas can create their OWN schedule (status: draft)."""
+    """Create schedule. Admin can create for any teacher. Guru/wali_kelas can create their OWN schedule (status: draft).
+
+    Phase 6: blocks creation if guru/ruang bentrok (kecuali admin force=true).
+    """
     is_admin = 'admin' in user.get('roles', [])
     teacher_id = payload.get('teacher_id')
     is_self_assign = teacher_id == user['id']
@@ -66,6 +179,28 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
     if not is_admin:
         if not (can_self and is_self_assign):
             raise HTTPException(403, "Hanya admin yang bisa menambahkan jadwal orang lain")
+
+    # Conflict detection (Phase 6: guru + ruang)
+    ay_id = payload.get('academic_year_id')
+    if not ay_id:
+        ay = await get_active_academic_year()
+        ay_id = ay['id'] if ay else None
+        payload['academic_year_id'] = ay_id
+    force = payload.pop('force', False)
+    if ay_id and payload.get('day') and payload.get('start_time') and payload.get('end_time'):
+        conflicts = await _find_conflicts(
+            ay_id, payload['day'], payload['start_time'], payload['end_time'],
+            teacher_id=payload.get('teacher_id'),
+            room_id=payload.get('room_id'),
+            class_id=payload.get('class_id'),
+        )
+        blocking = conflicts['teacher'] + conflicts['room']
+        if blocking and not (is_admin and force):
+            raise HTTPException(status_code=409, detail={
+                'message': f"Bentrok jadwal: {_conflict_message(conflicts)}",
+                'conflicts': conflicts,
+            })
+
     payload.setdefault('status', 'submitted' if is_admin else 'draft')
     payload['created_by'] = user['id']
     sched = ScheduleModel(**payload)
@@ -318,7 +453,10 @@ async def submit_schedule(sid: str, request: Request, user: Dict = Depends(get_c
 
 @router.put("/schedules/{sid}/lock")
 async def lock_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
-    """Lock jadwal. Admin bisa kunci semua. Wali kelas bisa kunci jadwal di kelasnya saja."""
+    """Lock jadwal. Admin bisa kunci semua. Wali kelas bisa kunci jadwal di kelasnya saja.
+
+    Phase 6: tolak lock kalau ada konflik guru/ruang (kecuali admin force=true via query).
+    """
     sch = await db.schedules.find_one({'id': sid})
     if not sch:
         raise HTTPException(404, "Tidak ditemukan")
@@ -330,6 +468,21 @@ async def lock_schedule(sid: str, request: Request, user: Dict = Depends(get_cur
         can_lock = cls and cls.get('homeroom_teacher_id') == user['id']
     if not can_lock:
         raise HTTPException(403, "Tidak diizinkan mengunci jadwal ini")
+
+    # Conflict re-check (final guard before locking)
+    force = request.query_params.get('force', '').lower() in ('true', '1', 'yes') if request else False
+    conflicts = await _find_conflicts(
+        sch.get('academic_year_id'), sch.get('day'), sch.get('start_time'), sch.get('end_time'),
+        teacher_id=sch.get('teacher_id'), room_id=sch.get('room_id'),
+        class_id=sch.get('class_id'), exclude_id=sid,
+    )
+    blocking = conflicts['teacher'] + conflicts['room']
+    if blocking and not (is_admin and force):
+        raise HTTPException(status_code=409, detail={
+            'message': f"Tidak bisa lock: {_conflict_message(conflicts)}",
+            'conflicts': conflicts,
+        })
+
     locked_by_role = 'admin' if is_admin else 'wali_kelas'
     await db.schedules.update_one({'id': sid}, {'$set': {
         'status': 'locked',
