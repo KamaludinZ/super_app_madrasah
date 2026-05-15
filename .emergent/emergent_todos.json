@@ -1,50 +1,50 @@
 [
   {
-    "content": "Backend: Models update (User.view_ay/semester, Class.token+curriculum_id+semester)",
-    "status": "in_progress"
+    "content": "Backend: Models update (User.view_ay/semester, Class.token+curriculum_id+semester) — DONE",
+    "status": "completed"
   },
   {
-    "content": "Backend: /auth/view-context GET+PUT",
-    "status": "pending"
+    "content": "Backend: /auth/view-context GET+PUT — DONE",
+    "status": "completed"
   },
   {
-    "content": "Backend: Class token auto-generation + endpoint regenerate",
-    "status": "pending"
+    "content": "Backend: Class token auto-generation + regenerate + backfill — DONE",
+    "status": "completed"
   },
   {
-    "content": "Backend: Schedule conflict check (guru + ruang) + endpoint conflict-check",
-    "status": "pending"
+    "content": "Backend: Schedule conflict check (guru + ruang) + endpoint conflict-check — DONE",
+    "status": "completed"
   },
   {
-    "content": "Backend: Jurnal validate-by-class-token + by-class-token endpoints (fallback scan QR)",
-    "status": "pending"
+    "content": "Backend: Jurnal validate-by-class-token + by-class-token endpoints — DONE",
+    "status": "completed"
   },
   {
-    "content": "Frontend: AdminCurriculumsPage /admin/kurikulum",
-    "status": "pending"
+    "content": "Frontend: AdminCurriculumsPage /admin/kurikulum — DONE",
+    "status": "completed"
   },
   {
-    "content": "Frontend: AdminClassesPage tambah token + curriculum + semester columns",
-    "status": "pending"
+    "content": "Frontend: AdminClassesPage token + curriculum + semester columns — DONE & TERVERIFIKASI",
+    "status": "completed"
   },
   {
-    "content": "Frontend: navForRole STRICT activeRole only (fix wali kelas masih lihat menu guru)",
-    "status": "pending"
+    "content": "Frontend: navForRole STRICT activeRole only (wali_kelas tidak lihat menu guru) — DONE & TERVERIFIKASI",
+    "status": "completed"
   },
   {
-    "content": "Frontend: Sidebar TP card clickable + show kurikulum name + ViewContextDialog",
-    "status": "pending"
+    "content": "Frontend: Sidebar TP card clickable + curriculum + ViewContextDialog — DONE & TERVERIFIKASI",
+    "status": "completed"
   },
   {
-    "content": "Frontend: JurnalScanPage fix camera + tab token manual",
-    "status": "pending"
+    "content": "Frontend: JurnalScanPage fix camera (useEffect timing) + tab Token QR + tab Token Kelas — DONE",
+    "status": "completed"
   },
   {
-    "content": "Frontend: AdminSchedulesPage tampilkan nama guru+mapel di cell + color coding (kuning/hijau/biru)",
-    "status": "pending"
+    "content": "Frontend: AdminSchedulesPage nama guru+mapel di cell + color coding (kuning/hijau/biru) — DONE & TERVERIFIKASI",
+    "status": "completed"
   },
   {
-    "content": "Testing: regression + endpoint baru",
-    "status": "pending"
+    "content": "Testing: Iterasi 1 60/60 + Phase 6 smoke 13/13 PASS",
+    "status": "completed"
   }
 ]

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Copy, RefreshCw, KeyRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,41 +15,105 @@ export default function AdminClassesPage() {
   const [items, setItems] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [curriculums, setCurriculums] = useState([]);
   const [activeAY, setActiveAY] = useState(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', grade: 7, parallel: 'A', academic_year_id: '', homeroom_teacher_id: '', room_id: '', capacity: 40 });
+  const [form, setForm] = useState({
+    name: '', grade: 7, parallel: 'A', academic_year_id: '',
+    homeroom_teacher_id: '', room_id: '', capacity: 40,
+    curriculum_id: '', semester: '',
+  });
 
   const refresh = async () => {
     const { data } = await api.get('/classes');
     setItems(data);
   };
+
   useEffect(() => {
     (async () => {
       const ay = await api.get('/academic-years/active');
       setActiveAY(ay.data);
-      const [c, r, u] = await Promise.all([api.get('/classes'), api.get('/rooms'), api.get('/users')]);
-      setItems(c.data); setRooms(r.data);
+      const [c, r, u, cur] = await Promise.all([
+        api.get('/classes'), api.get('/rooms'), api.get('/users'), api.get('/curriculums'),
+      ]);
+      setItems(c.data); setRooms(r.data); setCurriculums(cur.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas'].includes(rr))));
     })();
   }, []);
 
-  const openCreate = () => { setEditing(null); setForm({ name: '', grade: 7, parallel: 'A', academic_year_id: activeAY?.id, homeroom_teacher_id: '', room_id: '', capacity: 40 }); setOpen(true); };
-  const openEdit = (c) => { setEditing(c); setForm({ ...c, homeroom_teacher_id: c.homeroom_teacher_id || '', room_id: c.room_id || '', capacity: c.capacity || 40 }); setOpen(true); };
+  const openCreate = () => {
+    setEditing(null);
+    setForm({
+      name: '', grade: 7, parallel: 'A',
+      academic_year_id: activeAY?.id || '',
+      homeroom_teacher_id: '', room_id: '', capacity: 40,
+      curriculum_id: activeAY?.curriculum_id || '',
+      semester: activeAY?.active_semester || '',
+    });
+    setOpen(true);
+  };
+
+  const openEdit = (c) => {
+    setEditing(c);
+    setForm({
+      ...c,
+      homeroom_teacher_id: c.homeroom_teacher_id || '',
+      room_id: c.room_id || '',
+      capacity: c.capacity || 40,
+      curriculum_id: c.curriculum_id || '',
+      semester: c.semester || c.effective_semester || '',
+    });
+    setOpen(true);
+  };
+
   const handleSubmit = async () => {
     if (!form.name || !form.academic_year_id) { toast.error('Nama dan Tahun Pelajaran wajib'); return; }
     try {
-      const payload = { ...form, homeroom_teacher_id: form.homeroom_teacher_id || null, room_id: form.room_id || null, capacity: parseInt(form.capacity) || 40 };
+      const payload = {
+        ...form,
+        homeroom_teacher_id: form.homeroom_teacher_id || null,
+        room_id: form.room_id || null,
+        curriculum_id: form.curriculum_id || null,
+        semester: form.semester || null,
+        capacity: parseInt(form.capacity) || 40,
+      };
       if (editing) await api.put(`/classes/${editing.id}`, payload);
       else await api.post('/classes', payload);
       toast.success('Berhasil disimpan');
       setOpen(false); refresh();
     } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
+
   const handleDelete = async (c) => {
     if (!window.confirm(`Hapus kelas ${c.name}?`)) return;
     await api.delete(`/classes/${c.id}`); toast.success('Dihapus'); refresh();
   };
+
+  const handleCopy = (token, name) => {
+    navigator.clipboard.writeText(token);
+    toast.success(`Token kelas ${name} disalin ke clipboard`);
+  };
+
+  const handleRegenerate = async (c) => {
+    if (!window.confirm(`Generate ulang token kelas ${c.name}? Token lama tidak berlaku lagi.`)) return;
+    try {
+      const { data } = await api.post(`/classes/${c.id}/regenerate-token`);
+      toast.success(`Token baru: ${data.token}`);
+      refresh();
+    } catch (e) { toast.error('Gagal'); }
+  };
+
+  const handleBackfill = async () => {
+    if (!window.confirm('Generate token untuk semua kelas yang belum punya?')) return;
+    try {
+      const { data } = await api.post('/classes/backfill-tokens');
+      toast.success(`${data.updated} token dibuat`);
+      refresh();
+    } catch (e) { toast.error('Gagal'); }
+  };
+
+  const missingToken = items.filter((i) => !i.token).length;
 
   return (
     <div className="space-y-6">
@@ -59,10 +123,28 @@ export default function AdminClassesPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Kelola Kelas</h1>
           <p className="text-sm text-slate-600 mt-1">{items.length} kelas • TP {activeAY?.name || '-'}</p>
         </div>
-        <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-class-button"><Plus className="h-4 w-4" /> Tambah Kelas</Button>
+        <div className="flex gap-2">
+          {missingToken > 0 && (
+            <Button onClick={handleBackfill} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50" data-testid="btn-backfill-tokens">
+              <KeyRound className="h-4 w-4" /> Generate {missingToken} Token
+            </Button>
+          )}
+          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-class-button"><Plus className="h-4 w-4" /> Tambah Kelas</Button>
+        </div>
       </div>
+
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-classes-table">
-        <TableHeader><TableRow><TableHead>Nama</TableHead><TableHead>Tingkat</TableHead><TableHead>Peserta</TableHead><TableHead>Wali Kelas</TableHead><TableHead>Ruang</TableHead><TableHead className="text-right">Aksi</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow>
+          <TableHead>Nama</TableHead>
+          <TableHead>Tingkat</TableHead>
+          <TableHead>Peserta</TableHead>
+          <TableHead>Kurikulum</TableHead>
+          <TableHead>Semester</TableHead>
+          <TableHead>Wali Kelas</TableHead>
+          <TableHead>Ruang</TableHead>
+          <TableHead>Token</TableHead>
+          <TableHead className="text-right">Aksi</TableHead>
+        </TableRow></TableHeader>
         <TableBody>
           {items.map((c) => {
             const cap = c.capacity || 40;
@@ -83,8 +165,37 @@ export default function AdminClassesPage() {
                     </div>
                   </div>
                 </TableCell>
+                <TableCell className="text-xs">
+                  {c.curriculum_name ? (
+                    <span title={c.curriculum_name}>
+                      <Badge variant="outline" className="font-mono text-[10px]">{c.curriculum_code || '?'}</Badge>
+                    </span>
+                  ) : <span className="text-slate-400">-</span>}
+                </TableCell>
+                <TableCell className="text-xs capitalize">
+                  {c.effective_semester ? (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 capitalize">{c.effective_semester}</Badge>
+                  ) : <span className="text-slate-400">-</span>}
+                </TableCell>
                 <TableCell className="text-sm">{c.homeroom_teacher_name || teachers.find((t) => t.id === c.homeroom_teacher_id)?.full_name || '-'}</TableCell>
                 <TableCell className="text-sm font-mono">{c.room_name || rooms.find((r) => r.id === c.room_id)?.name || '-'}</TableCell>
+                <TableCell data-testid={`class-token-${c.name}`}>
+                  {c.token ? (
+                    <div className="flex items-center gap-1">
+                      <code className="text-[11px] bg-emerald-50 text-emerald-900 border border-emerald-200 px-1.5 py-0.5 rounded font-mono">
+                        {c.token}
+                      </code>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleCopy(c.token, c.name)} title="Copy">
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleRegenerate(c)} title="Regenerate">
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-amber-700 italic">Belum ada</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => handleDelete(c)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
@@ -96,7 +207,7 @@ export default function AdminClassesPage() {
       </Table></div></CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>{editing ? 'Edit Kelas' : 'Tambah Kelas'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
@@ -104,10 +215,34 @@ export default function AdminClassesPage() {
               <div><Label>Paralel</Label><Input value={form.parallel} onChange={(e) => setForm({...form, parallel: e.target.value.toUpperCase()})} /></div>
               <div><Label>Nama</Label><Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="7A" data-testid="class-form-name" /></div>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Kapasitas</Label>
+                <Input type="number" min="1" max="60" value={form.capacity} onChange={(e) => setForm({...form, capacity: e.target.value})} placeholder="40" data-testid="class-form-capacity" />
+              </div>
+              <div>
+                <Label>Semester Aktif</Label>
+                <Select value={form.semester || ''} onValueChange={(v) => setForm({...form, semester: v})}>
+                  <SelectTrigger data-testid="class-form-semester"><SelectValue placeholder="ganjil/genap" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ganjil">Ganjil</SelectItem>
+                    <SelectItem value="genap">Genap</SelectItem>
+                    <SelectItem value="1">Semester 1 (Percepatan)</SelectItem>
+                    <SelectItem value="2">Semester 2 (Percepatan)</SelectItem>
+                    <SelectItem value="3">Semester 3 (Percepatan)</SelectItem>
+                    <SelectItem value="4">Semester 4 (Percepatan)</SelectItem>
+                    <SelectItem value="5">Semester 5 (Percepatan)</SelectItem>
+                    <SelectItem value="6">Semester 6 (Percepatan)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div>
-              <Label>Kapasitas Maksimal Siswa</Label>
-              <Input type="number" min="1" max="60" value={form.capacity} onChange={(e) => setForm({...form, capacity: e.target.value})} placeholder="40" data-testid="class-form-capacity" />
-              <p className="text-xs text-slate-500 mt-1">Default 40 siswa per rombongan belajar</p>
+              <Label>Kurikulum</Label>
+              <Select value={form.curriculum_id || ''} onValueChange={(v) => setForm({...form, curriculum_id: v})}>
+                <SelectTrigger data-testid="class-form-curriculum"><SelectValue placeholder="Pilih kurikulum (ikut TP jika kosong)" /></SelectTrigger>
+                <SelectContent>{curriculums.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>)}</SelectContent>
+              </Select>
             </div>
             <div><Label>Wali Kelas</Label>
               <Select value={form.homeroom_teacher_id || ''} onValueChange={(v) => setForm({...form, homeroom_teacher_id: v})}>

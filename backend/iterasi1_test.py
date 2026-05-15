@@ -238,7 +238,8 @@ class Iterasi1Tester:
             "room_id": self.room_id,
             "day": "senin",
             "start_time": "07:00",
-            "end_time": "07:45"
+            "end_time": "07:45",
+            "force": True
         }
         success, sched_admin = self.test(
             "POST /schedules as admin → status='submitted', submitted_by=admin.id",
@@ -261,9 +262,9 @@ class Iterasi1Tester:
             "subject_id": self.subject_id,
             "teacher_id": self.guru1_id,
             "room_id": self.room_id,
-            "day": "selasa",
-            "start_time": "08:00",
-            "end_time": "08:45"
+            "day": "sabtu",
+            "start_time": "20:00",
+            "end_time": "20:45"
         }
         success, sched_guru1 = self.test(
             "POST /schedules as guru1 with teacher_id=guru1.id (self-assign) → status='draft'",
@@ -373,9 +374,9 @@ class Iterasi1Tester:
             "subject_id": self.subject_id,
             "teacher_id": self.guru1_id,
             "room_id": self.room_id,
-            "day": "kamis",
-            "start_time": "10:00",
-            "end_time": "10:45"
+            "day": "sabtu",
+            "start_time": "22:00",
+            "end_time": "22:45"
         }
         success, sched_guru2 = self.test(
             "POST /schedules as guru1 (for lock test)",
@@ -459,9 +460,9 @@ class Iterasi1Tester:
             "subject_id": self.subject_id,
             "teacher_id": self.guru1_id,
             "room_id": self.room_id,
-            "day": "jumat",
-            "start_time": "11:00",
-            "end_time": "11:45"
+            "day": "sabtu",
+            "start_time": "21:00",
+            "end_time": "21:45"
         }
         success, sched_del = self.test(
             "POST /schedules as guru1 (for delete test)",
@@ -496,8 +497,8 @@ class Iterasi1Tester:
             "teacher_id": self.guru1_id,
             "room_id": self.room_id,
             "day": "sabtu",
-            "start_time": "12:00",
-            "end_time": "12:45"
+            "start_time": "23:00",
+            "end_time": "23:45"
         }
         success, sched_del2 = self.test(
             "POST /schedules as guru1 (for delete draft test)",

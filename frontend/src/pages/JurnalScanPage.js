@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Html5Qrcode } from 'html5-qrcode';
-import { ScanLine, MapPin, CheckCircle2, XCircle, Loader2, Camera, ArrowLeft, ShieldCheck, Clock, Send, RotateCw, AlertCircle } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ScanLine, MapPin, CheckCircle2, XCircle, Loader2, Camera, ArrowLeft, ShieldCheck, Clock, Send, RotateCw, AlertCircle, KeyRound, Hash } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,8 @@ export default function JurnalScanPage() {
     siswa_hadir: 0, siswa_tidak_hadir: 0, siswa_izin: 0, siswa_sakit: 0,
   });
   const [manualToken, setManualToken] = useState('');
+  const [classToken, setClassToken] = useState('');
+  const [scanMode, setScanMode] = useState('qr'); // qr | class_token
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState(null);
 
@@ -39,35 +42,78 @@ export default function JurnalScanPage() {
     );
   }, []);
 
-  const startScanner = useCallback(async () => {
+  // FIX: Start scanner AFTER DOM is ready (phase=='scanning' renders the div)
+  // Previously the constructor was called BEFORE the div was rendered, causing failure.
+  useEffect(() => {
+    let active = true;
+    if (phase !== 'scanning') return;
+
+    const initScanner = async () => {
+      setError(null);
+      try {
+        // Wait a tick for DOM
+        await new Promise((r) => setTimeout(r, 50));
+        if (!active) return;
+        const el = document.getElementById('qr-reader');
+        if (!el) {
+          setError('Elemen kamera tidak ditemukan');
+          setPhase('idle');
+          return;
+        }
+        const html5 = new Html5Qrcode('qr-reader', { verbose: false });
+        scannerRef.current = html5;
+        await html5.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decoded) => {
+            html5.stop().then(() => {
+              scannerRef.current = null;
+              setCameraReady(false);
+              handleQrDecoded(decoded);
+            }).catch(() => handleQrDecoded(decoded));
+          },
+          () => {}
+        );
+        if (active) setCameraReady(true);
+      } catch (e) {
+        if (!active) return;
+        setCameraReady(false);
+        const msg = e?.message || String(e);
+        let userMsg = 'Tidak dapat mengakses kamera.';
+        if (msg.includes('Permission') || msg.includes('NotAllowed')) {
+          userMsg = 'Izin kamera ditolak. Mohon izinkan akses kamera lalu coba lagi.';
+        } else if (msg.includes('NotFound') || msg.includes('No camera')) {
+          userMsg = 'Perangkat ini tidak memiliki kamera. Gunakan opsi Token Manual.';
+        } else if (msg.includes('NotReadable')) {
+          userMsg = 'Kamera sedang dipakai aplikasi lain.';
+        } else if (msg.includes('OverconstrainedError')) {
+          userMsg = 'Spesifikasi kamera tidak terpenuhi.';
+        } else if (msg.includes('SecurityError')) {
+          userMsg = 'Browser butuh HTTPS untuk akses kamera.';
+        }
+        setError(userMsg + ' Sebagai alternatif, gunakan Token QR / Token Kelas manual.');
+        setPhase('idle');
+      }
+    };
+
+    initScanner();
+    return () => {
+      active = false;
+      if (scannerRef.current) {
+        try { scannerRef.current.stop().catch(() => {}); } catch (_e) { /* noop */ }
+        scannerRef.current = null;
+      }
+    };
+  }, [phase]);
+
+  const startScanner = useCallback(() => {
     setError(null);
     setPhase('scanning');
-    try {
-      const html5 = new Html5Qrcode('qr-reader');
-      scannerRef.current = html5;
-      await html5.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decoded) => {
-          html5.stop().then(() => {
-            scannerRef.current = null;
-            setCameraReady(false);
-            handleQrDecoded(decoded);
-          }).catch(() => handleQrDecoded(decoded));
-        },
-        () => {}
-      );
-      setCameraReady(true);
-    } catch (e) {
-      setCameraReady(false);
-      setError('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
-      setPhase('idle');
-    }
   }, []);
 
   const stopScanner = async () => {
     if (scannerRef.current) {
-      try { await scannerRef.current.stop(); } catch {}
+      try { await scannerRef.current.stop(); } catch (_e) { /* noop */ }
       scannerRef.current = null;
     }
     setCameraReady(false);
@@ -98,6 +144,33 @@ export default function JurnalScanPage() {
     }
   };
 
+  const handleClassTokenSubmit = async (e) => {
+    e.preventDefault();
+    const t = classToken.trim().toUpperCase();
+    if (!t) return;
+    setClassToken(t);
+    setQrToken(`CLASS:${t}`); // marker for submit phase to use class-token endpoint
+    setPhase('validating');
+    try {
+      const { data } = await api.post('/jurnal/validate-by-class-token', {
+        class_token: t,
+        user_lat: gps?.lat ?? null,
+        user_lon: gps?.lon ?? null,
+      });
+      setValidation(data);
+      if (data.overall_valid) {
+        setPhase('validated');
+        toast.success('Token kelas valid! Silakan isi jurnal.');
+      } else {
+        setPhase('error');
+        toast.error('Validasi gagal: ' + (data.qr?.reason || data.schedule?.reason || data.gps?.reason || 'Tidak diketahui'));
+      }
+    } catch (err) {
+      setPhase('error');
+      setError(err?.response?.data?.detail || 'Gagal validasi token kelas');
+    }
+  };
+
   const handleManualSubmit = (e) => {
     e.preventDefault();
     if (!manualToken.trim()) return;
@@ -112,22 +185,36 @@ export default function JurnalScanPage() {
     }
     setPhase('submitting');
     try {
-      const { data } = await api.post('/jurnal', {
-        qr_token: qrToken,
-        user_lat: gps?.lat ?? null,
-        user_lon: gps?.lon ?? null,
-        ...form,
-        siswa_hadir: parseInt(form.siswa_hadir) || 0,
-        siswa_tidak_hadir: parseInt(form.siswa_tidak_hadir) || 0,
-        siswa_izin: parseInt(form.siswa_izin) || 0,
-        siswa_sakit: parseInt(form.siswa_sakit) || 0,
-      });
+      const isClassToken = qrToken?.startsWith('CLASS:');
+      const endpoint = isClassToken ? '/jurnal/by-class-token' : '/jurnal';
+      const payload = isClassToken
+        ? {
+            class_token: qrToken.replace('CLASS:', ''),
+            user_lat: gps?.lat ?? null,
+            user_lon: gps?.lon ?? null,
+            ...form,
+            siswa_hadir: parseInt(form.siswa_hadir) || 0,
+            siswa_tidak_hadir: parseInt(form.siswa_tidak_hadir) || 0,
+            siswa_izin: parseInt(form.siswa_izin) || 0,
+            siswa_sakit: parseInt(form.siswa_sakit) || 0,
+          }
+        : {
+            qr_token: qrToken,
+            user_lat: gps?.lat ?? null,
+            user_lon: gps?.lon ?? null,
+            ...form,
+            siswa_hadir: parseInt(form.siswa_hadir) || 0,
+            siswa_tidak_hadir: parseInt(form.siswa_tidak_hadir) || 0,
+            siswa_izin: parseInt(form.siswa_izin) || 0,
+            siswa_sakit: parseInt(form.siswa_sakit) || 0,
+          };
+      await api.post(endpoint, payload);
       setPhase('success');
       toast.success('Jurnal berhasil disimpan!');
       setTimeout(() => nav('/jurnal/riwayat'), 1500);
-    } catch (e) {
+    } catch (err) {
       setPhase('validated');
-      const msg = e?.response?.data?.detail;
+      const msg = err?.response?.data?.detail;
       toast.error(typeof msg === 'string' ? msg : (msg?.message || 'Gagal menyimpan jurnal'));
     }
   };
@@ -138,6 +225,7 @@ export default function JurnalScanPage() {
     setValidation(null);
     setError(null);
     setManualToken('');
+    setClassToken('');
   };
 
   return (
@@ -174,20 +262,52 @@ export default function JurnalScanPage() {
         {/* Phase: idle - Show scan options */}
         {phase === 'idle' && (
           <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {error && (
+              <Alert className="bg-amber-50 border-amber-200 mb-3">
+                <AlertCircle className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900 text-sm">{error}</AlertDescription>
+              </Alert>
+            )}
             <Card>
-              <CardContent className="p-6 space-y-4">
-                <Button onClick={startScanner} size="lg" className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2 h-14 text-base" data-testid="jurnal-scan-start-button">
-                  <Camera className="h-5 w-5" /> Buka Kamera & Scan QR
-                </Button>
-                <Separator />
-                <div>
-                  <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Atau Masukkan Token QR Manual</Label>
-                  <form onSubmit={handleManualSubmit} className="flex gap-2 mt-2">
-                    <Input value={manualToken} onChange={(e) => setManualToken(e.target.value)} placeholder="Tempel token QR di sini..." className="flex-1 font-mono text-xs" data-testid="jurnal-manual-token-input" />
-                    <Button type="submit" disabled={!manualToken.trim()} variant="outline" data-testid="jurnal-manual-token-submit">Validasi</Button>
-                  </form>
-                  <p className="text-xs text-slate-500 mt-2">Gunakan opsi ini jika kamera tidak tersedia. Token bisa didapat dari admin atau halaman QR Generator.</p>
-                </div>
+              <CardContent className="p-4 sm:p-6">
+                <Tabs value={scanMode} onValueChange={setScanMode} className="w-full">
+                  <TabsList className="grid grid-cols-3 mb-4">
+                    <TabsTrigger value="qr" data-testid="tab-scan-qr"><Camera className="h-3.5 w-3.5 mr-1" /> Scan QR</TabsTrigger>
+                    <TabsTrigger value="qr_token" data-testid="tab-scan-qr-token"><Hash className="h-3.5 w-3.5 mr-1" /> Token QR</TabsTrigger>
+                    <TabsTrigger value="class_token" data-testid="tab-scan-class-token"><KeyRound className="h-3.5 w-3.5 mr-1" /> Token Kelas</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="qr" className="space-y-3 mt-0">
+                    <p className="text-sm text-slate-600">Pindai kartu QR di depan kelas dengan kamera HP/laptop Anda.</p>
+                    <Button onClick={startScanner} size="lg" className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2 h-14 text-base" data-testid="jurnal-scan-start-button">
+                      <Camera className="h-5 w-5" /> Buka Kamera & Scan QR
+                    </Button>
+                    <p className="text-xs text-slate-500">Catatan: izinkan akses kamera saat browser meminta. Untuk akses kamera, pastikan menggunakan koneksi HTTPS.</p>
+                  </TabsContent>
+
+                  <TabsContent value="qr_token" className="space-y-3 mt-0">
+                    <p className="text-sm text-slate-600">Tempel token QR (string panjang) yang didapat dari admin atau halaman QR Generator.</p>
+                    <form onSubmit={handleManualSubmit} className="flex gap-2">
+                      <Input value={manualToken} onChange={(e) => setManualToken(e.target.value)} placeholder="Token QR..." className="flex-1 font-mono text-xs" data-testid="jurnal-manual-token-input" />
+                      <Button type="submit" disabled={!manualToken.trim()} className="bg-[#006837] hover:bg-[#005a30]" data-testid="jurnal-manual-token-submit">Validasi</Button>
+                    </form>
+                    <p className="text-xs text-slate-500">Token QR biasanya berupa string acak yang ter-encrypt.</p>
+                  </TabsContent>
+
+                  <TabsContent value="class_token" className="space-y-3 mt-0">
+                    <p className="text-sm text-slate-600">Masukkan <strong>Token Kelas</strong> (format mis. <code className="text-[11px] bg-slate-100 px-1 rounded">7A-2526-X9K2</code>). Token ini tertera di kartu QR dan bisa dilihat admin pada menu Kelas.</p>
+                    <form onSubmit={handleClassTokenSubmit} className="flex gap-2">
+                      <Input value={classToken} onChange={(e) => setClassToken(e.target.value.toUpperCase())} placeholder="Mis: 7A-2526-X9K2" className="flex-1 font-mono text-sm" data-testid="jurnal-class-token-input" />
+                      <Button type="submit" disabled={!classToken.trim()} className="bg-[#006837] hover:bg-[#005a30]" data-testid="jurnal-class-token-submit">Validasi</Button>
+                    </form>
+                    <Alert className="bg-emerald-50 border-emerald-200">
+                      <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                      <AlertDescription className="text-emerald-900 text-xs">
+                        Token kelas adalah alternatif jika kamera tidak berfungsi. Sistem tetap memvalidasi jadwal & GPS Anda.
+                      </AlertDescription>
+                    </Alert>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </motion.div>

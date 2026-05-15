@@ -75,7 +75,16 @@ export default function AdminSchedulesPage() {
       if (editing) await api.put(`/schedules/${editing.id}`, form);
       else await api.post('/schedules', form);
       toast.success('Berhasil disimpan'); setOpen(false); await loadGrid(filterMode, filterValue);
-    } catch (e) { toast.error('Gagal'); }
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      if (e?.response?.status === 409 && typeof detail === 'object') {
+        const msg = detail.message || 'Jadwal bentrok';
+        // Show conflicts visually
+        toast.error(msg, { duration: 8000 });
+      } else {
+        toast.error(typeof detail === 'string' ? detail : 'Gagal menyimpan');
+      }
+    }
   };
   const handleDelete = async (s) => {
     if (!window.confirm('Hapus jadwal?')) return;
@@ -84,7 +93,11 @@ export default function AdminSchedulesPage() {
   const handleLock = async (s) => {
     if (!window.confirm(`Kunci jadwal ini? Setelah dikunci tidak bisa diedit kecuali dibuka kunci.`)) return;
     try { await api.put(`/schedules/${s.id}/lock`); toast.success('Jadwal dikunci'); await loadGrid(filterMode, filterValue); }
-    catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
+    catch (e) {
+      const detail = e?.response?.data?.detail;
+      const msg = typeof detail === 'object' ? detail.message : (typeof detail === 'string' ? detail : 'Gagal');
+      toast.error(msg, { duration: 8000 });
+    }
   };
   const handleUnlock = async (s) => {
     if (!window.confirm(`Buka kunci jadwal ini?`)) return;
@@ -180,6 +193,20 @@ export default function AdminSchedulesPage() {
 
         <TabsContent value="grid" className="mt-4">
           <Card><CardContent className="p-3">
+            {/* Color Legend (Phase 6 visual cue) */}
+            <div className="flex items-center gap-3 flex-wrap mb-2 px-1 text-[11px] text-slate-600">
+              <span className="font-semibold">Petunjuk Status:</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-300" /> Draft
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /> Terkirim/Disetujui
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-sky-200 border border-sky-400" /> Terkunci
+              </span>
+              <span className="ml-auto text-[10px] italic">Cell sudah terisi = bentrok, isi nama guru/mapel sebagai petunjuk</span>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs" data-testid="schedule-grid-table">
                 <thead>
@@ -202,13 +229,25 @@ export default function AdminSchedulesPage() {
                         if (slot.is_break) {
                           return <td key={day} className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>;
                         }
+                        // Color coding by status (Phase 6 visual cue)
+                        const statusColors = {
+                          draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
+                          submitted: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
+                          locked: 'bg-sky-100 hover:bg-sky-200 border-sky-400 text-sky-900',
+                        };
+                        const sStatus = s?.status || 'submitted';
+                        const cellClass = statusColors[sStatus] || statusColors.submitted;
                         return (
                           <td key={day} className="border border-slate-200 p-1 align-top">
                             {s ? (
-                              <button type="button" onClick={() => openEdit(s)} className="w-full text-left p-2 rounded bg-[#006837]/5 hover:bg-[#006837]/10 border border-[#006837]/20" data-testid={`grid-cell-${day}-${slot.start_time}`}>
-                                <div className="font-semibold text-[#006837] truncate">{s.subject_code}</div>
-                                <div className="text-[10px] text-slate-700 truncate">{filterMode === 'class' ? s.teacher_name : s.class_name}</div>
-                                <div className="text-[10px] text-slate-500 font-mono">{s.room_name}</div>
+                              <button type="button" onClick={() => openEdit(s)} className={`w-full text-left p-2 rounded border ${cellClass} transition-colors`} data-testid={`grid-cell-${day}-${slot.start_time}`} title={`${s.subject_name || s.subject_code} • ${s.teacher_name || ''} • ${sStatus}`}>
+                                <div className="font-semibold truncate flex items-center gap-1">
+                                  <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
+                                  {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block opacity-70" />}
+                                  {sStatus === 'draft' && <span className="text-[9px] opacity-70">[D]</span>}
+                                </div>
+                                <div className="text-[10px] truncate opacity-90">{filterMode === 'class' ? s.teacher_name : s.class_name}</div>
+                                <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
                               </button>
                             ) : (
                               <button type="button" onClick={() => openCreate(day, slot.start_time, slot.end_time)} className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs" data-testid={`grid-empty-${day}-${slot.start_time}`}>+</button>
