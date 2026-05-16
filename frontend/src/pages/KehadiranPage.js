@@ -31,7 +31,14 @@ export default function KehadiranPage() {
   useEffect(() => {
     (async () => {
       if (isAdmin) {
-        const c = await api.get('/classes'); setClasses(c.data);
+        // Get active academic year first
+        const ayRes = await api.get('/academic-years/active');
+        const activeAY = ayRes.data;
+
+        const c = await api.get('/classes', {
+          params: activeAY ? { academic_year_id: activeAY.id } : {}
+        });
+        setClasses(c.data);
       } else {
         // Wali kelas - get own class
         const wk = await api.get('/wali-kelas/my-class');

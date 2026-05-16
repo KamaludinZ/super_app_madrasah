@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Html5Qrcode } from 'html5-qrcode';
 import CameraScanner from '@/components/scanner/CameraScanner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ScanLine, MapPin, CheckCircle2, XCircle, Loader2, Camera, ArrowLeft, ShieldCheck, Clock, Send, RotateCw, AlertCircle, KeyRound, Hash } from 'lucide-react';
+import { ScanLine, MapPin, CheckCircle2, XCircle, Loader2, Camera, ArrowLeft, ShieldCheck, Clock, Send, RotateCw, AlertCircle, KeyRound, Hash, UserCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+
+const STATUS_OPTIONS = [
+  { value: 'hadir', label: 'Hadir', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { value: 'sakit', label: 'Sakit', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'izin', label: 'Izin', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'alpa', label: 'Alpa', color: 'bg-rose-100 text-rose-700 border-rose-300' },
+];
 
 export default function JurnalScanPage() {
   const nav = useNavigate();
@@ -32,6 +39,9 @@ export default function JurnalScanPage() {
   const [scanMode, setScanMode] = useState('qr'); // qr | class_token
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState({});
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   // Get GPS on mount
   useEffect(() => {
@@ -74,6 +84,10 @@ export default function JurnalScanPage() {
       if (data.overall_valid) {
         setPhase('validated');
         toast.success('QR Code valid! Silakan isi jurnal.');
+        // Load students from the class
+        if (data.context?.schedule?.class_id) {
+          loadStudents(data.context.schedule.class_id);
+        }
       } else {
         setPhase('error');
         toast.error('Validasi gagal: ' + (data.qr?.reason || data.schedule?.reason || data.gps?.reason || 'Tidak diketahui'));
@@ -101,6 +115,10 @@ export default function JurnalScanPage() {
       if (data.overall_valid) {
         setPhase('validated');
         toast.success('Token kelas valid! Silakan isi jurnal.');
+        // Load students from the class
+        if (data.context?.schedule?.class_id) {
+          loadStudents(data.context.schedule.class_id);
+        }
       } else {
         setPhase('error');
         toast.error('Validasi gagal: ' + (data.qr?.reason || data.schedule?.reason || data.gps?.reason || 'Tidak diketahui'));
@@ -117,6 +135,39 @@ export default function JurnalScanPage() {
     handleQrDecoded(manualToken.trim());
   };
 
+  const loadStudents = async (classId) => {
+    setLoadingStudents(true);
+    try {
+      const { data } = await api.get('/students', { params: { class_id: classId } });
+      setStudents(data);
+      // Initialize all students as 'hadir' by default
+      const initialRecords = {};
+      data.forEach((stu) => {
+        initialRecords[stu.id] = 'hadir';
+      });
+      setAttendanceRecords(initialRecords);
+    } catch (e) {
+      toast.error('Gagal memuat daftar siswa');
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  // Auto-calculate attendance counts from individual records
+  const attendanceSummary = useMemo(() => {
+    return students.reduce((acc, s) => {
+      const status = attendanceRecords[s.id] || 'hadir';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, { hadir: 0, sakit: 0, izin: 0, alpa: 0 });
+  }, [students, attendanceRecords]);
+
+  const setAllStatus = (status) => {
+    const newRec = {};
+    students.forEach((s) => { newRec[s.id] = status; });
+    setAttendanceRecords(newRec);
+  };
+
   const handleSubmitJurnal = async (e) => {
     e.preventDefault();
     if (!form.materi.trim()) {
@@ -127,26 +178,30 @@ export default function JurnalScanPage() {
     try {
       const isClassToken = qrToken?.startsWith('CLASS:');
       const endpoint = isClassToken ? '/jurnal/by-class-token' : '/jurnal';
+
+      // Use auto-calculated counts from individual attendance
       const payload = isClassToken
         ? {
             class_token: qrToken.replace('CLASS:', ''),
             user_lat: gps?.lat ?? null,
             user_lon: gps?.lon ?? null,
-            ...form,
-            siswa_hadir: parseInt(form.siswa_hadir) || 0,
-            siswa_tidak_hadir: parseInt(form.siswa_tidak_hadir) || 0,
-            siswa_izin: parseInt(form.siswa_izin) || 0,
-            siswa_sakit: parseInt(form.siswa_sakit) || 0,
+            materi: form.materi,
+            catatan: form.catatan,
+            siswa_hadir: attendanceSummary.hadir,
+            siswa_tidak_hadir: attendanceSummary.alpa,
+            siswa_izin: attendanceSummary.izin,
+            siswa_sakit: attendanceSummary.sakit,
           }
         : {
             qr_token: qrToken,
             user_lat: gps?.lat ?? null,
             user_lon: gps?.lon ?? null,
-            ...form,
-            siswa_hadir: parseInt(form.siswa_hadir) || 0,
-            siswa_tidak_hadir: parseInt(form.siswa_tidak_hadir) || 0,
-            siswa_izin: parseInt(form.siswa_izin) || 0,
-            siswa_sakit: parseInt(form.siswa_sakit) || 0,
+            materi: form.materi,
+            catatan: form.catatan,
+            siswa_hadir: attendanceSummary.hadir,
+            siswa_tidak_hadir: attendanceSummary.alpa,
+            siswa_izin: attendanceSummary.izin,
+            siswa_sakit: attendanceSummary.sakit,
           };
       await api.post(endpoint, payload);
       setPhase('success');
@@ -166,6 +221,8 @@ export default function JurnalScanPage() {
     setError(null);
     setManualToken('');
     setClassToken('');
+    setStudents([]);
+    setAttendanceRecords({});
   };
 
   return (
@@ -347,12 +404,73 @@ export default function JurnalScanPage() {
                     <Textarea id="catatan" value={form.catatan} onChange={(e) => setForm({ ...form, catatan: e.target.value })}
                       placeholder="Catatan tambahan, tugas, kondisi kelas..." rows={2} className="mt-1" data-testid="jurnal-catatan-input" />
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <NumberField label="Hadir" value={form.siswa_hadir} onChange={(v) => setForm({ ...form, siswa_hadir: v })} testid="jurnal-hadir" color="emerald" />
-                    <NumberField label="Sakit" value={form.siswa_sakit} onChange={(v) => setForm({ ...form, siswa_sakit: v })} testid="jurnal-sakit" color="amber" />
-                    <NumberField label="Izin" value={form.siswa_izin} onChange={(v) => setForm({ ...form, siswa_izin: v })} testid="jurnal-izin" color="blue" />
-                    <NumberField label="Alpa" value={form.siswa_tidak_hadir} onChange={(v) => setForm({ ...form, siswa_tidak_hadir: v })} testid="jurnal-alpa" color="rose" />
+                  <Separator className="my-4" />
+
+                  {/* Attendance Summary */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="h-4 w-4 text-[#006837]" />
+                        <Label className="text-sm font-semibold">Presensi Siswa</Label>
+                      </div>
+                      <Button type="button" onClick={() => setAllStatus('hadir')} variant="outline" size="sm" className="h-7 text-xs">
+                        Semua Hadir
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                      {STATUS_OPTIONS.map((opt) => (
+                        <div key={opt.value} className={`rounded-lg border p-2 ${opt.color}`}>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide">{opt.label}</div>
+                          <div className="text-xl font-extrabold tabular-nums" data-testid={`jurnal-count-${opt.value}`}>
+                            {attendanceSummary[opt.value] || 0}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Student List */}
+                    {loadingStudents ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-[#006837]" />
+                      </div>
+                    ) : students.length > 0 ? (
+                      <div className="space-y-2 max-h-96 overflow-y-auto pr-2" data-testid="jurnal-attendance-list">
+                        {students.map((s) => (
+                          <div key={s.id} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 bg-white">
+                            <div className="h-8 w-8 rounded-full bg-[#006837] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {s.full_name?.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-semibold truncate">{s.full_name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">{s.nisn || '-'}</div>
+                            </div>
+                            <div className="flex gap-1">
+                              {STATUS_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setAttendanceRecords({ ...attendanceRecords, [s.id]: opt.value })}
+                                  className={`px-2 py-1 rounded text-[10px] font-semibold border transition-colors ${
+                                    attendanceRecords[s.id] === opt.value
+                                      ? opt.color + ' ring-2 ring-offset-1 ring-[#006837]'
+                                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                  }`}
+                                  data-testid={`jurnal-attendance-${s.username}-${opt.value}`}
+                                >
+                                  {opt.label.charAt(0)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-sm text-slate-500">
+                        Tidak ada data siswa
+                      </div>
+                    )}
                   </div>
+
                   <Button type="submit" disabled={phase === 'submitting'} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2 h-11" data-testid="jurnal-submit-button">
                     {phase === 'submitting' ? <><Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...</> : <><Send className="h-4 w-4" /> Simpan Jurnal</>}
                   </Button>
@@ -375,21 +493,6 @@ export default function JurnalScanPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function NumberField({ label, value, onChange, testid, color }) {
-  const colors = {
-    emerald: 'border-emerald-200 bg-emerald-50/50',
-    amber: 'border-amber-200 bg-amber-50/50',
-    blue: 'border-blue-200 bg-blue-50/50',
-    rose: 'border-rose-200 bg-rose-50/50',
-  };
-  return (
-    <div className={`rounded-xl border p-2 ${colors[color]}`}>
-      <Label className="text-xs font-semibold uppercase tracking-wide">{label}</Label>
-      <Input type="number" min="0" value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 h-9 bg-white text-center font-mono font-bold" data-testid={testid} />
     </div>
   );
 }

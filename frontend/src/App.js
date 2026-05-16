@@ -6,6 +6,7 @@ import LoginPage from '@/pages/LoginPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import PublicMonitoring from '@/pages/PublicMonitoring';
+import PublicPrestasi from '@/pages/PublicPrestasi';
 import AppShell from '@/components/layout/AppShell';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
@@ -81,6 +82,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/public/monitoring" element={<PublicMonitoring />} />
+          <Route path="/public/prestasi" element={<PublicPrestasi />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>

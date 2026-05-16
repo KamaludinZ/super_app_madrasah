@@ -59,9 +59,14 @@ export default function ReportPage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // Get active academic year first
+      const ayRes = await api.get('/academic-years/active');
+      const activeAY = ayRes.data;
+
       const [reps, cls] = await Promise.all([
         api.get('/reports'),
-        api.get('/classes'),
+        // Load classes for active academic year
+        activeAY ? api.get('/classes', { params: { academic_year_id: activeAY.id } }) : api.get('/classes'),
       ]);
       setReports(reps.data);
       setClasses(cls.data);

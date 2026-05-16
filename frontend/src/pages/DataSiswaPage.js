@@ -36,7 +36,14 @@ export default function DataSiswaPage() {
     (async () => {
       try {
         if (isAdmin || isWaliKelas) {
-          const c = await api.get('/classes');
+          // Get active academic year first
+          const ayRes = await api.get('/academic-years/active');
+          const activeAY = ayRes.data;
+
+          // Load classes for active academic year
+          const c = await api.get('/classes', {
+            params: activeAY ? { academic_year_id: activeAY.id } : {}
+          });
           setClasses(c.data || []);
         }
         await loadStudents('all');

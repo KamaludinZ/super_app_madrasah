@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, AlertCircle, Circle, Radio, RefreshCw, Calendar, LogIn, CalendarDays, Star } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Circle, Radio, RefreshCw, Calendar, LogIn, CalendarDays, Star, LayoutDashboard, User } from 'lucide-react';
 import { api, DAY_LABELS, STATUS_COLORS, STATUS_LABELS } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 import axios from 'axios';
 
 const REFRESH_INTERVAL = 15000; // 15s
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 export default function PublicMonitoring() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('aktif');
   const [now, setNow] = useState(new Date());
   const [holiday, setHoliday] = useState(null);
 
@@ -46,17 +48,44 @@ export default function PublicMonitoring() {
     return () => { clearInterval(t); clearInterval(t2); clearInterval(t3); };
   }, []);
 
+  // Helper function to check if schedule is ongoing based on time
+  const isOngoing = (item) => {
+    if (!item.start_time || !item.end_time) return false;
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+    return currentTime >= item.start_time && currentTime <= item.end_time;
+  };
+
+  // Helper function to check if schedule is upcoming
+  const isUpcoming = (item) => {
+    if (!item.start_time) return false;
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+    return currentTime < item.start_time;
+  };
+
   const filteredItems = (data?.classes || []).filter((c) => {
-    if (filter === 'all') return true;
-    if (filter === 'active') return c.status === 'active';
-    if (filter === 'filled') return c.jurnal_status === 'filled';
-    if (filter === 'pending') return c.jurnal_status === 'pending';
-    if (filter === 'missing') return c.jurnal_status === 'missing';
+    if (filter === 'aktif') return true; // Show all for the day
+    if (filter === 'akan-datang') return isUpcoming(c);
+    if (filter === 'berlangsung') return isOngoing(c); // Show ongoing regardless of filled status
+    if (filter === 'terisi') return c.jurnal_status === 'filled';
+    if (filter === 'belum-terisi') return c.jurnal_status === 'missing' || c.jurnal_status === 'pending';
     return true;
   });
 
   const dayLabel = DAY_LABELS[data?.day] || data?.day || '';
-  const stats = data?.stats || { total: 0, filled: 0, pending: 0, missing: 0, upcoming: 0 };
+
+  // Calculate stats based on current time
+  const allClasses = data?.classes || [];
+  const stats = {
+    total: allClasses.length,
+    filled: allClasses.filter(c => c.jurnal_status === 'filled').length,
+    berlangsung: allClasses.filter(c => isOngoing(c)).length,
+    belum_terisi: allClasses.filter(c => c.jurnal_status === 'missing' || c.jurnal_status === 'pending').length,
+    akan_datang: allClasses.filter(c => isUpcoming(c)).length,
+  };
+
+  // Find current ongoing session numbers
+  const ongoingClasses = allClasses.filter(c => isOngoing(c));
+  const sessionNumbers = [...new Set(ongoingClasses.map(c => c.session_number).filter(Boolean))].sort((a, b) => a - b);
 
   return (
     <div className="min-h-screen bg-[var(--cream)]">
@@ -86,11 +115,25 @@ export default function PublicMonitoring() {
               </div>
               <div className="text-xs text-slate-500">{dayLabel}, {now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
             </div>
-            <Link to="/login">
-              <Button variant="outline" size="sm" className="gap-2" data-testid="link-back-to-login">
-                <LogIn className="h-4 w-4" /> <span className="hidden sm:inline">Login</span>
-              </Button>
-            </Link>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200">
+                  <User className="h-3 w-3 text-blue-600" />
+                  <span className="text-xs font-semibold text-blue-700">{user.full_name}</span>
+                </div>
+                <Link to="/dashboard">
+                  <Button variant="outline" size="sm" className="gap-2" data-testid="link-to-dashboard">
+                    <LayoutDashboard className="h-4 w-4" /> <span className="hidden sm:inline">Dashboard</span>
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <Link to="/login">
+                <Button variant="outline" size="sm" className="gap-2" data-testid="link-back-to-login">
+                  <LogIn className="h-4 w-4" /> <span className="hidden sm:inline">Login</span>
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -134,24 +177,43 @@ export default function PublicMonitoring() {
           </p>
         </div>
 
+        {/* Current Session Indicator */}
+        {sessionNumbers.length > 0 && (
+          <div className="mb-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 p-4" data-testid="current-session-indicator">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center h-12 w-12 rounded-full bg-amber-500 text-white shrink-0">
+                <Radio className="h-6 w-6 animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <div className="font-bold text-amber-900 text-lg">
+                  SEDANG BERLANGSUNG: Jam Ke-{sessionNumbers.join(', ')}
+                </div>
+                <div className="text-sm text-amber-700 mt-0.5">
+                  {stats.berlangsung} kelas sedang dalam proses pembelajaran
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           <StatCard label="Total Jadwal" value={stats.total} color="slate" icon={Calendar} />
           <StatCard label="Terisi" value={stats.filled} color="emerald" icon={CheckCircle2} />
-          <StatCard label="Berlangsung" value={stats.pending} color="amber" icon={Clock} />
-          <StatCard label="Belum Diisi" value={stats.missing} color="rose" icon={AlertCircle} />
-          <StatCard label="Akan Datang" value={stats.upcoming} color="slate" icon={Circle} />
+          <StatCard label="Berlangsung" value={stats.berlangsung} color="amber" icon={Clock} />
+          <StatCard label="Belum Diisi" value={stats.belum_terisi} color="rose" icon={AlertCircle} />
+          <StatCard label="Akan Datang" value={stats.akan_datang} color="slate" icon={Circle} />
         </div>
 
         {/* Filters */}
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <Tabs value={filter} onValueChange={setFilter} data-testid="public-monitoring-filter-tabs">
             <TabsList className="bg-white border border-slate-200">
-              <TabsTrigger value="all" data-testid="filter-all">Semua</TabsTrigger>
-              <TabsTrigger value="active" data-testid="filter-active">Aktif</TabsTrigger>
-              <TabsTrigger value="filled" data-testid="filter-filled">Terisi</TabsTrigger>
-              <TabsTrigger value="pending" data-testid="filter-pending">Berlangsung</TabsTrigger>
-              <TabsTrigger value="missing" data-testid="filter-missing">Belum Diisi</TabsTrigger>
+              <TabsTrigger value="aktif" data-testid="filter-aktif">Aktif ({stats.total})</TabsTrigger>
+              <TabsTrigger value="akan-datang" data-testid="filter-akan-datang">Akan Datang ({stats.akan_datang})</TabsTrigger>
+              <TabsTrigger value="berlangsung" data-testid="filter-berlangsung">Berlangsung ({stats.berlangsung})</TabsTrigger>
+              <TabsTrigger value="terisi" data-testid="filter-terisi">Terisi ({stats.filled})</TabsTrigger>
+              <TabsTrigger value="belum-terisi" data-testid="filter-belum-terisi">Belum Terisi ({stats.belum_terisi})</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button variant="outline" size="sm" onClick={fetchData} className="gap-2" data-testid="refresh-monitoring">
@@ -172,7 +234,7 @@ export default function PublicMonitoring() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="public-monitoring-grid">
-            {filteredItems.map((c, idx) => <ScheduleCard key={`${c.schedule_id}-${idx}`} item={c} />)}
+            {filteredItems.map((c, idx) => <ScheduleCard key={`${c.schedule_id}-${idx}`} item={c} now={now} />)}
           </div>
         )}
 
@@ -202,9 +264,16 @@ function StatCard({ label, value, color, icon: Icon }) {
   );
 }
 
-function ScheduleCard({ item }) {
+function ScheduleCard({ item, now }) {
   const statusBg = STATUS_COLORS[item.jurnal_status] || 'bg-slate-50 border-slate-200';
-  const isActive = item.status === 'active';
+
+  // Check if currently ongoing
+  const currentTime = now.toTimeString().slice(0, 5);
+  const isOngoing = item.start_time && item.end_time && currentTime >= item.start_time && currentTime <= item.end_time;
+
+  // Legacy support for old 'active' status
+  const isActive = item.status === 'active' || isOngoing;
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
@@ -214,7 +283,8 @@ function ScheduleCard({ item }) {
     >
       {isActive && (
         <div className="absolute -top-2 left-3 flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
-          <span className="h-1.5 w-1.5 rounded-full bg-white live-dot" /> SEDANG BERJALAN
+          <span className="h-1.5 w-1.5 rounded-full bg-white live-dot" />
+          {item.session_number ? `JAM KE-${item.session_number}` : 'SEDANG BERJALAN'}
         </div>
       )}
       <div className="flex items-start justify-between mb-2">
@@ -231,6 +301,11 @@ function ScheduleCard({ item }) {
         <div className="text-slate-600 text-xs">{item.teacher_name}</div>
         <div className="flex items-center gap-1 text-xs text-slate-500 font-mono">
           <Clock className="h-3 w-3" /> {item.start_time} — {item.end_time}
+          {item.session_number && (
+            <span className="ml-auto px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+              Jam {item.session_number}
+            </span>
+          )}
         </div>
         {item.jurnal_materi && (
           <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-700 line-clamp-2">

@@ -177,6 +177,34 @@ async def get_cleanliness_recap(user: Dict = Depends(require_role('admin'))):
     return result
 
 
+@router.get("/cleanliness/guru/classes/all")
+async def get_guru_all_classes(user: Dict = Depends(require_role('guru'))):
+    """Guru: get all classes they teach (from their schedules), not limited to a specific day."""
+    # Get active academic year
+    ay = await get_active_academic_year()
+    if not ay:
+        return []
+
+    # Get all schedules for this teacher
+    schedules = await db.schedules.find({
+        'teacher_id': user['id'],
+        'academic_year_id': ay['id'],
+        'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
+    }, {'_id': 0, 'class_id': 1}).to_list(500)
+
+    # Get unique class IDs
+    class_ids = list(set(s['class_id'] for s in schedules))
+
+    # Get class details
+    classes = []
+    for cid in class_ids:
+        cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+        if cls:
+            classes.append(serialize_doc(cls))
+
+    return classes
+
+
 @router.get("/cleanliness/guru/classes")
 async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_role('guru'))):
     """Guru: get classes they teach on a specific date based on schedule."""
@@ -214,6 +242,25 @@ async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_rol
     return classes
 
 
+@router.get("/cleanliness/guru/history")
+async def get_guru_cleanliness_history(limit: int = 100, user: Dict = Depends(require_role('guru'))):
+    """Get cleanliness history filled by this teacher across all classes."""
+    # Fixed: Use recorded_by instead of created_by
+    items = await db.class_cleanliness.find(
+        {'recorded_by': user['id']},
+        {'_id': 0}
+    ).sort('recorded_at', -1).to_list(limit)
+
+    # Enrich with class names
+    enriched = []
+    for item in items:
+        cls = await db.classes.find_one({'id': item.get('class_id')}, {'_id': 0, 'name': 1})
+        item['class_name'] = cls.get('name') if cls else 'Unknown'
+        enriched.append(serialize_doc(item))
+
+    return enriched
+
+
 @router.get("/cleanliness/class/{class_id}")
 async def get_class_cleanliness(class_id: str, limit: int = 30,
                                 user: Dict = Depends(get_current_user)):
@@ -229,13 +276,14 @@ async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request
     """Submit cleanliness record. For guru: validates schedule on that date."""
     is_guru = 'guru' in user.get('roles', []) and 'admin' not in user.get('roles', []) and 'wali_kelas' not in user.get('roles', [])
 
-    # For guru: validate they have schedule to teach this class on this date
+    # For guru: validate they teach this class (on any day) and can only fill for today's date
     if is_guru:
-        # Parse date to get day of week
+        # Parse date and ensure it's today
         try:
             date_obj = datetime.strptime(req.date, '%Y-%m-%d')
-            day_names = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
-            day = day_names[date_obj.weekday()]
+            today = datetime.now().date()
+            if date_obj.date() != today:
+                raise HTTPException(403, "Guru hanya dapat mengisi kebersihan untuk hari ini")
         except ValueError:
             raise HTTPException(400, "Format tanggal salah")
 
@@ -244,17 +292,16 @@ async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request
         if not ay:
             raise HTTPException(400, "Tidak ada tahun akademik aktif")
 
-        # Check if guru has schedule on this day for this class
+        # Check if guru teaches this class (on any day)
         schedule = await db.schedules.find_one({
             'teacher_id': user['id'],
             'class_id': req.class_id,
-            'day': day,
             'academic_year_id': ay['id'],
             'status': {'$in': ['approved', 'locked']}
         })
 
         if not schedule:
-            raise HTTPException(403, f"Anda tidak mengajar di kelas ini pada hari {day.capitalize()}")
+            raise HTTPException(403, "Anda tidak mengajar di kelas ini")
 
     # For admin and wali_kelas: use existing permission check
     elif not await user_can_view_class(user, req.class_id):

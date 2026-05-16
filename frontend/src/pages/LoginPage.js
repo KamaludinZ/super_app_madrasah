@@ -97,9 +97,12 @@ export default function LoginPage() {
             <Feature icon={ShieldCheck} title="Jurnal Presisi" desc="Sistem anti-manipulasi dengan validasi QR + Jadwal + GPS" />
             <Feature icon={BookOpen} title="Multi-Peran" desc="9 peran berbeda dengan fitur switch role yang seamless" />
           </div>
-          <div className="pt-4">
-            <Link to="/public/monitoring" className="text-sm text-[#006837] hover:underline font-medium" data-testid="link-public-monitoring">
+          <div className="pt-4 space-y-2">
+            <Link to="/public/monitoring" className="block text-sm text-[#006837] hover:underline font-medium" data-testid="link-public-monitoring">
               → Lihat Monitoring Jurnal Publik (Realtime)
+            </Link>
+            <Link to="/public/prestasi" className="block text-sm text-[#006837] hover:underline font-medium" data-testid="link-public-prestasi">
+              → Lihat Prestasi Madrasah
             </Link>
           </div>
         </motion.div>
@@ -201,20 +204,12 @@ export default function LoginPage() {
                 </div>
               </form>
 
-              <div className="mt-6 pt-4 border-t border-slate-200 text-xs text-slate-500 space-y-1">
-                <div className="font-semibold text-slate-700 mb-1">Akun Demo:</div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono">
-                  <span>admin / admin123</span>
-                  <span>guru1 / guru123</span>
-                  <span>walas7a / walas123</span>
-                  <span>siswa1 / siswa123</span>
-                  <span>piket1 / piket123</span>
-                  <span>ek1 / ek123</span>
-                </div>
-              </div>
-              <div className="mt-3 lg:hidden">
-                <Link to="/public/monitoring" className="text-sm text-[#006837] hover:underline" data-testid="link-public-monitoring-mobile">
+              <div className="mt-6 pt-4 border-t border-slate-200 lg:hidden space-y-1">
+                <Link to="/public/monitoring" className="block text-sm text-[#006837] hover:underline" data-testid="link-public-monitoring-mobile">
                   → Monitoring Publik
+                </Link>
+                <Link to="/public/prestasi" className="block text-sm text-[#006837] hover:underline" data-testid="link-public-prestasi-mobile">
+                  → Prestasi Madrasah
                 </Link>
               </div>
             </CardContent>

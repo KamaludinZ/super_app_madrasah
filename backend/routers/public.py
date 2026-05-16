@@ -95,3 +95,81 @@ async def public_holidays_today():
         'is_academic_holiday': bool(academic),
         'academic_holiday': serialize_doc(academic) if academic else None,
     }
+
+
+@router.get("/public/achievements")
+async def public_achievements(
+    year: Optional[int] = None,
+    level: Optional[str] = None,
+    holder_type: Optional[str] = None,
+    limit: int = 100
+):
+    """Endpoint publik: prestasi madrasah yang telah diverifikasi."""
+    q = {'is_verified': True}
+
+    if year:
+        q['year'] = year
+    if level:
+        q['level'] = level
+    if holder_type:
+        q['holder_type'] = holder_type
+
+    # Get achievements
+    achievements = await db.achievements.find(
+        q, {'_id': 0}
+    ).sort([('year', -1), ('date', -1)]).limit(limit).to_list(limit)
+
+    # Enrich with student/teacher/extracurricular names
+    for a in achievements:
+        if a.get('student_id'):
+            student = await db.students.find_one({'id': a['student_id']}, {'_id': 0, 'full_name': 1, 'nisn': 1})
+            if student:
+                a['student_name'] = student.get('full_name')
+                a['student_nisn'] = student.get('nisn')
+
+        if a.get('teacher_id'):
+            teacher = await db.users.find_one({'id': a['teacher_id']}, {'_id': 0, 'full_name': 1})
+            if teacher:
+                a['teacher_name'] = teacher.get('full_name')
+
+        if a.get('extracurricular_id'):
+            ekskul = await db.extracurriculars.find_one({'id': a['extracurricular_id']}, {'_id': 0, 'name': 1})
+            if ekskul:
+                a['extracurricular_name'] = ekskul.get('name')
+
+    # Get stats
+    stats = {
+        'total': await db.achievements.count_documents({'is_verified': True}),
+        'by_level': {},
+        'by_holder_type': {},
+        'by_year': {}
+    }
+
+    levels = ['Kabupaten/Kota', 'Provinsi', 'Nasional', 'Internasional']
+    for lvl in levels:
+        stats['by_level'][lvl] = await db.achievements.count_documents({'is_verified': True, 'level': lvl})
+
+    holder_types = ['siswa', 'guru', 'tendik', 'madrasah']
+    for ht in holder_types:
+        stats['by_holder_type'][ht] = await db.achievements.count_documents({'is_verified': True, 'holder_type': ht})
+
+    # Get recent years
+    pipeline = [
+        {'$match': {'is_verified': True}},
+        {'$group': {'_id': '$year', 'count': {'$sum': 1}}},
+        {'$sort': {'_id': -1}},
+        {'$limit': 5}
+    ]
+    year_stats = await db.achievements.aggregate(pipeline).to_list(5)
+    for ys in year_stats:
+        stats['by_year'][ys['_id']] = ys['count']
+
+    settings = await get_settings()
+
+    return {
+        'achievements': achievements,
+        'stats': stats,
+        'school_name': settings.get('school_name'),
+        'app_name': settings.get('app_name'),
+        'logo_url': settings.get('logo_url'),
+    }

@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Trophy, Plus, Pencil, Trash2, CheckCircle2, Clock, Search, Upload,
   Medal, Image as ImageIcon, Award, Calendar, MapPin, Building, X,
-  GraduationCap, Users as UsersIcon, Briefcase, School,
+  GraduationCap, Users as UsersIcon, Briefcase, School, Target, Star, Filter,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -35,6 +35,13 @@ const LEVELS = [
   { value: 'nasional', label: 'Nasional' },
   { value: 'internasional', label: 'Internasional' },
 ];
+
+const LEVEL_ICONS = {
+  'kab_kota': { icon: Award, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+  'provinsi': { icon: Medal, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+  'nasional': { icon: Trophy, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
+  'internasional': { icon: Star, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
+};
 
 const RANKS = [
   'Juara 1', 'Juara 2', 'Juara 3',
@@ -105,6 +112,9 @@ export default function AchievementsPage() {
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterLevel, setFilterLevel] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   const refresh = async () => {
     try {
@@ -226,6 +236,8 @@ export default function AchievementsPage() {
     return filteredByHolder.filter((a) => {
       if (statusTab === 'pending' && a.is_verified) return false;
       if (statusTab === 'verified' && !a.is_verified) return false;
+      if (filterYear !== 'all' && a.year !== parseInt(filterYear)) return false;
+      if (filterLevel !== 'all' && a.level !== filterLevel) return false;
       if (search) {
         const s = search.toLowerCase();
         return (a.name || '').toLowerCase().includes(s) ||
@@ -236,16 +248,41 @@ export default function AchievementsPage() {
       }
       return true;
     });
-  }, [filteredByHolder, statusTab, search]);
+  }, [filteredByHolder, statusTab, search, filterYear, filterLevel]);
 
   const stats = useMemo(() => {
     const all = filteredByHolder;
+    const byLevel = {};
+    const byYear = {};
+
+    all.forEach((a) => {
+      // Count by level
+      if (a.level) {
+        byLevel[a.level] = (byLevel[a.level] || 0) + 1;
+      }
+      // Count by year
+      if (a.year) {
+        byYear[a.year] = (byYear[a.year] || 0) + 1;
+      }
+    });
+
     return {
       total: all.length,
       pending: all.filter((a) => !a.is_verified).length,
       verified: all.filter((a) => a.is_verified).length,
+      by_level: byLevel,
+      by_year: byYear,
     };
   }, [filteredByHolder]);
+
+  const availableYears = Object.keys(stats.by_year || {}).sort((a, b) => b - a);
+
+  const clearFilters = () => {
+    setFilterYear('all');
+    setFilterLevel('all');
+  };
+
+  const hasActiveFilters = filterYear !== 'all' || filterLevel !== 'all';
 
   if (loading) return <div className="text-sm text-slate-500">Memuat...</div>;
 
@@ -299,12 +336,103 @@ export default function AchievementsPage() {
         </div>
 
         <TabsContent value={holderTab} className="mt-4 space-y-4">
-          {/* Stats summary for current tab */}
-          <div className="grid grid-cols-3 gap-3">
-            <SmallStat icon={Trophy} label="Total" value={stats.total} color="bg-slate-50 border-slate-200 text-slate-700" />
-            <SmallStat icon={Clock} label="Menunggu" value={stats.pending} color="bg-amber-50 border-amber-200 text-amber-700" />
-            <SmallStat icon={CheckCircle2} label="Terverifikasi" value={stats.verified} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+          {/* Stats Overview */}
+          <div className="space-y-3">
+            {/* Stats by Level */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {/* Total Prestasi */}
+              <div className="rounded-xl border p-3 bg-blue-50 border-blue-200">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide">Total</span>
+                  <Target className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="text-2xl font-extrabold tabular-nums">{stats.total}</div>
+              </div>
+
+              {/* Stats by Level */}
+              {Object.entries(LEVEL_ICONS).map(([level, config]) => {
+                const Icon = config.icon;
+                const count = stats.by_level[level] || 0;
+                const label = levelLabel(level);
+                return (
+                  <div key={level} className={`rounded-xl border p-3 ${config.bg} ${config.border}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-ellipsis overflow-hidden whitespace-nowrap">{label}</span>
+                      <Icon className={`h-4 w-4 ${config.color}`} />
+                    </div>
+                    <div className="text-2xl font-extrabold tabular-nums">{count}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Stats summary for current tab */}
+            <div className="grid grid-cols-3 gap-3">
+              <SmallStat icon={Trophy} label="Total" value={stats.total} color="bg-slate-50 border-slate-200 text-slate-700" />
+              <SmallStat icon={Clock} label="Menunggu" value={stats.pending} color="bg-amber-50 border-amber-200 text-amber-700" />
+              <SmallStat icon={CheckCircle2} label="Terverifikasi" value={stats.verified} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+            </div>
           </div>
+
+          {/* Filters */}
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className={hasActiveFilters ? 'border-[#006837] text-[#006837]' : ''}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filter {hasActiveFilters && `(${[filterYear !== 'all', filterLevel !== 'all'].filter(Boolean).length})`}
+            </Button>
+          </div>
+
+          {/* Filter Panel */}
+          {showFilters && (
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-slate-900">Filter Prestasi</h3>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      <X className="h-4 w-4 mr-1" />
+                      Hapus Filter
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Tahun</Label>
+                    <Select value={filterYear} onValueChange={setFilterYear}>
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Semua Tahun" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Semua Tahun</SelectItem>
+                        {availableYears.map(y => (
+                          <SelectItem key={y} value={y}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tingkat</Label>
+                    <Select value={filterLevel} onValueChange={setFilterLevel}>
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Semua Tingkat" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Semua Tingkat</SelectItem>
+                        {LEVELS.map(lvl => (
+                          <SelectItem key={lvl.value} value={lvl.value}>{lvl.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Status sub-tabs */}
           <Tabs value={statusTab} onValueChange={setStatusTab}>

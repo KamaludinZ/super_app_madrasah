@@ -87,12 +87,15 @@ export default function MySchedulePage() {
 
   const refresh = async () => {
     try {
-      const [s, c, sub, r, ay, settings] = await Promise.all([
+      const ay = await api.get('/academic-years/active');
+      const activeAYData = ay.data;
+
+      const [s, c, sub, r, settings] = await Promise.all([
         api.get('/schedules', { params: { teacher_id: user?.id } }),
-        api.get('/classes'),
+        // Load classes for active academic year
+        activeAYData ? api.get('/classes', { params: { academic_year_id: activeAYData.id } }) : api.get('/classes'),
         api.get('/subjects'),
         api.get('/rooms'),
-        api.get('/academic-years/active'),
         api.get('/settings'),
       ]);
       console.log('MySchedulePage - items:', s.data);
@@ -106,7 +109,7 @@ export default function MySchedulePage() {
       setClasses(c.data || []);
       setSubjects(sub.data || []);
       setRooms(r.data || []);
-      setActiveAY(ay.data);
+      setActiveAY(activeAYData);
       // Get teaching slots from settings, filter out break times
       const slots = settings.data?.teaching_slots || [];
       setTeachingSlots(slots.filter(slot => !slot.is_break));

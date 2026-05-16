@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
 /**
- * ViewContextDialog \u2014 Per-user TP/Semester override.
+ * ViewContextDialog - Per-user TP/Semester override.
  *
  * Setiap user bisa memilih melihat data di TP/semester lampau tanpa
  * mempengaruhi user lain dan TP aktif global.
@@ -46,7 +46,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
         semester: (selSem === '__ACTIVE__' || !selSem) ? null : selSem,
       };
       const { data } = await api.put('/auth/view-context', payload);
-      toast.success(`Konteks lihat: ${data.year_name} \u2014 ${data.semester || 'aktif'}`);
+      toast.success(`Konteks lihat: ${data.year_name} - ${data.semester || 'aktif'}`);
       onUpdated?.(data);
       onOpenChange(false);
     } catch (e) {
@@ -75,7 +75,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
             Pilih Tahun Pelajaran & Semester
           </DialogTitle>
           <DialogDescription>
-            Lihat data dari TP/semester berbeda. Pengaturan ini <strong>hanya untuk Anda</strong> \u2014 tidak mempengaruhi user lain atau TP aktif global.
+            Lihat data dari TP/semester berbeda. Pengaturan ini <strong>hanya untuk Anda</strong> - tidak mempengaruhi user lain atau TP aktif global.
           </DialogDescription>
         </DialogHeader>
 
@@ -84,7 +84,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
             <Alert className="bg-amber-50 border-amber-200">
               <Eye className="h-4 w-4 text-amber-700" />
               <AlertDescription className="text-amber-900 text-sm">
-                Anda sedang dalam mode <strong>VIEW</strong>: <strong>{ctx.year_name} \u2014 {ctx.semester}</strong>
+                Anda sedang dalam mode <strong>VIEW</strong>: <strong>{ctx.year_name} - {ctx.semester}</strong>
               </AlertDescription>
             </Alert>
           )}
@@ -92,7 +92,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
             <Alert className="bg-emerald-50 border-emerald-200">
               <EyeOff className="h-4 w-4 text-emerald-700" />
               <AlertDescription className="text-emerald-900 text-sm">
-                Mengikuti TP aktif global: <strong>{ctx.year_name} \u2014 {ctx.semester}</strong>
+                Mengikuti TP aktif global: <strong>{ctx.year_name} - {ctx.semester}</strong>
               </AlertDescription>
             </Alert>
           )}
@@ -104,7 +104,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
               <SelectContent>
                 <SelectItem value="__ACTIVE__">
                   <span className="flex items-center gap-1.5">
-                    \u2728 Ikut TP Aktif Global
+                    Ikut TP Aktif Global
                   </span>
                 </SelectItem>
                 {(ctx?.available_academic_years || []).map((a) => (
@@ -140,7 +140,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Batal</Button>
           <Button onClick={handleApply} disabled={loading || !selAY} className="bg-[#006837] hover:bg-[#005a30]" data-testid="vc-apply">
-            {loading ? 'Menyimpan\u2026' : 'Terapkan'}
+            {loading ? 'Menyimpan...' : 'Terapkan'}
           </Button>
         </DialogFooter>
       </DialogContent>

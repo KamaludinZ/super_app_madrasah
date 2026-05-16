@@ -24,7 +24,13 @@ export default function JadwalPage() {
           }
         } else if (activeRole === 'wali_kelas') {
           // Wali kelas: get jadwal kelasnya
-          const { data: classes } = await api.get('/classes');
+          // Get active academic year first
+          const ayRes = await api.get('/academic-years/active');
+          const activeAY = ayRes.data;
+
+          const { data: classes } = await api.get('/classes', {
+            params: activeAY ? { academic_year_id: activeAY.id } : {}
+          });
           const myClass = classes.find(c => c.homeroom_teacher_id === user.id);
           if (myClass) {
             const { data: todayData } = await api.get('/schedules', { params: { class_id: myClass.id, day: getDayId() } });

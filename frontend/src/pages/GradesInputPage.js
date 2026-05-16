@@ -43,7 +43,8 @@ export default function GradesInputPage() {
         setActiveAY(ay.data);
         setSemester(ay.data?.active_semester || 'ganjil');
         const [cls, sub, sch] = await Promise.all([
-          api.get('/classes'),
+          // Load classes for active academic year
+          ay.data ? api.get('/classes', { params: { academic_year_id: ay.data.id } }) : api.get('/classes'),
           api.get('/subjects'),
           api.get('/schedules'),
         ]);
