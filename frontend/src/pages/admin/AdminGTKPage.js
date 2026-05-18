@@ -26,12 +26,17 @@ export default function AdminGTKPage() {
   const [loading, setLoading] = useState(true);
   const [detailUser, setDetailUser] = useState(null);
   const [accountUser, setAccountUser] = useState(null);
+  const [jabatanList, setJabatanList] = useState([]);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/users');
-      setUsers(data || []);
+      const [usersRes, jabatanRes] = await Promise.all([
+        api.get('/users'),
+        api.get('/jabatan/active')
+      ]);
+      setUsers(usersRes.data || []);
+      setJabatanList(jabatanRes.data || []);
     } finally { setLoading(false); }
   };
   useEffect(() => { refresh(); }, []);
@@ -132,12 +137,19 @@ export default function AdminGTKPage() {
                         <TableHead>NIP/NUPTK</TableHead>
                         <TableHead>L/P</TableHead>
                         <TableHead>PERAN</TableHead>
+                        <TableHead>JABATAN</TableHead>
                         <TableHead>STATUS</TableHead>
                         <TableHead className="text-right">AKSI</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((u, i) => (
+                      {filtered.map((u, i) => {
+                        const userJabatanNames = (u.jabatan_ids || []).map(jid => {
+                          const j = jabatanList.find(jab => jab.id === jid);
+                          return j?.name;
+                        }).filter(Boolean);
+
+                        return (
                         <TableRow key={u.id} data-testid={`gtk-row-${u.id}`}>
                           <TableCell className="text-center text-slate-500 font-mono">{i + 1}</TableCell>
                           <TableCell className="font-semibold">{u.full_name}</TableCell>
@@ -153,6 +165,17 @@ export default function AdminGTKPage() {
                                 <Badge key={r} variant="outline" className="text-xs">{ROLE_LABELS[r] || r}</Badge>
                               ))}
                             </div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {userJabatanNames.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {userJabatanNames.map((jName, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs">{jName}</Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="italic text-slate-400 text-xs">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {u.mutation_type === 'keluar' ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">Mutasi Keluar</Badge> :
@@ -178,9 +201,10 @@ export default function AdminGTKPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                       {filtered.length === 0 && (
-                        <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
+                        <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">
                           <Briefcase className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                           <div className="font-semibold">Tidak ada data GTK</div>
                         </TableCell></TableRow>

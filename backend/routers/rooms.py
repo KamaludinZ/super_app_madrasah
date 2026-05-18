@@ -137,13 +137,20 @@ async def generate_qr_card(rid: str, template_id: Optional[str] = Form(None),
     settings = await get_settings()
     token = encrypt_qr_payload(rid)
     template_bytes = None
+
+    # Debug logging for template
+    logger.info(f"[QR-CARD] Generating card for room {rid}, template_id: {template_id}")
+
     if template_id:
         tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
+        logger.info(f"[QR-CARD] Template found: {tpl is not None}")
         if tpl and tpl.get('image_b64'):
             b64 = tpl['image_b64']
             if ',' in b64:
                 b64 = b64.split(',', 1)[1]
             template_bytes = base64.b64decode(b64)
+            logger.info(f"[QR-CARD] Template bytes loaded: {len(template_bytes)} bytes")
+
     cls = None
     class_token_val = None
     if not class_name:
@@ -156,6 +163,8 @@ async def generate_qr_card(rid: str, template_id: Optional[str] = Form(None),
         cls = await db.classes.find_one({'name': class_name}, {'_id': 0})
         if cls:
             class_token_val = cls.get('token')
+
+    logger.info(f"[QR-CARD] Creating card: class={class_name}, token={class_token_val}, has_template={template_bytes is not None}")
 
     png_bytes = create_b5_card(
         qr_data=token, room_name=room.get('name', rid), class_name=class_name,
@@ -175,20 +184,26 @@ async def generate_bulk_qr_cards_by_grade(grade: int = Form(...),
     """Generate QR cards for all classes in a specific grade level"""
     from PIL import Image as PILImage
 
+    logger.info(f"[BULK] Starting bulk generation for grade {grade}, template_id: {template_id}")
+
     # Get all classes for this grade
     classes_list = await db.classes.find({'grade': grade}, {'_id': 0}).to_list(100)
     if not classes_list:
         raise HTTPException(404, f"Tidak ada kelas untuk jenjang {grade}")
 
+    logger.info(f"[BULK] Found {len(classes_list)} classes for grade {grade}")
+
     settings = await get_settings()
     template_bytes = None
     if template_id:
         tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
+        logger.info(f"[BULK] Template found: {tpl is not None}")
         if tpl and tpl.get('image_b64'):
             b64 = tpl['image_b64']
             if ',' in b64:
                 b64 = b64.split(',', 1)[1]
             template_bytes = base64.b64decode(b64)
+            logger.info(f"[BULK] Template loaded: {len(template_bytes)} bytes")
 
     # Generate cards for each class
     card_images = []
@@ -219,30 +234,48 @@ async def generate_bulk_qr_cards_by_grade(grade: int = Form(...),
     # Create A4 layout (2 cards per page in portrait)
     # A4 @ 200 DPI = 1654 x 2339 px
     # B5 card = 1386 x 1969 px
-    # We'll fit 2 B5 cards vertically on A4 with margins
+    # THIN MARGINS for maximum card size
     A4_W, A4_H = 1654, 2339
     CARD_W, CARD_H = 1386, 1969
 
-    # Calculate scaling to fit 2 cards on A4
-    scale = min((A4_W - 100) / CARD_W, (A4_H - 100) / (CARD_H * 2))
+    # Very thin margins (20px = 2.5mm @ 200 DPI)
+    MARGIN_TOP = 20
+    MARGIN_BOTTOM = 20
+    MARGIN_LEFT = 20
+    MARGIN_RIGHT = 20
+    CARD_GAP = 20  # Gap between 2 cards
+
+    # Calculate scaling to fit 2 cards on A4 with thin margins
+    available_w = A4_W - MARGIN_LEFT - MARGIN_RIGHT
+    available_h = A4_H - MARGIN_TOP - MARGIN_BOTTOM - CARD_GAP
+    scale = min(available_w / CARD_W, available_h / (CARD_H * 2))
     scaled_w = int(CARD_W * scale)
     scaled_h = int(CARD_H * scale)
 
+    logger.info(f"[BULK] A4 size: {A4_W}x{A4_H}, Card original: {CARD_W}x{CARD_H}")
+    logger.info(f"[BULK] Scale: {scale:.3f}, Scaled card: {scaled_w}x{scaled_h}")
+
     pages = []
+    # Use compatibility for PIL resize
+    try:
+        resample_method = PILImage.Resampling.LANCZOS
+    except AttributeError:
+        resample_method = PILImage.LANCZOS
+
     for i in range(0, len(card_images), 2):
         page = PILImage.new('RGB', (A4_W, A4_H), color=(255, 255, 255))
 
-        # First card (top)
-        card1 = card_images[i].resize((scaled_w, scaled_h), PILImage.Resampling.LANCZOS)
+        # First card (top) - centered horizontally, tight top margin
+        card1 = card_images[i].resize((scaled_w, scaled_h), resample_method)
         x1 = (A4_W - scaled_w) // 2
-        y1 = 50
+        y1 = MARGIN_TOP
         page.paste(card1, (x1, y1))
 
         # Second card (bottom) if exists
         if i + 1 < len(card_images):
-            card2 = card_images[i + 1].resize((scaled_w, scaled_h), PILImage.Resampling.LANCZOS)
+            card2 = card_images[i + 1].resize((scaled_w, scaled_h), resample_method)
             x2 = (A4_W - scaled_w) // 2
-            y2 = y1 + scaled_h + 50
+            y2 = y1 + scaled_h + CARD_GAP
             page.paste(card2, (x2, y2))
 
         pages.append(page)

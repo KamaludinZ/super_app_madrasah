@@ -11,7 +11,7 @@ import {
   Trophy,
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
-  Megaphone, ChevronDown, Briefcase,
+  Megaphone, ChevronDown, Briefcase, Info,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -65,9 +65,12 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal Piket', icon: History, testid: 'nav-jurnal-history-piket' });
+    items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-piket-kebersihan' });
   } else if (role === 'guru_bk') {
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' });
-    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' });
+    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' });
+    items.push({ to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-bk-kebersihan' });
+    items.push({ to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-bk-laporan' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' });
   } else if (role === 'guru_tata_tertib') {
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' });
@@ -96,6 +99,7 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' },
           { to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' },
           { to: '/admin/classes', label: 'Kelas', icon: BookOpen, testid: 'nav-classes' },
+          { to: '/admin/jabatan', label: 'Jabatan', icon: Briefcase, testid: 'nav-jabatan' },
           { to: '/admin/holidays', label: 'Hari Libur', icon: CalendarDays, testid: 'nav-admin-holidays' },
           { to: '/admin/qr-generator', label: 'QR Generator', icon: QrCode, testid: 'nav-qr' },
         ],
@@ -107,6 +111,8 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
           { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
           { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-admin-alumni' },
+          { to: '/admin/naik-kelas', label: 'Naik Kelas & Kelulusan', icon: ArrowRightLeft, testid: 'nav-admin-promotions' },
         ],
       },
       {
@@ -134,6 +140,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Sistem & Utilitas',
         items: [
+          { to: '/admin/app-info', label: 'Info & Update', icon: Info, testid: 'nav-admin-app-info' },
           { to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' },
           { to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' },
           { to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' },
@@ -299,6 +306,7 @@ export default function AppShell({ children }) {
   const [viewCtx, setViewCtx] = useState(null);
   const [vcDialogOpen, setVcDialogOpen] = useState(false);
   const [pwDialogOpen, setPwDialogOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState(null);
   const items = navForRole(activeRole, user?.roles || []);
 
   // Auto-prompt password change on first load if needed.
@@ -320,6 +328,13 @@ export default function AppShell({ children }) {
   useEffect(() => {
     refreshViewCtx();
   }, [activeRole, refreshViewCtx]);
+
+  // Load app version
+  useEffect(() => {
+    api.get('/app-info')
+      .then(({ data }) => setAppVersion(data.current_version))
+      .catch(() => setAppVersion('1.0.0')); // fallback
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -360,8 +375,11 @@ export default function AppShell({ children }) {
         <div className="flex-1 overflow-y-auto">
           <Sidebar items={items} current={loc.pathname} viewCtx={viewCtx} onTPClick={() => setVcDialogOpen(true)} />
         </div>
-        <div className="p-3 border-t border-slate-100 text-xs text-slate-500">
-          {schoolName}
+        <div className="p-3 border-t border-slate-100">
+          <div className="text-xs text-slate-600 font-medium">{schoolName}</div>
+          {appVersion && (
+            <div className="text-[10px] text-slate-400 mt-1">Version {appVersion}</div>
+          )}
         </div>
       </aside>
 
@@ -377,7 +395,7 @@ export default function AppShell({ children }) {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-72 p-0">
+                <SheetContent side="left" className="w-72 p-0 flex flex-col">
                   <div className="px-5 py-5 border-b border-slate-100">
                     <div className="flex items-center gap-3">
                       {settings?.logo_url ? (
@@ -391,8 +409,14 @@ export default function AppShell({ children }) {
                       </div>
                     </div>
                   </div>
-                  <div className="overflow-y-auto h-[calc(100vh-90px)]">
+                  <div className="flex-1 overflow-y-auto">
                     <Sidebar items={items} current={loc.pathname} onItemClick={() => setMobileOpen(false)} viewCtx={viewCtx} onTPClick={() => { setVcDialogOpen(true); setMobileOpen(false); }} />
+                  </div>
+                  <div className="p-3 border-t border-slate-100">
+                    <div className="text-xs text-slate-600 font-medium">{schoolName}</div>
+                    {appVersion && (
+                      <div className="text-[10px] text-slate-400 mt-1">Version {appVersion}</div>
+                    )}
                   </div>
                 </SheetContent>
               </Sheet>

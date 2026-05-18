@@ -315,6 +315,27 @@ async def journals_by_class(class_id: str, limit: int = 50, user: Dict = Depends
     return enriched
 
 
+@router.get("/jurnal/piket-filled")
+async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 'admin'))):
+    """Get journals filled by piket (where filled_by_user_id is current user)"""
+    items = await db.journals.find({'filled_by_user_id': user['id']}, {'_id': 0}).sort('started_at', -1).to_list(500)
+    enriched = []
+    for j in items:
+        cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
+        sub = await db.subjects.find_one({'id': j.get('subject_id')}, {'_id': 0, 'name': 1})
+        room = await db.rooms.find_one({'id': j.get('room_id')}, {'_id': 0, 'name': 1})
+        teacher = await db.users.find_one({'id': j.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        filled_by = await db.users.find_one({'id': j.get('filled_by_user_id')}, {'_id': 0, 'full_name': 1})
+
+        j['class_name'] = cls.get('name') if cls else None
+        j['subject_name'] = sub.get('name') if sub else None
+        j['room_name'] = room.get('name') if room else None
+        j['teacher_name'] = teacher.get('full_name') if teacher else None
+        j['filled_by_name'] = filled_by.get('full_name') if filled_by else None
+        enriched.append(serialize_doc(j))
+    return enriched
+
+
 # ============================================================
 # ADMIN JURNAL REKAP
 # ============================================================

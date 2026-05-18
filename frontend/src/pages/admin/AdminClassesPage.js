@@ -4,12 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, BookOpen, Copy, RefreshCw, KeyRound } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Copy, RefreshCw, KeyRound, Users } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import ClassDetailDialog from '@/components/classes/ClassDetailDialog';
 
 export default function AdminClassesPage() {
   const [items, setItems] = useState([]);
@@ -19,6 +20,7 @@ export default function AdminClassesPage() {
   const [activeAY, setActiveAY] = useState(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [detailClass, setDetailClass] = useState(null);
   const [form, setForm] = useState({
     name: '', grade: 7, parallel: 'A', academic_year_id: '',
     homeroom_teacher_id: '', room_id: '', capacity: 40,
@@ -197,6 +199,7 @@ export default function AdminClassesPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
+                  <Button size="icon" variant="ghost" onClick={() => setDetailClass(c)} title="Detail Kelas"><Users className="h-4 w-4 text-blue-600" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => handleDelete(c)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
                 </TableCell>
@@ -260,6 +263,13 @@ export default function AdminClassesPage() {
           <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Batal</Button><Button onClick={handleSubmit} className="bg-[#006837]" data-testid="class-form-submit">Simpan</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClassDetailDialog
+        classData={detailClass}
+        open={!!detailClass}
+        onOpenChange={(open) => !open && setDetailClass(null)}
+        onRefresh={refresh}
+      />
     </div>
   );
 }

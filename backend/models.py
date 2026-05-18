@@ -87,8 +87,27 @@ class UserModel(BaseModel):
     # Tidak mempengaruhi user lain dan tidak mengubah TP aktif global.
     view_academic_year_id: Optional[str] = None  # None = ikut TP aktif global
     view_semester: Optional[str] = None  # None = ikut semester aktif global
+    # Alumni & graduation tracking
+    graduation_status: Optional[str] = None  # 'aktif' | 'lulus' | 'mutasi_keluar' | 'dropout'
+    graduation_date: Optional[str] = None  # YYYY-MM-DD tanggal lulus
+    graduation_ay_id: Optional[str] = None  # TP saat lulus
+    graduation_class_id: Optional[str] = None  # Kelas terakhir saat lulus
+    graduation_certificate_number: Optional[str] = None  # Nomor ijazah
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
+    jabatan_ids: List[str] = Field(default_factory=list)  # Array of jabatan IDs for guru/staff
+
+
+class JabatanModel(BaseModel):
+    """Model for managing staff positions/jabatan (e.g., Kepala Sekolah, Wakil Kepala, etc.)"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Kepala Sekolah", "Wakil Kepala Kurikulum", "Koordinator Mata Pelajaran"
+    description: Optional[str] = None  # Detailed description of the position
+    category: Optional[str] = None  # e.g., "struktural", "fungsional", "koordinator"
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
 
 
 class AcademicYearModel(BaseModel):
@@ -248,7 +267,10 @@ class TeacherTaskModel(BaseModel):
     date: str  # YYYY-MM-DD tanggal pelaksanaan
     task_content: str  # Detail tugas/materi titipan
     notes: Optional[str] = None  # Catatan tambahan untuk piket
-    status: str = 'pending'  # 'pending' | 'completed' | 'cancelled'
+    leave_type: Optional[str] = None  # Jenis izin: 'sakit', 'cuti', 'dinas_luar', 'lainnya'
+    status: str = 'pending'  # 'pending' | 'accepted' | 'completed' | 'cancelled'
+    accepted_by_user_id: Optional[str] = None  # Guru piket yang menerima tugas
+    accepted_at: Optional[datetime] = None  # Waktu diterima oleh guru piket
     completed_journal_id: Optional[str] = None  # Link ke journal jika sudah diisi
     completed_by_user_id: Optional[str] = None  # Guru piket yang mengisi
     completed_at: Optional[datetime] = None
@@ -597,3 +619,63 @@ class MutationKeluarSubmit(BaseModel):
     mutation_keluar_type: Optional[str] = None  # 'pindah' | 'keluar' | 'pensiun' | 'berhenti'
     mutation_destination: Optional[str] = None  # Instansi tujuan (wajib jika pindah)
     mutation_document_url: Optional[str] = None
+
+
+class ClassHistoryModel(BaseModel):
+    """Riwayat kelas siswa - track semua perubahan kelas siswa per TP & semester."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # ID siswa
+    class_id: str  # ID kelas
+    academic_year_id: str  # Tahun pelajaran
+    semester: str  # 'Ganjil' | 'Genap' | '1' | '2' | '3' | '4' | '5' | '6'
+    reason: Literal[
+        'pembagian_kelas',  # Pembagian kelas awal TP
+        'pindah_kelas',  # Pindah kelas dalam satu TP/semester
+        'naik_kelas',  # Naik kelas ke TP berikutnya
+        'pindah_semester',  # Pindah semester (khusus kelas accelerated)
+        'mutasi_masuk',  # Siswa mutasi masuk dari sekolah lain
+        'mutasi_keluar',  # Siswa mutasi keluar ke sekolah lain
+        'lulus'  # Siswa lulus dari sekolah
+    ]
+    start_date: str  # YYYY-MM-DD - tanggal mulai di kelas ini
+    end_date: Optional[str] = None  # YYYY-MM-DD - tanggal keluar dari kelas (None jika masih aktif)
+    notes: Optional[str] = None  # Catatan tambahan
+    created_by_user_id: str  # User yang membuat record ini
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class PromotionBatchModel(BaseModel):
+    """Batch process for class promotion (naik kelas/semester/lulus)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: Literal['naik_kelas', 'pindah_semester', 'lulus']
+    from_academic_year_id: str
+    from_semester: str
+    to_academic_year_id: Optional[str] = None  # None jika lulus
+    to_semester: Optional[str] = None  # None jika lulus
+    from_class_id: Optional[str] = None  # Filter kelas asal (None = semua)
+    to_class_id: Optional[str] = None  # Target kelas (untuk naik_kelas/pindah_semester)
+    student_ids: List[str] = Field(default_factory=list)  # Siswa yang diproses
+    processed_count: int = 0
+    failed_count: int = 0
+    errors: List[str] = Field(default_factory=list)
+    graduation_date: Optional[str] = None  # Untuk type=lulus
+    certificate_number_prefix: Optional[str] = None  # Prefix nomor ijazah
+    status: Literal['pending', 'processing', 'completed', 'failed'] = 'pending'
+    created_by_user_id: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+
+
+class PromotionRequest(BaseModel):
+    """Request model for promotion/graduation operations."""
+    type: Literal['naik_kelas', 'pindah_semester', 'lulus']
+    from_class_id: Optional[str] = None
+    to_class_id: Optional[str] = None
+    to_academic_year_id: Optional[str] = None
+    to_semester: Optional[str] = None
+    student_ids: List[str]
+    graduation_date: Optional[str] = None
+    certificate_number_prefix: Optional[str] = None
+    notes: Optional[str] = None

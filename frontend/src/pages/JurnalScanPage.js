@@ -71,9 +71,14 @@ export default function JurnalScanPage() {
 
   useEffect(() => () => { stopScanner(); }, []);
 
-  const handleQrDecoded = async (token) => {
+  const handleQrDecoded = useCallback(async (token) => {
+    console.log('[QR] Decoded token:', token);
     setQrToken(token);
     setPhase('validating');
+
+    // Stop scanner immediately after decode
+    await stopScanner();
+
     try {
       const { data } = await api.post('/jurnal/validate', {
         qr_token: token,
@@ -96,7 +101,7 @@ export default function JurnalScanPage() {
       setPhase('error');
       setError(e?.response?.data?.detail || 'Gagal validasi QR');
     }
-  };
+  }, [gps]);
 
   const handleClassTokenSubmit = async (e) => {
     e.preventDefault();
@@ -383,7 +388,15 @@ export default function JurnalScanPage() {
                     <div className="font-bold text-emerald-900">Terverifikasi: Jadwal & Lokasi</div>
                     <div className="text-xs text-emerald-800/80">
                       {validation.context?.schedule?.subject_name || ''} • {validation.context?.room?.name || ''}
+                      {validation.context?.schedule?.jtm_count && validation.context.schedule.jtm_count > 1 && (
+                        <span className="ml-2 font-semibold">• {validation.context.schedule.jtm_count} JTM</span>
+                      )}
                     </div>
+                    {validation.context?.schedule?.hour_range && (
+                      <div className="text-[10px] text-emerald-700 mt-0.5">
+                        {validation.context.schedule.hour_range} ({validation.context.schedule.time_range || `${validation.context.schedule.start_time}-${validation.context.schedule.end_time}`})
+                      </div>
+                    )}
                   </div>
                 </div>
                 <ValidationDetails validation={validation} compact />

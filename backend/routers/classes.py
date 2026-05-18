@@ -17,7 +17,7 @@ from core import (
     serialize_doc,
 )
 from excel_io import class_template, parse_class_rows
-from models import ClassModel
+from models import ClassModel, ClassHistoryModel
 
 router = APIRouter()
 
@@ -213,3 +213,179 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
         await db.classes.insert_many(new_docs)
     await log_audit(user, 'import_excel', 'class', None, details={'success': success, 'errors': len(errors)}, request=request)
     return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+# ==================== Class Student Management ====================
+
+@router.get("/classes/{cid}/students")
+async def get_class_students(cid: str, user: Dict = Depends(require_role('admin', 'wali_kelas'))):
+    """Get list of students in a specific class."""
+    cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+    if not cls:
+        raise HTTPException(404, "Kelas tidak ditemukan")
+
+    students = await db.users.find({
+        'roles': 'siswa',
+        'student_class_id': cid,
+        'is_active': True
+    }, {'_id': 0}).sort('full_name', 1).to_list(500)
+
+    return {
+        'class': serialize_doc(cls),
+        'students': [serialize_doc(s) for s in students],
+        'count': len(students)
+    }
+
+
+@router.get("/classes/{cid}/available-students")
+async def get_available_students(cid: str, user: Dict = Depends(require_role('admin'))):
+    """Get list of students without class assignment (available to be added to class)."""
+    # Get class to check its grade level and academic year
+    cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+    if not cls:
+        raise HTTPException(404, "Kelas tidak ditemukan")
+
+    # Get students who don't have a class assigned and are active
+    students = await db.users.find({
+        'roles': 'siswa',
+        '$or': [
+            {'student_class_id': None},
+            {'student_class_id': {'$exists': False}}
+        ],
+        'is_active': True
+    }, {'_id': 0}).sort('full_name', 1).to_list(500)
+
+    return [serialize_doc(s) for s in students]
+
+
+@router.post("/classes/{cid}/students/{student_id}")
+async def add_student_to_class(
+    cid: str,
+    student_id: str,
+    payload: Dict,
+    request: Request,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Add a student to a class and record in history."""
+    cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+    if not cls:
+        raise HTTPException(404, "Kelas tidak ditemukan")
+
+    student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    # Check if student already has a class
+    if student.get('student_class_id'):
+        raise HTTPException(400, "Siswa sudah memiliki kelas. Hapus dari kelas lama terlebih dahulu.")
+
+    # Check class capacity
+    current_count = await db.users.count_documents({
+        'roles': 'siswa',
+        'student_class_id': cid,
+        'is_active': True
+    })
+    capacity = cls.get('capacity', 40)
+    if current_count >= capacity:
+        raise HTTPException(400, f"Kelas sudah penuh (kapasitas: {capacity})")
+
+    # Get active academic year and semester
+    ay = await get_active_academic_year()
+    if not ay:
+        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
+
+    # Update student's class
+    await db.users.update_one(
+        {'id': student_id},
+        {'$set': {'student_class_id': cid}}
+    )
+
+    # Create history record
+    history = ClassHistoryModel(
+        student_id=student_id,
+        class_id=cid,
+        academic_year_id=ay['id'],
+        semester=ay.get('active_semester', 'Ganjil'),
+        reason=payload.get('reason', 'pembagian_kelas'),
+        start_date=payload.get('start_date', datetime.utcnow().strftime('%Y-%m-%d')),
+        notes=payload.get('notes'),
+        created_by_user_id=user['id']
+    )
+
+    doc = history.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.class_history.insert_one(doc)
+
+    await log_audit(user, 'add_student_to_class', 'class', cid,
+                    details={'student_id': student_id, 'student_name': student.get('full_name'), 'reason': history.reason},
+                    request=request)
+
+    return {'message': 'Siswa berhasil ditambahkan ke kelas', 'history': serialize_doc(doc)}
+
+
+@router.delete("/classes/{cid}/students/{student_id}")
+async def remove_student_from_class(
+    cid: str,
+    student_id: str,
+    payload: Dict,
+    request: Request,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Remove a student from a class and update history."""
+    cls = await db.classes.find_one({'id': cid}, {'_id': 0})
+    if not cls:
+        raise HTTPException(404, "Kelas tidak ditemukan")
+
+    student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    if student.get('student_class_id') != cid:
+        raise HTTPException(400, "Siswa tidak terdaftar di kelas ini")
+
+    # Update student's class to None
+    await db.users.update_one(
+        {'id': student_id},
+        {'$set': {'student_class_id': None}}
+    )
+
+    # Update the most recent active history record for this student in this class
+    end_date = payload.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))
+    await db.class_history.update_one(
+        {
+            'student_id': student_id,
+            'class_id': cid,
+            'end_date': None  # Find active record
+        },
+        {'$set': {'end_date': end_date}}
+    )
+
+    await log_audit(user, 'remove_student_from_class', 'class', cid,
+                    details={'student_id': student_id, 'student_name': student.get('full_name')},
+                    request=request)
+
+    return {'message': 'Siswa berhasil dihapus dari kelas'}
+
+
+@router.get("/students/{student_id}/class-history")
+async def get_student_class_history(student_id: str, user: Dict = Depends(require_role('admin', 'wali_kelas'))):
+    """Get class history for a specific student."""
+    student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    history = await db.class_history.find(
+        {'student_id': student_id},
+        {'_id': 0}
+    ).sort('start_date', -1).to_list(500)
+
+    # Enrich with class name, academic year name
+    enriched = []
+    for h in history:
+        cls = await db.classes.find_one({'id': h.get('class_id')}, {'_id': 0, 'name': 1})
+        ay = await db.academic_years.find_one({'id': h.get('academic_year_id')}, {'_id': 0, 'name': 1})
+        h['class_name'] = cls.get('name') if cls else None
+        h['academic_year_name'] = ay.get('name') if ay else None
+        enriched.append(serialize_doc(h))
+
+    return enriched

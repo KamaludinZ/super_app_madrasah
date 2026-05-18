@@ -14,7 +14,10 @@
       "Bash(timeout /t 3)",
       "Bash(nul)",
       "Bash(timeout:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(server.py)",
+      "Bash(uvicorn:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

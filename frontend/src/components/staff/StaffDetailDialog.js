@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   User, Briefcase, MapPin, Save, Loader2, Phone, Mail,
@@ -28,20 +29,34 @@ export default function StaffDetailDialog({ user: staffUser, open, onClose, auto
   const [editMode, setEditMode] = useState(autoEdit);
   const [data, setData] = useState({});
   const [busy, setBusy] = useState(false);
+  const [jabatanList, setJabatanList] = useState([]);
 
   useEffect(() => {
     if (!staffUser?.id) return;
     (async () => {
       setLoading(true);
       try {
-        const r = await api.get('/users');
-        const found = (r.data || []).find((u) => u.id === staffUser.id);
+        const [userRes, jabatanRes] = await Promise.all([
+          api.get('/users'),
+          api.get('/jabatan/active')
+        ]);
+        const found = (userRes.data || []).find((u) => u.id === staffUser.id);
         setData(found || staffUser);
+        setJabatanList(jabatanRes.data || []);
       } finally { setLoading(false); }
     })();
   }, [staffUser?.id]);
 
   const setField = (k, v) => setData({ ...data, [k]: v });
+
+  const toggleJabatan = (jid) => {
+    const current = data.jabatan_ids || [];
+    if (current.includes(jid)) {
+      setData({ ...data, jabatan_ids: current.filter((id) => id !== jid) });
+    } else {
+      setData({ ...data, jabatan_ids: [...current, jid] });
+    }
+  };
 
   const handleSave = async () => {
     setBusy(true);
@@ -117,9 +132,40 @@ export default function StaffDetailDialog({ user: staffUser, open, onClose, auto
                   <SelectField label="Pendidikan Terakhir" value={data.pendidikan_terakhir} options={PENDIDIKAN_OPTIONS} onChange={(v) => setField('pendidikan_terakhir', v)} disabled={!editMode} />
                   <Field label="Jurusan / Program Studi" value={data.jurusan} onChange={(v) => setField('jurusan', v)} disabled={!editMode} />
                   <SelectField label="Status Kepegawaian" value={data.status_kepegawaian} options={STATUS_KEPEGAWAIAN} onChange={(v) => setField('status_kepegawaian', v)} disabled={!editMode} />
-                  <Field label="Jabatan" value={data.jabatan} onChange={(v) => setField('jabatan', v)} disabled={!editMode} placeholder="Mis. Wakamad Kurikulum" />
                   <Field label="Mulai Bertugas" type="date" value={data.tmt_mulai} onChange={(v) => setField('tmt_mulai', v)} disabled={!editMode} />
                   <Field label="Mata Pelajaran Diampu" value={data.mapel_diampu} onChange={(v) => setField('mapel_diampu', v)} disabled={!editMode} placeholder="Mis. Matematika, IPA" />
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs uppercase text-slate-500">Jabatan (boleh lebih dari satu)</Label>
+                    {editMode ? (
+                      <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                        {jabatanList.length === 0 ? (
+                          <p className="text-sm text-slate-400 col-span-2 py-2">Belum ada jabatan. Kelola di menu Jabatan.</p>
+                        ) : (
+                          jabatanList.map((j) => (
+                            <label key={j.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <Checkbox checked={(data.jabatan_ids || []).includes(j.id)} onCheckedChange={() => toggleJabatan(j.id)} />
+                              <span>{j.name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-1 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 min-h-[42px]">
+                        {(data.jabatan_ids || []).length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(data.jabatan_ids || []).map((jid) => {
+                              const j = jabatanList.find((jab) => jab.id === jid);
+                              return j ? (
+                                <Badge key={jid} variant="outline" className="text-xs">{j.name}</Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        ) : (
+                          <span className="italic text-slate-400 text-sm">-</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

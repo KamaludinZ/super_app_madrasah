@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   User, Users, MapPin, Save, Loader2, Heart, Phone, Mail,
-  Calendar, Hash, Globe, FileText, GraduationCap, Pencil, Eye,
+  Calendar, Hash, Globe, FileText, GraduationCap, Pencil, Eye, History,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -67,6 +67,8 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
   const [detail, setDetail] = useState(EMPTY_DETAIL);
   const [studentData, setStudentData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [classHistory, setClassHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (!student?.id) return;
@@ -95,6 +97,25 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
       }
     })();
   }, [student?.id]);
+
+  const loadClassHistory = async () => {
+    if (!student?.id) return;
+    setLoadingHistory(true);
+    try {
+      const { data } = await api.get(`/students/${student.id}/class-history`);
+      setClassHistory(data || []);
+    } catch (e) {
+      toast.error('Gagal memuat riwayat kelas');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'riwayat' && classHistory.length === 0 && !loadingHistory) {
+      loadClassHistory();
+    }
+  }, [tab]);
 
   const handleSave = async () => {
     setBusy(true);
@@ -166,6 +187,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
               <TabsTrigger value="siswa" data-testid="tab-siswa"><User className="h-3.5 w-3.5 mr-1" /> Data Siswa</TabsTrigger>
               <TabsTrigger value="ortu" data-testid="tab-ortu"><Users className="h-3.5 w-3.5 mr-1" /> Data Orang Tua</TabsTrigger>
               <TabsTrigger value="alamat" data-testid="tab-alamat"><MapPin className="h-3.5 w-3.5 mr-1" /> Data Alamat</TabsTrigger>
+              <TabsTrigger value="riwayat" data-testid="tab-riwayat"><History className="h-3.5 w-3.5 mr-1" /> Riwayat Kelas</TabsTrigger>
             </TabsList>
 
             <TabsContent value="siswa" className="mt-4 space-y-3">
@@ -232,6 +254,90 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                 <SelectRow label="Transportasi" value={detail.alamat_siswa?.transportasi} options={['Jalan Kaki', 'Sepeda', 'Sepeda Motor', 'Mobil Pribadi', 'Antar Jemput Sekolah', 'Angkutan Umum', 'Perahu/Sampan', 'Kendaraan Pribadi', 'Kereta Api', 'Ojek', 'Andong/Bendi/Sado/Dokar/Delman/Becak', 'Lainnya']} onChange={(v) => setField('alamat_siswa.transportasi', v)} disabled={!editMode} />
                 <SelectRow label="Waktu Tempuh" value={detail.alamat_siswa?.waktu_tempuh} options={['1-10 menit', '10-19 menit', '20-29 menit', '30-39 menit', '1-2 jam', 'Lebih dari 2 jam']} onChange={(v) => setField('alamat_siswa.waktu_tempuh', v)} disabled={!editMode} />
               </Section>
+            </TabsContent>
+
+            <TabsContent value="riwayat" className="mt-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100 mb-4">
+                    <History className="h-4 w-4 text-[#006837]" />
+                    <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Riwayat Kelas Siswa</h3>
+                  </div>
+
+                  {loadingHistory ? (
+                    <div className="py-8 text-center text-slate-500">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-[#006837]" />
+                      Memuat riwayat kelas...
+                    </div>
+                  ) : classHistory.length === 0 ? (
+                    <p className="text-center py-8 text-slate-400">Belum ada riwayat kelas</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {classHistory.map((h, idx) => {
+                        const reasonLabels = {
+                          pembagian_kelas: { label: 'Pembagian Kelas', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+                          pindah_kelas: { label: 'Pindah Kelas', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+                          naik_kelas: { label: 'Naik Kelas', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                          mutasi_masuk: { label: 'Mutasi Masuk', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+                          mutasi_keluar: { label: 'Mutasi Keluar', color: 'bg-rose-100 text-rose-700 border-rose-200' }
+                        };
+                        const reason = reasonLabels[h.reason] || { label: h.reason, color: 'bg-slate-100 text-slate-700' };
+                        const isActive = !h.end_date;
+
+                        return (
+                          <div key={h.id} className={`p-4 rounded-lg border-2 ${isActive ? 'border-[#006837] bg-[#006837]/5' : 'border-slate-200 bg-slate-50'}`}>
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-bold text-lg text-slate-900">{h.class_name}</h4>
+                                  {isActive && (
+                                    <Badge className="bg-[#006837] text-white">Kelas Saat Ini</Badge>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-slate-600">Tahun Pelajaran:</span>
+                                    <div className="font-semibold text-slate-900">{h.academic_year_name}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-600">Semester:</span>
+                                    <div className="font-semibold text-slate-900 capitalize">{h.semester}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-600">Tanggal Mulai:</span>
+                                    <div className="font-mono text-sm text-slate-900">
+                                      {new Date(h.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </div>
+                                  </div>
+                                  {h.end_date && (
+                                    <div>
+                                      <span className="text-slate-600">Tanggal Selesai:</span>
+                                      <div className="font-mono text-sm text-slate-900">
+                                        {new Date(h.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <Badge className={`${reason.color} border`}>
+                                  {reason.label}
+                                </Badge>
+                              </div>
+                            </div>
+                            {h.notes && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <span className="text-xs text-slate-600 uppercase">Catatan:</span>
+                                <p className="text-sm text-slate-700 italic mt-1">{h.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         )}

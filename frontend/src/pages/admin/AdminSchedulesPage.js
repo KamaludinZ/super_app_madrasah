@@ -47,7 +47,11 @@ export default function AdminSchedulesPage() {
     console.log('Grid.grid:', data.grid);
     console.log('Grid.schedules length:', data.schedules?.length);
     setGrid(data);
-    setItems(data.schedules || []);
+
+    // For list view, fetch grouped schedules with JTM
+    const { data: groupedData } = await api.get('/schedules/grouped', { params });
+    console.log('Grouped schedules with JTM:', groupedData);
+    setItems(groupedData || []);
   };
 
   useEffect(() => {
@@ -285,14 +289,25 @@ export default function AdminSchedulesPage() {
         </TabsContent>
 
         <TabsContent value="list" className="mt-4">
+          <Card><CardContent className="p-3">
+            <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
+              <span className="font-semibold">JTM (Jam Tugas Mengajar):</span> Jam mengajar yang berdekatan di kelas, hari, dan mata pelajaran yang sama otomatis digabung menjadi 1 entry. Contoh: Jam ke-2 dan ke-3 Matematika di kelas yang sama = 2 JTM.
+            </div>
+          </CardContent></Card>
           <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-schedules-table">
             <TableHeader><TableRow>
-              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
+              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
             <TableBody>{items.map((s) => (
               <TableRow key={s.id}>
                 <TableCell className="capitalize">{DAY_LABELS[s.day]}</TableCell>
-                <TableCell className="font-mono">{s.start_time}-{s.end_time}</TableCell>
+                <TableCell className="font-mono">
+                  <div>{s.hour_range || `Jam ke-${s.slot_index + 1 || '?'}`}</div>
+                  <div className="text-[10px] text-slate-500">{s.time_range || `${s.start_time}-${s.end_time}`}</div>
+                </TableCell>
+                <TableCell className="font-semibold text-[#006837]">
+                  {s.jtm_count || 1} JTM
+                </TableCell>
                 <TableCell className="font-semibold">{s.class_name || '-'}</TableCell>
                 <TableCell>{s.subject_name || '-'}</TableCell>
                 <TableCell className="text-sm">{s.teacher_name || '-'}</TableCell>

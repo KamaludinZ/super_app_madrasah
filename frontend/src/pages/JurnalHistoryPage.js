@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { History, Calendar, Clock, BookOpen, Download, Filter, X } from 'lucide-react';
+import { History, Calendar, Clock, BookOpen, Download, Filter, X, ShieldAlert } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,11 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function JurnalHistoryPage() {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+
+  const isPiket = user?.roles?.includes('guru_piket');
 
   // Filter states
   const [filterDateStart, setFilterDateStart] = useState('');
@@ -22,10 +26,12 @@ export default function JurnalHistoryPage() {
   const [filterClass, setFilterClass] = useState('all');
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterQrMode, setFilterQrMode] = useState('all');
+  const [filterFillMode, setFilterFillMode] = useState('all');
 
   useEffect(() => {
-    api.get('/jurnal/my').then(({ data }) => setItems(data)).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    const endpoint = isPiket ? '/jurnal/piket-filled' : '/jurnal/my';
+    api.get(endpoint).then(({ data }) => setItems(data)).catch(() => {}).finally(() => setLoading(false));
+  }, [isPiket]);
 
   // Get unique classes and subjects for filter
   const uniqueClasses = useMemo(() => {
@@ -67,8 +73,13 @@ export default function JurnalHistoryPage() {
       filtered = filtered.filter(j => (j.qr_mode || 'static') === filterQrMode);
     }
 
+    // Filter by fill mode
+    if (filterFillMode !== 'all') {
+      filtered = filtered.filter(j => (j.fill_mode || 'self') === filterFillMode);
+    }
+
     return filtered;
-  }, [items, filterDateStart, filterDateEnd, filterClass, filterSubject, filterQrMode]);
+  }, [items, filterDateStart, filterDateEnd, filterClass, filterSubject, filterQrMode, filterFillMode]);
 
   const handleExportExcel = () => {
     if (filteredItems.length === 0) {
@@ -78,25 +89,38 @@ export default function JurnalHistoryPage() {
 
     try {
       // Prepare data for export
-      const exportData = filteredItems.map((j, index) => ({
-        'No': index + 1,
-        'Tanggal': new Date(j.started_at).toLocaleString('id-ID', {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        }),
-        'Mata Pelajaran': j.subject_name,
-        'Kelas': j.class_name,
-        'Token Kelas': j.class_token || '-',
-        'Ruangan': j.room_name || '-',
-        'Mode QR': j.qr_mode || 'static',
-        'Materi': j.materi,
-        'Catatan': j.catatan || '-',
-        'Hadir': j.siswa_hadir || 0,
-        'Sakit': j.siswa_sakit || 0,
-        'Izin': j.siswa_izin || 0,
-        'Alpa': j.siswa_tidak_hadir || 0,
-        'Total Siswa': (j.siswa_hadir || 0) + (j.siswa_sakit || 0) + (j.siswa_izin || 0) + (j.siswa_tidak_hadir || 0),
-      }));
+      const exportData = filteredItems.map((j, index) => {
+        const base = {
+          'No': index + 1,
+          'Tanggal': new Date(j.started_at).toLocaleString('id-ID', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+          }),
+          'JTM': j.jtm_count || 1,
+          'Mata Pelajaran': j.subject_name,
+          'Kelas': j.class_name,
+          'Guru Pengajar': j.teacher_name || '-',
+          'Token Kelas': j.class_token || '-',
+          'Ruangan': j.room_name || '-',
+          'Mode QR': j.qr_mode || 'static',
+          'Materi': j.materi,
+          'Catatan': j.catatan || '-',
+        };
+
+        if (isPiket) {
+          base['Mode Pengisian'] = j.fill_mode === 'piket' ? 'Piket' : j.fill_mode === 'admin' ? 'Admin' : 'Guru';
+          base['Diisi Oleh'] = j.filled_by_name || j.teacher_name || '-';
+          base['Catatan Piket'] = j.piket_note || '-';
+        }
+
+        base['Hadir'] = j.siswa_hadir || 0;
+        base['Sakit'] = j.siswa_sakit || 0;
+        base['Izin'] = j.siswa_izin || 0;
+        base['Alpa'] = j.siswa_tidak_hadir || 0;
+        base['Total Siswa'] = (j.siswa_hadir || 0) + (j.siswa_sakit || 0) + (j.siswa_izin || 0) + (j.siswa_tidak_hadir || 0);
+
+        return base;
+      });
 
       // Create workbook and worksheet
       const ws = XLSX.utils.json_to_sheet(exportData);
@@ -140,10 +164,11 @@ export default function JurnalHistoryPage() {
     setFilterClass('all');
     setFilterSubject('all');
     setFilterQrMode('all');
+    setFilterFillMode('all');
   };
 
   const hasActiveFilters = filterDateStart || filterDateEnd || filterClass !== 'all' ||
-                          filterSubject !== 'all' || filterQrMode !== 'all';
+                          filterSubject !== 'all' || filterQrMode !== 'all' || filterFillMode !== 'all';
 
   const getQrModeBadge = (mode) => {
     const qrMode = mode || 'static';
@@ -162,12 +187,16 @@ export default function JurnalHistoryPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
-            <History className="h-3 w-3 mr-1" /> Riwayat Jurnal
+            {isPiket ? <ShieldAlert className="h-3 w-3 mr-1" /> : <History className="h-3 w-3 mr-1" />}
+            {isPiket ? 'Riwayat Jurnal Piket' : 'Riwayat Jurnal'}
           </Badge>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Jurnal Mengajar Saya</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            {isPiket ? 'Jurnal yang Saya Isi (Piket)' : 'Jurnal Mengajar Saya'}
+          </h1>
           <p className="text-sm text-slate-600 mt-1">
             Menampilkan <span className="font-semibold">{filteredItems.length}</span> dari{' '}
             <span className="font-semibold">{items.length}</span> entri
+            {isPiket && <span className="text-blue-600 ml-1">• Jurnal yang diisi sebagai guru piket</span>}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -203,7 +232,7 @@ export default function JurnalHistoryPage() {
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
               <div>
                 <Label className="text-xs">Tanggal Mulai</Label>
                 <Input
@@ -264,6 +293,22 @@ export default function JurnalHistoryPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {isPiket && (
+                <div>
+                  <Label className="text-xs">Mode Pengisian</Label>
+                  <Select value={filterFillMode} onValueChange={setFilterFillMode}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder="Semua Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Mode</SelectItem>
+                      <SelectItem value="piket">Piket</SelectItem>
+                      <SelectItem value="self">Guru Sendiri</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -296,13 +341,21 @@ export default function JurnalHistoryPage() {
                   <TableRow className="bg-slate-50">
                     <TableHead className="w-[50px]">No</TableHead>
                     <TableHead className="min-w-[150px]">Tanggal & Waktu</TableHead>
+                    <TableHead className="min-w-[70px]">JTM</TableHead>
                     <TableHead className="min-w-[140px]">Mata Pelajaran</TableHead>
                     <TableHead className="min-w-[100px]">Kelas</TableHead>
+                    {isPiket && <TableHead className="min-w-[140px]">Guru Pengajar</TableHead>}
                     <TableHead className="min-w-[110px]">Token Kelas</TableHead>
                     <TableHead className="min-w-[100px]">Ruangan</TableHead>
                     <TableHead className="min-w-[100px]">Mode QR</TableHead>
                     <TableHead className="min-w-[250px]">Materi</TableHead>
                     <TableHead className="min-w-[200px]">Catatan</TableHead>
+                    {isPiket && (
+                      <>
+                        <TableHead className="min-w-[120px]">Mode Pengisian</TableHead>
+                        <TableHead className="min-w-[200px]">Catatan Piket</TableHead>
+                      </>
+                    )}
                     <TableHead className="text-center">Hadir</TableHead>
                     <TableHead className="text-center">Sakit</TableHead>
                     <TableHead className="text-center">Izin</TableHead>
@@ -332,6 +385,11 @@ export default function JurnalHistoryPage() {
                           </div>
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold">
+                          {j.jtm_count || 1} JTM
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium text-slate-900">{j.subject_name}</div>
                       </TableCell>
@@ -340,6 +398,11 @@ export default function JurnalHistoryPage() {
                           {j.class_name}
                         </Badge>
                       </TableCell>
+                      {isPiket && (
+                        <TableCell>
+                          <span className="text-sm text-slate-700">{j.teacher_name || '-'}</span>
+                        </TableCell>
+                      )}
                       <TableCell>
                         {j.class_token ? (
                           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 font-mono text-xs">
@@ -369,6 +432,31 @@ export default function JurnalHistoryPage() {
                           <span className="text-xs text-slate-400">-</span>
                         )}
                       </TableCell>
+                      {isPiket && (
+                        <>
+                          <TableCell>
+                            {j.fill_mode === 'piket' ? (
+                              <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                                <ShieldAlert className="h-3 w-3 mr-1" />
+                                Piket
+                              </Badge>
+                            ) : j.fill_mode === 'admin' ? (
+                              <Badge className="bg-purple-50 text-purple-700 border-purple-200">Admin</Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-slate-50">Guru</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {j.piket_note ? (
+                              <div className="text-sm text-blue-600 italic max-w-xs">
+                                {j.piket_note}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell className="text-center">
                         <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
                           {j.siswa_hadir || 0}

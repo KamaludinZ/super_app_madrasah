@@ -91,14 +91,15 @@ export default function MySchedulePage() {
       const activeAYData = ay.data;
 
       const [s, c, sub, r, settings] = await Promise.all([
-        api.get('/schedules', { params: { teacher_id: user?.id } }),
+        // Use grouped endpoint for JTM grouping
+        api.get('/schedules/grouped', { params: { teacher_id: user?.id } }),
         // Load classes for active academic year
         activeAYData ? api.get('/classes', { params: { academic_year_id: activeAYData.id } }) : api.get('/classes'),
         api.get('/subjects'),
         api.get('/rooms'),
         api.get('/settings'),
       ]);
-      console.log('MySchedulePage - items:', s.data);
+      console.log('MySchedulePage - grouped items:', s.data);
 
       // Ensure status field exists with default 'draft'
       const itemsWithStatus = (s.data || []).map(item => ({
@@ -373,10 +374,15 @@ export default function MySchedulePage() {
         </>
       ) : (
         <Card>
+        <CardContent className="p-3">
+          <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
+            <span className="font-semibold">JTM (Jam Tugas Mengajar):</span> Jam mengajar berdekatan di kelas, hari, dan mata pelajaran yang sama digabung menjadi 1 entry.
+          </div>
+        </CardContent>
         <CardContent className="p-0">
           <Table data-testid="my-schedule-table">
             <TableHeader><TableRow>
-              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>Kelas</TableHead>
+              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>JTM</TableHead><TableHead>Kelas</TableHead>
               <TableHead>Mata Pelajaran</TableHead><TableHead>Ruang</TableHead>
               <TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
@@ -384,7 +390,13 @@ export default function MySchedulePage() {
               {items.map((s) => (
                 <TableRow key={s.id} data-testid={`schedule-row-${s.id}`}>
                   <TableCell className="capitalize font-semibold">{DAY_LABELS[s.day]}</TableCell>
-                  <TableCell className="font-mono text-sm">{s.start_time}–{s.end_time}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    <div>{s.hour_range || `Jam ke-${s.slot_index + 1 || '?'}`}</div>
+                    <div className="text-[10px] text-slate-500">{s.time_range || `${s.start_time}–${s.end_time}`}</div>
+                  </TableCell>
+                  <TableCell className="font-semibold text-[#006837]">
+                    {s.jtm_count || 1} JTM
+                  </TableCell>
                   <TableCell>{s.class_name || '-'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

@@ -43,6 +43,8 @@ export default function KebersihanPage() {
   const [filterClassHistory, setFilterClassHistory] = useState('all');
   const [filterCondition, setFilterCondition] = useState('all');
   const [detailDialog, setDetailDialog] = useState({ open: false, data: null });
+  const [detailStudents, setDetailStudents] = useState([]);
+  const [loadingDetailStudents, setLoadingDetailStudents] = useState(false);
 
   // Load classes (for guru: all classes they teach from schedule, not limited to today)
   useEffect(() => {
@@ -127,6 +129,20 @@ export default function KebersihanPage() {
       finally { setLoading(false); }
     })();
   }, [selectedClass, date]);
+
+  // Load students for detail dialog
+  useEffect(() => {
+    if (detailDialog.open && detailDialog.data?.class_id) {
+      setLoadingDetailStudents(true);
+      api.get('/students', { params: { class_id: detailDialog.data.class_id } })
+        .then(({ data }) => setDetailStudents(data))
+        .catch(() => {
+          toast.error('Gagal memuat daftar siswa');
+          setDetailStudents([]);
+        })
+        .finally(() => setLoadingDetailStudents(false));
+    }
+  }, [detailDialog.open, detailDialog.data?.class_id]);
 
   const handleSubmit = async () => {
     if (!selectedClass) { toast.error('Pilih kelas dulu'); return; }
@@ -420,40 +436,163 @@ export default function KebersihanPage() {
                 )}
               </div>
             ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredGuruHistory.map((h) => {
-                  const opt = CONDITION_OPTIONS.find((o) => o.value === h.condition) || CONDITION_OPTIONS[0];
-                  return (
-                    <div key={h.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-                        <div>
-                          <div className="font-mono text-xs text-slate-900">{h.date}</div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Clock className="h-3 w-3" />
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[120px]">Tanggal</TableHead>
+                      <TableHead>Kelas</TableHead>
+                      <TableHead>Kondisi</TableHead>
+                      <TableHead className="w-[120px]">Rating</TableHead>
+                      <TableHead className="w-[80px] text-center">Piket</TableHead>
+                      <TableHead className="w-[140px]">Waktu Input</TableHead>
+                      <TableHead className="w-[100px] text-center">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredGuruHistory.map((h) => {
+                      const opt = CONDITION_OPTIONS.find((o) => o.value === h.condition) || CONDITION_OPTIONS[0];
+                      return (
+                        <TableRow key={h.id}>
+                          <TableCell className="font-mono text-xs">{h.date}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-slate-50">{h.class_name}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={opt.color}>{opt.label}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex">
+                              {[1,2,3,4,5].map((n) => (
+                                <Star key={n} className={`h-3.5 w-3.5 ${h.rating >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-xs">{h.piket_students?.length || 0}</TableCell>
+                          <TableCell className="text-xs text-slate-500">
                             {h.recorded_at ? new Date(h.recorded_at).toLocaleString('id-ID', {
                               day: '2-digit',
                               month: 'short',
                               hour: '2-digit',
                               minute: '2-digit'
                             }) : '-'}
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="bg-slate-50 shrink-0">{h.class_name}</Badge>
-                        <Badge className={`${opt.color} shrink-0`}>{opt.label}</Badge>
-                        <div className="flex shrink-0">{[1,2,3,4,5].map((n) => <Star key={n} className={`h-3 w-3 ${h.rating >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />)}</div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs text-slate-500">{h.piket_students?.length || 0} piket</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDetailDialog({ open: true, data: h })}
+                              className="h-7 px-2"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              Detail
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      {/* Detail Dialog */}
+      <Dialog open={detailDialog.open} onOpenChange={(open) => setDetailDialog({ open, data: null })}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detail Catatan Kebersihan</DialogTitle>
+          </DialogHeader>
+          {detailDialog.data && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Tanggal</Label>
+                  <p className="font-mono text-sm font-semibold">{detailDialog.data.date}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Kelas</Label>
+                  <p className="text-sm font-semibold">{detailDialog.data.class_name}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Kondisi</Label>
+                  <div className="mt-1">
+                    <Badge className={CONDITION_OPTIONS.find(o => o.value === detailDialog.data.condition)?.color || CONDITION_OPTIONS[0].color}>
+                      {CONDITION_OPTIONS.find(o => o.value === detailDialog.data.condition)?.label || 'Bersih'}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Rating</Label>
+                  <div className="flex mt-1">
+                    {[1,2,3,4,5].map((n) => (
+                      <Star key={n} className={`h-5 w-5 ${detailDialog.data.rating >= n ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-slate-500">Waktu Input</Label>
+                <p className="text-sm">
+                  {detailDialog.data.recorded_at ? new Date(detailDialog.data.recorded_at).toLocaleString('id-ID', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : '-'}
+                </p>
+              </div>
+
+              {detailDialog.data.notes && (
+                <div>
+                  <Label className="text-xs text-slate-500">Catatan</Label>
+                  <p className="text-sm bg-slate-50 p-3 rounded-lg border border-slate-200 mt-1">
+                    {detailDialog.data.notes}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <Label className="text-xs text-slate-500">Daftar Piket ({detailDialog.data.piket_students?.length || 0} siswa)</Label>
+                {loadingDetailStudents ? (
+                  <div className="py-4 text-center">
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
+                  </div>
+                ) : detailDialog.data.piket_students && detailDialog.data.piket_students.length > 0 ? (
+                  <div className="mt-2 max-h-60 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[60px]">No</TableHead>
+                          <TableHead>Nama Siswa</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {detailDialog.data.piket_students.map((studentId, index) => {
+                          const student = detailStudents.find(s => s.id === studentId);
+                          return (
+                            <TableRow key={studentId}>
+                              <TableCell className="text-center">{index + 1}</TableCell>
+                              <TableCell>{student?.full_name || studentId}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 mt-2">Tidak ada siswa piket</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

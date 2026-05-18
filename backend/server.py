@@ -18,13 +18,17 @@ from routers import (
     academic,
     admin,
     admin_settings,
+    alumni,
+    app_info,
     auth,
     classes,
     health,
     holidays_tasks,
+    jabatan,
     journals,
     notifications,
     phase4,
+    promotions,
     public,
     reports,
     rooms,
@@ -47,10 +51,12 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
 api_router.include_router(admin_settings.router)
+api_router.include_router(app_info.router)
 api_router.include_router(academic.router)
 api_router.include_router(classes.router)
 api_router.include_router(subjects.router)
 api_router.include_router(rooms.router)
+api_router.include_router(jabatan.router)
 api_router.include_router(users.router)
 api_router.include_router(students.router)
 api_router.include_router(schedules.router)
@@ -62,6 +68,8 @@ api_router.include_router(holidays_tasks.router)
 api_router.include_router(phase4.router)
 api_router.include_router(notifications.router)
 api_router.include_router(reports.router)
+api_router.include_router(alumni.router)
+api_router.include_router(promotions.router)
 
 app.include_router(api_router)
 
@@ -131,3 +139,4 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+

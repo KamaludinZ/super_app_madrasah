@@ -13,6 +13,7 @@ from core import (
     get_current_user,
     get_settings,
     log_audit,
+    logger,
     require_role,
     serialize_doc,
 )
@@ -135,6 +136,50 @@ async def schedules_conflict_check(
 # ============================================================
 # SCHEDULES LIST/CREATE
 # ============================================================
+
+# More specific routes must come BEFORE generic routes in FastAPI
+@router.get("/schedules/grouped")
+async def list_schedules_grouped(
+    academic_year_id: Optional[str] = None, semester: Optional[str] = None,
+    class_id: Optional[str] = None, teacher_id: Optional[str] = None, day: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """
+    Get schedules grouped by JTM (Jam Tugas Mengajar).
+    Consecutive teaching hours in same class, day, subject are grouped together.
+    """
+    q = {}
+    if academic_year_id: q['academic_year_id'] = academic_year_id
+    if semester: q['semester'] = semester
+    if class_id: q['class_id'] = class_id
+    if teacher_id: q['teacher_id'] = teacher_id
+    if day: q['day'] = day
+
+    items = await db.schedules.find(q, {'_id': 0}).sort([('day', 1), ('start_time', 1)]).to_list(2000)
+
+    # Enrich first
+    enriched = []
+    for s in items:
+        cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
+        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+        teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+        room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
+        s['class_name'] = cls.get('name') if cls else None
+        s['subject_name'] = sub.get('name') if sub else None
+        s['subject_code'] = sub.get('code') if sub else None
+        s['teacher_name'] = teacher.get('full_name') if teacher else None
+        s['room_name'] = room.get('name') if room else None
+        if s.get('locked_by'):
+            lb = await db.users.find_one({'id': s['locked_by']}, {'_id': 0, 'full_name': 1})
+            s['locked_by_name'] = lb.get('full_name') if lb else None
+        enriched.append(serialize_doc(s))
+
+    # Group by JTM
+    grouped = _group_schedules_by_jtm(enriched)
+
+    return grouped
+
+
 @router.get("/schedules")
 async def list_schedules(
     academic_year_id: Optional[str] = None, semester: Optional[str] = None,
@@ -164,6 +209,135 @@ async def list_schedules(
             s['locked_by_name'] = lb.get('full_name') if lb else None
         enriched.append(serialize_doc(s))
     return enriched
+
+
+def _group_schedules_by_jtm(schedules: List[Dict]) -> List[Dict]:
+    """
+    Group teaching hours into JTM blocks.
+    Same day, class, subject, teacher = 1 JTM entry, even if separated by break times.
+
+    Example: Math class at hours 2, 3 (before break), then hours 4, 5 (after break)
+    If same teacher, subject, class, day = counted as 4 JTM total.
+
+    Returns list of grouped schedules with:
+    - jtm_count: number of teaching hours
+    - hours: list of hour numbers (e.g., [2, 3, 4, 5])
+    - hour_range: string like "Jam ke-2, 3, 4, 5"
+    - schedule_ids: list of original schedule IDs in this group
+    """
+    from datetime import datetime as dt
+
+    # Sort by day, class, subject, teacher, then start_time
+    sorted_schedules = sorted(schedules, key=lambda s: (
+        s.get('day', ''),
+        s.get('class_id', ''),
+        s.get('subject_id', ''),
+        s.get('teacher_id', ''),
+        s.get('start_time', '')
+    ))
+
+    grouped = []
+    i = 0
+
+    while i < len(sorted_schedules):
+        current = sorted_schedules[i]
+        group = [current]
+        group_ids = [current.get('id')]
+
+        # Try to find all schedules with same day, class, subject, teacher
+        # even if they're not strictly consecutive (breaks allowed)
+        j = i + 1
+        last_end_time = current.get('end_time')
+
+        while j < len(sorted_schedules):
+            next_schedule = sorted_schedules[j]
+
+            # Check if same day, class, subject, teacher
+            if (next_schedule.get('day') == current.get('day') and
+                next_schedule.get('class_id') == current.get('class_id') and
+                next_schedule.get('subject_id') == current.get('subject_id') and
+                next_schedule.get('teacher_id') == current.get('teacher_id')):
+
+                # Allow small gaps for break times (up to 2 hours gap)
+                # Parse time strings to check gap
+                try:
+                    from datetime import datetime
+                    last_end = datetime.strptime(last_end_time, '%H:%M')
+                    next_start = datetime.strptime(next_schedule.get('start_time'), '%H:%M')
+                    gap_minutes = (next_start - last_end).total_seconds() / 60
+
+                    # If gap is reasonable (< 120 minutes), it's likely just a break
+                    # and we should group them together
+                    if gap_minutes <= 120:
+                        group.append(next_schedule)
+                        group_ids.append(next_schedule.get('id'))
+                        last_end_time = next_schedule.get('end_time')
+                        j += 1
+                    else:
+                        break
+                except:
+                    # If time parsing fails, use strict consecutive check
+                    if last_end_time == next_schedule.get('start_time'):
+                        group.append(next_schedule)
+                        group_ids.append(next_schedule.get('id'))
+                        last_end_time = next_schedule.get('end_time')
+                        j += 1
+                    else:
+                        break
+            else:
+                break
+
+        # Create grouped entry
+        first = group[0]
+        last = group[-1]
+
+        # Extract hour numbers from slot_index
+        hours = []
+
+        # Define standard school schedule times (07:00 start, 45 min per hour)
+        # This maps start times to hour numbers
+        time_to_hour_map = {
+            '07:00': 1, '07:45': 2, '08:30': 3, '09:15': 4,
+            '10:15': 5, '11:00': 6, '11:45': 7,  # After 1st break (09:15-10:15)
+            '13:15': 8, '14:00': 9, '14:45': 10, '15:30': 11  # After lunch (11:45-13:15)
+        }
+
+        for s in group:
+            # First try to use slot_index if it exists and seems valid
+            if s.get('slot_index') is not None and s.get('slot_index') >= 0:
+                hour_num = s['slot_index'] + 1  # slot_index is 0-based
+                if hour_num not in hours:
+                    hours.append(hour_num)
+            # Otherwise try to derive from start_time using the map
+            elif s.get('start_time') in time_to_hour_map:
+                hour_num = time_to_hour_map[s['start_time']]
+                if hour_num not in hours:
+                    hours.append(hour_num)
+
+        # If we still don't have valid hours or the count doesn't match, use fallback
+        if not hours or len(hours) != len(group):
+            # Fallback: use sequential numbering
+            hours = list(range(1, len(group) + 1))
+            logger.warning(f"Using fallback hour numbering for grouped schedule. Group size: {len(group)}, start_times: {[s.get('start_time') for s in group]}")
+
+        # Sort hours to ensure proper order
+        hours.sort()
+        hour_range = "Jam ke-" + ", ".join(str(h) for h in hours)
+
+        grouped_entry = {
+            **first,  # Use first schedule as base
+            'jtm_count': len(group),
+            'hours': hours,
+            'hour_range': hour_range,
+            'schedule_ids': group_ids,
+            'end_time': last.get('end_time'),  # Use last schedule's end time
+            'time_range': f"{first.get('start_time')} - {last.get('end_time')}"
+        }
+
+        grouped.append(grouped_entry)
+        i = j if j > i + 1 else i + 1
+
+    return grouped
 
 
 @router.post("/schedules")
@@ -464,6 +638,28 @@ async def submit_schedule(sid: str, request: Request, user: Dict = Depends(get_c
     return serialize_doc(doc)
 
 
+@router.put("/schedules/{sid}/unsubmit")
+async def unsubmit_schedule(sid: str, request: Request, user: Dict = Depends(get_current_user)):
+    """Guru/wali kelas batal kirim jadwal yang sudah di-submit (kembali ke draft)."""
+    existing = await db.schedules.find_one({'id': sid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = existing.get('teacher_id') == user['id'] or existing.get('created_by') == user['id']
+    if not (is_admin or is_owner):
+        raise HTTPException(403, "Tidak diizinkan")
+    if existing.get('status') not in ['submitted']:
+        raise HTTPException(400, "Hanya jadwal dengan status 'terkirim' yang bisa dibatalkan")
+    await db.schedules.update_one({'id': sid}, {'$set': {
+        'status': 'draft',
+        'submitted_at': None,
+        'submitted_by': None,
+    }})
+    await log_audit(user, 'unsubmit', 'schedule', sid, request=request)
+    doc = await db.schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
 @router.put("/schedules/{sid}/approve")
 async def approve_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
     """Admin menyetujui jadwal yang sudah di-submit oleh guru."""
@@ -670,3 +866,4 @@ async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_
     await db.piket_schedules.delete_one({'id': pid})
     await log_audit(user, 'delete', 'piket_schedule', pid, request=request)
     return {'message': 'Dihapus'}
+

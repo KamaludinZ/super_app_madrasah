@@ -34,10 +34,12 @@ export default function PiketTasksPage() {
   const [loading, setLoading] = useState(true);
   const [taskOpen, setTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [taskForm, setTaskForm] = useState({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '' });
+  const [taskForm, setTaskForm] = useState({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '', leave_type: '' });
   const [fillOpen, setFillOpen] = useState(false);
   const [fillTarget, setFillTarget] = useState(null);
   const [fillForm, setFillForm] = useState({ materi: '', catatan: '', piket_note: '', ...ATTENDANCE_DEFAULT });
+  const [fillStudents, setFillStudents] = useState([]);
+  const [fillAttendance, setFillAttendance] = useState({});
 
   const refresh = async () => {
     try {
@@ -59,12 +61,12 @@ export default function PiketTasksPage() {
 
   const openCreateTask = () => {
     setEditingTask(null);
-    setTaskForm({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '' });
+    setTaskForm({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '', leave_type: '' });
     setTaskOpen(true);
   };
   const openEditTask = (t) => {
     setEditingTask(t);
-    setTaskForm({ schedule_id: t.schedule_id, date: t.date, task_content: t.task_content, notes: t.notes || '' });
+    setTaskForm({ schedule_id: t.schedule_id, date: t.date, task_content: t.task_content, notes: t.notes || '', leave_type: t.leave_type || '' });
     setTaskOpen(true);
   };
   const submitTask = async () => {
@@ -85,7 +87,18 @@ export default function PiketTasksPage() {
     catch (e) { toast.error('Gagal hapus'); }
   };
 
-  const openFill = (sch, task = null) => {
+  const acceptTask = async (t) => {
+    if (!window.confirm(`Terima tugas titipan dari ${t.teacher_name}?`)) return;
+    try {
+      await api.put(`/teacher-tasks/${t.id}/accept`);
+      toast.success('Tugas diterima');
+      await refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menerima tugas');
+    }
+  };
+
+  const openFill = async (sch, task = null) => {
     setFillTarget({ schedule: sch, task });
     setFillForm({
       materi: task?.task_content || '',
@@ -93,10 +106,43 @@ export default function PiketTasksPage() {
       piket_note: task ? `Titipan dari ${sch.teacher_name || 'guru pengajar'}` : 'Diisi oleh guru piket',
       ...ATTENDANCE_DEFAULT,
     });
+
+    // Load students for attendance
+    try {
+      const res = await api.get('/students', { params: { class_id: sch.class_id } });
+      setFillStudents(res.data);
+      // Initialize all students as 'hadir'
+      const initialAttendance = {};
+      res.data.forEach(student => {
+        initialAttendance[student.id] = 'hadir';
+      });
+      setFillAttendance(initialAttendance);
+    } catch (e) {
+      toast.error('Gagal memuat daftar siswa');
+      setFillStudents([]);
+      setFillAttendance({});
+    }
+
     setFillOpen(true);
   };
   const submitFill = async () => {
     if (!fillForm.materi.trim()) { toast.error('Materi wajib diisi'); return; }
+
+    // Calculate attendance summary from individual records
+    const attendanceSummary = {
+      siswa_hadir: 0,
+      siswa_tidak_hadir: 0,
+      siswa_izin: 0,
+      siswa_sakit: 0
+    };
+
+    Object.values(fillAttendance).forEach(status => {
+      if (status === 'hadir') attendanceSummary.siswa_hadir++;
+      else if (status === 'alpa') attendanceSummary.siswa_tidak_hadir++;
+      else if (status === 'izin') attendanceSummary.siswa_izin++;
+      else if (status === 'sakit') attendanceSummary.siswa_sakit++;
+    });
+
     try {
       await api.post('/piket/fill-journal', {
         schedule_id: fillTarget.schedule.id,
@@ -104,10 +150,8 @@ export default function PiketTasksPage() {
         materi: fillForm.materi,
         catatan: fillForm.catatan,
         piket_note: fillForm.piket_note,
-        siswa_hadir: parseInt(fillForm.siswa_hadir) || 0,
-        siswa_tidak_hadir: parseInt(fillForm.siswa_tidak_hadir) || 0,
-        siswa_izin: parseInt(fillForm.siswa_izin) || 0,
-        siswa_sakit: parseInt(fillForm.siswa_sakit) || 0,
+        ...attendanceSummary,
+        attendance_records: fillAttendance, // Send individual records
       });
       toast.success('Jurnal berhasil diisi atas nama guru pengajar');
       setFillOpen(false); await refresh();
@@ -236,58 +280,111 @@ export default function PiketTasksPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tanggal</TableHead>
+                      <TableHead>Jadwal Mengajar</TableHead>
                       <TableHead>Kelas</TableHead>
                       <TableHead>Mapel</TableHead>
                       <TableHead>Guru Pengajar</TableHead>
+                      <TableHead>Jenis Izin</TableHead>
                       <TableHead>Materi Titipan</TableHead>
+                      <TableHead>Catatan</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Diisi Oleh</TableHead>
+                      <TableHead>Diterima Oleh</TableHead>
+                      <TableHead>Waktu Terima</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(sTab === 'mine' ? myTasks : sTab === 'pending' ? pendingTasks : completedTasks).map((t) => (
-                      <TableRow key={t.id} data-testid={`task-row-${t.id}`}>
-                        <TableCell className="font-mono text-sm">{t.date}</TableCell>
-                        <TableCell className="font-semibold">{t.class_name || '-'}</TableCell>
-                        <TableCell className="text-sm">{t.subject_name || t.subject_code || '-'}</TableCell>
-                        <TableCell className="text-sm">{t.teacher_name || '-'}</TableCell>
-                        <TableCell className="text-sm max-w-[280px]">
-                          <div className="line-clamp-2">{t.task_content}</div>
-                          {t.notes && <div className="text-xs text-slate-500 mt-1 italic">{t.notes}</div>}
-                        </TableCell>
-                        <TableCell>
-                          {t.status === 'completed' ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Selesai</Badge>
-                          ) : (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200">Menunggu</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {t.completed_by_name ? (
-                            <span className="text-emerald-700 font-medium">{t.completed_by_name}</span>
-                          ) : (
-                            <span className="text-slate-400 italic">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {t.status === 'pending' && (t.teacher_id === user?.id || isAdmin) && (
-                              <>
-                                <Button size="icon" variant="ghost" onClick={() => openEditTask(t)} data-testid={`edit-task-${t.id}`}>
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button size="icon" variant="ghost" onClick={() => deleteTask(t)} className="text-rose-600" data-testid={`delete-task-${t.id}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
+                    {(sTab === 'mine' ? myTasks : sTab === 'pending' ? pendingTasks : completedTasks).map((t) => {
+                      const leaveTypeLabels = {
+                        'sakit': 'Izin Sakit',
+                        'cuti': 'Izin Cuti',
+                        'dinas_luar': 'Dinas Luar',
+                        'lainnya': 'Izin Lainnya'
+                      };
+                      return (
+                        <TableRow key={t.id} data-testid={`task-row-${t.id}`}>
+                          <TableCell className="font-mono text-sm">{t.date}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {t.start_time && t.end_time ? `${t.start_time}-${t.end_time}` : '-'}
+                          </TableCell>
+                          <TableCell className="font-semibold text-sm">{t.class_name || '-'}</TableCell>
+                          <TableCell className="text-sm">{t.subject_name || t.subject_code || '-'}</TableCell>
+                          <TableCell className="text-sm">{t.teacher_name || '-'}</TableCell>
+                          <TableCell className="text-xs">
+                            {t.leave_type ? (
+                              <Badge variant="outline" className="text-xs">
+                                {leaveTypeLabels[t.leave_type] || t.leave_type}
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
                             )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[200px]">
+                            <div className="line-clamp-2">{t.task_content}</div>
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[150px]">
+                            {t.notes ? (
+                              <div className="line-clamp-2 text-slate-600 italic">{t.notes}</div>
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {t.status === 'completed' ? (
+                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Selesai</Badge>
+                            ) : t.status === 'accepted' ? (
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-200">Diterima</Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200">Menunggu</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {t.accepted_by_name ? (
+                              <span className="text-blue-700 font-medium text-xs">{t.accepted_by_name}</span>
+                            ) : t.completed_by_name ? (
+                              <span className="text-emerald-700 font-medium text-xs">{t.completed_by_name}</span>
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600">
+                            {t.accepted_at ? (
+                              new Date(t.accepted_at).toLocaleString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              {t.status === 'pending' && isPiket && (
+                                <Button size="sm" variant="outline" onClick={() => acceptTask(t)}
+                                  className="border-blue-600 text-blue-600 hover:bg-blue-50 gap-1 text-xs"
+                                  data-testid={`accept-task-${t.id}`}>
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Terima
+                                </Button>
+                              )}
+                              {t.status === 'pending' && (t.teacher_id === user?.id || isAdmin) && (
+                                <>
+                                  <Button size="icon" variant="ghost" onClick={() => openEditTask(t)} data-testid={`edit-task-${t.id}`}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => deleteTask(t)} className="text-rose-600" data-testid={`delete-task-${t.id}`}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {(sTab === 'mine' ? myTasks : sTab === 'pending' ? pendingTasks : completedTasks).length === 0 && (
-                      <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                      <TableRow><TableCell colSpan={12} className="text-center py-12 text-slate-500">
                         <FileText className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                         <div className="font-semibold">Tidak ada data</div>
                       </TableCell></TableRow>
@@ -329,6 +426,20 @@ export default function PiketTasksPage() {
               <Input type="date" value={taskForm.date}
                 onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })}
                 data-testid="task-form-date" />
+            </div>
+            <div>
+              <Label>Jenis Izin Guru</Label>
+              <Select value={taskForm.leave_type} onValueChange={(v) => setTaskForm({ ...taskForm, leave_type: v })}>
+                <SelectTrigger data-testid="task-form-leave-type">
+                  <SelectValue placeholder="Pilih jenis izin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sakit">Izin Sakit</SelectItem>
+                  <SelectItem value="cuti">Izin Cuti</SelectItem>
+                  <SelectItem value="dinas_luar">Dinas Luar</SelectItem>
+                  <SelectItem value="lainnya">Izin Lainnya</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Materi Tugas / Instruksi *</Label>
@@ -422,22 +533,48 @@ export default function PiketTasksPage() {
                   placeholder="Mis. Guru izin, sakit, diklat..."
                   data-testid="fill-piket-note" />
               </div>
-              <div className="grid grid-cols-4 gap-2">
-                <div>
-                  <Label className="text-xs">Hadir</Label>
-                  <Input type="number" min="0" value={fillForm.siswa_hadir} onChange={(e) => setFillForm({ ...fillForm, siswa_hadir: e.target.value })} data-testid="fill-hadir" />
+              <div>
+                <Label className="font-semibold">Absensi Siswa</Label>
+                <div className="mt-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">No</TableHead>
+                        <TableHead>Nama Siswa</TableHead>
+                        <TableHead className="w-[140px]">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fillStudents.map((student, index) => (
+                        <TableRow key={student.id}>
+                          <TableCell className="text-center text-xs">{index + 1}</TableCell>
+                          <TableCell className="text-sm">{student.full_name}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={fillAttendance[student.id] || 'hadir'}
+                              onValueChange={(val) => setFillAttendance({ ...fillAttendance, [student.id]: val })}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="hadir">Hadir</SelectItem>
+                                <SelectItem value="izin">Izin</SelectItem>
+                                <SelectItem value="sakit">Sakit</SelectItem>
+                                <SelectItem value="alpa">Alpa</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-                <div>
-                  <Label className="text-xs">Izin</Label>
-                  <Input type="number" min="0" value={fillForm.siswa_izin} onChange={(e) => setFillForm({ ...fillForm, siswa_izin: e.target.value })} data-testid="fill-izin" />
-                </div>
-                <div>
-                  <Label className="text-xs">Sakit</Label>
-                  <Input type="number" min="0" value={fillForm.siswa_sakit} onChange={(e) => setFillForm({ ...fillForm, siswa_sakit: e.target.value })} data-testid="fill-sakit" />
-                </div>
-                <div>
-                  <Label className="text-xs">Alpa</Label>
-                  <Input type="number" min="0" value={fillForm.siswa_tidak_hadir} onChange={(e) => setFillForm({ ...fillForm, siswa_tidak_hadir: e.target.value })} data-testid="fill-alpa" />
+                <div className="mt-2 text-xs text-slate-600 flex gap-4">
+                  <span>Hadir: {Object.values(fillAttendance).filter(s => s === 'hadir').length}</span>
+                  <span>Izin: {Object.values(fillAttendance).filter(s => s === 'izin').length}</span>
+                  <span>Sakit: {Object.values(fillAttendance).filter(s => s === 'sakit').length}</span>
+                  <span>Alpa: {Object.values(fillAttendance).filter(s => s === 'alpa').length}</span>
                 </div>
               </div>
             </div>

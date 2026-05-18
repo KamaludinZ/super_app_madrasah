@@ -136,8 +136,8 @@ async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
 # CLASS CLEANLINESS (Kebersihan Kelas)
 # ============================================================
 @router.get("/cleanliness/admin/recap")
-async def get_cleanliness_recap(user: Dict = Depends(require_role('admin'))):
-    """Admin: rekapitulasi penilaian kebersihan semua kelas."""
+async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk'))):
+    """Admin & Guru BK: rekapitulasi penilaian kebersihan semua kelas."""
     # Get all classes
     ay = await get_active_academic_year()
     classes = await db.classes.find(

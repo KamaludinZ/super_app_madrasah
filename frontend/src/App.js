@@ -14,6 +14,7 @@ import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
 import JadwalPage from '@/pages/JadwalPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminClassesPage from '@/pages/admin/AdminClassesPage';
+import AdminJabatanPage from '@/pages/admin/AdminJabatanPage';
 import AdminRoomsPage from '@/pages/admin/AdminRoomsPage';
 import AdminSubjectsPage from '@/pages/admin/AdminSubjectsPage';
 import AdminSchedulesPage from '@/pages/admin/AdminSchedulesPage';
@@ -45,6 +46,9 @@ import AdminGTKPage from '@/pages/admin/AdminGTKPage';
 import ReportPage from '@/pages/ReportPage';
 import WaliKelasReportsPage from '@/pages/WaliKelasReportsPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
+import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
+import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
+import AdminPromotionsPage from '@/pages/admin/AdminPromotionsPage';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -106,6 +110,7 @@ function App() {
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/gtk" element={<AdminGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
+            <Route path="/admin/jabatan" element={<AdminJabatanPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />
             <Route path="/admin/subjects" element={<AdminSubjectsPage />} />
             <Route path="/admin/schedules" element={<AdminSchedulesPage />} />
@@ -118,9 +123,12 @@ function App() {
             <Route path="/admin/backup" element={<AdminBackupPage />} />
             <Route path="/admin/pengumuman" element={<AdminAnnouncementsPage />} />
             <Route path="/admin/kurikulum" element={<AdminCurriculumsPage />} />
+            <Route path="/admin/app-info" element={<AdminAppInfoPage />} />
             <Route path="/piket/tugas" element={<PiketTasksPage />} />
             <Route path="/jadwal/atur" element={<MySchedulePage />} />
             <Route path="/admin/mutasi" element={<AdminMutationsPage />} />
+            <Route path="/admin/alumni" element={<AdminAlumniPage />} />
+            <Route path="/admin/naik-kelas" element={<AdminPromotionsPage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />

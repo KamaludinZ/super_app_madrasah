@@ -152,6 +152,9 @@ async def list_teacher_tasks(date: Optional[str] = None,
             t['room_name'] = room.get('name') if room else None
         tch = await db.users.find_one({'id': t.get('teacher_id')}, {'_id': 0, 'full_name': 1})
         t['teacher_name'] = tch.get('full_name') if tch else None
+        if t.get('accepted_by_user_id'):
+            ab = await db.users.find_one({'id': t['accepted_by_user_id']}, {'_id': 0, 'full_name': 1})
+            t['accepted_by_name'] = ab.get('full_name') if ab else None
         if t.get('completed_by_user_id'):
             cb = await db.users.find_one({'id': t['completed_by_user_id']}, {'_id': 0, 'full_name': 1})
             t['completed_by_name'] = cb.get('full_name') if cb else None
@@ -211,6 +214,29 @@ async def delete_teacher_task(tid: str, request: Request, user: Dict = Depends(g
     await db.teacher_tasks.delete_one({'id': tid})
     await log_audit(user, 'delete', 'teacher_task', tid, request=request)
     return {'message': 'Dihapus'}
+
+
+@router.put("/teacher-tasks/{tid}/accept")
+async def accept_teacher_task(tid: str, request: Request, user: Dict = Depends(require_role('guru_piket', 'admin'))):
+    """Guru piket menerima tugas titipan."""
+    from datetime import datetime
+    existing = await db.teacher_tasks.find_one({'id': tid})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    if existing.get('status') != 'pending':
+        raise HTTPException(400, "Tugas sudah diterima atau selesai")
+
+    await db.teacher_tasks.update_one(
+        {'id': tid},
+        {'$set': {
+            'status': 'accepted',
+            'accepted_by_user_id': user['id'],
+            'accepted_at': datetime.utcnow().isoformat()
+        }}
+    )
+    await log_audit(user, 'accept', 'teacher_task', tid, details={'accepted_by': user.get('full_name')}, request=request)
+    doc = await db.teacher_tasks.find_one({'id': tid}, {'_id': 0})
+    return serialize_doc(doc)
 
 
 # ============================================================

@@ -17,19 +17,23 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 export default function CameraScanner({ onDecoded, onCancel }) {
   const containerRef = useRef(null);
   const scannerRef = useRef(null);
-  const [status, setStatus] = useState('starting'); // starting | ready | error
+  const [status, setStatus] = useState('starting'); // starting | ready | error | scanning
   const [error, setError] = useState(null);
+  const [scanProgress, setScanProgress] = useState('Menunggu QR Code...');
 
   useEffect(() => {
     let mounted = true;
+    let processingQr = false; // Prevent duplicate processing
 
     const init = async () => {
+      console.log('[CameraScanner] Initializing...');
       // Wait one frame to ensure ref is attached
       await new Promise((r) => requestAnimationFrame(() => r()));
       if (!mounted) return;
 
       const el = containerRef.current;
       if (!el) {
+        console.error('[CameraScanner] Container element not found');
         setError('Elemen kamera tidak ditemukan');
         setStatus('error');
         return;
@@ -38,10 +42,12 @@ export default function CameraScanner({ onDecoded, onCancel }) {
       // Ensure unique id
       const elId = el.id || 'qr-camera-' + Date.now();
       if (!el.id) el.id = elId;
+      console.log('[CameraScanner] Using element ID:', elId);
 
       try {
         // Probe camera permissions first
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error('[CameraScanner] MediaDevices API not available');
           setError('Browser ini tidak mendukung akses kamera. Coba gunakan Chrome / Safari terbaru, atau gunakan tab "Token Kelas" sebagai alternatif.');
           setStatus('error');
           return;
@@ -50,32 +56,135 @@ export default function CameraScanner({ onDecoded, onCancel }) {
         const html5 = new Html5Qrcode(elId, { verbose: false });
         scannerRef.current = html5;
 
-        // Try environment camera first, fallback to any camera
-        const cameraConfig = { facingMode: 'environment' };
-        const scanConfig = {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0
+        // Try environment camera with high resolution
+        const cameraConfig = {
+          facingMode: 'environment',
+          // Request higher resolution for better QR detection
+          advanced: [
+            { zoom: 2.0 },
+            { focusMode: 'continuous' }
+          ]
         };
 
-        await html5.start(
-          cameraConfig,
-          scanConfig,
+        const scanConfig = {
+          fps: 30, // Maximum FPS for fastest detection
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            // Make QR box larger for easier scanning
+            let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            let qrboxSize = Math.floor(minEdge * 0.85); // 85% of smaller dimension for larger scan area
+            return {
+              width: qrboxSize,
+              height: qrboxSize
+            };
+          },
+          aspectRatio: 1.0,
+          disableFlip: false, // Allow horizontal flip for better detection
+          videoConstraints: {
+            // Request higher resolution for better detection
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            facingMode: 'environment'
+          }
+        };
+
+        console.log('[CameraScanner] Starting camera with config:', { cameraConfig, scanConfig });
+
+        // Try with advanced config first, fallback to simple config if fails
+        let cameraStarted = false;
+        try {
+          await html5.start(
+            cameraConfig,
+            scanConfig,
           (decodedText) => {
-            // Stop and pass result up
+            // Prevent duplicate processing
+            if (processingQr) {
+              console.log('[CameraScanner] Already processing QR, ignoring...');
+              return;
+            }
+            processingQr = true;
+
+            console.log('[CameraScanner] QR detected:', decodedText);
+
+            // Update UI immediately
+            if (mounted) {
+              setScanProgress('✓ QR Code terdeteksi! Memproses...');
+              setStatus('scanning');
+            }
+
+            // Call onDecoded immediately without waiting for stop
+            onDecoded?.(decodedText);
+
+            // Stop scanner in background
             if (scannerRef.current) {
               html5.stop()
-                .then(() => { scannerRef.current = null; })
-                .catch(() => {})
-                .finally(() => onDecoded?.(decodedText));
+                .then(() => {
+                  scannerRef.current = null;
+                  console.log('[CameraScanner] Scanner stopped');
+                })
+                .catch((err) => {
+                  console.error('[CameraScanner] Error stopping:', err);
+                });
             }
           },
-          () => { /* ignore per-frame failures */ }
-        );
+          (errorMessage) => {
+            // Optional: log scan errors for debugging (uncomment to see what's happening)
+            // console.log('[CameraScanner] Scan frame error:', errorMessage);
+          });
+          cameraStarted = true;
+        } catch (advancedError) {
+          console.warn('[CameraScanner] Advanced config failed, trying simple config:', advancedError);
+          // Fallback to simple configuration
+          await html5.start(
+            { facingMode: 'environment' },
+            {
+              fps: 30,
+              qrbox: 250,
+              disableFlip: false
+            },
+            (decodedText) => {
+              if (processingQr) {
+                console.log('[CameraScanner] Already processing QR, ignoring...');
+                return;
+              }
+              processingQr = true;
 
-        if (mounted) setStatus('ready');
+              console.log('[CameraScanner] QR detected (fallback):', decodedText);
+
+              // Update UI immediately
+              if (mounted) {
+                setScanProgress('✓ QR Code terdeteksi! Memproses...');
+                setStatus('scanning');
+              }
+
+              // Call onDecoded immediately without waiting for stop
+              onDecoded?.(decodedText);
+
+              // Stop scanner in background
+              if (scannerRef.current) {
+                html5.stop()
+                  .then(() => {
+                    scannerRef.current = null;
+                    console.log('[CameraScanner] Scanner stopped');
+                  })
+                  .catch((err) => {
+                    console.error('[CameraScanner] Error stopping:', err);
+                  });
+              }
+            },
+            (errorMessage) => {
+              // Ignore per-frame errors
+            }
+          );
+          cameraStarted = true;
+        }
+
+        if (mounted && cameraStarted) {
+          console.log('[CameraScanner] Camera started successfully');
+          setStatus('ready');
+        }
       } catch (e) {
         if (!mounted) return;
+        console.error('[CameraScanner] Error initializing camera:', e);
         const msg = (e?.message || String(e)).toLowerCase();
         let userMsg = 'Tidak dapat mengakses kamera.';
         if (msg.includes('permission') || msg.includes('notallowed')) {
@@ -89,6 +198,7 @@ export default function CameraScanner({ onDecoded, onCancel }) {
         } else if (msg.includes('securityerror') || msg.includes('https')) {
           userMsg = 'Akses kamera memerlukan koneksi HTTPS. Hubungi admin IT.';
         }
+        console.error('[CameraScanner] User-friendly error:', userMsg);
         setError(userMsg);
         setStatus('error');
       }
@@ -144,7 +254,24 @@ export default function CameraScanner({ onDecoded, onCancel }) {
       />
 
       {status === 'ready' && (
-        <p className="text-xs text-slate-500 text-center">Arahkan kamera ke kartu QR di depan kelas. Sistem akan mendeteksi secara otomatis.</p>
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500 text-center">Arahkan kamera ke kartu QR di depan kelas. Sistem akan mendeteksi secara otomatis.</p>
+          <div className="text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
+              <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-emerald-700">{scanProgress}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {status === 'scanning' && (
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-200">
+            <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+            <span className="text-sm font-semibold text-blue-700">{scanProgress}</span>
+          </div>
+        </div>
       )}
 
       <Button variant="outline" onClick={stopAndCancel} className="w-full" data-testid="jurnal-scan-cancel">

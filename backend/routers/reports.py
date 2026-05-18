@@ -161,8 +161,8 @@ async def get_report(report_id: str, user: Dict = Depends(get_current_user)):
 # ============================================================
 @router.put("/reports/{report_id}")
 async def update_report(report_id: str, req: ReportUpdate, request: Request,
-                        user: Dict = Depends(require_role('admin'))):
-    """Admin updates report status and response."""
+                        user: Dict = Depends(require_role('admin', 'guru_bk'))):
+    """Admin & Guru BK updates report status and response."""
     existing = await db.reports.find_one({'id': report_id})
     if not existing:
         raise HTTPException(404, "Laporan tidak ditemukan")
@@ -221,8 +221,8 @@ async def delete_report(report_id: str, request: Request,
 # STATS (Admin)
 # ============================================================
 @router.get("/reports/stats/summary")
-async def get_reports_stats(user: Dict = Depends(require_role('admin'))):
-    """Get report statistics for admin dashboard."""
+async def get_reports_stats(user: Dict = Depends(require_role('admin', 'guru_bk'))):
+    """Get report statistics for admin & Guru BK dashboard."""
     total = await db.reports.count_documents({})
     by_type = {}
     by_status = {}

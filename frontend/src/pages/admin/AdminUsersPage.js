@@ -18,6 +18,7 @@ const EMPTY = {
   roles: [], homeroom_class_id: '', student_class_id: '', parent_of: [],
   gender: '', birth_place: '', birth_date: '', address: '',
   mutation_type: '', mutation_date: '', mutation_note: '',
+  jabatan_ids: [],
 };
 
 const ROLE_TABS = [
@@ -37,6 +38,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [jabatanList, setJabatanList] = useState([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [open, setOpen] = useState(false);
@@ -53,8 +55,13 @@ export default function AdminUsersPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [u, r, c] = await Promise.all([api.get('/users'), api.get('/roles'), api.get('/classes')]);
-        setUsers(u.data); setRoles(r.data); setClasses(c.data);
+        const [u, r, c, j] = await Promise.all([
+          api.get('/users'),
+          api.get('/roles'),
+          api.get('/classes'),
+          api.get('/jabatan/active')
+        ]);
+        setUsers(u.data); setRoles(r.data); setClasses(c.data); setJabatanList(j.data);
         const studs = await api.get('/users', { params: { role: 'siswa' } });
         setStudentsList(studs.data);
       } catch (e) { /* */ } finally { setLoading(false); }
@@ -76,12 +83,18 @@ export default function AdminUsersPage() {
       mutation_type: u.mutation_type || '',
       mutation_date: u.mutation_date || '',
       mutation_note: u.mutation_note || '',
+      jabatan_ids: u.jabatan_ids || [],
     });
   };
 
   const toggleRole = (r) => {
     const exists = form.roles.includes(r);
     setForm({ ...form, roles: exists ? form.roles.filter((x) => x !== r) : [...form.roles, r] });
+  };
+
+  const toggleJabatan = (jid) => {
+    const exists = form.jabatan_ids.includes(jid);
+    setForm({ ...form, jabatan_ids: exists ? form.jabatan_ids.filter((x) => x !== jid) : [...form.jabatan_ids, jid] });
   };
 
   const handleSubmit = async () => {
@@ -178,8 +191,13 @@ export default function AdminUsersPage() {
                 <Table data-testid="admin-users-table">
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[100px]">ID</TableHead>
                       <TableHead>Username</TableHead>
                       <TableHead>Nama Lengkap</TableHead>
+                      <TableHead>NISN</TableHead>
+                      <TableHead>NIP/Peg ID</TableHead>
+                      <TableHead>Jabatan</TableHead>
+                      <TableHead>Kelas</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Peran</TableHead>
                       <TableHead>Status</TableHead>
@@ -187,43 +205,94 @@ export default function AdminUsersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((u) => (
-                      <TableRow key={u.id} data-testid={`user-row-${u.username}`}>
-                        <TableCell className="font-mono">{u.username}</TableCell>
-                        <TableCell className="font-medium">{u.full_name}</TableCell>
-                        <TableCell className="text-sm text-slate-600">{u.email || <span className="italic text-slate-400">-</span>}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {u.roles?.map((r) => (
-                              <Badge key={r} variant="secondary" className="text-xs">{ROLE_LABELS[r] || r}</Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {u.mutation_type === 'keluar' ? (
-                            <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1">
-                              <UserMinus className="h-3 w-3" /> Mutasi Keluar
-                            </Badge>
-                          ) : u.mutation_type === 'masuk' ? (
-                            <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1">
-                              <UserPlus className="h-3 w-3" /> Mutasi Masuk
-                            </Badge>
-                          ) : u.is_active ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
-                          ) : (
-                            <Badge variant="outline">Nonaktif</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filtered.map((u) => {
+                      const isSiswa = u.roles?.includes('siswa');
+                      const isStaff = u.roles?.some(r => ['guru', 'wali_kelas', 'tenaga_kependidikan', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler', 'admin'].includes(r));
+                      const className = isSiswa ? classes.find(c => c.id === u.student_class_id)?.name : null;
+
+                      // Get user's jabatan names
+                      const userJabatanNames = u.jabatan_ids?.map(jid => {
+                        const j = jabatanList.find(jab => jab.id === jid);
+                        return j?.name;
+                      }).filter(Boolean) || [];
+
+                      return (
+                        <TableRow key={u.id} data-testid={`user-row-${u.username}`}>
+                          <TableCell className="font-mono text-xs text-slate-500">
+                            {u.id ? u.id.substring(0, 8) : '-'}
+                          </TableCell>
+                          <TableCell className="font-mono">{u.username}</TableCell>
+                          <TableCell className="font-medium">{u.full_name}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {isSiswa && u.nisn ? (
+                              <span className="text-slate-700">{u.nisn}</span>
+                            ) : (
+                              <span className="italic text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {isStaff && u.nip_nuptk ? (
+                              <span className="text-slate-700">{u.nip_nuptk}</span>
+                            ) : (
+                              <span className="italic text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {userJabatanNames.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {userJabatanNames.map((jName, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs">{jName}</Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="italic text-slate-400 text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {isSiswa ? (
+                              className ? (
+                                <Badge variant="outline" className="font-semibold">{className}</Badge>
+                              ) : (
+                                <span className="italic text-slate-400 text-xs">Belum ada kelas</span>
+                              )
+                            ) : (
+                              <span className="italic text-slate-400 text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-600">{u.email || <span className="italic text-slate-400">-</span>}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {u.roles?.map((r) => (
+                                <Badge key={r} variant="secondary" className="text-xs">{ROLE_LABELS[r] || r}</Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {u.mutation_type === 'keluar' ? (
+                              <Badge className="bg-rose-100 text-rose-700 border-rose-200 gap-1">
+                                <UserMinus className="h-3 w-3" /> Mutasi Keluar
+                              </Badge>
+                            ) : u.mutation_type === 'masuk' ? (
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-200 gap-1">
+                                <UserPlus className="h-3 w-3" /> Mutasi Masuk
+                              </Badge>
+                            ) : u.is_active ? (
+                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+                            ) : (
+                              <Badge variant="outline">Nonaktif</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {filtered.length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -283,6 +352,23 @@ export default function AdminUsersPage() {
                 ))}
               </div>
             </div>
+            {(form.roles.includes('guru') || form.roles.includes('tenaga_kependidikan')) && (
+              <div className="sm:col-span-2">
+                <Label>Jabatan (boleh lebih dari satu)</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">
+                  {jabatanList.length === 0 ? (
+                    <p className="text-sm text-slate-400 col-span-2 py-2">Belum ada jabatan. Kelola di menu Jabatan.</p>
+                  ) : (
+                    jabatanList.map((j) => (
+                      <label key={j.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <Checkbox checked={form.jabatan_ids.includes(j.id)} onCheckedChange={() => toggleJabatan(j.id)} />
+                        <span>{j.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
             {form.roles.includes('wali_kelas') && (
               <div className="sm:col-span-2">
                 <Label>Wali Kelas dari</Label>
