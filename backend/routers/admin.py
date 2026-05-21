@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from core import (
     db,
     get_active_academic_year,
+    get_active_context,
     get_settings,
     log_audit,
     logger,
@@ -49,30 +50,36 @@ async def get_security_logs(limit: int = 200, user: Dict = Depends(require_role(
 # ============================================================
 @router.get("/admin/stats")
 async def admin_stats(user: Dict = Depends(require_role('admin'))):
+    """Dashboard stats filtered by user's view context (semester)"""
     today = current_day_id()
-    ay = await get_active_academic_year()
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
     total_users = await db.users.count_documents({})
-    total_classes = await db.classes.count_documents({})
+    total_classes = await db.classes.count_documents({'semester_id': semester_id} if semester_id else {})
     total_rooms = await db.rooms.count_documents({})
     total_schedules_today = await db.schedules.count_documents({
-        'day': today, 'academic_year_id': ay['id'] if ay else 'none',
-    })
+        'day': today, 'semester_id': semester_id,
+    } if semester_id else {'day': today})
     now = now_wib()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     total_journals_today = await db.journals.count_documents({'started_at': {'$gte': today_start}})
     return {
         'total_users': total_users, 'total_classes': total_classes, 'total_rooms': total_rooms,
         'total_schedules_today': total_schedules_today, 'total_journals_today': total_journals_today,
-        'active_academic_year': ay.get('name') if ay else None, 'current_day': today,
+        'active_semester': ctx.get('semester_name'), 'current_day': today,
     }
 
 
 @router.get("/admin/stats/students")
 async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
-    """Statistik siswa: total, per tingkat (7/8/9), mutasi di TP aktif."""
-    ay = await get_active_academic_year()
+    """Statistik siswa: total, per tingkat (7/8/9), mutasi filtered by user's view context (semester)."""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    academic_year_id = ctx.get('academic_year_id')
+
     total = await db.users.count_documents({'roles': 'siswa', 'is_active': True})
-    classes = await db.classes.find({'academic_year_id': ay['id']} if ay else {}, {'_id': 0, 'id': 1, 'grade': 1}).to_list(500)
+    classes = await db.classes.find({'semester_id': semester_id} if semester_id else {}, {'_id': 0, 'id': 1, 'grade': 1}).to_list(500)
     grade_map = {c['id']: c.get('grade') for c in classes}
     per_grade = {7: 0, 8: 0, 9: 0}
     siswa_users = await db.users.find({'roles': 'siswa', 'is_active': True}, {'_id': 0, 'student_class_id': 1}).to_list(5000)
@@ -81,8 +88,8 @@ async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
         if g in per_grade:
             per_grade[g] += 1
     mutasi_q = {'roles': 'siswa'}
-    if ay:
-        mutasi_q['mutation_ay_id'] = ay['id']
+    if academic_year_id:
+        mutasi_q['mutation_ay_id'] = academic_year_id
     mutasi_q['mutation_type'] = {'$in': ['masuk', 'keluar']}
     total_mutasi = await db.users.count_documents(mutasi_q)
     mutasi_masuk = await db.users.count_documents({**mutasi_q, 'mutation_type': 'masuk'})
@@ -95,7 +102,7 @@ async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
         'mutasi_total': total_mutasi,
         'mutasi_masuk': mutasi_masuk,
         'mutasi_keluar': mutasi_keluar,
-        'academic_year': ay.get('name') if ay else None,
+        'semester_name': ctx.get('semester_name'),
     }
 
 

@@ -11,6 +11,7 @@ from auth_utils import hash_password
 from core import (
     db,
     get_active_academic_year,
+    get_active_context,
     get_current_user,
     log_audit,
     require_role,
@@ -71,10 +72,15 @@ async def student_today(student_id: str, user: Dict = Depends(get_current_user))
     if not cls:
         return {'student': serialize_doc(student), 'class': None, 'today_schedule': []}
     day = current_day_id()
-    ay = await get_active_academic_year()
+
+    # Get semester_id from the class to filter schedules
+    semester_id = cls.get('semester_id')
+    if not semester_id:
+        return {'student': serialize_doc(student), 'class': serialize_doc(cls), 'today_schedule': []}
+
     schedules = await db.schedules.find({
         'class_id': cls['id'], 'day': day,
-        'academic_year_id': ay['id'] if ay else None,
+        'semester_id': semester_id,
     }, {'_id': 0}).sort('start_time', 1).to_list(50)
     enriched = []
     for s in schedules:
@@ -137,11 +143,12 @@ async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
 # ============================================================
 @router.get("/cleanliness/admin/recap")
 async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk'))):
-    """Admin & Guru BK: rekapitulasi penilaian kebersihan semua kelas."""
-    # Get all classes
-    ay = await get_active_academic_year()
+    """Admin & Guru BK: rekapitulasi penilaian kebersihan semua kelas, filtered by user's view context (semester)."""
+    # Get all classes for active semester
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
     classes = await db.classes.find(
-        {'academic_year_id': ay['id'] if ay else None},
+        {'semester_id': semester_id} if semester_id else {},
         {'_id': 0}
     ).sort('name', 1).to_list(500)
 
@@ -179,16 +186,17 @@ async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru
 
 @router.get("/cleanliness/guru/classes/all")
 async def get_guru_all_classes(user: Dict = Depends(require_role('guru'))):
-    """Guru: get all classes they teach (from their schedules), not limited to a specific day."""
-    # Get active academic year
-    ay = await get_active_academic_year()
-    if not ay:
+    """Guru: get all classes they teach (from their schedules), filtered by user's view context (semester)."""
+    # Get active semester context
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
         return []
 
-    # Get all schedules for this teacher
+    # Get all schedules for this teacher in active semester
     schedules = await db.schedules.find({
         'teacher_id': user['id'],
-        'academic_year_id': ay['id'],
+        'semester_id': semester_id,
         'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
     }, {'_id': 0, 'class_id': 1}).to_list(500)
 
@@ -216,16 +224,17 @@ async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_rol
     except ValueError:
         raise HTTPException(400, "Format tanggal salah, gunakan YYYY-MM-DD")
 
-    # Get active academic year
-    ay = await get_active_academic_year()
-    if not ay:
+    # Get active semester context
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
         return []
 
-    # Get schedules for this teacher on this day
+    # Get schedules for this teacher on this day in active semester
     schedules = await db.schedules.find({
         'teacher_id': user['id'],
         'day': day,
-        'academic_year_id': ay['id'],
+        'semester_id': semester_id,
         'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
     }, {'_id': 0, 'class_id': 1}).to_list(500)
 
@@ -244,12 +253,23 @@ async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_rol
 
 @router.get("/cleanliness/guru/history")
 async def get_guru_cleanliness_history(limit: int = 100, user: Dict = Depends(require_role('guru'))):
-    """Get cleanliness history filled by this teacher across all classes."""
-    # Fixed: Use recorded_by instead of created_by
-    items = await db.class_cleanliness.find(
-        {'recorded_by': user['id']},
-        {'_id': 0}
-    ).sort('recorded_at', -1).to_list(limit)
+    """Get cleanliness history filled by this teacher across all classes, filtered by user's view context (semester)."""
+    # Get user's view context for semester filtering
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Get classes for this semester
+    class_ids = []
+    if semester_id:
+        classes = await db.classes.find({'semester_id': semester_id}, {'_id': 0, 'id': 1}).to_list(None)
+        class_ids = [c['id'] for c in classes]
+
+    # Build query
+    query = {'recorded_by': user['id']}
+    if class_ids:
+        query['class_id'] = {'$in': class_ids}
+
+    items = await db.class_cleanliness.find(query, {'_id': 0}).sort('recorded_at', -1).to_list(limit)
 
     # Enrich with class names
     enriched = []
@@ -266,6 +286,19 @@ async def get_class_cleanliness(class_id: str, limit: int = 30,
                                 user: Dict = Depends(get_current_user)):
     if not await user_can_view_class(user, class_id):
         raise HTTPException(403, "Tidak diizinkan")
+
+    # Verify class belongs to current semester context
+    cls = await db.classes.find_one({'id': class_id}, {'_id': 0, 'semester_id': 1})
+    if not cls:
+        return []
+
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Only show cleanliness data if class is in current semester
+    if semester_id and cls.get('semester_id') != semester_id:
+        return []
+
     items = await db.class_cleanliness.find({'class_id': class_id}, {'_id': 0}).sort('date', -1).to_list(limit)
     return [serialize_doc(i) for i in items]
 
@@ -287,16 +320,17 @@ async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request
         except ValueError:
             raise HTTPException(400, "Format tanggal salah")
 
-        # Get active academic year
-        ay = await get_active_academic_year()
-        if not ay:
-            raise HTTPException(400, "Tidak ada tahun akademik aktif")
+        # Get active semester context
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+        if not semester_id:
+            raise HTTPException(400, "Tidak ada semester aktif")
 
-        # Check if guru teaches this class (on any day)
+        # Check if guru teaches this class (on any day) in active semester
         schedule = await db.schedules.find_one({
             'teacher_id': user['id'],
             'class_id': req.class_id,
-            'academic_year_id': ay['id'],
+            'semester_id': semester_id,
             'status': {'$in': ['approved', 'locked']}
         })
 

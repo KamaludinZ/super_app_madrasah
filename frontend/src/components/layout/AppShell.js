@@ -11,7 +11,7 @@ import {
   Trophy,
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
-  Megaphone, ChevronDown, Briefcase, Info,
+  Megaphone, ChevronDown, Briefcase, Info, CheckCircle2, UserCircle, HelpCircle,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -27,7 +27,6 @@ import { ROLE_LABELS, api } from '@/lib/api';
 import { toast } from 'sonner';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
-import { HelpCircle } from 'lucide-react';
 
 /**
  * Build sidebar items based ONLY on activeRole.
@@ -51,6 +50,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
     items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
+    items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-guru' });
   } else if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
@@ -80,11 +80,13 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });
   } else if (role === 'tenaga_kependidikan') {
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
+    items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
   } else if (role === 'siswa') {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
+    items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-siswa' });
   } else if (role === 'orang_tua') {
     items.push({ to: '/dashboard', label: 'Anak Saya', icon: Users, testid: 'nav-ortu-anak' });
   } else if (role === 'admin') {
@@ -94,7 +96,9 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Master App',
         items: [
+          { to: '/admin/tahun-takwim', label: 'Tahun Takwim', icon: Calendar, testid: 'nav-tahun-takwim' },
           { to: '/admin/academic-year', label: 'Tahun Pelajaran', icon: GraduationCap, testid: 'nav-academic-year' },
+          { to: '/admin/semesters', label: 'Semester', icon: CalendarDays, testid: 'nav-semesters' },
           { to: '/admin/kurikulum', label: 'Kurikulum', icon: BookOpen, testid: 'nav-curriculums' },
           { to: '/admin/subjects', label: 'Mata Pelajaran', icon: BookMarked, testid: 'nav-subjects' },
           { to: '/admin/rooms', label: 'Ruangan', icon: Building2, testid: 'nav-rooms' },
@@ -110,9 +114,12 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' },
           { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
           { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
+          { to: '/admin/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-admin-buku-induk' },
           { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' },
           { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-admin-alumni' },
           { to: '/admin/naik-kelas', label: 'Naik Kelas & Kelulusan', icon: ArrowRightLeft, testid: 'nav-admin-promotions' },
+          { to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-admin-verval-siswa' },
+          { to: '/admin/verval-gtk', label: 'Verval Data GTK', icon: CheckCircle2, testid: 'nav-admin-verval-gtk' },
         ],
       },
       {
@@ -160,34 +167,58 @@ function ActivePeriodCard({ ctx, onClick }) {
       </div>
     );
   }
-  const isOverride = ctx.is_override;
+  // Show orange override UI only if user has override AND it's different from active global
+  const showOverrideUI = ctx.is_override && !ctx.isViewingSameSemesterAsActive;
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid="sidebar-active-period"
       className={`group mx-3 mt-3 mb-1 rounded-xl p-3 text-white shadow-sm w-[calc(100%-1.5rem)] text-left transition-all hover:shadow-md ${
-        isOverride
+        showOverrideUI
           ? 'bg-gradient-to-br from-amber-600 to-amber-700 ring-2 ring-amber-300/50'
           : 'bg-gradient-to-br from-[#006837] to-[#0B7A3B]'
       }`}
     >
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5">
-          <GraduationCap className="h-3.5 w-3.5 opacity-80" />
+          <Calendar className="h-3.5 w-3.5 opacity-80" />
           <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">
-            {isOverride ? 'Mode Lihat' : 'TP Aktif'}
+            {showOverrideUI ? 'Mode Lihat' : 'Periode Aktif'}
           </div>
         </div>
         <ChevronDown className="h-3 w-3 opacity-70 group-hover:opacity-100" />
       </div>
-      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight mt-0.5" data-testid="sidebar-tp-name">{ctx.year_name}</div>
+
+      {/* Tahun Takwim - tampilkan dari semester yang dipilih */}
+      {ctx.tahun_takwim_info && ctx.tahun_takwim_info.length > 0 && (() => {
+        // Ambil Tahun Takwim pertama dari semester yang dipilih (bukan is_active)
+        const currentTT = ctx.tahun_takwim_info[0];
+        if (!currentTT) return null;
+        return (
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider opacity-70">Tahun Takwim</span>
+            <Badge className="bg-white/20 text-white border-white/30 text-[10px] font-bold px-2 py-0">
+              {currentTT.year}
+            </Badge>
+          </div>
+        );
+      })()}
+
+      {/* Tahun Pelajaran */}
+      <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider opacity-80">
+          <GraduationCap className="h-3 w-3 inline mr-1 opacity-80" />
+          Tahun Pelajaran
+        </span>
+      </div>
+      <div className="font-mono text-base font-extrabold tabular-nums tracking-tight" data-testid="sidebar-tp-name">{ctx.year_name}</div>
 
       {/* Semester */}
-      <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center justify-between">
+      <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider opacity-80">Semester</span>
         <Badge data-testid="sidebar-semester" className="bg-amber-300/95 text-amber-900 border-0 capitalize text-[10px] font-bold px-2 py-0">
-          {ctx.semester || '-'}
+          {ctx.semester_name || '-'}
         </Badge>
       </div>
 
@@ -205,10 +236,10 @@ function ActivePeriodCard({ ctx, onClick }) {
         )}
       </div>
 
-      {isOverride && (
+      {showOverrideUI && (
         <div className="text-[9px] mt-1 italic opacity-90">Klik untuk ubah / reset</div>
       )}
-      {!isOverride && (
+      {!showOverrideUI && (
         <div className="text-[9px] mt-1 italic opacity-70">Klik untuk pindah TP lampau</div>
       )}
     </button>
@@ -322,7 +353,13 @@ export default function AppShell({ children }) {
   }, [user?.id]);
 
   const refreshViewCtx = React.useCallback(() => {
-    api.get('/auth/view-context').then(({ data }) => setViewCtx(data)).catch(() => {});
+    api.get('/auth/view-context').then(({ data }) => {
+      // Enhance data with logic to detect if override is same as active
+      const activeSemester = (data.available_semesters || []).find(s => s.is_active);
+      const isViewingSameSemesterAsActive = data.semester_id && activeSemester && data.semester_id === activeSemester.id;
+      data.isViewingSameSemesterAsActive = isViewingSameSemesterAsActive;
+      setViewCtx(data);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -504,6 +541,9 @@ export default function AppShell({ children }) {
                     ))}
                     <DropdownMenuSeparator />
                   </div>
+                  <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
+                    <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
                     <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password
                   </DropdownMenuItem>

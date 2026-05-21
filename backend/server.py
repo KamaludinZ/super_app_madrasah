@@ -33,9 +33,13 @@ from routers import (
     reports,
     rooms,
     schedules,
+    semesters,
+    student_records,
     students,
     subjects,
+    tahun_takwim,
     users,
+    verval,
     wali_parent,
 )
 
@@ -53,6 +57,7 @@ api_router.include_router(auth.router)
 api_router.include_router(admin_settings.router)
 api_router.include_router(app_info.router)
 api_router.include_router(academic.router)
+api_router.include_router(tahun_takwim.router)
 api_router.include_router(classes.router)
 api_router.include_router(subjects.router)
 api_router.include_router(rooms.router)
@@ -70,6 +75,9 @@ api_router.include_router(notifications.router)
 api_router.include_router(reports.router)
 api_router.include_router(alumni.router)
 api_router.include_router(promotions.router)
+api_router.include_router(student_records.router)
+api_router.include_router(semesters.router)
+api_router.include_router(verval.router)
 
 app.include_router(api_router)
 
@@ -139,4 +147,5 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
 

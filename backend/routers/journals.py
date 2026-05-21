@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core import (
     db,
     get_active_academic_year,
+    get_active_context,
     get_current_user,
     get_settings,
     log_audit,
@@ -59,12 +60,17 @@ async def _validate_qr_full(qr_token: str, user_lat: Optional[float], user_lon: 
             result['qr'] = dyn
             return result
 
-    ay = await get_active_academic_year()
-    if not ay:
-        result['schedule'] = {'valid': False, 'reason': 'Tidak ada tahun pelajaran aktif'}
+    # Get user to determine context - validation should use current user's context
+    # However, this is a helper function. We'll get semester from schedules that exist for this room+teacher
+    # OR we can pass user context as parameter. For now, get active semester globally.
+    from core import get_active_context as get_ctx
+    ctx = await get_ctx(None)  # None means use global active semester
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
+        result['schedule'] = {'valid': False, 'reason': 'Tidak ada semester aktif'}
         return result
     schedules = await db.schedules.find({
-        'academic_year_id': ay['id'], 'teacher_id': teacher_id, 'room_id': room_id,
+        'semester_id': semester_id, 'teacher_id': teacher_id, 'room_id': room_id,
     }, {'_id': 0}).to_list(100)
     for s in schedules:
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
@@ -110,7 +116,11 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
 
     sched = validation['context']['schedule']
     room = validation['context']['room']
-    ay = await get_active_academic_year()
+
+    # Get semester_id from schedule (validation already ensured schedule exists for active semester)
+    semester_id = sched.get('semester_id')
+    if not semester_id:
+        raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
 
     existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
     if existing:
@@ -118,8 +128,7 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
 
     journal = JournalModel(
         schedule_id=sched['id'], teacher_id=user['id'], class_id=sched['class_id'],
-        subject_id=sched['subject_id'], room_id=room['id'], academic_year_id=ay['id'],
-        semester=sched.get('semester', 'ganjil'),
+        subject_id=sched['subject_id'], room_id=room['id'], semester_id=semester_id,
         materi=req.materi, catatan=req.catatan,
         siswa_hadir=req.siswa_hadir, siswa_tidak_hadir=req.siswa_tidak_hadir,
         siswa_izin=req.siswa_izin, siswa_sakit=req.siswa_sakit,
@@ -171,12 +180,15 @@ async def _validate_by_class_token(class_token: str, user_lat, user_lon, teacher
         result['qr'] = {'valid': False, 'reason': 'Ruangan tidak ditemukan'}
         return result
 
-    ay = await get_active_academic_year()
-    if not ay:
-        result['schedule'] = {'valid': False, 'reason': 'Tidak ada tahun pelajaran aktif'}
+    # Get active semester context
+    from core import get_active_context as get_ctx
+    ctx = await get_ctx(None)  # None means use global active semester
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
+        result['schedule'] = {'valid': False, 'reason': 'Tidak ada semester aktif'}
         return result
     schedules = await db.schedules.find({
-        'academic_year_id': ay['id'], 'teacher_id': teacher_id, 'class_id': cls['id'],
+        'semester_id': semester_id, 'teacher_id': teacher_id, 'class_id': cls['id'],
     }, {'_id': 0}).to_list(100)
     for s in schedules:
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
@@ -260,7 +272,12 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
         raise HTTPException(status_code=400, detail={'message': 'Validasi gagal', 'validation': validation})
     sched = validation['context']['schedule']
     room = validation['context']['room']
-    ay = await get_active_academic_year()
+
+    # Get semester_id from schedule (validation already ensured schedule exists for active semester)
+    semester_id = sched.get('semester_id')
+    if not semester_id:
+        raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
+
     existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
     if existing:
         raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
@@ -268,8 +285,7 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
     doc = {
         'id': j_id, 'schedule_id': sched['id'], 'teacher_id': user['id'],
         'class_id': sched['class_id'], 'subject_id': sched['subject_id'],
-        'room_id': room['id'], 'academic_year_id': ay['id'] if ay else sched.get('academic_year_id'),
-        'semester': sched.get('semester', 'ganjil'),
+        'room_id': room['id'], 'semester_id': semester_id,
         'materi': req.materi, 'catatan': req.catatan,
         'siswa_hadir': req.siswa_hadir, 'siswa_tidak_hadir': req.siswa_tidak_hadir,
         'siswa_izin': req.siswa_izin, 'siswa_sakit': req.siswa_sakit,
@@ -289,7 +305,15 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
 
 @router.get("/jurnal/my")
 async def my_journals(user: Dict = Depends(get_current_user)):
-    items = await db.journals.find({'teacher_id': user['id']}, {'_id': 0}).sort('started_at', -1).to_list(500)
+    """Get my journals filtered by user's view context (semester)"""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    query = {'teacher_id': user['id']}
+    if semester_id:
+        query['semester_id'] = semester_id
+
+    items = await db.journals.find(query, {'_id': 0}).sort('started_at', -1).to_list(500)
     enriched = []
     for j in items:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
@@ -304,7 +328,18 @@ async def my_journals(user: Dict = Depends(get_current_user)):
 
 @router.get("/jurnal/by-class/{class_id}")
 async def journals_by_class(class_id: str, limit: int = 50, user: Dict = Depends(get_current_user)):
-    items = await db.journals.find({'class_id': class_id}, {'_id': 0}).sort('started_at', -1).to_list(limit)
+    """Get journals by class filtered by class's semester (journals should match class's semester)"""
+    # Get the class to find its semester_id
+    cls = await db.classes.find_one({'id': class_id}, {'_id': 0, 'semester_id': 1})
+    if not cls:
+        return []
+
+    query = {'class_id': class_id}
+    # Filter by semester if class has semester_id
+    if cls.get('semester_id'):
+        query['semester_id'] = cls['semester_id']
+
+    items = await db.journals.find(query, {'_id': 0}).sort('started_at', -1).to_list(limit)
     enriched = []
     for j in items:
         sub = await db.subjects.find_one({'id': j.get('subject_id')}, {'_id': 0, 'name': 1})
@@ -317,8 +352,15 @@ async def journals_by_class(class_id: str, limit: int = 50, user: Dict = Depends
 
 @router.get("/jurnal/piket-filled")
 async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 'admin'))):
-    """Get journals filled by piket (where filled_by_user_id is current user)"""
-    items = await db.journals.find({'filled_by_user_id': user['id']}, {'_id': 0}).sort('started_at', -1).to_list(500)
+    """Get journals filled by piket filtered by user's view context (semester)"""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    query = {'filled_by_user_id': user['id']}
+    if semester_id:
+        query['semester_id'] = semester_id
+
+    items = await db.journals.find(query, {'_id': 0}).sort('started_at', -1).to_list(500)
     enriched = []
     for j in items:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
@@ -346,16 +388,21 @@ async def admin_jurnal_rekap(
     class_id: Optional[str] = None,
     teacher_id: Optional[str] = None,
     subject_id: Optional[str] = None,
-    academic_year_id: Optional[str] = None,
+    semester_id: Optional[str] = None,
     limit: int = 500,
     user: Dict = Depends(require_role('admin'))
 ):
-    """Rekap lengkap data jurnal mengajar untuk admin"""
+    """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id"""
+    # Use user's view context semester if no semester_id provided in query
+    if not semester_id:
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+
     q = {}
     if class_id: q['class_id'] = class_id
     if teacher_id: q['teacher_id'] = teacher_id
     if subject_id: q['subject_id'] = subject_id
-    if academic_year_id: q['academic_year_id'] = academic_year_id
+    if semester_id: q['semester_id'] = semester_id
     if start_date or end_date:
         date_q = {}
         if start_date: date_q['$gte'] = start_date
@@ -396,11 +443,12 @@ async def admin_jurnal_rekap(
 
 @router.get("/admin/jurnal/stats-by-teacher")
 async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))):
-    """Aggregate jurnal count per guru"""
-    ay = await get_active_academic_year()
+    """Aggregate jurnal count per guru, filtered by user's view context (semester)"""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
     pipeline = []
-    if ay:
-        pipeline.append({'$match': {'academic_year_id': ay['id']}})
+    if semester_id:
+        pipeline.append({'$match': {'semester_id': semester_id}})
     pipeline.append({'$group': {'_id': '$teacher_id', 'count': {'$sum': 1}}})
     pipeline.append({'$sort': {'count': -1}})
     results = await db.journals.aggregate(pipeline).to_list(200)

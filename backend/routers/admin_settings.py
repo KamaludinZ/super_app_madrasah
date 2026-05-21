@@ -28,18 +28,27 @@ async def update_settings(payload: Dict[str, Any], request: Request, user: Dict 
 @router.post("/admin/settings/upload-logo")
 async def upload_logo(file: UploadFile = File(...), kind: str = Form('logo'),
                       request: Request = None, user: Dict = Depends(require_role('admin'))):
+    # DEBUG: Log the received kind parameter
+    print(f"[UPLOAD DEBUG] Received kind parameter: '{kind}'")
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File terlalu besar (max 5MB)")
     mime = file.content_type or 'image/png'
     b64 = base64.b64encode(contents).decode('utf-8')
     data_url = f"data:{mime};base64,{b64}"
-    field_map = {'logo': 'logo_url', 'favicon': 'favicon_url', 'report_logo': 'report_logo_url'}
+    field_map = {
+        'logo': 'logo_url',
+        'favicon': 'favicon_url',
+        'report_logo': 'report_logo_url',
+        'letterhead': 'letterhead_url'  # NEW: kop surat
+    }
     field = field_map.get(kind, 'logo_url')
+    print(f"[UPLOAD DEBUG] Mapped to field: '{field}'")
     await db.settings.update_one({'id': 'global_config'},
                                  {'$set': {field: data_url, 'updated_at': datetime.utcnow().isoformat(),
                                            'updated_by': user['username']}}, upsert=True)
     await log_audit(user, 'upload', 'settings', field, request=request)
+    print(f"[UPLOAD DEBUG] Saved successfully to field: '{field}'")
     return {field: data_url}
 
 

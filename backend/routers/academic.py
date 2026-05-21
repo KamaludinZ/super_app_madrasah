@@ -1,4 +1,5 @@
 """Academic years & Curriculums."""
+from datetime import datetime
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,11 +34,50 @@ async def active_academic_year():
 
 @router.post("/academic-years")
 async def create_academic_year(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+    """
+    Create Academic Year dengan validasi hierarkis.
+
+    Validasi:
+    - name harus unique
+    - start_date dan end_date wajib
+    - start_date harus sebelum end_date
+    - tahun_takwim_ids harus valid (jika diisi)
+    """
     ay = AcademicYearModel(**payload)
+
+    # Validasi: name sudah ada atau belum
+    existing = await db.academic_years.find_one({'name': ay.name})
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tahun Pelajaran {ay.name} sudah ada"
+        )
+
+    # Validasi: start_date dan end_date
+    if ay.start_date >= ay.end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="start_date harus sebelum end_date"
+        )
+
+    # Validasi: Tahun Takwim IDs harus valid
+    if ay.tahun_takwim_ids:
+        for tt_id in ay.tahun_takwim_ids:
+            tt = await db.tahun_takwim.find_one({'id': tt_id})
+            if not tt:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tahun Takwim {tt_id} tidak ditemukan"
+                )
+
     doc = ay.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    if doc.get('updated_at'):
+        doc['updated_at'] = doc['updated_at'].isoformat()
+
     if ay.is_active:
         await db.academic_years.update_many({}, {'$set': {'is_active': False}})
+
     await db.academic_years.insert_one(doc)
     await log_audit(user, 'create', 'academic_year', ay.id, details={'name': ay.name}, request=request)
     return serialize_doc(doc)
@@ -45,14 +85,61 @@ async def create_academic_year(payload: Dict, request: Request, user: Dict = Dep
 
 @router.put("/academic-years/{ay_id}")
 async def update_academic_year(ay_id: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
-    """Edit TP - name, semester_type, semesters list, active_semester"""
+    """
+    Update Academic Year dengan validasi hierarkis.
+
+    Validasi:
+    - name harus unique (jika diubah)
+    - start_date harus sebelum end_date (jika diubah)
+    - tahun_takwim_ids harus valid (jika diubah)
+    """
     payload.pop('_id', None)
     payload.pop('id', None)
+
+    # Check exists
+    existing = await db.academic_years.find_one({'id': ay_id})
+    if not existing:
+        raise HTTPException(404, "Tahun pelajaran tidak ditemukan")
+
+    # Validasi: Jika name diubah, pastikan tidak duplicate
+    if 'name' in payload and payload['name'] != existing['name']:
+        duplicate = await db.academic_years.find_one({'name': payload['name']})
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tahun Pelajaran {payload['name']} sudah ada"
+            )
+
+    # Validasi: start_date dan end_date harus konsisten
+    start_date = payload.get('start_date', existing.get('start_date'))
+    end_date = payload.get('end_date', existing.get('end_date'))
+
+    if start_date and end_date and start_date >= end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="start_date harus sebelum end_date"
+        )
+
+    # Validasi: Tahun Takwim IDs harus valid
+    if 'tahun_takwim_ids' in payload and payload['tahun_takwim_ids']:
+        for tt_id in payload['tahun_takwim_ids']:
+            tt = await db.tahun_takwim.find_one({'id': tt_id})
+            if not tt:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tahun Takwim {tt_id} tidak ditemukan"
+                )
+
+    # Set updated_at
+    payload['updated_at'] = datetime.utcnow().isoformat()
+
     if payload.get('is_active') is True:
         await db.academic_years.update_many({'id': {'$ne': ay_id}}, {'$set': {'is_active': False}})
+
     res = await db.academic_years.update_one({'id': ay_id}, {'$set': payload})
     if res.matched_count == 0:
         raise HTTPException(404, "Tahun pelajaran tidak ditemukan")
+
     await log_audit(user, 'update', 'academic_year', ay_id, details={'keys': list(payload.keys())}, request=request)
     doc = await db.academic_years.find_one({'id': ay_id}, {'_id': 0})
     return serialize_doc(doc)
@@ -70,9 +157,37 @@ async def activate_academic_year(ay_id: str, request: Request, user: Dict = Depe
 
 @router.delete("/academic-years/{ay_id}")
 async def delete_academic_year(ay_id: str, request: Request, user: Dict = Depends(require_role('admin'))):
+    """
+    Delete Academic Year dengan validasi.
+
+    Validasi:
+    - Tidak bisa delete jika masih ada Semester yang terkait
+    - Tidak bisa delete Academic Year yang sedang aktif
+    """
+    # Check exists
+    existing = await db.academic_years.find_one({'id': ay_id})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+
+    # Validasi: Tidak bisa delete yang aktif
+    if existing.get('is_active'):
+        raise HTTPException(
+            status_code=400,
+            detail="Tidak bisa menghapus Tahun Pelajaran yang sedang aktif"
+        )
+
+    # Validasi: Check apakah ada Semester yang masih menggunakan
+    semester_count = await db.semesters.count_documents({'academic_year_id': ay_id})
+    if semester_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tidak bisa menghapus. Masih ada {semester_count} Semester yang terkait dengan Tahun Pelajaran ini"
+        )
+
     res = await db.academic_years.delete_one({'id': ay_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Tidak ditemukan")
+
     await log_audit(user, 'delete', 'academic_year', ay_id, request=request)
     return {'message': 'Dihapus'}
 

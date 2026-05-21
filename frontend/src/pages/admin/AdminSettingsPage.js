@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog } from 'lucide-react';
+import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog, FileText, User } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +21,7 @@ export default function AdminSettingsPage() {
   const [form, setForm] = useState(null);
   const fileLogoRef = useRef(null);
   const fileFaviconRef = useRef(null);
+  const fileLetterheadRef = useRef(null);
 
   const refresh = async () => {
     const { data } = await api.get('/admin/settings');
@@ -50,9 +51,37 @@ export default function AdminSettingsPage() {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       });
       if (!r.ok) throw new Error('Upload gagal');
-      toast.success(`${kind === 'logo' ? 'Logo' : 'Favicon'} berhasil diunggah`);
+      const kindLabels = { logo: 'Logo', favicon: 'Favicon', letterhead: 'Kop Surat' };
+      toast.success(`${kindLabels[kind] || kind} berhasil diunggah`);
       refresh();
     } catch (e) { toast.error(e.message); }
+  };
+
+  const POSITION_OPTIONS = [
+    { value: 'kepala_madrasah', label: 'Kepala Madrasah' },
+    { value: 'kepala_tu', label: 'Kepala Tata Usaha' },
+    { value: 'wakil_kesiswaan', label: 'Wakil Kepala Bidang Kesiswaan' },
+    { value: 'wakil_kurikulum', label: 'Wakil Kepala Bidang Kurikulum' },
+    { value: 'wakil_humas', label: 'Wakil Kepala Bidang Humas' },
+    { value: 'wakil_sarpras', label: 'Wakil Kepala Bidang Sarpras' },
+  ];
+
+  const addLeader = () => {
+    const leadership = [...(form.leadership || [])];
+    leadership.push({ name: '', nip: '', position: 'kepala_madrasah' });
+    setForm({ ...form, leadership });
+  };
+
+  const updateLeader = (idx, field, val) => {
+    const leadership = [...(form.leadership || [])];
+    leadership[idx] = { ...leadership[idx], [field]: val };
+    setForm({ ...form, leadership });
+  };
+
+  const removeLeader = (idx) => {
+    const leadership = [...(form.leadership || [])];
+    leadership.splice(idx, 1);
+    setForm({ ...form, leadership });
   };
 
   const toggleActiveDay = (d) => {
@@ -185,6 +214,93 @@ export default function AdminSettingsPage() {
                     <input ref={fileFaviconRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files[0] && uploadFile(e.target.files[0], 'favicon')} />
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <FileText className="h-4 w-4" /> Kop Surat
+              </h2>
+              <div>
+                <Label>Kop Surat (PNG/JPG, max 5MB)</Label>
+                <div className="mt-2 flex items-center gap-3">
+                  {form.letterhead_url ? (
+                    <img src={form.letterhead_url} alt="Kop Surat" className="h-24 border border-slate-200 rounded-lg p-2 bg-white object-contain" />
+                  ) : (
+                    <div className="h-24 w-full max-w-md bg-slate-100 rounded-lg flex items-center justify-center text-xs text-slate-500">
+                      Belum ada kop surat
+                    </div>
+                  )}
+                  <Button variant="outline" onClick={() => fileLetterheadRef.current?.click()} className="gap-2">
+                    <Upload className="h-4 w-4" /> Upload Kop Surat
+                  </Button>
+                  <input ref={fileLetterheadRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files[0] && uploadFile(e.target.files[0], 'letterhead')} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold flex items-center gap-2">
+                  <User className="h-4 w-4" /> Daftar Pimpinan
+                </h2>
+                <Button size="sm" variant="outline" onClick={addLeader} className="gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Tambah Pimpinan
+                </Button>
+              </div>
+              <p className="text-xs text-slate-600">
+                Kelola daftar pimpinan madrasah untuk keperluan laporan dan dokumen resmi.
+              </p>
+              <div className="space-y-3">
+                {(form.leadership || []).map((leader, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-start p-3 rounded-lg border bg-white border-slate-200">
+                    <div className="col-span-12 sm:col-span-4">
+                      <Label className="text-xs">Nama</Label>
+                      <Input
+                        value={leader.name || ''}
+                        onChange={(e) => updateLeader(idx, 'name', e.target.value)}
+                        placeholder="Nama lengkap"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="col-span-12 sm:col-span-3">
+                      <Label className="text-xs">NIP (opsional)</Label>
+                      <Input
+                        value={leader.nip || ''}
+                        onChange={(e) => updateLeader(idx, 'nip', e.target.value)}
+                        placeholder="NIP"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="col-span-10 sm:col-span-4">
+                      <Label className="text-xs">Jabatan</Label>
+                      <Select value={leader.position || 'kepala_madrasah'} onValueChange={(v) => updateLeader(idx, 'position', v)}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POSITION_OPTIONS.map((pos) => (
+                            <SelectItem key={pos.value} value={pos.value}>{pos.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 flex items-end justify-end">
+                      <Button size="icon" variant="ghost" onClick={() => removeLeader(idx)} className="text-rose-600 mt-5">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {(!form.leadership || form.leadership.length === 0) && (
+                  <div className="text-center py-6 text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                    Belum ada data pimpinan. Klik "Tambah Pimpinan" untuk mulai.
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -11,20 +11,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import ClassDetailDialog from '@/components/classes/ClassDetailDialog';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function AdminClassesPage() {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [curriculums, setCurriculums] = useState([]);
-  const [activeAY, setActiveAY] = useState(null);
+  const [semesters, setSemesters] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
+  const [activeSemester, setActiveSemester] = useState(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detailClass, setDetailClass] = useState(null);
   const [form, setForm] = useState({
     name: '', grade: 7, parallel: 'A', academic_year_id: '',
-    homeroom_teacher_id: '', room_id: '', capacity: 40,
-    curriculum_id: '', semester: '',
+    semester_id: '', homeroom_teacher_id: '', room_id: '', capacity: 40,
   });
 
   const refresh = async () => {
@@ -34,24 +36,39 @@ export default function AdminClassesPage() {
 
   useEffect(() => {
     (async () => {
-      const ay = await api.get('/academic-years/active');
-      setActiveAY(ay.data);
-      const [c, r, u, cur] = await Promise.all([
-        api.get('/classes'), api.get('/rooms'), api.get('/users'), api.get('/curriculums'),
+      const [c, r, u, sems, allAy] = await Promise.all([
+        api.get('/classes'),
+        api.get('/rooms'),
+        api.get('/users'),
+        api.get('/semesters'),
+        api.get('/academic-years'),
       ]);
-      setItems(c.data); setRooms(r.data); setCurriculums(cur.data);
+      setItems(c.data);
+      setRooms(r.data);
+      setSemesters(sems.data);
+      setAcademicYears(allAy.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas'].includes(rr))));
+
+      // Find active semester
+      const activeSem = sems.data.find(s => s.is_active);
+      setActiveSemester(activeSem);
     })();
   }, []);
+
+  // Auto-refresh classes when user changes view semester
+  useEffect(() => {
+    if (user) {
+      refresh();
+    }
+  }, [user?.view_semester_id]);
 
   const openCreate = () => {
     setEditing(null);
     setForm({
       name: '', grade: 7, parallel: 'A',
-      academic_year_id: activeAY?.id || '',
+      academic_year_id: activeSemester?.academic_year_id || '',
+      semester_id: activeSemester?.id || '',
       homeroom_teacher_id: '', room_id: '', capacity: 40,
-      curriculum_id: activeAY?.curriculum_id || '',
-      semester: activeAY?.active_semester || '',
     });
     setOpen(true);
   };
@@ -59,25 +76,28 @@ export default function AdminClassesPage() {
   const openEdit = (c) => {
     setEditing(c);
     setForm({
-      ...c,
+      name: c.name,
+      grade: c.grade,
+      parallel: c.parallel,
+      academic_year_id: c.academic_year_id || '',
+      semester_id: c.semester_id || '',
       homeroom_teacher_id: c.homeroom_teacher_id || '',
       room_id: c.room_id || '',
       capacity: c.capacity || 40,
-      curriculum_id: c.curriculum_id || '',
-      semester: c.semester || c.effective_semester || '',
     });
     setOpen(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.academic_year_id) { toast.error('Nama dan Tahun Pelajaran wajib'); return; }
+    if (!form.name || !form.academic_year_id || !form.semester_id) {
+      toast.error('Nama, Tahun Pelajaran, dan Semester wajib diisi');
+      return;
+    }
     try {
       const payload = {
         ...form,
         homeroom_teacher_id: form.homeroom_teacher_id || null,
         room_id: form.room_id || null,
-        curriculum_id: form.curriculum_id || null,
-        semester: form.semester || null,
         capacity: parseInt(form.capacity) || 40,
       };
       if (editing) await api.put(`/classes/${editing.id}`, payload);
@@ -123,7 +143,7 @@ export default function AdminClassesPage() {
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><BookOpen className="h-3 w-3 mr-1" /> Manajemen Kelas</Badge>
           <h1 className="text-2xl sm:text-3xl font-bold">Kelola Kelas</h1>
-          <p className="text-sm text-slate-600 mt-1">{items.length} kelas • TP {activeAY?.name || '-'}</p>
+          <p className="text-sm text-slate-600 mt-1">{items.length} kelas • Semester {activeSemester?.name || '-'}</p>
         </div>
         <div className="flex gap-2">
           {missingToken > 0 && (
@@ -139,6 +159,7 @@ export default function AdminClassesPage() {
         <TableHeader><TableRow>
           <TableHead>Nama</TableHead>
           <TableHead>Tingkat</TableHead>
+          <TableHead>Tahun Pelajaran</TableHead>
           <TableHead>Peserta</TableHead>
           <TableHead>Kurikulum</TableHead>
           <TableHead>Semester</TableHead>
@@ -157,6 +178,11 @@ export default function AdminClassesPage() {
               <TableRow key={c.id} data-testid={`class-row-${c.name}`}>
                 <TableCell className="font-semibold">{c.name}</TableCell>
                 <TableCell>{c.grade}</TableCell>
+                <TableCell className="text-xs">
+                  {c.academic_year_name ? (
+                    <Badge variant="outline" className="font-mono text-[10px]">{c.academic_year_name}</Badge>
+                  ) : <span className="text-slate-400">-</span>}
+                </TableCell>
                 <TableCell data-testid={`class-peserta-${c.name}`}>
                   <div className="flex items-center gap-2">
                     <span className={`font-mono font-semibold text-sm ${ratio >= 1 ? 'text-rose-600' : 'text-slate-900'}`}>
@@ -175,8 +201,10 @@ export default function AdminClassesPage() {
                   ) : <span className="text-slate-400">-</span>}
                 </TableCell>
                 <TableCell className="text-xs capitalize">
-                  {c.effective_semester ? (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 capitalize">{c.effective_semester}</Badge>
+                  {c.semester_name ? (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 capitalize">
+                      {c.semester_name} ({c.semester_code || ''})
+                    </Badge>
                   ) : <span className="text-slate-400">-</span>}
                 </TableCell>
                 <TableCell className="text-sm">{c.homeroom_teacher_name || teachers.find((t) => t.id === c.homeroom_teacher_id)?.full_name || '-'}</TableCell>
@@ -218,34 +246,38 @@ export default function AdminClassesPage() {
               <div><Label>Paralel</Label><Input value={form.parallel} onChange={(e) => setForm({...form, parallel: e.target.value.toUpperCase()})} /></div>
               <div><Label>Nama</Label><Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="7A" data-testid="class-form-name" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Kapasitas</Label>
-                <Input type="number" min="1" max="60" value={form.capacity} onChange={(e) => setForm({...form, capacity: e.target.value})} placeholder="40" data-testid="class-form-capacity" />
-              </div>
-              <div>
-                <Label>Semester Aktif</Label>
-                <Select value={form.semester || ''} onValueChange={(v) => setForm({...form, semester: v})}>
-                  <SelectTrigger data-testid="class-form-semester"><SelectValue placeholder="ganjil/genap" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ganjil">Ganjil</SelectItem>
-                    <SelectItem value="genap">Genap</SelectItem>
-                    <SelectItem value="1">Semester 1 (Percepatan)</SelectItem>
-                    <SelectItem value="2">Semester 2 (Percepatan)</SelectItem>
-                    <SelectItem value="3">Semester 3 (Percepatan)</SelectItem>
-                    <SelectItem value="4">Semester 4 (Percepatan)</SelectItem>
-                    <SelectItem value="5">Semester 5 (Percepatan)</SelectItem>
-                    <SelectItem value="6">Semester 6 (Percepatan)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label>Tahun Pelajaran <span className="text-red-500">*</span></Label>
+              <Select value={form.academic_year_id || ''} onValueChange={(v) => setForm({...form, academic_year_id: v, semester_id: ''})}>
+                <SelectTrigger data-testid="class-form-academic-year"><SelectValue placeholder="Pilih tahun pelajaran..." /></SelectTrigger>
+                <SelectContent>
+                  {academicYears.map((ay) => (
+                    <SelectItem key={ay.id} value={ay.id}>
+                      {ay.name} {ay.is_active && <span className="text-green-600">(Aktif)</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Label>Kurikulum</Label>
-              <Select value={form.curriculum_id || ''} onValueChange={(v) => setForm({...form, curriculum_id: v})}>
-                <SelectTrigger data-testid="class-form-curriculum"><SelectValue placeholder="Pilih kurikulum (ikut TP jika kosong)" /></SelectTrigger>
-                <SelectContent>{curriculums.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>)}</SelectContent>
+              <Label>Semester <span className="text-red-500">*</span></Label>
+              <Select value={form.semester_id || ''} onValueChange={(v) => setForm({...form, semester_id: v})}>
+                <SelectTrigger data-testid="class-form-semester"><SelectValue placeholder="Pilih semester..." /></SelectTrigger>
+                <SelectContent>
+                  {semesters
+                    .filter(s => !form.academic_year_id || s.academic_year_id === form.academic_year_id)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({s.code}) {s.is_active && <span className="text-green-600">AKTIF</span>}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
               </Select>
+              <p className="text-xs text-slate-500 mt-1">Kurikulum mengikuti semester yang dipilih</p>
+            </div>
+            <div>
+              <Label>Kapasitas</Label>
+              <Input type="number" min="1" max="60" value={form.capacity} onChange={(e) => setForm({...form, capacity: e.target.value})} placeholder="40" data-testid="class-form-capacity" />
             </div>
             <div><Label>Wali Kelas</Label>
               <Select value={form.homeroom_teacher_id || ''} onValueChange={(v) => setForm({...form, homeroom_teacher_id: v})}>

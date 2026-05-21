@@ -199,81 +199,137 @@ async def dismiss_password_reminder(request: Request, days: int = 30,
 # VIEW CONTEXT (Per-user TP/Semester override)
 # ============================================================
 class ViewContextRequest(BaseModel):
-    academic_year_id: Optional[str] = None  # None = clear (ikut TP aktif global)
-    semester: Optional[str] = None  # None = ikut semester aktif global
+    semester_id: Optional[str] = None  # None = clear (ikut semester aktif global)
 
 
 async def _resolve_view_context(user: Dict) -> Dict:
-    """Return effective view context: { academic_year_id, semester, year_name, semester_name, is_override, curriculum_name }.
+    """Return effective view context based on semester (which contains academic year and tahun takwim).
 
     Priority:
-    1. User override (view_academic_year_id, view_semester) if set
-    2. Active academic year + active semester
+    1. User override (view_semester_id) if set
+    2. Active semester globally
+
+    Returns: {
+        semester_id, semester_name, semester_code,
+        academic_year_id, year_name,
+        tahun_takwim_ids, tahun_takwim_info,
+        is_override, is_active_global,
+        curriculum_id, curriculum_name
+    }
     """
-    override_ay = user.get('view_academic_year_id')
-    override_sem = user.get('view_semester')
-    active_ay = await db.academic_years.find_one({'is_active': True}, {'_id': 0})
+    override_sem_id = user.get('view_semester_id')
 
-    if override_ay:
-        ay = await db.academic_years.find_one({'id': override_ay}, {'_id': 0})
-        if not ay:
-            ay = active_ay
-            override_ay = None
-            override_sem = None
+    # Get semester (either override or active)
+    if override_sem_id:
+        sem = await db.semesters.find_one({'id': override_sem_id}, {'_id': 0})
+        if not sem:
+            # Fallback to active if override not found
+            sem = await db.semesters.find_one({'is_active': True}, {'_id': 0})
+            override_sem_id = None
     else:
-        ay = active_ay
+        sem = await db.semesters.find_one({'is_active': True}, {'_id': 0})
 
-    if not ay:
-        return {'academic_year_id': None, 'semester': None, 'year_name': None,
-                'semester_name': None, 'is_override': False, 'curriculum_name': None,
-                'curriculum_id': None}
+    if not sem:
+        return {
+            'semester_id': None, 'semester_name': None, 'semester_code': None,
+            'academic_year_id': None, 'year_name': None,
+            'tahun_takwim_ids': [],
+            'tahun_takwim_info': [],
+            'is_override': False, 'is_active_global': True,
+            'curriculum_id': None, 'curriculum_name': None,
+        }
 
-    semester = override_sem or ay.get('active_semester')
+    # Get academic year
+    ay = await db.academic_years.find_one({'id': sem.get('academic_year_id')}, {'_id': 0})
+
+    # Get Tahun Takwim info from SEMESTER (not from Academic Year)
+    tahun_takwim_id = sem.get('tahun_takwim_id')
+    tahun_takwim_info = []
+    if tahun_takwim_id:
+        tt = await db.tahun_takwim.find_one({'id': tahun_takwim_id}, {'_id': 0})
+        if tt:
+            tahun_takwim_info.append({
+                'id': tt.get('id'),
+                'year': tt.get('year'),
+                'name': tt.get('name'),
+                'is_active': tt.get('is_active', False),
+            })
+
+    # Keep tahun_takwim_ids for backward compatibility
+    tahun_takwim_ids = [tahun_takwim_id] if tahun_takwim_id else []
+
+    # Get curriculum if set
     curriculum_name = None
-    if ay.get('curriculum_id'):
-        c = await db.curriculums.find_one({'id': ay['curriculum_id']}, {'_id': 0, 'name': 1, 'code': 1})
-        curriculum_name = c.get('name') if c else None
+    curriculum_code = None
+    if sem.get('curriculum_id'):
+        c = await db.curriculums.find_one({'id': sem['curriculum_id']}, {'_id': 0, 'name': 1, 'code': 1})
+        if c:
+            curriculum_name = c.get('name')
+            curriculum_code = c.get('code')
+
     return {
-        'academic_year_id': ay['id'],
-        'semester': semester,
-        'year_name': ay.get('name'),
-        'semester_name': semester,
-        'is_override': bool(override_ay or override_sem),
-        'is_active_global': not (override_ay or override_sem),
+        'semester_id': sem['id'],
+        'semester_name': sem.get('name'),
+        'semester_code': sem.get('code'),
+        'academic_year_id': ay['id'] if ay else None,
+        'year_name': ay.get('name') if ay else None,
+        'tahun_takwim_ids': tahun_takwim_ids,
+        'tahun_takwim_info': tahun_takwim_info,
+        'is_override': bool(override_sem_id),
+        'is_active_global': not bool(override_sem_id),
+        'curriculum_id': sem.get('curriculum_id'),
         'curriculum_name': curriculum_name,
-        'curriculum_id': ay.get('curriculum_id'),
-        'available_semesters': [s.get('name') if isinstance(s, dict) else s
-                                for s in ay.get('semesters', [])] or (['ganjil', 'genap'] if ay.get('semester_type') == 'regular'
-                                                                       else ['1', '2', '3', '4', '5', '6']),
+        'curriculum_code': curriculum_code,
     }
 
 
 @router.get("/auth/view-context")
 async def get_view_context(user: Dict = Depends(get_current_user)):
-    """Get current effective view context (TP + semester) for the logged-in user."""
+    """Get current effective view context (semester-based) for the logged-in user."""
     ctx = await _resolve_view_context(user)
-    # Also include list of all TPs so frontend bisa tampilkan dropdown
+
+    # Include list of all Tahun Takwim (NEW)
+    all_tts = await db.tahun_takwim.find({}, {'_id': 0}).sort('year', -1).to_list(50)
+    ctx['available_tahun_takwim'] = [
+        {'id': tt['id'], 'year': tt.get('year'), 'name': tt.get('name'),
+         'is_active': tt.get('is_active', False)}
+        for tt in all_tts
+    ]
+
+    # Include list of all academic years
     all_ays = await db.academic_years.find({}, {'_id': 0}).sort('name', -1).to_list(50)
     ctx['available_academic_years'] = [
         {'id': a['id'], 'name': a.get('name'), 'is_active': a.get('is_active', False),
-         'semester_type': a.get('semester_type', 'regular'),
-         'semesters': [s.get('name') if isinstance(s, dict) else s for s in a.get('semesters', [])]}
+         'tahun_takwim_ids': a.get('tahun_takwim_ids', [])}
         for a in all_ays
     ]
+
+    # Include all semesters grouped by academic year
+    all_sems = await db.semesters.find({}, {'_id': 0}).sort([('academic_year_id', -1), ('code', 1)]).to_list(200)
+    ctx['available_semesters'] = [
+        {'id': s['id'], 'name': s.get('name'), 'code': s.get('code'),
+         'academic_year_id': s.get('academic_year_id'),
+         'tahun_takwim_id': s.get('tahun_takwim_id'),  # Include Tahun Takwim for filtering
+         'is_active': s.get('is_active', False)}
+        for s in all_sems
+    ]
+
     return ctx
 
 
 @router.put("/auth/view-context")
 async def set_view_context(req: ViewContextRequest, request: Request,
                            user: Dict = Depends(get_current_user)):
-    """Set per-user view override (TP + semester). Pass null/empty to clear (back to active)."""
+    """Set per-user view override (semester). Pass null/empty to clear (back to active)."""
     update = {
-        'view_academic_year_id': req.academic_year_id or None,
-        'view_semester': req.semester or None,
+        'view_semester_id': req.semester_id or None,
+        # Clean up old fields
+        'view_academic_year_id': None,
+        'view_semester': None,
     }
     await db.users.update_one({'id': user['id']}, {'$set': update})
     await log_audit(user, 'set_view_context', 'user', user['id'],
-                    details=update, request=request)
+                    details={'semester_id': req.semester_id}, request=request)
     fresh = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
     ctx = await _resolve_view_context(fresh)
     return ctx

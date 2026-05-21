@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core import (
     db,
     get_current_user,
+    get_active_context,
     log_audit,
     require_role,
     serialize_doc,
@@ -48,14 +49,24 @@ async def get_reports(
     user: Dict = Depends(get_current_user)
 ):
     """
-    Get reports based on role:
-    - Admin: sees all reports
-    - Wali Kelas: sees reports for their class
-    - Guru: sees their own reports
+    Get reports based on role, filtered by user's view context (semester):
+    - Admin: sees all reports for current semester
+    - Wali Kelas: sees reports for their class in current semester
+    - Guru: sees their own reports for current semester
     """
     is_admin = 'admin' in user.get('roles', [])
     is_wali_kelas = 'wali_kelas' in user.get('roles', [])
     is_guru = 'guru' in user.get('roles', [])
+
+    # Get user's view context for semester filtering
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Get classes for this semester to filter reports
+    class_ids = []
+    if semester_id:
+        classes = await db.classes.find({'semester_id': semester_id}, {'_id': 0, 'id': 1}).to_list(None)
+        class_ids = [c['id'] for c in classes]
 
     query = {}
 
@@ -67,18 +78,22 @@ async def get_reports(
 
     # Role-based filtering
     if is_admin:
-        # Admin sees all reports, can filter by class_id
+        # Admin sees all reports for current semester, can filter by class_id
         if class_id:
             query['class_id'] = class_id
+        elif class_ids:
+            query['class_id'] = {'$in': class_ids}
     elif is_wali_kelas:
-        # Wali kelas sees only reports for their class
-        wk_class = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
+        # Wali kelas sees only reports for their class in current semester
+        wk_class = await db.classes.find_one({'homeroom_teacher_id': user['id'], 'semester_id': semester_id}, {'_id': 0, 'id': 1})
         if not wk_class:
             return []
         query['class_id'] = wk_class['id']
     elif is_guru:
-        # Guru sees only their own reports
+        # Guru sees only their own reports for classes in current semester
         query['reported_by'] = user['id']
+        if class_ids:
+            query['class_id'] = {'$in': class_ids}
     else:
         return []
 
@@ -222,20 +237,38 @@ async def delete_report(report_id: str, request: Request,
 # ============================================================
 @router.get("/reports/stats/summary")
 async def get_reports_stats(user: Dict = Depends(require_role('admin', 'guru_bk'))):
-    """Get report statistics for admin & Guru BK dashboard."""
-    total = await db.reports.count_documents({})
+    """Get report statistics for admin & Guru BK dashboard, filtered by user's view context (semester)."""
+    # Get user's view context for semester filtering
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Get classes for this semester to filter reports
+    class_ids = []
+    if semester_id:
+        classes = await db.classes.find({'semester_id': semester_id}, {'_id': 0, 'id': 1}).to_list(None)
+        class_ids = [c['id'] for c in classes]
+
+    # Base query filter for current semester
+    base_query = {}
+    if class_ids:
+        base_query['class_id'] = {'$in': class_ids}
+
+    total = await db.reports.count_documents(base_query)
     by_type = {}
     by_status = {}
     by_priority = {}
 
     for t in ['sarana_prasarana', 'siswa', 'catatan']:
-        by_type[t] = await db.reports.count_documents({'type': t})
+        query = {**base_query, 'type': t}
+        by_type[t] = await db.reports.count_documents(query)
 
     for s in ['baru', 'ditinjau', 'dalam_proses', 'selesai', 'ditolak']:
-        by_status[s] = await db.reports.count_documents({'status': s})
+        query = {**base_query, 'status': s}
+        by_status[s] = await db.reports.count_documents(query)
 
     for p in ['rendah', 'sedang', 'tinggi', 'mendesak']:
-        by_priority[p] = await db.reports.count_documents({'priority': p})
+        query = {**base_query, 'priority': p}
+        by_priority[p] = await db.reports.count_documents(query)
 
     return {
         'total': total,

@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from core import (
     db,
     get_active_academic_year,
+    get_active_context,
     get_current_user,
     get_settings,
     log_audit,
@@ -37,7 +38,7 @@ def _times_overlap(start_a: str, end_a: str, start_b: str, end_b: str) -> bool:
 
 
 async def _find_conflicts(
-    academic_year_id: str,
+    semester_id: str,
     day: str,
     start_time: str,
     end_time: str,
@@ -51,7 +52,7 @@ async def _find_conflicts(
     Each entry includes: id, day, start_time, end_time, teacher_name, subject_name,
     class_name, room_name, status (draft/submitted/locked).
     """
-    q = {'academic_year_id': academic_year_id, 'day': day}
+    q = {'semester_id': semester_id, 'day': day}
     if exclude_id:
         q['id'] = {'$ne': exclude_id}
     candidates = await db.schedules.find(q, {'_id': 0}).to_list(500)
@@ -103,7 +104,7 @@ def _conflict_message(conflicts: Dict[str, List[Dict]]) -> str:
 @router.get("/schedules/conflict-check")
 async def schedules_conflict_check(
     day: str, start_time: str, end_time: str,
-    academic_year_id: Optional[str] = None,
+    semester_id: Optional[str] = None,
     teacher_id: Optional[str] = None,
     room_id: Optional[str] = None,
     class_id: Optional[str] = None,
@@ -114,13 +115,14 @@ async def schedules_conflict_check(
 
     Returns: { has_conflict: bool, teacher: [...], room: [...], class: [...], message: str }
     """
-    ay_id = academic_year_id
-    if not ay_id:
-        ay = await get_active_academic_year()
-        if not ay:
+    sem_id = semester_id
+    if not sem_id:
+        from core import get_active_context
+        ctx = await get_active_context(user)
+        sem_id = ctx.get('semester_id')
+        if not sem_id:
             return {'has_conflict': False, 'teacher': [], 'room': [], 'class': [], 'message': ''}
-        ay_id = ay['id']
-    conflicts = await _find_conflicts(ay_id, day, start_time, end_time,
+    conflicts = await _find_conflicts(sem_id, day, start_time, end_time,
                                        teacher_id=teacher_id, room_id=room_id, class_id=class_id,
                                        exclude_id=exclude_id)
     has = bool(conflicts['teacher'] or conflicts['room'])  # only guru + ruang BLOCK
@@ -140,7 +142,7 @@ async def schedules_conflict_check(
 # More specific routes must come BEFORE generic routes in FastAPI
 @router.get("/schedules/grouped")
 async def list_schedules_grouped(
-    academic_year_id: Optional[str] = None, semester: Optional[str] = None,
+    semester_id: Optional[str] = None,
     class_id: Optional[str] = None, teacher_id: Optional[str] = None, day: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
@@ -148,9 +150,15 @@ async def list_schedules_grouped(
     Get schedules grouped by JTM (Jam Tugas Mengajar).
     Consecutive teaching hours in same class, day, subject are grouped together.
     """
+    from core import get_active_context
+
+    # Get semester_id from user context if not provided
+    if not semester_id:
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+
     q = {}
-    if academic_year_id: q['academic_year_id'] = academic_year_id
-    if semester: q['semester'] = semester
+    if semester_id: q['semester_id'] = semester_id
     if class_id: q['class_id'] = class_id
     if teacher_id: q['teacher_id'] = teacher_id
     if day: q['day'] = day
@@ -182,13 +190,19 @@ async def list_schedules_grouped(
 
 @router.get("/schedules")
 async def list_schedules(
-    academic_year_id: Optional[str] = None, semester: Optional[str] = None,
+    semester_id: Optional[str] = None,
     class_id: Optional[str] = None, teacher_id: Optional[str] = None, day: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
+    from core import get_active_context
+
+    # Get semester_id from user context if not provided
+    if not semester_id:
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+
     q = {}
-    if academic_year_id: q['academic_year_id'] = academic_year_id
-    if semester: q['semester'] = semester
+    if semester_id: q['semester_id'] = semester_id
     if class_id: q['class_id'] = class_id
     if teacher_id: q['teacher_id'] = teacher_id
     if day: q['day'] = day
@@ -346,6 +360,8 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
 
     Phase 6: blocks creation if guru/ruang bentrok (kecuali admin force=true).
     """
+    from core import get_active_context
+
     is_admin = 'admin' in user.get('roles', [])
     teacher_id = payload.get('teacher_id')
     is_self_assign = teacher_id == user['id']
@@ -354,16 +370,20 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
         if not (can_self and is_self_assign):
             raise HTTPException(403, "Hanya admin yang bisa menambahkan jadwal orang lain")
 
+    # Ensure semester_id is set (from payload or user context)
+    sem_id = payload.get('semester_id')
+    if not sem_id:
+        ctx = await get_active_context(user)
+        sem_id = ctx.get('semester_id')
+        if not sem_id:
+            raise HTTPException(400, "semester_id wajib diisi")
+        payload['semester_id'] = sem_id
+
     # Conflict detection (Phase 6: guru + ruang)
-    ay_id = payload.get('academic_year_id')
-    if not ay_id:
-        ay = await get_active_academic_year()
-        ay_id = ay['id'] if ay else None
-        payload['academic_year_id'] = ay_id
     force = payload.pop('force', False)
-    if ay_id and payload.get('day') and payload.get('start_time') and payload.get('end_time'):
+    if sem_id and payload.get('day') and payload.get('start_time') and payload.get('end_time'):
         conflicts = await _find_conflicts(
-            ay_id, payload['day'], payload['start_time'], payload['end_time'],
+            sem_id, payload['day'], payload['start_time'], payload['end_time'],
             teacher_id=payload.get('teacher_id'),
             room_id=payload.get('room_id'),
             class_id=payload.get('class_id'),
@@ -412,12 +432,14 @@ async def bulk_lock_schedules(payload: Dict, request: Request, user: Dict = Depe
 # my-today / grid / excel-template MUST come BEFORE /schedules/{sid} for path matching
 @router.get("/schedules/my-today")
 async def my_today_schedule(user: Dict = Depends(get_current_user)):
-    ay = await get_active_academic_year()
-    if not ay:
+    """Get today's schedule for current user, filtered by user's view context (semester)."""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
         return []
     day = current_day_id()
     items = await db.schedules.find({
-        'teacher_id': user['id'], 'day': day, 'academic_year_id': ay['id'],
+        'teacher_id': user['id'], 'day': day, 'semester_id': semester_id,
     }, {'_id': 0}).sort('start_time', 1).to_list(50)
     enriched = []
     for s in items:
@@ -437,10 +459,11 @@ async def my_today_schedule(user: Dict = Depends(get_current_user)):
 @router.get("/schedules/grid")
 async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[str] = None,
                          user: Dict = Depends(get_current_user)):
-    """Return schedule data structured as grid: days x slots"""
+    """Return schedule data structured as grid: days x slots, filtered by user's view context (semester)."""
     settings = await get_settings()
-    ay = await get_active_academic_year()
-    if not ay:
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
         return {'days': [], 'slots': [], 'grid': {}}
     active_days = settings.get('active_days', ['senin','selasa','rabu','kamis','jumat'])
     # Default slots jika belum ada di settings
@@ -457,7 +480,7 @@ async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[st
         {'name': 'Jam 8', 'start_time': '13:00', 'end_time': '13:45', 'is_break': False},
     ]
     slots = settings.get('teaching_slots', default_slots)
-    q = {'academic_year_id': ay['id']}
+    q = {'semester_id': semester_id}
     if class_id: q['class_id'] = class_id
     if teacher_id: q['teacher_id'] = teacher_id
     items = await db.schedules.find(q, {'_id': 0}).to_list(2000)
@@ -549,10 +572,12 @@ async def schedule_import_excel(file: UploadFile = File(...), request: Request =
     except Exception as e:
         raise HTTPException(400, f"Gagal membaca Excel: {e}")
 
-    ay = await get_active_academic_year()
-    if not ay:
-        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
-    classes_map = {c['name']: c['id'] for c in await db.classes.find({'academic_year_id': ay['id']}, {'_id': 0}).to_list(500)}
+    # Get active semester context
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
+        raise HTTPException(400, "Tidak ada semester aktif")
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({'semester_id': semester_id}, {'_id': 0}).to_list(500)}
     subjects_map = {s['code'].upper(): s['id'] for s in await db.subjects.find({}, {'_id': 0}).to_list(500)}
     rooms_map = {r['name']: r['id'] for r in await db.rooms.find({}, {'_id': 0}).to_list(500)}
     users_map = {u['username']: u['id'] for u in await db.users.find({}, {'_id': 0, 'username': 1, 'id': 1}).to_list(2000)}
@@ -595,11 +620,12 @@ async def schedule_import_excel(file: UploadFile = File(...), request: Request =
 
             sched = {
                 'id': str(uuid.uuid4()),
-                'academic_year_id': ay['id'], 'semester': sem,
+                'semester_id': semester_id,
                 'class_id': classes_map[kls], 'subject_id': subjects_map[mp_kode],
                 'teacher_id': users_map[gr_username], 'room_id': rooms_map[ruang],
                 'day': hari, 'start_time': jm, 'end_time': js,
                 'is_published': True, 'created_at': datetime.utcnow().isoformat(),
+                'status': 'draft',  # Initial status for new schedules
             }
             new_docs.append(sched)
             success += 1

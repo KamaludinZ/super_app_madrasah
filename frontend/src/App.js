@@ -22,6 +22,8 @@ import AdminQRGeneratorPage from '@/pages/admin/AdminQRGeneratorPage';
 import AdminAuditLogsPage from '@/pages/admin/AdminAuditLogsPage';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 import AdminAcademicYearPage from '@/pages/admin/AdminAcademicYearPage';
+import AdminTahunTakwimPage from '@/pages/admin/AdminTahunTakwimPage';
+import AdminSemestersPage from '@/pages/admin/AdminSemestersPage';
 import WaliKelasDashboard from '@/pages/WaliKelasDashboard';
 import DataSiswaPage from '@/pages/DataSiswaPage';
 import KehadiranPage from '@/pages/KehadiranPage';
@@ -49,6 +51,11 @@ import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
 import AdminPromotionsPage from '@/pages/admin/AdminPromotionsPage';
+import AdminStudentRecordsPage from '@/pages/admin/AdminStudentRecordsPage';
+import AdminVervalSiswaPage from '@/pages/admin/AdminVervalSiswaPage';
+import AdminVervalGTKPage from '@/pages/admin/AdminVervalGTKPage';
+import MyVervalRequestsPage from '@/pages/MyVervalRequestsPage';
+import ProfilePage from '@/pages/ProfilePage';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -76,9 +83,37 @@ function RequireAuth() {
   );
 }
 
+// Component to dynamically update favicon from settings
+function DynamicFavicon() {
+  const { settings } = useAuth();
+
+  React.useEffect(() => {
+    // Use favicon_url if available, otherwise fallback to logo_url
+    const faviconUrl = settings?.favicon_url || settings?.logo_url;
+
+    if (faviconUrl) {
+      // Remove existing favicon
+      const existingFavicon = document.querySelector("link[rel*='icon']");
+      if (existingFavicon) {
+        existingFavicon.parentNode.removeChild(existingFavicon);
+      }
+
+      // Add new favicon with logo from settings
+      const link = document.createElement('link');
+      link.type = 'image/x-icon';
+      link.rel = 'icon';
+      link.href = faviconUrl;
+      document.head.appendChild(link);
+    }
+  }, [settings?.favicon_url, settings?.logo_url]);
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
+      <DynamicFavicon />
       <BrowserRouter>
         <Toaster richColors position="top-right" />
         <Routes>
@@ -117,7 +152,9 @@ function App() {
             <Route path="/admin/qr-generator" element={<AdminQRGeneratorPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/tahun-takwim" element={<AdminTahunTakwimPage />} />
             <Route path="/admin/academic-year" element={<AdminAcademicYearPage />} />
+            <Route path="/admin/semesters" element={<AdminSemestersPage />} />
             <Route path="/admin/import" element={<AdminImportPage />} />
             <Route path="/admin/holidays" element={<AdminHolidaysPage />} />
             <Route path="/admin/backup" element={<AdminBackupPage />} />
@@ -129,6 +166,11 @@ function App() {
             <Route path="/admin/mutasi" element={<AdminMutationsPage />} />
             <Route path="/admin/alumni" element={<AdminAlumniPage />} />
             <Route path="/admin/naik-kelas" element={<AdminPromotionsPage />} />
+            <Route path="/admin/buku-induk" element={<AdminStudentRecordsPage />} />
+            <Route path="/admin/verval-siswa" element={<AdminVervalSiswaPage />} />
+            <Route path="/admin/verval-gtk" element={<AdminVervalGTKPage />} />
+            <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />

@@ -1,23 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(yarn:*)",
-      "Bash(npm install)",
-      "Bash(npm install:*)",
-      "Bash(pip install:*)",
-      "Bash(mongod:*)",
-      "Bash(python:*)",
-      "Bash(npm start)",
-      "Bash(curl:*)",
-      "Bash(dir:*)",
-      "Bash(timeout /t 3)",
-      "Bash(nul)",
-      "Bash(timeout:*)",
-      "Bash(grep:*)",
-      "Bash(server.py)",
-      "Bash(uvicorn:*)",
-      "Bash(find:*)"
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /F /PID 15980)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

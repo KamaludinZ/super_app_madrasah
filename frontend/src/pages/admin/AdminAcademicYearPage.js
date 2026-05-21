@@ -11,71 +11,61 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
-const REGULAR_SEMESTERS = [
-  { name: 'ganjil', label: 'Ganjil' },
-  { name: 'genap', label: 'Genap' },
-];
-const ACCELERATED_SEMESTERS = [
-  { name: '1', label: 'Semester 1' }, { name: '2', label: 'Semester 2' },
-  { name: '3', label: 'Semester 3' }, { name: '4', label: 'Semester 4' },
-  { name: '5', label: 'Semester 5' }, { name: '6', label: 'Semester 6' },
-];
-
 export default function AdminAcademicYearPage() {
   const [items, setItems] = useState([]);
-  const [curriculums, setCurriculums] = useState([]);
+  const [tahunTakwimList, setTahunTakwimList] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
-    name: '', is_active: false, semester_type: 'regular', semesters: [], active_semester: 'ganjil',
-    curriculum_id: '',
+    name: '',
+    tahun_takwim_ids: [],
+    start_date: '',
+    end_date: '',
+    is_active: false,
   });
 
   const refresh = async () => {
-    const [{ data }, { data: curs }] = await Promise.all([
-      api.get('/academic-years'),
-      api.get('/curriculums'),
-    ]);
-    setItems(data); setCurriculums(curs || []);
+    const { data } = await api.get('/academic-years');
+    setItems(data);
   };
-  useEffect(() => { refresh(); }, []);
 
-  const curriculumById = (id) => curriculums.find((c) => c.id === id);
+  const loadTahunTakwim = async () => {
+    try {
+      const { data } = await api.get('/tahun-takwim');
+      setTahunTakwimList(data);
+    } catch (e) {
+      console.error('Failed to load Tahun Takwim:', e);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    loadTahunTakwim();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
     setForm({
-      name: '', is_active: false, semester_type: 'regular',
-      semesters: REGULAR_SEMESTERS.map((s) => ({ ...s, is_active: s.name === 'ganjil' })),
-      active_semester: 'ganjil',
-      curriculum_id: '',
+      name: `${currentYear}/${nextYear}`,
+      tahun_takwim_ids: [],
+      start_date: `${currentYear}-07-01`,
+      end_date: `${nextYear}-06-30`,
+      is_active: false,
     });
     setOpen(true);
   };
   const openEdit = (ay) => {
     setEditing(ay);
     setForm({
-      name: ay.name, is_active: ay.is_active,
-      semester_type: ay.semester_type || 'regular',
-      semesters: ay.semesters || [],
-      active_semester: ay.active_semester || (ay.semesters?.find((s) => s.is_active)?.name || ''),
-      curriculum_id: ay.curriculum_id || '',
+      name: ay.name,
+      tahun_takwim_ids: ay.tahun_takwim_ids || [],
+      start_date: ay.start_date || '',
+      end_date: ay.end_date || '',
+      is_active: ay.is_active,
     });
     setOpen(true);
-  };
-
-  const onTypeChange = (type) => {
-    const baseSet = type === 'regular' ? REGULAR_SEMESTERS : ACCELERATED_SEMESTERS;
-    setForm({
-      ...form, semester_type: type,
-      semesters: baseSet.map((s, idx) => ({ ...s, is_active: idx === 0 })),
-      active_semester: baseSet[0]?.name,
-    });
-  };
-
-  const setActiveSemester = (name) => {
-    const updated = (form.semesters || []).map((s) => ({ ...s, is_active: s.name === name }));
-    setForm({ ...form, semesters: updated, active_semester: name });
   };
 
   const handleSubmit = async () => {
@@ -109,104 +99,113 @@ export default function AdminAcademicYearPage() {
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><GraduationCap className="h-3 w-3 mr-1" /> Tahun Pelajaran</Badge>
           <h1 className="text-2xl sm:text-3xl font-bold">Kelola Tahun Pelajaran</h1>
-          <p className="text-sm text-slate-600 mt-1">Tahun pelajaran aktif menjadi acuan semua data baru. Mendukung semester Ganjil/Genap dan kelas Percepatan (Semester 1-6).</p>
+          <p className="text-sm text-slate-600 mt-1">Tahun pelajaran aktif menjadi acuan semua data baru. Kelola semester di menu Semester.</p>
         </div>
         <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-ay-button"><Plus className="h-4 w-4" /> Tambah</Button>
       </div>
 
       <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table>
         <TableHeader><TableRow>
-          <TableHead>Nama</TableHead><TableHead>Tipe</TableHead><TableHead>Kurikulum</TableHead><TableHead>Semester</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
+          <TableHead>Nama</TableHead><TableHead>Tahun Takwim</TableHead><TableHead>Periode</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
         </TableRow></TableHeader>
-        <TableBody>{items.map((ay) => (
-          <TableRow key={ay.id} data-testid={`ay-row-${ay.name}`}>
-            <TableCell className="font-mono font-semibold">{ay.name}</TableCell>
-            <TableCell>
-              <Badge variant="outline" className="capitalize">{ay.semester_type === 'accelerated' ? 'Percepatan (1-6)' : 'Regular (Ganjil/Genap)'}</Badge>
-            </TableCell>
-            <TableCell>
-              {ay.curriculum_id ? (
-                <Badge variant="outline" className="bg-[#006837]/5 text-[#006837] border-[#006837]/20" title={curriculumById(ay.curriculum_id)?.name || ''}>
-                  {curriculumById(ay.curriculum_id)?.code || curriculumById(ay.curriculum_id)?.name || '?'}
-                </Badge>
-              ) : <span className="text-xs text-slate-400 italic">Belum diset</span>}
-            </TableCell>
-            <TableCell>
-              <div className="flex flex-wrap gap-1">
-                {(ay.semesters || []).map((s) => (
-                  <Badge key={s.name} className={s.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}>
-                    {s.label || s.name}{s.is_active ? ' (aktif)' : ''}
-                  </Badge>
-                ))}
-              </div>
-            </TableCell>
-            <TableCell>{ay.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> : <Badge variant="outline">Arsip</Badge>}</TableCell>
-            <TableCell className="text-right">
-              <Button size="sm" variant="outline" onClick={() => openEdit(ay)} className="gap-1 mr-1" data-testid={`edit-ay-${ay.name}`}><Pencil className="h-3.5 w-3.5" /> Edit</Button>
-              {!ay.is_active && <Button size="sm" variant="outline" onClick={() => handleActivate(ay)} className="gap-1" data-testid={`activate-ay-${ay.name}`}><Check className="h-3.5 w-3.5" /> Aktifkan</Button>}
-              <Button size="icon" variant="ghost" onClick={() => handleDelete(ay)} className="text-rose-600 ml-1"><Trash2 className="h-4 w-4" /></Button>
-            </TableCell>
-          </TableRow>
-        ))}</TableBody>
+        <TableBody>{items.map((ay) => {
+          const ttYears = (ay.tahun_takwim_ids || []).map(ttId => {
+            const tt = tahunTakwimList.find(t => t.id === ttId);
+            return tt ? tt.year : ttId;
+          }).join('/');
+          return (
+            <TableRow key={ay.id} data-testid={`ay-row-${ay.name}`}>
+              <TableCell className="font-mono font-semibold">{ay.name}</TableCell>
+              <TableCell className="text-xs text-slate-600">
+                {ttYears || <span className="text-slate-400">-</span>}
+              </TableCell>
+              <TableCell className="text-xs text-slate-600">
+                {ay.start_date && ay.end_date ? (
+                  <>{new Date(ay.start_date).toLocaleDateString('id-ID')} - {new Date(ay.end_date).toLocaleDateString('id-ID')}</>
+                ) : '-'}
+              </TableCell>
+              <TableCell>{ay.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> : <Badge variant="outline">Arsip</Badge>}</TableCell>
+              <TableCell className="text-right">
+                <Button size="sm" variant="outline" onClick={() => openEdit(ay)} className="gap-1 mr-1" data-testid={`edit-ay-${ay.name}`}><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+                {!ay.is_active && <Button size="sm" variant="outline" onClick={() => handleActivate(ay)} className="gap-1" data-testid={`activate-ay-${ay.name}`}><Check className="h-3.5 w-3.5" /> Aktifkan</Button>}
+                <Button size="icon" variant="ghost" onClick={() => handleDelete(ay)} className="text-rose-600 ml-1"><Trash2 className="h-4 w-4" /></Button>
+              </TableCell>
+            </TableRow>
+          );
+        })}</TableBody>
       </Table></div></CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? 'Edit Tahun Pelajaran' : 'Tambah Tahun Pelajaran'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Nama Tahun Pelajaran *</Label><Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="2026/2027" data-testid="ay-form-name" /></div>
+          <div className="space-y-4">
             <div>
-              <Label>Tipe Semester *</Label>
-              <Select value={form.semester_type} onValueChange={onTypeChange}>
-                <SelectTrigger data-testid="ay-form-type"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="regular">Regular - Ganjil & Genap</SelectItem>
-                  <SelectItem value="accelerated">Kelas Percepatan - Semester 1 s/d 6</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 mt-1">Pilih "Percepatan" untuk kelas akselerasi yang menyelesaikan 6 semester dalam 2 tahun.</p>
+              <Label>Nama Tahun Pelajaran *</Label>
+              <Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="2026/2027" data-testid="ay-form-name" />
+              <p className="text-xs text-slate-500 mt-1">Format: YYYY/YYYY (contoh: 2026/2027)</p>
             </div>
+
             <div>
-              <Label>Semester Aktif</Label>
-              <Select value={form.active_semester} onValueChange={setActiveSemester}>
-                <SelectTrigger data-testid="ay-form-active-sem"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(form.semesters || []).map((s) => (
-                    <SelectItem key={s.name} value={s.name}>{s.label || s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Kurikulum yang Digunakan</Label>
-              <Select value={form.curriculum_id || '__none__'} onValueChange={(v) => setForm({...form, curriculum_id: v === '__none__' ? '' : v})}>
-                <SelectTrigger data-testid="ay-form-curriculum"><SelectValue placeholder="Pilih kurikulum..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Belum diset</SelectItem>
-                  {curriculums.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 mt-1">
-                Kurikulum ini akan dipakai sebagai default untuk semua kelas di TP ini.
-                {curriculums.length === 0 && (
-                  <span className="block text-amber-700 mt-0.5">Belum ada kurikulum. Buat di menu Kurikulum dulu.</span>
+              <Label>Tahun Takwim yang Dilintasi *</Label>
+              <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                {tahunTakwimList.length === 0 && (
+                  <p className="text-xs text-slate-500">Tidak ada Tahun Takwim. Buat di menu Tahun Takwim terlebih dahulu.</p>
                 )}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
-              <Label className="text-xs text-slate-600">Daftar Semester:</Label>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {(form.semesters || []).map((s) => (
-                  <Badge key={s.name} variant="outline">{s.label || s.name}</Badge>
+                {tahunTakwimList.map((tt) => (
+                  <label key={tt.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded">
+                    <input
+                      type="checkbox"
+                      checked={form.tahun_takwim_ids.includes(tt.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setForm({...form, tahun_takwim_ids: [...form.tahun_takwim_ids, tt.id].sort()});
+                        } else {
+                          setForm({...form, tahun_takwim_ids: form.tahun_takwim_ids.filter(id => id !== tt.id)});
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm font-medium">{tt.year}</span>
+                    <span className="text-xs text-slate-500">- {tt.name}</span>
+                    {tt.is_active && <Badge className="ml-auto bg-emerald-500 text-[9px]">AKTIF</Badge>}
+                  </label>
                 ))}
               </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Pilih 1-2 tahun takwim yang dilintasi TP ini (contoh: TP 2025/2026 melintasi tahun 2025 dan 2026)
+              </p>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Tanggal Mulai *</Label>
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) => setForm({...form, start_date: e.target.value})}
+                />
+                <p className="text-xs text-slate-500 mt-1">Biasanya 1 Juli</p>
+              </div>
+              <div>
+                <Label>Tanggal Selesai *</Label>
+                <Input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({...form, end_date: e.target.value})}
+                />
+                <p className="text-xs text-slate-500 mt-1">Biasanya 30 Juni</p>
+              </div>
+            </div>
+
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({...form, is_active: e.target.checked})} />
               <span className="text-sm">Set sebagai TP aktif (akan menonaktifkan TP lain)</span>
             </label>
+            <div className="rounded-lg border border-blue-200 p-3 bg-blue-50">
+              <p className="text-xs text-blue-800">
+                <strong>Info:</strong> Setelah membuat TP, buat semester-semester di menu Semester dan tentukan kurikulum yang digunakan untuk tiap semester.
+              </p>
+            </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Batal</Button><Button onClick={handleSubmit} className="bg-[#006837]" data-testid="ay-form-submit">Simpan</Button></DialogFooter>
         </DialogContent>

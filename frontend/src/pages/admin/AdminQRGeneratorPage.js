@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 export default function AdminQRGeneratorPage() {
+  const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [classes, setClasses] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -31,7 +33,11 @@ export default function AdminQRGeneratorPage() {
     const [r, c, t] = await Promise.all([api.get('/rooms'), api.get('/classes'), api.get('/qr-templates')]);
     setRooms(r.data); setClasses(c.data); setTemplates(t.data);
   };
-  useEffect(() => { refresh(); }, []);
+
+  // Refresh when component mounts or when user context changes (semester/year)
+  useEffect(() => {
+    refresh();
+  }, [user?.view_semester_id, user?.view_academic_year_id]);
 
   // Get unique grade levels
   const grades = [...new Set(classes.map(c => c.grade))].sort((a, b) => a - b);

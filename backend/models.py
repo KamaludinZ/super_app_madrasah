@@ -110,16 +110,52 @@ class JabatanModel(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class TahunTakwimModel(BaseModel):
+    """
+    Tahun Takwim (Calendar Year) - Mengatur kalender umum aplikasi (Januari - Desember).
+    Digunakan untuk laporan keuangan, anggaran tahunan, dan timestamp riwayat data.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    year: int  # e.g., 2026
+    name: str  # e.g., "Tahun 2026"
+    start_date: str  # YYYY-MM-DD, default: "2026-01-01"
+    end_date: str  # YYYY-MM-DD, default: "2026-12-31"
+    is_active: bool = False  # hanya 1 tahun takwim yang aktif
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+
 class AcademicYearModel(BaseModel):
+    """
+    Tahun Pelajaran - Mengatur siklus kenaikan kelas.
+    Bisa melintasi 2 Tahun Takwim (contoh: 2025/2026 melintasi tahun 2025 dan 2026).
+    """
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str  # e.g., "2025/2026"
+    tahun_takwim_ids: List[str] = Field(default_factory=list)  # List of Tahun Takwim IDs yang dilintasi
+    start_date: str  # YYYY-MM-DD, e.g., "2025-07-01" (awal TP)
+    end_date: str  # YYYY-MM-DD, e.g., "2026-06-30" (akhir TP)
     is_active: bool = False
-    # 'regular' = ganjil/genap; 'accelerated' = semester 1-6 untuk kelas percepatan
-    semester_type: Literal['regular', 'accelerated'] = 'regular'
-    semesters: List[Dict[str, Any]] = Field(default_factory=list)
-    active_semester: Optional[str] = None  # name of active semester
-    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di TP ini
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+
+class SemesterModel(BaseModel):
+    """Semester - Terpisah dari Academic Year untuk fleksibilitas."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Ganjil", "Genap", "Semester 1", "Semester 2"
+    code: str  # e.g., "ganjil", "genap", "1", "2", "3", "4", "5", "6" - primary code for display
+    codes: List[str] = Field(default_factory=list)  # Multiple codes for accelerated (e.g., ["1", "3", "5"])
+    academic_year_id: str  # TP yang dimiliki semester ini
+    tahun_takwim_id: Optional[str] = None  # Tahun Takwim yang dimiliki semester ini
+    semester_type: Literal['regular', 'accelerated'] = 'regular'  # regular: ganjil/genap, accelerated: 1-6
+    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di semester ini
+    start_date: Optional[str] = None  # YYYY-MM-DD
+    end_date: Optional[str] = None  # YYYY-MM-DD
+    is_active: bool = False  # hanya 1 semester yang aktif di sistem
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -140,14 +176,15 @@ class ClassModel(BaseModel):
     name: str
     grade: int
     parallel: str
-    academic_year_id: str
+    academic_year_id: str  # TP reference (kept for reference)
+    semester_id: Optional[str] = None  # Semester aktif untuk kelas ini
     homeroom_teacher_id: Optional[str] = None
     room_id: Optional[str] = None
     capacity: int = 40  # Kapasitas maksimal siswa per kelas
     is_accelerated: bool = False  # kelas percepatan flag
     # Phase E2 additions
-    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di kelas ini (boleh override TP)
-    semester: Optional[str] = None  # semester aktif untuk kelas ini (boleh beda dari TP utama)
+    curriculum_id: Optional[str] = None  # kurikulum yang dipakai di kelas ini (deprecated - use from semester)
+    semester: Optional[str] = None  # DEPRECATED: use semester_id instead
     token: Optional[str] = None  # token kelas unik (format: <name>-<year>-<rand4>)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -201,8 +238,7 @@ class SubjectModel(BaseModel):
 class ScheduleModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    academic_year_id: str
-    semester: str  # 'ganjil', 'genap', or '1', '2', ..., '6'
+    semester_id: str  # NEW: references semesters.id (contains academic_year_id + curriculum)
     class_id: str
     subject_id: str
     teacher_id: str
@@ -212,6 +248,9 @@ class ScheduleModel(BaseModel):
     end_time: str
     slot_index: Optional[int] = None  # references teaching_slots index
     is_published: bool = True
+    # === DEPRECATED fields (keep for backward compatibility) ===
+    academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
+    semester: Optional[str] = None  # DEPRECATED: use semester_id instead
     # === Workflow status ===
     # Flow: draft → submitted → approved → locked
     status: str = 'draft'  # 'draft' | 'submitted' | 'approved' | 'locked'
@@ -234,8 +273,7 @@ class JournalModel(BaseModel):
     class_id: str
     subject_id: str
     room_id: str
-    academic_year_id: str
-    semester: str
+    semester_id: str  # NEW: references semesters.id (contains academic_year_id + curriculum)
     materi: str
     catatan: Optional[str] = None
     siswa_hadir: int = 0
@@ -248,6 +286,9 @@ class JournalModel(BaseModel):
     validations: Dict[str, Any] = Field(default_factory=dict)
     qr_mode: str = 'static'
     is_locked: bool = False
+    # === DEPRECATED fields (keep for backward compatibility) ===
+    academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
+    semester: Optional[str] = None  # DEPRECATED: use semester_id instead
     # === Audit pengisian jurnal ===
     fill_mode: str = 'self'  # 'self' (guru pengajar isi sendiri) | 'piket' (guru piket titipan) | 'admin' (admin override)
     filled_by_user_id: Optional[str] = None  # Jika beda dari teacher_id (mis. piket)
@@ -326,11 +367,15 @@ class ClassAttendanceModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     class_id: str
+    semester_id: str  # NEW: references semesters.id (contains academic_year_id)
     date: str  # YYYY-MM-DD
     records: List[Dict[str, Any]] = Field(default_factory=list)
     recorded_by: str  # user_id
     recorded_at: datetime = Field(default_factory=datetime.utcnow)
     summary: Dict[str, int] = Field(default_factory=dict)  # {'hadir': 28, 'sakit': 1, ...}
+    # === DEPRECATED fields (keep for backward compatibility) ===
+    academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
+    semester: Optional[str] = None  # DEPRECATED: use semester_id instead
 
 
 class ClassCleanlinessModel(BaseModel):
@@ -338,6 +383,8 @@ class ClassCleanlinessModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     class_id: str
+    academic_year_id: str  # Link to academic year
+    semester: str  # 'Ganjil', 'Genap', or '1'-'6'
     date: str  # YYYY-MM-DD
     rating: int = 3  # 1-5 stars
     condition: Literal['bersih', 'cukup', 'kotor'] = 'bersih'
@@ -373,6 +420,13 @@ class SecurityLogModel(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
+class LeadershipPosition(BaseModel):
+    """Model untuk data pimpinan madrasah"""
+    name: str
+    nip: Optional[str] = None
+    position: str  # 'kepala_madrasah', 'kepala_tu', 'wakil_kesiswaan', etc.
+
+
 class SettingsModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = "global_config"
@@ -387,6 +441,9 @@ class SettingsModel(BaseModel):
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
     report_logo_url: Optional[str] = None
+    # NEW: Kop surat dan daftar pimpinan
+    letterhead_url: Optional[str] = None  # URL untuk kop surat
+    leadership: List[Dict[str, str]] = Field(default_factory=list)  # Daftar pimpinan
     primary_color: str = "#006837"
     gps_default_enabled: bool = True
     gps_default_radius: float = 20.0
@@ -679,3 +736,207 @@ class PromotionRequest(BaseModel):
     graduation_date: Optional[str] = None
     certificate_number_prefix: Optional[str] = None
     notes: Optional[str] = None
+
+
+# ============================================================
+# GRADES & RAPOR (Nilai Siswa - Melekat Lintas TP)
+# ============================================================
+class GradeModel(BaseModel):
+    """Nilai siswa per mata pelajaran per semester - melekat pada siswa lintas TP."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # ID siswa
+    class_id: str  # Kelas saat nilai diinput
+    subject_id: str  # Mata pelajaran
+    semester_id: str  # NEW: references semesters.id (contains academic_year_id)
+    # Komponen nilai K-13 / Kurikulum Merdeka
+    nilai_pengetahuan: Optional[float] = None  # Nilai Pengetahuan (KI-3)
+    nilai_keterampilan: Optional[float] = None  # Nilai Keterampilan (KI-4)
+    nilai_sikap: Optional[str] = None  # Predikat Sikap Spiritual & Sosial
+    nilai_akhir: Optional[float] = None  # Rata-rata atau nilai akhir
+    predikat: Optional[str] = None  # A, B, C, D
+    deskripsi: Optional[str] = None  # Deskripsi capaian kompetensi
+    # Untuk kelas 9: nilai ujian
+    nilai_ujian_tulis: Optional[float] = None
+    nilai_ujian_praktek: Optional[float] = None
+    # Tracking
+    recorded_by: str  # Guru yang input
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    # === DEPRECATED fields (keep for backward compatibility) ===
+    academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
+    semester: Optional[str] = None  # DEPRECATED: use semester_id instead
+
+
+class RaporSummaryModel(BaseModel):
+    """Rangkuman rapor siswa lintas TP (kelas 7-9)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    academic_year_id: str
+    semester: str
+    class_id: str
+    total_subjects: int = 0
+    average_score: float = 0.0
+    rank_in_class: Optional[int] = None
+    attendance_summary: Dict[str, int] = Field(default_factory=dict)  # {'hadir': 180, 'sakit': 2, ...}
+    notes: Optional[str] = None  # Catatan wali kelas
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================
+# ACHIEVEMENTS (Prestasi - Melekat Lintas TP)
+# ============================================================
+class AchievementModel(BaseModel):
+    """Prestasi siswa - melekat pada siswa lintas TP & semester."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # ID siswa
+    academic_year_id: str  # TP saat prestasi diraih
+    semester: str  # Semester saat prestasi diraih
+    achievement_type: Literal['akademik', 'non_akademik', 'ekstrakurikuler', 'olahraga', 'seni', 'lainnya']
+    title: str  # Nama prestasi
+    description: Optional[str] = None  # Deskripsi prestasi
+    level: Literal['sekolah', 'kecamatan', 'kabupaten', 'provinsi', 'nasional', 'internasional']
+    rank: Optional[str] = None  # Juara 1, 2, 3, dst atau Peserta
+    organizer: Optional[str] = None  # Penyelenggara
+    date: str  # YYYY-MM-DD tanggal prestasi
+    certificate_url: Optional[str] = None  # Upload sertifikat
+    photo_url: Optional[str] = None  # Foto dokumentasi
+    recorded_by: str  # User yang input
+    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    verified: bool = False  # Verifikasi oleh admin
+    verified_by: Optional[str] = None
+    verified_at: Optional[datetime] = None
+
+
+# ============================================================
+# BUKU INDUK SISWA (Master Student Record)
+# ============================================================
+class StudentMasterRecordModel(BaseModel):
+    """Buku Induk Siswa - data lengkap siswa untuk keperluan administrasi."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # FK ke users.id
+
+    # Data Pribadi
+    full_name: str
+    nis: Optional[str] = None
+    nisn: Optional[str] = None
+    nik: Optional[str] = None  # NIK KTP
+    gender: Optional[str] = None  # 'L' / 'P'
+    birth_place: Optional[str] = None
+    birth_date: Optional[str] = None  # YYYY-MM-DD
+    religion: Optional[str] = None
+    citizenship: Optional[str] = None  # 'WNI' / 'WNA'
+    special_needs: Optional[str] = None  # Berkebutuhan khusus
+    address: Optional[str] = None
+    rt: Optional[str] = None
+    rw: Optional[str] = None
+    kelurahan: Optional[str] = None
+    kecamatan: Optional[str] = None
+    kabupaten: Optional[str] = None
+    provinsi: Optional[str] = None
+    postal_code: Optional[str] = None
+    residence_type: Optional[str] = None  # Tinggal dengan orang tua/wali/kos
+    transportation: Optional[str] = None  # Alat transportasi
+    distance_km: Optional[float] = None  # Jarak rumah ke sekolah
+    phone: Optional[str] = None
+    mobile_phone: Optional[str] = None
+    email: Optional[str] = None
+
+    # Data Keluarga - Ayah
+    father_name: Optional[str] = None
+    father_nik: Optional[str] = None
+    father_birth_year: Optional[int] = None
+    father_education: Optional[str] = None
+    father_occupation: Optional[str] = None
+    father_income: Optional[str] = None  # Range pendapatan
+    father_phone: Optional[str] = None
+
+    # Data Keluarga - Ibu
+    mother_name: Optional[str] = None
+    mother_nik: Optional[str] = None
+    mother_birth_year: Optional[int] = None
+    mother_education: Optional[str] = None
+    mother_occupation: Optional[str] = None
+    mother_income: Optional[str] = None
+    mother_phone: Optional[str] = None
+
+    # Data Keluarga - Wali (jika ada)
+    guardian_name: Optional[str] = None
+    guardian_nik: Optional[str] = None
+    guardian_birth_year: Optional[int] = None
+    guardian_education: Optional[str] = None
+    guardian_occupation: Optional[str] = None
+    guardian_income: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    guardian_relationship: Optional[str] = None  # Hubungan dengan siswa
+
+    # Data Pendidikan Sebelumnya
+    previous_school: Optional[str] = None
+    previous_school_address: Optional[str] = None
+    previous_school_certificate_number: Optional[str] = None
+    previous_school_ijazah_number: Optional[str] = None
+
+    # Data Penerimaan Siswa Baru
+    admission_date: Optional[str] = None  # YYYY-MM-DD
+    admission_class: Optional[str] = None  # Kelas diterima pertama kali
+    admission_academic_year: Optional[str] = None  # TP diterima
+    admission_number: Optional[str] = None  # Nomor peserta PSB
+
+    # Data Kesehatan
+    blood_type: Optional[str] = None
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    health_history: Optional[str] = None  # Riwayat penyakit
+
+    # Data Bantuan/Beasiswa
+    kps_pkh_number: Optional[str] = None  # Nomor KPS/PKH
+    kip_number: Optional[str] = None  # Nomor KIP
+    kks_number: Optional[str] = None  # Nomor KKS
+    scholarship_info: Optional[str] = None  # Info beasiswa lain
+
+    # Data Keluar/Lulus
+    exit_date: Optional[str] = None  # Tanggal keluar
+    exit_reason: Optional[str] = None  # Alasan keluar (lulus, mutasi, dll)
+    exit_certificate_number: Optional[str] = None  # Nomor SKHUN/Ijazah
+
+    # Tracking
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+
+
+class VervalRequestModel(BaseModel):
+    """
+    Model untuk request verifikasi dan validasi data user.
+    Digunakan saat siswa/guru/tendik mengajukan perubahan data yang perlu di-approve admin.
+    """
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str  # ID user yang mengajukan
+    user_type: str  # 'siswa' | 'guru' | 'tenaga_kependidikan'
+    request_type: str = 'update'  # 'update' | 'create' (untuk future expansion)
+
+    # Data lama (sebelum perubahan) - snapshot dari user doc saat ini
+    old_data: Dict[str, Any] = Field(default_factory=dict)
+
+    # Data baru yang diajukan (perubahan yang diminta)
+    new_data: Dict[str, Any] = Field(default_factory=dict)
+
+    # Status: 'pending' | 'approved' | 'rejected'
+    status: str = 'pending'
+
+    # Admin notes/catatan saat approve/reject
+    admin_notes: Optional[str] = None
+
+    # Tracking
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    submitted_by: str  # user_id yang submit (biasanya sama dengan user_id)
+    submitted_by_name: Optional[str] = None  # nama lengkap untuk display
+
+    # Approval tracking
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None  # admin user_id
+    reviewed_by_name: Optional[str] = None  # admin nama lengkap

@@ -167,3 +167,93 @@ async def get_settings():
         await db.settings.insert_one(default)
         return default
     return serialize_doc(s)
+
+
+async def get_active_context(user: Optional[Dict[str, Any]] = None):
+    """
+    Get active semester context (HIERARCHICAL TIME SYSTEM).
+
+    Priority:
+    1. User override (view_semester_id) if set
+    2. Active semester globally
+
+    Returns: {
+        'semester_id': str,
+        'semester_name': str,
+        'semester_code': str,
+        'academic_year_id': str,
+        'academic_year_name': str,
+        'tahun_takwim_ids': List[str],  # NEW: Tahun Takwim yang dilintasi
+        'tahun_takwim_info': List[Dict],  # NEW: Detail Tahun Takwim
+        'is_override': bool,
+        'curriculum_id': str,
+        'curriculum_name': str,
+        'curriculum_code': str
+    }
+    """
+    override_sem_id = user.get('view_semester_id') if user else None
+
+    # Get semester (either override or active)
+    if override_sem_id:
+        sem = await db.semesters.find_one({'id': override_sem_id}, {'_id': 0})
+        if not sem:
+            # Fallback to active if override not found
+            sem = await db.semesters.find_one({'is_active': True}, {'_id': 0})
+            override_sem_id = None
+    else:
+        sem = await db.semesters.find_one({'is_active': True}, {'_id': 0})
+
+    if not sem:
+        return {
+            'semester_id': None,
+            'semester_name': None,
+            'semester_code': None,
+            'academic_year_id': None,
+            'academic_year_name': None,
+            'tahun_takwim_ids': [],
+            'tahun_takwim_info': [],
+            'is_override': False,
+            'curriculum_id': None,
+            'curriculum_name': None,
+            'curriculum_code': None,
+        }
+
+    # Get academic year
+    ay = await db.academic_years.find_one({'id': sem.get('academic_year_id')}, {'_id': 0})
+
+    # Get Tahun Takwim info (NEW)
+    tahun_takwim_ids = ay.get('tahun_takwim_ids', []) if ay else []
+    tahun_takwim_info = []
+    if tahun_takwim_ids:
+        for tt_id in tahun_takwim_ids:
+            tt = await db.tahun_takwim.find_one({'id': tt_id}, {'_id': 0})
+            if tt:
+                tahun_takwim_info.append({
+                    'id': tt.get('id'),
+                    'year': tt.get('year'),
+                    'name': tt.get('name'),
+                    'is_active': tt.get('is_active', False),
+                })
+
+    # Get curriculum if set
+    curriculum_name = None
+    curriculum_code = None
+    if sem.get('curriculum_id'):
+        c = await db.curriculums.find_one({'id': sem['curriculum_id']}, {'_id': 0, 'name': 1, 'code': 1})
+        if c:
+            curriculum_name = c.get('name')
+            curriculum_code = c.get('code')
+
+    return {
+        'semester_id': sem['id'],
+        'semester_name': sem.get('name'),
+        'semester_code': sem.get('code'),
+        'academic_year_id': ay['id'] if ay else None,
+        'academic_year_name': ay.get('name') if ay else None,
+        'tahun_takwim_ids': tahun_takwim_ids,
+        'tahun_takwim_info': tahun_takwim_info,
+        'is_override': bool(override_sem_id),
+        'curriculum_id': sem.get('curriculum_id'),
+        'curriculum_name': curriculum_name,
+        'curriculum_code': curriculum_code,
+    }

@@ -16,6 +16,7 @@ from core import (
     require_role,
     serialize_doc,
 )
+from routers.auth import _resolve_view_context
 from excel_io import class_template, parse_class_rows
 from models import ClassModel, ClassHistoryModel
 
@@ -59,10 +60,17 @@ async def _ensure_unique_token(token: str) -> str:
 
 
 @router.get("/classes")
-async def list_classes(academic_year_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_classes(user: Dict = Depends(get_current_user)):
+    """List classes filtered by user's view context (semester)."""
+    # Get user's effective view context
+    ctx = await _resolve_view_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Filter by semester_id from view context
     q = {}
-    if academic_year_id:
-        q['academic_year_id'] = academic_year_id
+    if semester_id:
+        q['semester_id'] = semester_id
+
     items = await db.classes.find(q, {'_id': 0}).sort('name', 1).to_list(500)
     enriched = []
     for c in items:
@@ -76,38 +84,43 @@ async def list_classes(academic_year_id: Optional[str] = None, user: Dict = Depe
         if c.get('room_id'):
             r = await db.rooms.find_one({'id': c['room_id']}, {'_id': 0, 'name': 1})
             c['room_name'] = r.get('name') if r else None
-        # Curriculum enrichment (from class.curriculum_id, fallback to TP.curriculum_id)
-        ay = await db.academic_years.find_one({'id': c.get('academic_year_id')}, {'_id': 0, 'curriculum_id': 1, 'active_semester': 1, 'name': 1})
-        cur_id = c.get('curriculum_id') or (ay.get('curriculum_id') if ay else None)
-        if cur_id:
-            cur = await db.curriculums.find_one({'id': cur_id}, {'_id': 0, 'name': 1, 'code': 1})
-            c['curriculum_name'] = cur.get('name') if cur else None
-            c['curriculum_code'] = cur.get('code') if cur else None
-        if ay:
-            c['ay_name'] = ay.get('name')
-            # Effective semester: class.semester if set, else TP.active_semester
-            c['effective_semester'] = c.get('semester') or ay.get('active_semester')
+
+        # Enrich with semester info
+        if c.get('semester_id'):
+            sem = await db.semesters.find_one({'id': c['semester_id']}, {'_id': 0})
+            if sem:
+                c['semester_name'] = sem.get('name')
+                c['semester_code'] = sem.get('code')
+                # Enrich with academic year
+                ay = await db.academic_years.find_one({'id': sem.get('academic_year_id')}, {'_id': 0, 'name': 1})
+                if ay:
+                    c['academic_year_name'] = ay.get('name')
+                # Enrich with curriculum from semester
+                if sem.get('curriculum_id'):
+                    cur = await db.curriculums.find_one({'id': sem['curriculum_id']}, {'_id': 0, 'name': 1, 'code': 1})
+                    if cur:
+                        c['curriculum_name'] = cur.get('name')
+                        c['curriculum_code'] = cur.get('code')
+
         enriched.append(serialize_doc(c))
     return enriched
 
 
 @router.post("/classes")
 async def create_class(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
-    # Auto-fill curriculum/semester from TP if not provided
-    if not payload.get('curriculum_id') or not payload.get('semester'):
-        ay = await db.academic_years.find_one({'id': payload.get('academic_year_id')}, {'_id': 0})
-        if ay:
-            if not payload.get('curriculum_id'):
-                payload['curriculum_id'] = ay.get('curriculum_id')
-            if not payload.get('semester'):
-                payload['semester'] = ay.get('active_semester')
+    """Create a new class. semester_id is required."""
+    if not payload.get('semester_id'):
+        raise HTTPException(400, "semester_id wajib diisi")
+
     cls = ClassModel(**payload)
+
     # Auto-generate token if not provided
     if not cls.token:
         ay = await db.academic_years.find_one({'id': cls.academic_year_id}, {'_id': 0, 'name': 1})
         token = _generate_class_token(cls.name, ay.get('name') if ay else None)
         token = await _ensure_unique_token(token)
         cls.token = token
+
     doc = cls.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.classes.insert_one(doc)
@@ -180,9 +193,13 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
         raise HTTPException(400, "Hanya .xlsx")
     contents = await file.read()
     rows = parse_class_rows(contents)
-    ay = await get_active_academic_year()
-    if not ay:
-        raise HTTPException(400, "Tidak ada TP aktif")
+
+    # Get active semester context for creating classes
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
+        raise HTTPException(400, "Tidak ada semester aktif")
+
     users_map = {u['username']: u['id'] for u in await db.users.find({}, {'_id': 0, 'username': 1, 'id': 1}).to_list(2000)}
     rooms_map = {r['name']: r['id'] for r in await db.rooms.find({}, {'_id': 0, 'name': 1, 'id': 1}).to_list(500)}
     success = 0
@@ -192,14 +209,14 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
         try:
             if not r['name']:
                 errors.append(f"Baris {r['_row']}: nama kelas wajib"); continue
-            existing = await db.classes.find_one({'name': r['name'], 'academic_year_id': ay['id']})
+            existing = await db.classes.find_one({'name': r['name'], 'semester_id': semester_id})
             if existing:
-                errors.append(f"Baris {r['_row']}: kelas '{r['name']}' sudah ada di TP aktif"); continue
+                errors.append(f"Baris {r['_row']}: kelas '{r['name']}' sudah ada di semester aktif"); continue
             homeroom_id = users_map.get(r.get('wali_kelas_username')) if r.get('wali_kelas_username') else None
             room_id = rooms_map.get(r.get('ruang_kode')) if r.get('ruang_kode') else None
             cls = ClassModel(
                 name=r['name'], grade=r['grade'], parallel=r['parallel'],
-                academic_year_id=ay['id'],
+                semester_id=semester_id,
                 homeroom_teacher_id=homeroom_id, room_id=room_id,
                 is_accelerated=r.get('is_accelerated', False),
             )
@@ -289,10 +306,18 @@ async def add_student_to_class(
     if current_count >= capacity:
         raise HTTPException(400, f"Kelas sudah penuh (kapasitas: {capacity})")
 
-    # Get active academic year and semester
-    ay = await get_active_academic_year()
-    if not ay:
-        raise HTTPException(400, "Tidak ada tahun pelajaran aktif")
+    # Get semester info from class to create history record
+    # ClassHistoryModel still uses academic_year_id + semester for backward compatibility
+    semester_id = cls.get('semester_id')
+    if not semester_id:
+        raise HTTPException(400, "Kelas tidak memiliki semester_id")
+
+    semester = await db.semesters.find_one({'id': semester_id}, {'_id': 0})
+    if not semester:
+        raise HTTPException(400, "Semester tidak ditemukan")
+
+    academic_year_id = semester.get('academic_year_id')
+    semester_code = semester.get('code', 'Ganjil')
 
     # Update student's class
     await db.users.update_one(
@@ -300,12 +325,12 @@ async def add_student_to_class(
         {'$set': {'student_class_id': cid}}
     )
 
-    # Create history record
+    # Create history record (uses old format for backward compatibility)
     history = ClassHistoryModel(
         student_id=student_id,
         class_id=cid,
-        academic_year_id=ay['id'],
-        semester=ay.get('active_semester', 'Ganjil'),
+        academic_year_id=academic_year_id,
+        semester=semester_code,
         reason=payload.get('reason', 'pembagian_kelas'),
         start_date=payload.get('start_date', datetime.utcnow().strftime('%Y-%m-%d')),
         notes=payload.get('notes'),
@@ -389,3 +414,73 @@ async def get_student_class_history(student_id: str, user: Dict = Depends(requir
         enriched.append(serialize_doc(h))
 
     return enriched
+
+
+@router.post("/classes/migrate-semester-ids", dependencies=[Depends(require_role('admin'))])
+async def migrate_class_semester_ids(request: Request, user: Dict = Depends(get_current_user)):
+    """
+    MIGRATION ENDPOINT: Populate semester_id for existing classes.
+
+    Matches classes with semesters based on academic_year_id and semester code.
+    """
+    # Get all classes without semester_id
+    classes_to_update = await db.classes.find(
+        {'$or': [{'semester_id': None}, {'semester_id': {'$exists': False}}]},
+        {'_id': 0}
+    ).to_list(500)
+
+    if not classes_to_update:
+        return {'message': 'Semua kelas sudah memiliki semester_id', 'updated': 0}
+
+    # Get all semesters for matching
+    all_semesters = await db.semesters.find({}, {'_id': 0}).to_list(500)
+
+    updated_count = 0
+    failed = []
+
+    for cls in classes_to_update:
+        academic_year_id = cls.get('academic_year_id')
+        semester_str = cls.get('semester', '').lower()  # 'ganjil' or 'genap'
+
+        if not academic_year_id or not semester_str:
+            failed.append({
+                'class_id': cls['id'],
+                'name': cls.get('name'),
+                'reason': 'Missing academic_year_id or semester'
+            })
+            continue
+
+        # Find matching semester
+        matching_semester = None
+        for sem in all_semesters:
+            if (sem.get('academic_year_id') == academic_year_id and
+                sem.get('code', '').lower() == semester_str):
+                matching_semester = sem
+                break
+
+        if matching_semester:
+            # Update class with semester_id
+            await db.classes.update_one(
+                {'id': cls['id']},
+                {'$set': {'semester_id': matching_semester['id']}}
+            )
+            updated_count += 1
+        else:
+            failed.append({
+                'class_id': cls['id'],
+                'name': cls.get('name'),
+                'reason': f"No semester found for AY {academic_year_id} / {semester_str}"
+            })
+
+    await log_audit(
+        user, 'migrate_semester_ids', 'classes', None,
+        details={'updated': updated_count, 'failed_count': len(failed)},
+        request=request
+    )
+
+    return {
+        'message': f'Migrasi selesai: {updated_count} kelas diupdate',
+        'updated': updated_count,
+        'failed_count': len(failed),
+        'failed': failed[:10]  # Show first 10 failures only
+    }

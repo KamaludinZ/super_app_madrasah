@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core import (
     db,
     get_active_academic_year,
+    get_active_context,
     get_current_user,
     log_audit,
     require_role,
@@ -119,6 +120,16 @@ async def list_teacher_tasks(date: Optional[str] = None,
                              status: Optional[str] = None,
                              schedule_id: Optional[str] = None,
                              user: Dict = Depends(get_current_user)):
+    # Get user's view context for semester filtering
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+
+    # Get schedules for this semester to filter tasks
+    schedule_ids = []
+    if semester_id:
+        schedules = await db.schedules.find({'semester_id': semester_id}, {'_id': 0, 'id': 1}).to_list(None)
+        schedule_ids = [s['id'] for s in schedules]
+
     q = {}
     if date:
         q['date'] = date
@@ -126,6 +137,10 @@ async def list_teacher_tasks(date: Optional[str] = None,
         q['status'] = status
     if schedule_id:
         q['schedule_id'] = schedule_id
+    elif schedule_ids:
+        # Filter by schedules in current semester
+        q['schedule_id'] = {'$in': schedule_ids}
+
     is_piket = 'guru_piket' in user.get('roles', [])
     is_admin = 'admin' in user.get('roles', [])
     is_teacher = bool(set(user.get('roles', [])) & {'guru', 'wali_kelas'})
@@ -244,14 +259,15 @@ async def accept_teacher_task(tid: str, request: Request, user: Dict = Depends(r
 # ============================================================
 @router.get("/piket/schedules/today")
 async def piket_schedules_today(user: Dict = Depends(require_role('guru_piket', 'admin'))):
-    """Daftar jadwal mengajar hari ini yang BELUM dibuat jurnal — guru piket bisa isi titipan."""
+    """Daftar jadwal mengajar hari ini yang BELUM dibuat jurnal — guru piket bisa isi titipan, filtered by user's view context (semester)."""
     today = current_day_id()
     today_date = now_wib().strftime('%Y-%m-%d')
-    ay = await get_active_academic_year()
-    if not ay:
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    if not semester_id:
         return []
     schedules = await db.schedules.find({
-        'day': today, 'academic_year_id': ay['id']
+        'day': today, 'semester_id': semester_id
     }, {'_id': 0}).sort('start_time', 1).to_list(200)
     today_start = now_wib().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     journals_today = await db.journals.find({
@@ -297,7 +313,12 @@ async def piket_fill_journal(payload: Dict, request: Request,
     })
     if existing:
         raise HTTPException(400, "Jurnal hari ini untuk jadwal ini sudah ada")
-    ay = await get_active_academic_year()
+
+    # Get semester_id from schedule
+    semester_id = sch.get('semester_id')
+    if not semester_id:
+        raise HTTPException(400, "Schedule tidak memiliki semester_id")
+
     j_id = str(uuid.uuid4())
     fill_role = 'admin' if 'admin' in user.get('roles', []) and 'guru_piket' not in user.get('roles', []) else 'guru_piket'
     journal_doc = {
@@ -307,8 +328,7 @@ async def piket_fill_journal(payload: Dict, request: Request,
         'class_id': sch['class_id'],
         'subject_id': sch['subject_id'],
         'room_id': sch['room_id'],
-        'academic_year_id': ay['id'] if ay else sch.get('academic_year_id'),
-        'semester': (ay or {}).get('active_semester', 'ganjil'),
+        'semester_id': semester_id,
         'materi': payload.get('materi', ''),
         'catatan': payload.get('catatan'),
         'siswa_hadir': int(payload.get('siswa_hadir') or 0),
