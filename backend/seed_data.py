@@ -320,6 +320,179 @@ async def seed_all(db: Any):
     await db.journals.insert_one(sample_journal)
     print("[seed] Sample journal created (for monitoring page demo)")
 
+    # ============================================================
+    # 9. SAMPLE INDIKATOR & MATERI (for jurnal mengajar dropdown)
+    # ============================================================
+    # Check if indikator data already exists
+    indikator_count = await db.indikator.count_documents({})
+    if indikator_count > 0:
+        print(f"[seed] {indikator_count} indikator already exist, skipping indikator/materi seed.")
+    else:
+        # Get current semester
+        current_semester = await db.semesters.find_one({'is_active': True})
+        semester_id = current_semester['id'] if current_semester else str(uuid.uuid4())
+
+        # Sample Indikator for Matematika Kelas 7
+        indikator_mtk_data = [
+            {
+                'id': str(uuid.uuid4()),
+                'kode': '3.1',
+                'nama': 'Menjelaskan dan melakukan operasi hitung bilangan bulat dan pecahan',
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'kode': '3.2',
+                'nama': 'Menjelaskan himpunan, himpunan bagian, komplemen himpunan, operasi himpunan',
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'kode': '3.3',
+                'nama': 'Menjelaskan dan menentukan urutan pada bilangan bulat dan pecahan',
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+        ]
+
+        # Sample Indikator for IPA Kelas 7
+        indikator_ipa_data = [
+            {
+                'id': str(uuid.uuid4()),
+                'kode': '3.1',
+                'nama': 'Menerapkan konsep pengukuran berbagai besaran yang ada pada diri, makhluk hidup, dan lingkungan fisik',
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'kode': '3.2',
+                'nama': 'Mengklasifikasikan makhluk hidup dan benda berdasarkan karakteristik yang diamati',
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+        ]
+
+        all_indikator = indikator_mtk_data + indikator_ipa_data
+        await db.indikator.insert_many(all_indikator)
+        print(f"[seed] {len(all_indikator)} sample indikator created")
+
+        # Sample Materi for each Indikator
+        materi_data = [
+            # Materi untuk MTK Indikator 3.1
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Operasi Penjumlahan dan Pengurangan Bilangan Bulat',
+                'indikator_id': indikator_mtk_data[0]['id'],
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami konsep penjumlahan dan pengurangan pada bilangan bulat positif dan negatif',
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Operasi Perkalian dan Pembagian Bilangan Bulat',
+                'indikator_id': indikator_mtk_data[0]['id'],
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami konsep perkalian dan pembagian pada bilangan bulat',
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            # Materi untuk MTK Indikator 3.2
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Pengertian Himpunan dan Anggota Himpunan',
+                'indikator_id': indikator_mtk_data[1]['id'],
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami definisi himpunan, notasi himpunan, dan cara menyatakan anggota himpunan',
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Operasi Himpunan (Gabungan, Irisan, Selisih)',
+                'indikator_id': indikator_mtk_data[1]['id'],
+                'mapel_id': subject_map['MTK'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami operasi pada himpunan seperti gabungan, irisan, dan selisih',
+                'created_by': guru1['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            # Materi untuk IPA Indikator 3.1
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Besaran Pokok dan Besaran Turunan',
+                'indikator_id': indikator_ipa_data[0]['id'],
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami perbedaan besaran pokok dan besaran turunan serta satuannya',
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Pengukuran dengan Alat Ukur',
+                'indikator_id': indikator_ipa_data[0]['id'],
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Menggunakan berbagai alat ukur seperti penggaris, jangka sorong, dan timbangan',
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            # Materi untuk IPA Indikator 3.2
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Klasifikasi Makhluk Hidup Berdasarkan Ciri-Ciri',
+                'indikator_id': indikator_ipa_data[1]['id'],
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Mengelompokkan makhluk hidup berdasarkan persamaan dan perbedaan ciri yang dimiliki',
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'nama': 'Sistem Klasifikasi 5 Kingdom',
+                'indikator_id': indikator_ipa_data[1]['id'],
+                'mapel_id': subject_map['IPA'],
+                'tingkat_kelas': 'VII',
+                'semester_id': semester_id,
+                'deskripsi': 'Memahami sistem klasifikasi makhluk hidup menjadi 5 kingdom',
+                'created_by': walas7a['id'],
+                'created_at': datetime.utcnow().isoformat(),
+            },
+        ]
+
+        await db.materi.insert_many(materi_data)
+        print(f"[seed] {len(materi_data)} sample materi created")
+
     print("[seed] ✅ ALL SEED DATA INSERTED SUCCESSFULLY")
     print("[seed] Demo accounts:")
     print("       admin/admin123, guru1/guru123, walas7a/walas123, siswa1/siswa123,")

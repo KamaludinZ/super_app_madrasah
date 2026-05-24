@@ -12,6 +12,7 @@ import {
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
   Megaphone, ChevronDown, Briefcase, Info, CheckCircle2, UserCircle, HelpCircle,
+  Target, Award, DollarSign, LogIn, Loader2,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -45,6 +46,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
+    items.push({ to: '/guru/indikator-materi', label: 'Input Indikator & Materi', icon: BookOpen, testid: 'nav-guru-indikator-materi' });
     items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-guru-kebersihan' });
     items.push({ to: '/guru/laporan', label: 'Laporan', icon: FileText, testid: 'nav-guru-laporan' });
     items.push({ to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' });
@@ -111,15 +113,34 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Manajemen Pengguna',
         items: [
-          { to: '/admin/users', label: 'Pengguna', icon: Users, testid: 'nav-users' },
-          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
-          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
-          { to: '/admin/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-admin-buku-induk' },
+          { to: '/admin/users', label: 'Pengguna (GTK & Staff)', icon: Users, testid: 'nav-users' },
+          { to: '/admin/pengguna-siswa', label: 'Pengguna Siswa', icon: UserCircle, testid: 'nav-pengguna-siswa' },
           { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' },
+          { to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-admin-verval-siswa' },
+        ],
+      },
+      {
+        title: 'Manajemen GTK',
+        items: [
+          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
+          { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi', icon: UserCheck, testid: 'nav-gtk-absensi' },
+          { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-gtk-agenda-guru' },
+          { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-gtk-agenda-tendik' },
+          { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-gtk-ekinerja' },
+          { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-gtk-profesionalitas' },
+          { to: '/admin/verval-gtk', label: 'Verval Data GTK', icon: CheckCircle2, testid: 'nav-admin-verval-gtk' },
+        ],
+      },
+      {
+        title: 'Manajemen Siswa',
+        items: [
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' },
+          { to: '/admin/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-admin-buku-induk' },
+          { to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-admin-pip-penerima' },
+          { to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-admin-pip-ajuan' },
           { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-admin-alumni' },
           { to: '/admin/naik-kelas', label: 'Naik Kelas & Kelulusan', icon: ArrowRightLeft, testid: 'nav-admin-promotions' },
-          { to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-admin-verval-siswa' },
-          { to: '/admin/verval-gtk', label: 'Verval Data GTK', icon: CheckCircle2, testid: 'nav-admin-verval-gtk' },
         ],
       },
       {
@@ -128,7 +149,7 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' },
           { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' },
           { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' },
-          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' },
+          { to: '/admin/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-admin-indikator-materi' },
           { to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input-admin' },
           { to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-rapor-admin' },
         ],
@@ -142,6 +163,15 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-admin-laporan' },
           { to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' },
           { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' },
+        ],
+      },
+      {
+        title: 'Manajemen Tatib & BK',
+        items: [
+          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-admin-tatib-input' },
+          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-admin-tatib-kategori' },
+          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-admin-tatib-penanganan' },
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-admin-tatib-data' },
         ],
       },
       {
@@ -330,7 +360,7 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
 }
 
 export default function AppShell({ children }) {
-  const { user, activeRole, logout, switchRole, settings, refreshMe } = useAuth();
+  const { user, activeRole, logout, switchRole, stopImpersonate, settings, refreshMe } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -338,7 +368,20 @@ export default function AppShell({ children }) {
   const [vcDialogOpen, setVcDialogOpen] = useState(false);
   const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const [appVersion, setAppVersion] = useState(null);
+  const [stoppingImpersonate, setStoppingImpersonate] = useState(false);
   const items = navForRole(activeRole, user?.roles || []);
+
+  const handleStopImpersonate = async () => {
+    if (stoppingImpersonate) return;
+    setStoppingImpersonate(true);
+    try {
+      await stopImpersonate();
+      toast.success('Kembali ke akun admin');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal kembali ke akun admin');
+      setStoppingImpersonate(false);
+    }
+  };
 
   // Auto-prompt password change on first load if needed.
   useEffect(() => {
@@ -479,6 +522,26 @@ export default function AppShell({ children }) {
 
               {/* Notification Bell */}
               <NotificationBell />
+
+              {/* Back to Admin button - show only when impersonating */}
+              {user?.is_impersonating && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStopImpersonate}
+                  disabled={stoppingImpersonate}
+                  className="gap-2 bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                  data-testid="stop-impersonate-btn"
+                  title={`Kembali ke akun ${user.impersonator_username}`}
+                >
+                  {stoppingImpersonate ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogIn className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Kembali ke Admin</span>
+                </Button>
+              )}
 
               {/* Role switcher next to avatar - ALWAYS visible */}
               <DropdownMenu>

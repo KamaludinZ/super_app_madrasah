@@ -34,19 +34,18 @@ export default function StudentAccountInfoDialog({ student, open, onClose, isGTK
     (async () => {
       setLoading(true);
       try {
-        // Fetch fresh user data (single endpoint - we have list, just lookup)
-        const [u, audits] = await Promise.all([
-          api.get('/users', { params: { search: student.username || student.full_name } }),
+        // Fetch fresh user data directly by ID
+        const [userData, audits] = await Promise.all([
+          api.get(`/users/${student.id}`).catch(() => ({ data: null })),
           api.get('/admin/audit-logs', { params: { target_id: student.id, limit: 30 } }).catch(() => ({ data: [] })),
         ]);
-        const found = (u.data || []).find((x) => x.id === student.id);
-        if (found) setData(found);
+        if (userData.data) setData(userData.data);
         setLogs(audits.data || []);
       } finally {
         setLoading(false);
       }
     })();
-  }, [student?.id]);
+  }, [student?.id, student.username, student.full_name]);
 
   const handleResetPassword = async () => {
     if (newPassword.length < 6) { toast.error('Password minimal 6 karakter'); return; }
@@ -95,9 +94,25 @@ export default function StudentAccountInfoDialog({ student, open, onClose, isGTK
     url: window.location.origin + '/login',
   });
 
+  const handleOpenChange = (isOpen) => {
+    if (!isOpen) {
+      onClose();
+      // Blur any focused element after modal closes
+      requestAnimationFrame(() => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      });
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="account-info-dialog">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto"
+        data-testid="account-info-dialog"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-[#006837]" />

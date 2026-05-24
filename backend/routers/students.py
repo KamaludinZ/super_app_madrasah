@@ -2,7 +2,7 @@
 import io
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -17,7 +17,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from excel_io import parse_student_rows, student_template
+from excel_io import parse_student_rows, student_template, nism_update_template, parse_nism_update_rows
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
 from routers._shared import user_can_view_class
@@ -464,3 +464,291 @@ async def students_import(file: UploadFile = File(...), request: Request = None,
         await db.users.insert_many(new_docs)
     await log_audit(user, 'import_excel', 'student', None, details={'success': success, 'errors': len(errors)}, request=request)
     return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+# ============================================================
+# UPDATE NISM & NOMOR PESERTA UJIAN MADRASAH
+# ============================================================
+@router.get("/students/nism-template")
+async def download_nism_template(
+    class_id: Optional[str] = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """
+    Download template Excel berisi data siswa untuk update NISM dan Nomor Peserta Ujian.
+    Template sudah berisi data siswa existing yang bisa langsung diisi.
+    """
+    # Query siswa
+    q = {'roles': 'siswa'}
+    if class_id:
+        q['student_class_id'] = class_id
+
+    students = await db.users.find(q, {'_id': 0}).sort('full_name', 1).to_list(2000)
+
+    # Enrich dengan nama kelas
+    class_map = {}
+    classes = await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(500)
+    for c in classes:
+        class_map[c['id']] = c['name']
+
+    enriched_students = []
+    for s in students:
+        enriched_students.append({
+            'id': s.get('id'),
+            'nisn': s.get('nisn', ''),
+            'full_name': s.get('full_name', ''),
+            'class_name': class_map.get(s.get('student_class_id', ''), ''),
+            'nism': s.get('nism', ''),
+            'nomor_peserta_ujian': s.get('nomor_peserta_ujian', ''),
+        })
+
+    # Generate template
+    excel_bytes = nism_update_template(enriched_students)
+
+    # Determine filename
+    filename = 'template_update_nism_semua_siswa.xlsx'
+    if class_id:
+        kelas = class_map.get(class_id, 'kelas')
+        filename = f'template_update_nism_{kelas}.xlsx'
+
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/students/import-nism")
+async def import_nism_update(
+    file: UploadFile = File(...),
+    request: Request = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """
+    Import Excel untuk update NISM dan Nomor Peserta Ujian Madrasah secara masal.
+    File harus menggunakan template dari endpoint /students/nism-template.
+    """
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx atau .xlsm yang diperbolehkan")
+
+    contents = await file.read()
+
+    try:
+        rows = parse_nism_update_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Gagal membaca file Excel: {str(e)}")
+
+    success = 0
+    errors = []
+    updates = []
+
+    for r in rows:
+        try:
+            student_id = r['id']
+
+            # Cek apakah siswa exists
+            existing = await db.users.find_one({'id': student_id, 'roles': 'siswa'})
+            if not existing:
+                errors.append(f"Baris {r['_row']}: Siswa dengan ID {student_id} tidak ditemukan")
+                continue
+
+            # Prepare update data
+            update_data = {}
+            if r.get('nism'):
+                update_data['nism'] = r['nism']
+            if r.get('nomor_peserta_ujian'):
+                update_data['nomor_peserta_ujian'] = r['nomor_peserta_ujian']
+
+            # Skip jika tidak ada yang diupdate
+            if not update_data:
+                continue
+
+            updates.append({
+                'student_id': student_id,
+                'update': update_data,
+                'row': r['_row']
+            })
+
+            success += 1
+
+        except Exception as e:
+            errors.append(f"Baris {r['_row']}: {str(e)}")
+
+    # Bulk update
+    if updates:
+        for upd in updates:
+            try:
+                await db.users.update_one(
+                    {'id': upd['student_id']},
+                    {'$set': upd['update']}
+                )
+            except Exception as e:
+                errors.append(f"Baris {upd['row']}: Gagal update - {str(e)}")
+                success -= 1
+
+    # Log audit
+    await log_audit(
+        user['id'],
+        'import_nism_update',
+        'students',
+        None,
+        details={'success': success, 'errors': len(errors), 'total_rows': len(rows)},
+        request=request
+    )
+
+    return {
+        'success': success,
+        'errors': errors,
+        'total_rows': len(rows),
+        'message': f'Berhasil update {success} dari {len(rows)} baris data'
+    }
+
+
+# ============================================================
+# REKAM DIDIK (RIWAYAT KELAS SISWA)
+# ============================================================
+@router.get("/students/{student_id}/rekam-didik")
+async def get_rekam_didik(
+    student_id: str,
+    user: Dict = Depends(get_current_user)
+):
+    """
+    Get rekam didik (riwayat kelas) siswa dari kelas 7-9 (ganjil & genap).
+    """
+    # Cek akses
+    if 'admin' not in user.get('roles', []) and \
+       'guru' not in user.get('roles', []) and \
+       'wali_kelas' not in user.get('roles', []) and \
+       user['id'] != student_id:
+        raise HTTPException(403, "Tidak diizinkan melihat rekam didik siswa lain")
+
+    siswa = await db.users.find_one({'id': student_id, 'roles': 'siswa'})
+    if not siswa:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    return {
+        'student_id': student_id,
+        'student_name': siswa.get('full_name'),
+        'rekam_didik': siswa.get('rekam_didik', {})
+    }
+
+
+@router.put("/students/{student_id}/rekam-didik")
+async def update_rekam_didik(
+    student_id: str,
+    payload: Dict[str, Any],
+    request: Request = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """
+    Update rekam didik siswa.
+
+    Payload format:
+    {
+      "rekam_didik": {
+        "7_ganjil": {"class_id": "xxx", "class_name": "7A", "tahun_pelajaran_id": "yyy", "tahun_pelajaran": "2023/2024"},
+        "7_genap": {"class_id": "xxx", "class_name": "7A", "tahun_pelajaran_id": "yyy", "tahun_pelajaran": "2023/2024"},
+        ...
+      }
+    }
+    """
+    siswa = await db.users.find_one({'id': student_id, 'roles': 'siswa'})
+    if not siswa:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    rekam_didik = payload.get('rekam_didik', {})
+
+    # Validasi format
+    valid_periods = ['7_ganjil', '7_genap', '8_ganjil', '8_genap', '9_ganjil', '9_genap']
+    for period in rekam_didik.keys():
+        if period not in valid_periods:
+            raise HTTPException(400, f"Periode tidak valid: {period}. Harus salah satu dari: {', '.join(valid_periods)}")
+
+    # Update database
+    await db.users.update_one(
+        {'id': student_id},
+        {'$set': {'rekam_didik': rekam_didik}}
+    )
+
+    await log_audit(
+        user['id'],
+        'update_rekam_didik',
+        'students',
+        student_id,
+        details={'rekam_didik': rekam_didik},
+        request=request
+    )
+
+    return {
+        'message': 'Rekam didik berhasil diupdate',
+        'rekam_didik': rekam_didik
+    }
+
+
+@router.patch("/students/{student_id}/rekam-didik/{period}")
+async def update_rekam_didik_period(
+    student_id: str,
+    period: str,
+    payload: Dict[str, Any],
+    request: Request = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """
+    Update rekam didik untuk periode tertentu (misal: 7_ganjil).
+
+    Payload format:
+    {
+      "class_id": "xxx",
+      "class_name": "7A",
+      "tahun_pelajaran_id": "yyy",
+      "tahun_pelajaran": "2023/2024"
+    }
+
+    Atau untuk set kosong (mutasi keluar):
+    {
+      "clear": true
+    }
+    """
+    valid_periods = ['7_ganjil', '7_genap', '8_ganjil', '8_genap', '9_ganjil', '9_genap']
+    if period not in valid_periods:
+        raise HTTPException(400, f"Periode tidak valid: {period}")
+
+    siswa = await db.users.find_one({'id': student_id, 'roles': 'siswa'})
+    if not siswa:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+
+    # Check if clear
+    if payload.get('clear'):
+        update_value = None
+    else:
+        # Validate required fields
+        if not all([payload.get('class_id'), payload.get('class_name')]):
+            raise HTTPException(400, "class_id dan class_name wajib diisi")
+
+        update_value = {
+            'class_id': payload.get('class_id'),
+            'class_name': payload.get('class_name'),
+            'tahun_pelajaran_id': payload.get('tahun_pelajaran_id'),
+            'tahun_pelajaran': payload.get('tahun_pelajaran')
+        }
+
+    # Update database
+    await db.users.update_one(
+        {'id': student_id},
+        {'$set': {f'rekam_didik.{period}': update_value}}
+    )
+
+    await log_audit(
+        user['id'],
+        'update_rekam_didik_period',
+        'students',
+        student_id,
+        details={'period': period, 'data': update_value},
+        request=request
+    )
+
+    return {
+        'message': f'Rekam didik periode {period} berhasil diupdate',
+        'period': period,
+        'data': update_value
+    }

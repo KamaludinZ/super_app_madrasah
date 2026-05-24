@@ -36,6 +36,108 @@ router = APIRouter()
 
 
 # ============================================================
+# IMPERSONATION - Admin can login as another user
+# ============================================================
+class ImpersonateRequest(BaseModel):
+    target_user_id: str
+
+
+@router.post("/auth/impersonate")
+async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Admin can impersonate (login as) another user without password.
+    Stores original admin ID to allow reverting back."""
+
+    # Only admin can impersonate
+    if 'admin' not in user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Hanya admin yang dapat menggunakan fitur ini")
+
+    # Get target user
+    target_user = await db.users.find_one({'id': req.target_user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+
+    if not target_user.get('is_active', True):
+        raise HTTPException(status_code=403, detail="Akun target dinonaktifkan")
+
+    # Create token with impersonation info
+    active_role = target_user['roles'][0] if target_user.get('roles') else 'guru'
+    token = create_access_token({
+        'sub': target_user['id'],
+        'username': target_user['username'],
+        'active_role': active_role,
+        'impersonator_id': user['id'],  # Store admin's ID for reverting
+        'impersonator_username': user['username'],
+    })
+
+    # Log impersonation for audit trail
+    await log_security('impersonate_start', user.get('username'), {
+        'target_user_id': req.target_user_id,
+        'target_username': target_user.get('username'),
+    }, request)
+    await log_audit(user, 'impersonate', 'user', req.target_user_id,
+                    details={'target_username': target_user.get('username')}, request=request)
+
+    target_user_clean = serialize_doc(target_user.copy())
+    target_user_clean.pop('password_hash', None)
+    target_user_clean['is_impersonating'] = True
+    target_user_clean['impersonator_username'] = user['username']
+
+    settings = await get_settings()
+    return LoginResponse(
+        access_token=token,
+        user=target_user_clean,
+        active_role=active_role,
+        expires_in_minutes=settings.get('session_max_hours', 12) * 60,
+        idle_timeout_minutes=settings.get('idle_timeout_minutes', 30),
+    )
+
+
+@router.post("/auth/stop-impersonate")
+async def stop_impersonating(request: Request, user: Dict = Depends(get_current_user)):
+    """Stop impersonation and return to original admin account."""
+
+    # Check if currently impersonating - this info comes from JWT token
+    # We'll need to modify get_current_user to pass this through
+    # For now, get from request state which will be set by middleware
+    from fastapi import Request as FastAPIRequest
+    impersonator_id = getattr(request.state, 'impersonator_id', None)
+
+    if not impersonator_id:
+        raise HTTPException(status_code=400, detail="Tidak sedang dalam mode impersonation")
+
+    # Get original admin user
+    admin_user = await db.users.find_one({'id': impersonator_id})
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Admin user tidak ditemukan")
+
+    # Create new token for admin
+    active_role = admin_user['roles'][0] if admin_user.get('roles') else 'admin'
+    token = create_access_token({
+        'sub': admin_user['id'],
+        'username': admin_user['username'],
+        'active_role': active_role,
+    })
+
+    # Log stop impersonation
+    await log_security('impersonate_stop', admin_user.get('username'), {
+        'from_user_id': user['id'],
+        'from_username': user.get('username'),
+    }, request)
+
+    admin_user_clean = serialize_doc(admin_user.copy())
+    admin_user_clean.pop('password_hash', None)
+
+    settings = await get_settings()
+    return LoginResponse(
+        access_token=token,
+        user=admin_user_clean,
+        active_role=active_role,
+        expires_in_minutes=settings.get('session_max_hours', 12) * 60,
+        idle_timeout_minutes=settings.get('idle_timeout_minutes', 30),
+    )
+
+
+# ============================================================
 # PASSWORD POLICY HELPERS
 # ============================================================
 PASSWORD_REMINDER_MONTHS = 6

@@ -13,6 +13,7 @@ import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
 import JadwalPage from '@/pages/JadwalPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
+import AdminPenggunaSiswaPage from '@/pages/admin/AdminPenggunaSiswaPage';
 import AdminClassesPage from '@/pages/admin/AdminClassesPage';
 import AdminJabatanPage from '@/pages/admin/AdminJabatanPage';
 import AdminRoomsPage from '@/pages/admin/AdminRoomsPage';
@@ -45,6 +46,14 @@ import AnnouncementsListPage from '@/pages/AnnouncementsListPage';
 import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage';
 import AdminCurriculumsPage from '@/pages/admin/AdminCurriculumsPage';
 import AdminGTKPage from '@/pages/admin/AdminGTKPage';
+import AdminGTKDetailPage from '@/pages/admin/AdminGTKDetailPage';
+import AdminLaporanAbsensiPage from '@/pages/admin/AdminLaporanAbsensiPage';
+import AdminAgendaGuruPage from '@/pages/admin/AdminAgendaGuruPage';
+import AdminAgendaTendikPage from '@/pages/admin/AdminAgendaTendikPage';
+import AdminEKinerjaPage from '@/pages/admin/AdminEKinerjaPage';
+import AdminProfesionalitasGTKPage from '@/pages/admin/AdminProfesionalitasGTKPage';
+import AdminPIPReceiverPage from '@/pages/admin/AdminPIPReceiverPage';
+import AdminPIPProposalPage from '@/pages/admin/AdminPIPProposalPage';
 import ReportPage from '@/pages/ReportPage';
 import WaliKelasReportsPage from '@/pages/WaliKelasReportsPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
@@ -54,8 +63,15 @@ import AdminPromotionsPage from '@/pages/admin/AdminPromotionsPage';
 import AdminStudentRecordsPage from '@/pages/admin/AdminStudentRecordsPage';
 import AdminVervalSiswaPage from '@/pages/admin/AdminVervalSiswaPage';
 import AdminVervalGTKPage from '@/pages/admin/AdminVervalGTKPage';
+import AdminIndikatorMateriPage from '@/pages/admin/AdminIndikatorMateriPage';
+import GuruInputIndikatorMateriPage from '@/pages/GuruInputIndikatorMateriPage';
+import AdminTatibKategoriPage from '@/pages/admin/AdminTatibKategoriPage';
+import AdminTatibInputPage from '@/pages/admin/AdminTatibInputPage';
+import AdminTatibPenangananPage from '@/pages/admin/AdminTatibPenangananPage';
+import AdminTatibDataPage from '@/pages/admin/AdminTatibDataPage';
 import MyVervalRequestsPage from '@/pages/MyVervalRequestsPage';
 import ProfilePage from '@/pages/ProfilePage';
+import ProfilePageEMIS from '@/pages/ProfilePageEMIS';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -143,7 +159,14 @@ function App() {
             <Route path="/admin/jadwal-piket" element={<JadwalPiketPage />} />
             <Route path="/admin/jurnal" element={<AdminJurnalRekapPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/pengguna-siswa" element={<AdminPenggunaSiswaPage />} />
             <Route path="/admin/gtk" element={<AdminGTKPage />} />
+            <Route path="/admin/gtk/:id" element={<AdminGTKDetailPage />} />
+            <Route path="/admin/gtk/laporan-absensi" element={<AdminLaporanAbsensiPage />} />
+            <Route path="/admin/gtk/agenda-guru" element={<AdminAgendaGuruPage />} />
+            <Route path="/admin/gtk/agenda-tendik" element={<AdminAgendaTendikPage />} />
+            <Route path="/admin/gtk/e-kinerja" element={<AdminEKinerjaPage />} />
+            <Route path="/admin/gtk/profesionalitas" element={<AdminProfesionalitasGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
             <Route path="/admin/jabatan" element={<AdminJabatanPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />
@@ -169,8 +192,17 @@ function App() {
             <Route path="/admin/buku-induk" element={<AdminStudentRecordsPage />} />
             <Route path="/admin/verval-siswa" element={<AdminVervalSiswaPage />} />
             <Route path="/admin/verval-gtk" element={<AdminVervalGTKPage />} />
+            <Route path="/admin/indikator-materi" element={<AdminIndikatorMateriPage />} />
+            <Route path="/admin/pip/penerima" element={<AdminPIPReceiverPage />} />
+            <Route path="/admin/pip/ajuan" element={<AdminPIPProposalPage />} />
+            <Route path="/admin/tatib/kategori" element={<AdminTatibKategoriPage />} />
+            <Route path="/admin/tatib/input" element={<AdminTatibInputPage />} />
+            <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
+            <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
+            <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
             <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile" element={<ProfilePageEMIS />} />
+            <Route path="/profile-old" element={<ProfilePage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />
             <Route path="/nilai/input" element={<GradesInputPage />} />

@@ -4,13 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft, LogIn, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, ROLE_LABELS } from '@/lib/api';
+import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
 const EMPTY = {
@@ -19,6 +20,7 @@ const EMPTY = {
   gender: '', birth_place: '', birth_date: '', address: '',
   mutation_type: '', mutation_date: '', mutation_note: '',
   jabatan_ids: [],
+  nism: '', nomor_peserta_ujian: '',
 };
 
 const ROLE_TABS = [
@@ -26,15 +28,22 @@ const ROLE_TABS = [
   { value: 'admin', label: 'Admin' },
   { value: 'guru', label: 'Guru' },
   { value: 'wali_kelas', label: 'Wali Kelas' },
-  { value: 'siswa', label: 'Siswa' },
   { value: 'tenaga_kependidikan', label: 'Tendik' },
   { value: 'guru_piket', label: 'Piket' },
   { value: 'guru_bk', label: 'BK' },
   { value: 'guru_tata_tertib', label: 'Tatib' },
   { value: 'guru_ekstrakurikuler', label: 'Ekstra' },
+  { value: 'kepala_sekolah', label: 'Kepsek' },
+  { value: 'kepala_tata_usaha', label: 'KTU' },
+  { value: 'waka_kesiswaan', label: 'Waka Kesiswaan' },
+  { value: 'waka_kurikulum', label: 'Waka Kurikulum' },
+  { value: 'bendahara', label: 'Bendahara' },
+  { value: 'perpustakaan', label: 'Perpustakaan' },
+  { value: 'alumni', label: 'Alumni' },
 ];
 
 export default function AdminUsersPage() {
+  const { impersonate } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -46,6 +55,7 @@ export default function AdminUsersPage() {
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [studentsList, setStudentsList] = useState([]);
+  const [impersonatingUserId, setImpersonatingUserId] = useState(null);
 
   const refresh = async () => {
     const { data } = await api.get('/users');
@@ -84,6 +94,8 @@ export default function AdminUsersPage() {
       mutation_date: u.mutation_date || '',
       mutation_note: u.mutation_note || '',
       jabatan_ids: u.jabatan_ids || [],
+      nism: u.nism || '',
+      nomor_peserta_ujian: u.nomor_peserta_ujian || '',
     });
   };
 
@@ -143,7 +155,23 @@ export default function AdminUsersPage() {
     catch (e) { toast.error('Gagal menghapus'); }
   };
 
-  const filtered = users.filter((u) => {
+  const handleImpersonate = async (user) => {
+    if (impersonatingUserId) return;
+    setImpersonatingUserId(user.id);
+    try {
+      await impersonate(user.id);
+      toast.success(`Berhasil login sebagai ${user.full_name}`);
+      // Redirect will be handled by AuthContext
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal login sebagai user ini');
+      setImpersonatingUserId(null);
+    }
+  };
+
+  // Filter out siswa - they have their own menu (Pengguna Siswa)
+  const nonSiswaUsers = users.filter((u) => !(u.roles || []).includes('siswa'));
+
+  const filtered = nonSiswaUsers.filter((u) => {
     if (activeTab !== 'all' && !(u.roles || []).includes(activeTab)) return false;
     if (!search) return true;
     const s = search.toLowerCase();
@@ -152,8 +180,8 @@ export default function AdminUsersPage() {
 
   // Counts per role for badges
   const roleCounts = ROLE_TABS.reduce((acc, t) => {
-    if (t.value === 'all') acc[t.value] = users.length;
-    else acc[t.value] = users.filter((u) => (u.roles || []).includes(t.value)).length;
+    if (t.value === 'all') acc[t.value] = nonSiswaUsers.length;
+    else acc[t.value] = nonSiswaUsers.filter((u) => (u.roles || []).includes(t.value)).length;
     return acc;
   }, {});
 
@@ -162,12 +190,14 @@ export default function AdminUsersPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><Users className="h-3 w-3 mr-1" /> Manajemen Pengguna</Badge>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Kelola Pengguna</h1>
-          <p className="text-sm text-slate-600 mt-1">{users.length} pengguna terdaftar</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Kelola Pengguna (GTK & Staff)</h1>
+          <p className="text-sm text-slate-600 mt-1">{nonSiswaUsers.length} pengguna terdaftar (tidak termasuk siswa)</p>
         </div>
-        <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-user-button">
-          <Plus className="h-4 w-4" /> Tambah Pengguna
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-user-button">
+            <Plus className="h-4 w-4" /> Tambah Pengguna
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -184,8 +214,20 @@ export default function AdminUsersPage() {
           <Card>
             <CardContent className="p-0">
               <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+                {/* Hidden dummy fields to prevent browser autofill on search field */}
+                <input type="text" name="fake-username" autoComplete="username" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" />
+                <input type="password" name="fake-password" autoComplete="current-password" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" />
                 <Search className="h-4 w-4 text-slate-400" />
-                <Input placeholder="Cari nama atau username..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" data-testid="user-search-input" />
+                <Input
+                  placeholder="Cari nama atau username..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="max-w-sm"
+                  data-testid="user-search-input"
+                  autoComplete="off"
+                  name="users-search-query"
+                  type="search"
+                />
               </div>
               <div className="overflow-x-auto">
                 <Table data-testid="admin-users-table">
@@ -194,10 +236,8 @@ export default function AdminUsersPage() {
                       <TableHead className="w-[100px]">ID</TableHead>
                       <TableHead>Username</TableHead>
                       <TableHead>Nama Lengkap</TableHead>
-                      <TableHead>NISN</TableHead>
                       <TableHead>NIP/Peg ID</TableHead>
                       <TableHead>Jabatan</TableHead>
-                      <TableHead>Kelas</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Peran</TableHead>
                       <TableHead>Status</TableHead>
@@ -206,9 +246,7 @@ export default function AdminUsersPage() {
                   </TableHeader>
                   <TableBody>
                     {filtered.map((u) => {
-                      const isSiswa = u.roles?.includes('siswa');
                       const isStaff = u.roles?.some(r => ['guru', 'wali_kelas', 'tenaga_kependidikan', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler', 'admin'].includes(r));
-                      const className = isSiswa ? classes.find(c => c.id === u.student_class_id)?.name : null;
 
                       // Get user's jabatan names
                       const userJabatanNames = u.jabatan_ids?.map(jid => {
@@ -224,13 +262,6 @@ export default function AdminUsersPage() {
                           <TableCell className="font-mono">{u.username}</TableCell>
                           <TableCell className="font-medium">{u.full_name}</TableCell>
                           <TableCell className="font-mono text-xs">
-                            {isSiswa && u.nisn ? (
-                              <span className="text-slate-700">{u.nisn}</span>
-                            ) : (
-                              <span className="italic text-slate-400">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
                             {isStaff && u.nip_nuptk ? (
                               <span className="text-slate-700">{u.nip_nuptk}</span>
                             ) : (
@@ -244,17 +275,6 @@ export default function AdminUsersPage() {
                                   <Badge key={idx} variant="outline" className="text-xs">{jName}</Badge>
                                 ))}
                               </div>
-                            ) : (
-                              <span className="italic text-slate-400 text-xs">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {isSiswa ? (
-                              className ? (
-                                <Badge variant="outline" className="font-semibold">{className}</Badge>
-                              ) : (
-                                <span className="italic text-slate-400 text-xs">Belum ada kelas</span>
-                              )
                             ) : (
                               <span className="italic text-slate-400 text-xs">-</span>
                             )}
@@ -284,6 +304,14 @@ export default function AdminUsersPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
+                              <Button size="sm" variant="outline" onClick={() => handleImpersonate(u)}
+                                disabled={impersonatingUserId !== null}
+                                className="gap-1 border-blue-400 text-blue-700 hover:bg-blue-50"
+                                data-testid={`impersonate-user-${u.username}`}
+                                title="Login sebagai user ini">
+                                {impersonatingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                                Login Sebagai
+                              </Button>
                               <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
                             </div>
@@ -292,7 +320,7 @@ export default function AdminUsersPage() {
                       );
                     })}
                     {filtered.length === 0 && (
-                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">Tidak ada pengguna ditemukan</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -325,6 +353,14 @@ export default function AdminUsersPage() {
             <div>
               <Label>NISN (Siswa)</Label>
               <Input value={form.nisn || ''} onChange={(e) => setForm({ ...form, nisn: e.target.value })} />
+            </div>
+            <div>
+              <Label>NISM (Siswa)</Label>
+              <Input value={form.nism || ''} onChange={(e) => setForm({ ...form, nism: e.target.value })} placeholder="NIS Madrasah" />
+            </div>
+            <div>
+              <Label>Nomor Peserta Ujian (Siswa)</Label>
+              <Input value={form.nomor_peserta_ujian || ''} onChange={(e) => setForm({ ...form, nomor_peserta_ujian: e.target.value })} placeholder="No. Peserta Ujian Madrasah" />
             </div>
             <div>
               <Label>Jenis Kelamin</Label>

@@ -20,6 +20,61 @@ from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest, Mutat
 router = APIRouter()
 
 
+# IMPORTANT: Routes with literal paths MUST come before parameterized paths
+# Order: /users/excel-template -> /users/import-excel -> /users/{uid} -> /users
+@router.get("/users/excel-template")
+async def users_template(user: Dict = Depends(require_role('admin'))):
+    return StreamingResponse(
+        io.BytesIO(user_template()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_pengguna_matsandatama.xlsx"'},
+    )
+
+
+@router.post("/users/import-excel")
+async def users_import(file: UploadFile = File(...), request: Request = None,
+                       user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+    contents = await file.read()
+    try:
+        rows = parse_user_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Error parsing Excel: {e}")
+    success = []
+    errors = []
+    for idx, row in enumerate(rows, start=2):
+        try:
+            existing = await db.users.find_one({'username': row['username']})
+            if existing:
+                errors.append({'row': idx, 'error': f"Username {row['username']} sudah ada"})
+                continue
+            u = UserModel(
+                username=row['username'], password_hash=hash_password(row['password']),
+                full_name=row['full_name'], nip_nuptk=row.get('nip_nuptk'),
+                nisn=row.get('nisn'), email=row.get('email'), phone=row.get('phone'),
+                roles=row.get('roles', ['siswa']),
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            await db.users.insert_one(doc)
+            success.append(row['username'])
+        except Exception as e:
+            errors.append({'row': idx, 'error': str(e)})
+    if request:
+        await log_audit(user, 'import_users', 'users', None, details={'success': len(success), 'errors': len(errors)}, request=request)
+    return {'success': success, 'errors': errors}
+
+
+# GET /users/{uid} must be BEFORE GET /users to avoid path conflicts
+@router.get("/users/{uid}")
+async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
+    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
+    if not doc:
+        raise HTTPException(404, "User tidak ditemukan")
+    return serialize_doc(doc)
+
+
 @router.get("/users")
 async def list_users(role: Optional[str] = None, user: Dict = Depends(require_role('admin'))):
     q = {}
@@ -70,75 +125,6 @@ async def delete_user(uid: str, request: Request, user: Dict = Depends(require_r
     await db.users.delete_one({'id': uid})
     await log_audit(user, 'delete', 'user', uid, request=request)
     return {'message': 'Dihapus'}
-
-
-@router.get("/users/excel-template")
-async def users_template(user: Dict = Depends(require_role('admin'))):
-    return StreamingResponse(
-        io.BytesIO(user_template()),
-        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename="template_pengguna_matsandatama.xlsx"'},
-    )
-
-
-@router.post("/users/import-excel")
-async def users_import(file: UploadFile = File(...), request: Request = None,
-                       user: Dict = Depends(require_role('admin'))):
-    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
-        raise HTTPException(400, "Hanya file .xlsx yang didukung")
-    contents = await file.read()
-    try:
-        rows = parse_user_rows(contents)
-    except Exception as e:
-        raise HTTPException(400, f"Gagal membaca Excel: {e}")
-    success = 0
-    errors = []
-    new_docs = []
-    classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
-    valid_roles = set(ROLES)
-    for r in rows:
-        try:
-            if not r['username'] or not r['password'] or not r['full_name']:
-                errors.append(f"Baris {r['_row']}: username/password/nama wajib"); continue
-            if not r['roles']:
-                errors.append(f"Baris {r['_row']}: roles wajib"); continue
-            invalid = [x for x in r['roles'] if x not in valid_roles]
-            if invalid:
-                errors.append(f"Baris {r['_row']}: roles tidak valid {invalid}"); continue
-            existing = await db.users.find_one({'username': r['username']})
-            if existing:
-                errors.append(f"Baris {r['_row']}: username '{r['username']}' sudah ada"); continue
-            student_class_id = None
-            homeroom_class_id = None
-            if 'siswa' in r['roles'] and r.get('kelas_siswa'):
-                student_class_id = classes_map.get(r['kelas_siswa'])
-                if not student_class_id:
-                    errors.append(f"Baris {r['_row']}: kelas '{r['kelas_siswa']}' tidak ditemukan"); continue
-            if 'wali_kelas' in r['roles'] and r.get('wali_kelas'):
-                homeroom_class_id = classes_map.get(r['wali_kelas'])
-                if not homeroom_class_id:
-                    errors.append(f"Baris {r['_row']}: wali_kelas '{r['wali_kelas']}' tidak ditemukan"); continue
-            u = UserModel(
-                username=r['username'], password_hash=hash_password(r['password']),
-                full_name=r['full_name'], roles=r['roles'],
-                nip_nuptk=r.get('nip_nuptk'), nisn=r.get('nisn'),
-                email=r.get('email'), phone=r.get('phone'), gender=r.get('gender'),
-                student_class_id=student_class_id,
-                homeroom_class_id=homeroom_class_id,
-            )
-            doc = u.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            new_docs.append(doc)
-            success += 1
-            if homeroom_class_id:
-                await db.classes.update_one({'id': homeroom_class_id}, {'$set': {'homeroom_teacher_id': u.id}})
-        except Exception as e:
-            errors.append(f"Baris {r['_row']}: {e}")
-    if new_docs:
-        await db.users.insert_many(new_docs)
-    await log_audit(user, 'import_excel', 'user', None,
-                    details={'success': success, 'errors': len(errors), 'filename': file.filename}, request=request)
-    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
 
 
 # ============================================================

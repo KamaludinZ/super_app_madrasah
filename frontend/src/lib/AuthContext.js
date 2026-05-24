@@ -93,6 +93,42 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const impersonate = async (targetUserId) => {
+    const { data } = await api.post('/auth/impersonate', { target_user_id: targetUserId });
+    localStorage.setItem('matsa_token', data.access_token);
+    localStorage.setItem('matsa_active_role', data.active_role);
+    localStorage.setItem('matsa_user', JSON.stringify(data.user));
+    if (data.expires_in_minutes) {
+      localStorage.setItem('matsa_session_info', JSON.stringify({
+        expires_in_minutes: data.expires_in_minutes,
+        login_at: Date.now(),
+      }));
+    }
+    setUser(data.user);
+    setActiveRole(data.active_role);
+    // Redirect to dashboard after impersonating
+    window.location.href = '/dashboard';
+    return data;
+  };
+
+  const stopImpersonate = async () => {
+    const { data } = await api.post('/auth/stop-impersonate');
+    localStorage.setItem('matsa_token', data.access_token);
+    localStorage.setItem('matsa_active_role', data.active_role);
+    localStorage.setItem('matsa_user', JSON.stringify(data.user));
+    if (data.expires_in_minutes) {
+      localStorage.setItem('matsa_session_info', JSON.stringify({
+        expires_in_minutes: data.expires_in_minutes,
+        login_at: Date.now(),
+      }));
+    }
+    setUser(data.user);
+    setActiveRole(data.active_role);
+    // Redirect to dashboard after stopping impersonation
+    window.location.href = '/dashboard';
+    return data;
+  };
+
   // Idle timeout (default 30 min, configurable from settings)
   const idleTimeoutMinutes = user ? (settings?.idle_timeout_minutes || 30) : 0;
   useIdleTimeout(idleTimeoutMinutes, () => {
@@ -117,7 +153,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, activeRole, settings, setSettings, loading, login, logout, switchRole, refreshMe }}>
+    <AuthContext.Provider value={{ user, activeRole, settings, setSettings, loading, login, logout, switchRole, impersonate, stopImpersonate, refreshMe }}>
       {children}
     </AuthContext.Provider>
   );

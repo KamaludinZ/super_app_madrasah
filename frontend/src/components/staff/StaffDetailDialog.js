@@ -37,12 +37,15 @@ export default function StaffDetailDialog({ user: staffUser, open, onClose, auto
       setLoading(true);
       try {
         const [userRes, jabatanRes] = await Promise.all([
-          api.get('/users'),
+          api.get(`/users/${staffUser.id}`),
           api.get('/jabatan/active')
         ]);
-        const found = (userRes.data || []).find((u) => u.id === staffUser.id);
-        setData(found || staffUser);
+        setData(userRes.data || staffUser);
         setJabatanList(jabatanRes.data || []);
+      } catch (e) {
+        console.error('Error loading staff detail:', e);
+        setData(staffUser);
+        setJabatanList([]);
       } finally { setLoading(false); }
     })();
   }, [staffUser?.id]);

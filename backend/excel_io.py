@@ -422,3 +422,98 @@ def export_grades_xlsx(grades: List[Dict[str, Any]]) -> bytes:
         ])
     widths = [14, 28, 10, 12, 22, 10, 14, 14, 12, 10, 30, 20]
     return _make_export_workbook('Nilai', headers, rows, widths)
+
+
+# ============================================================
+# TEMPLATE UPDATE NISM & NOMOR PESERTA UJIAN
+# ============================================================
+def nism_update_template(students: List[Dict[str, Any]]) -> bytes:
+    """
+    Generate template Excel untuk update NISM dan Nomor Peserta Ujian Madrasah.
+    Template berisi data siswa existing yang bisa diupdate.
+    """
+    headers = ['id', 'nisn', 'nama_lengkap', 'kelas', 'nism', 'nomor_peserta_ujian']
+    examples = []
+
+    # Populate dengan data siswa yang ada
+    for s in students:
+        examples.append([
+            s.get('id', ''),
+            s.get('nisn', ''),
+            s.get('full_name', ''),
+            s.get('class_name', ''),
+            s.get('nism', ''),
+            s.get('nomor_peserta_ujian', ''),
+        ])
+
+    col_widths = [36, 14, 30, 10, 16, 20]
+    instructions = [
+        "Sheet 'Update NISM & No. Ujian' berisi data siswa yang sudah ada.",
+        "",
+        "Cara Penggunaan:",
+        "1. Download template ini untuk mendapatkan data siswa terkini",
+        "2. Isi kolom 'nism' dan 'nomor_peserta_ujian' sesuai kebutuhan",
+        "3. JANGAN UBAH kolom 'id', 'nisn', 'nama_lengkap', dan 'kelas' (untuk referensi saja)",
+        "4. Upload kembali file ini untuk update data",
+        "",
+        "Kolom yang bisa diupdate:",
+        "- nism: NIS Madrasah (NISM) - diperlukan untuk buku induk",
+        "- nomor_peserta_ujian: Nomor Peserta Ujian Madrasah (untuk siswa kelas 9)",
+        "",
+        "Kolom yang TIDAK boleh diubah (hanya untuk referensi):",
+        "- id: ID sistem (wajib ada, jangan diubah)",
+        "- nisn: Nomor Induk Siswa Nasional (referensi)",
+        "- nama_lengkap: Nama siswa (referensi)",
+        "- kelas: Kelas siswa (referensi)",
+        "",
+        "Tips:",
+        "- Kosongkan kolom jika tidak ingin mengubah nilai",
+        "- Sistem hanya akan update baris yang memiliki nilai baru di kolom nism atau nomor_peserta_ujian",
+    ]
+
+    wb = _make_workbook_with_data(
+        sheet_name="Update NISM & No. Ujian",
+        headers=headers,
+        examples=examples,
+        col_widths=col_widths,
+        instructions=instructions
+    )
+
+    return workbook_to_bytes(wb)
+
+
+def parse_nism_update_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """
+    Parse Excel file untuk update NISM dan Nomor Peserta Ujian.
+    Returns list of dicts dengan keys: id, nism, nomor_peserta_ujian, _row
+    """
+    wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    rows = []
+
+    # Headers expected: id, nisn, nama_lengkap, kelas, nism, nomor_peserta_ujian
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or not any(row):  # Skip empty rows
+            continue
+
+        # row[0] = id, row[4] = nism, row[5] = nomor_peserta_ujian
+        student_id = str(row[0]).strip() if row[0] else ''
+        nism = str(row[4]).strip() if row[4] and str(row[4]).strip() else None
+        nomor_ujian = str(row[5]).strip() if row[5] and str(row[5]).strip() else None
+
+        # Skip jika tidak ada ID (mandatory)
+        if not student_id:
+            continue
+
+        # Skip jika tidak ada perubahan (nism dan nomor_ujian kosong)
+        if not nism and not nomor_ujian:
+            continue
+
+        rows.append({
+            'id': student_id,
+            'nism': nism,
+            'nomor_peserta_ujian': nomor_ujian,
+            '_row': idx
+        })
+
+    return rows

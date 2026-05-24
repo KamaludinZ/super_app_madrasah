@@ -10,26 +10,72 @@ from pydantic import BaseModel, Field, ConfigDict
 
 ROLES = [
     'admin',
-    'guru',
-    'wali_kelas',
     'siswa',
+    'guru',
     'tenaga_kependidikan',
+    'guru_ekstrakurikuler',
     'guru_piket',
     'guru_bk',
+    'wali_kelas',
     'guru_tata_tertib',
-    'guru_ekstrakurikuler',
+    'alumni',
+    'kepala_sekolah',
+    'kepala_tata_usaha',
+    'waka_kesiswaan',
+    'waka_kurikulum',
+    'waka_sarpras',
+    'waka_humas',
+    'bendahara',
+    'kepegawaian',
+    'perpustakaan',
+    'unit_pelayanan',
+    'unit_kesehatan',
+    'penjamin_mutu',
+    'unit_pengaduan',
+    'unit_ubudiyah',
+    'unit_olimpiade',
+    'unit_tahfidz',
+    'unit_kopsis',
+    'mundhir_mahad',
+    'musrif_mahad',
+    'musrifah_mahad',
+    'murabbi_mahad',
+    'bendahara_mahad',
 ]
 
 ROLE_LABELS = {
     'admin': 'Administrator',
-    'guru': 'Guru Mata Pelajaran',
-    'wali_kelas': 'Wali Kelas',
     'siswa': 'Siswa',
+    'guru': 'Guru Mata Pelajaran',
     'tenaga_kependidikan': 'Tenaga Kependidikan',
+    'guru_ekstrakurikuler': 'Guru Ekstrakurikuler',
     'guru_piket': 'Guru Piket',
     'guru_bk': 'Guru BK',
+    'wali_kelas': 'Wali Kelas',
     'guru_tata_tertib': 'Guru Tata Tertib',
-    'guru_ekstrakurikuler': 'Guru Ekstrakurikuler',
+    'alumni': 'Alumni',
+    'kepala_sekolah': 'Kepala Sekolah',
+    'kepala_tata_usaha': 'Kepala Tata Usaha',
+    'waka_kesiswaan': 'Waka Kesiswaan',
+    'waka_kurikulum': 'Waka Kurikulum',
+    'waka_sarpras': 'Waka Sarana Prasarana',
+    'waka_humas': 'Waka Humas',
+    'bendahara': 'Bendahara',
+    'kepegawaian': 'Kepegawaian',
+    'perpustakaan': 'Perpustakaan',
+    'unit_pelayanan': 'Unit Pelayanan',
+    'unit_kesehatan': 'Unit Kesehatan',
+    'penjamin_mutu': 'Penjamin Mutu',
+    'unit_pengaduan': 'Unit Pengaduan',
+    'unit_ubudiyah': 'Unit Ubudiyah',
+    'unit_olimpiade': 'Unit Olimpiade',
+    'unit_tahfidz': 'Unit Tahfidz',
+    'unit_kopsis': 'Unit Kopsis',
+    'mundhir_mahad': 'Mundhir Mahad',
+    'musrif_mahad': 'Musrif Mahad',
+    'musrifah_mahad': 'Musrifah Mahad',
+    'murabbi_mahad': 'Murabbi Mahad',
+    'bendahara_mahad': 'Bendahara Mahad',
 }
 
 # Default teaching slots template (jam ke- format)
@@ -64,13 +110,15 @@ class UserModel(BaseModel):
     student_class_id: Optional[str] = None
     parent_of: List[str] = Field(default_factory=list)
     # Additional siswa fields
-    gender: Optional[str] = None  # 'L' / 'P'
+    gender: Optional[str] = None  # 'L' / 'P' / 'Laki-laki' / 'Perempuan'
     birth_place: Optional[str] = None
     birth_date: Optional[str] = None
     address: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: bool = True
     nis: Optional[str] = None  # Nomor Induk Siswa (lokal sekolah, beda dgn NISN)
+    nism: Optional[str] = None  # NIS Madrasah (NISM) - untuk buku induk
+    nomor_peserta_ujian: Optional[str] = None  # Nomor Peserta Ujian Madrasah (kelas 9) - untuk buku induk
     # Mutation tracking (for stats: mutasi masuk/keluar di TP aktif)
     mutation_type: Optional[str] = None  # 'masuk' | 'keluar' | None
     mutation_ay_id: Optional[str] = None  # TP saat mutasi
@@ -96,6 +144,167 @@ class UserModel(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
     jabatan_ids: List[str] = Field(default_factory=list)  # Array of jabatan IDs for guru/staff
+
+    # ==================== DATA SISWA (EMIS) ====================
+    # Kewarganegaraan
+    warga_negara: Optional[str] = None  # 'WNI' | 'WNA'
+    nik: Optional[str] = None  # 16 digit (WNI)
+    asal_negara: Optional[str] = None  # WNA
+    nomor_izin_tinggal: Optional[str] = None  # KITAS (WNA)
+
+    # Data Keluarga
+    jumlah_saudara: Optional[int] = None
+    anak_ke: Optional[int] = None
+    agama: Optional[str] = None
+    cita_cita: Optional[str] = None
+    hobi: Optional[str] = None
+    yang_membiayai_sekolah: Optional[str] = None
+
+    # Pra Sekolah & Imunisasi
+    pra_sekolah: List[str] = Field(default_factory=list)  # ['TK/RA', 'PAUD']
+    imunisasi: List[str] = Field(default_factory=list)  # ['Hepatitis B', 'BCG', 'DPT', 'Polio', 'Campak', 'Covid']
+
+    # Kontak Siswa
+    no_hp_siswa: Optional[str] = None
+    tidak_punya_hp: bool = False
+    email_siswa: Optional[str] = None
+
+    # KIP & KK
+    nomor_kip: Optional[str] = None
+    nomor_kk: Optional[str] = None
+    nama_kepala_keluarga: Optional[str] = None
+
+    # ==================== DATA ORANG TUA ====================
+    # AYAH KANDUNG
+    ayah_nama: Optional[str] = None
+    ayah_status: Optional[str] = None  # 'Masih Hidup' | 'Sudah Meninggal' | 'Tidak Diketahui'
+    ayah_kewarganegaraan: Optional[str] = None  # 'WNI' | 'WNA'
+    ayah_nik: Optional[str] = None
+    ayah_asal_negara: Optional[str] = None
+    ayah_nomor_izin_tinggal: Optional[str] = None
+    ayah_tempat_lahir: Optional[str] = None
+    ayah_tanggal_lahir: Optional[str] = None
+    ayah_pendidikan_terakhir: Optional[str] = None
+    ayah_pekerjaan: Optional[str] = None
+    ayah_penghasilan: Optional[str] = None
+    ayah_no_hp: Optional[str] = None
+    ayah_tidak_punya_hp: bool = False
+
+    # IBU KANDUNG
+    ibu_nama: Optional[str] = None
+    ibu_status: Optional[str] = None  # 'Masih Hidup' | 'Sudah Meninggal' | 'Tidak Diketahui'
+    ibu_kewarganegaraan: Optional[str] = None  # 'WNI' | 'WNA'
+    ibu_nik: Optional[str] = None
+    ibu_asal_negara: Optional[str] = None
+    ibu_nomor_izin_tinggal: Optional[str] = None
+    ibu_tempat_lahir: Optional[str] = None
+    ibu_tanggal_lahir: Optional[str] = None
+    ibu_pendidikan_terakhir: Optional[str] = None
+    ibu_pekerjaan: Optional[str] = None
+    ibu_penghasilan: Optional[str] = None
+    ibu_no_hp: Optional[str] = None
+    ibu_tidak_punya_hp: bool = False
+
+    # ==================== DATA WALI ====================
+    hubungan_wali: Optional[str] = None  # 'Sama dengan ayah kandung' | 'Sama dengan ibu kandung' | 'Lainnya'
+    wali_nama: Optional[str] = None
+    wali_status: Optional[str] = None
+    wali_kewarganegaraan: Optional[str] = None
+    wali_nik: Optional[str] = None
+    wali_asal_negara: Optional[str] = None
+    wali_nomor_izin_tinggal: Optional[str] = None
+    wali_tempat_lahir: Optional[str] = None
+    wali_tanggal_lahir: Optional[str] = None
+    wali_pendidikan_terakhir: Optional[str] = None
+    wali_pekerjaan: Optional[str] = None
+    wali_penghasilan: Optional[str] = None
+    wali_no_hp: Optional[str] = None
+    wali_tidak_punya_hp: bool = False
+    nomor_kks: Optional[str] = None
+    nomor_pkh: Optional[str] = None
+
+    # ==================== DATA ALAMAT ====================
+    # ALAMAT AYAH KANDUNG
+    ayah_tinggal_luar_negeri: bool = False
+    ayah_status_kepemilikan_rumah: Optional[str] = None
+    ayah_alamat_luar_negeri: Optional[str] = None
+    ayah_provinsi: Optional[str] = None
+    ayah_kabupaten_kota: Optional[str] = None
+    ayah_kecamatan: Optional[str] = None
+    ayah_kelurahan_desa: Optional[str] = None
+    ayah_rt: Optional[str] = None
+    ayah_rw: Optional[str] = None
+    ayah_alamat: Optional[str] = None
+    ayah_kode_pos: Optional[str] = None
+
+    # ALAMAT IBU KANDUNG
+    ibu_sama_dengan_ayah: bool = False
+    ibu_tinggal_luar_negeri: bool = False
+    ibu_status_kepemilikan_rumah: Optional[str] = None
+    ibu_alamat_luar_negeri: Optional[str] = None
+    ibu_provinsi: Optional[str] = None
+    ibu_kabupaten_kota: Optional[str] = None
+    ibu_kecamatan: Optional[str] = None
+    ibu_kelurahan_desa: Optional[str] = None
+    ibu_rt: Optional[str] = None
+    ibu_rw: Optional[str] = None
+    ibu_alamat: Optional[str] = None
+    ibu_kode_pos: Optional[str] = None
+
+    # ALAMAT WALI
+    wali_status_wali: Optional[str] = None  # 'Sama dengan ayah kandung' | 'Sama dengan ibu kandung' | 'Lainnya'
+    wali_sama_dengan_ayah: bool = False
+    wali_tinggal_luar_negeri: bool = False
+    wali_status_kepemilikan_rumah: Optional[str] = None
+    wali_alamat_luar_negeri: Optional[str] = None
+    wali_provinsi: Optional[str] = None
+    wali_kabupaten_kota: Optional[str] = None
+    wali_kecamatan: Optional[str] = None
+    wali_kelurahan_desa: Optional[str] = None
+    wali_rt: Optional[str] = None
+    wali_rw: Optional[str] = None
+    wali_alamat: Optional[str] = None
+    wali_kode_pos: Optional[str] = None
+
+    # ALAMAT TEMPAT TINGGAL SISWA
+    status_tempat_tinggal: Optional[str] = None  # 'Tinggal dengan Ayah Kandung' | 'Tinggal dengan Ibu Kandung' | dll
+    siswa_status_kepemilikan_rumah: Optional[str] = None
+    siswa_provinsi: Optional[str] = None
+    siswa_kabupaten_kota: Optional[str] = None
+    siswa_kecamatan: Optional[str] = None
+    siswa_kelurahan_desa: Optional[str] = None
+    siswa_rt: Optional[str] = None
+    siswa_rw: Optional[str] = None
+    siswa_alamat: Optional[str] = None
+    siswa_kode_pos: Optional[str] = None
+    jarak_tempuh: Optional[str] = None
+    transportasi: Optional[str] = None
+    waktu_tempuh: Optional[str] = None
+
+    # ==================== ARSIP DOKUMEN ====================
+    dokumen_pas_foto: Optional[str] = None  # URL file
+    dokumen_akte_kelahiran: Optional[str] = None
+    dokumen_ijazah_sd: Optional[str] = None
+    dokumen_kartu_keluarga: Optional[str] = None
+    dokumen_kip: Optional[str] = None  # Aktif jika nomor_kip terisi
+    dokumen_pkh: Optional[str] = None  # Aktif jika nomor_pkh terisi
+    dokumen_kks: Optional[str] = None  # Aktif jika nomor_kks terisi
+    dokumen_ijazah_mts: Optional[str] = None
+
+    # ==================== REKAM DIDIK (RIWAYAT KELAS) ====================
+    # Riwayat kelas siswa per semester dari kelas 7-9
+    # Format: {'7_ganjil': 'class_id', '7_genap': 'class_id', '8_ganjil': 'class_id', ...}
+    # Untuk siswa mutasi: semester sebelum masuk akan kosong, semester setelah keluar akan kosong
+    rekam_didik: Dict[str, Any] = Field(default_factory=dict)
+    # Contoh:
+    # {
+    #   '7_ganjil': {'class_id': 'xxx', 'class_name': '7A', 'tahun_pelajaran_id': 'yyy', 'tahun_pelajaran': '2023/2024'},
+    #   '7_genap': {'class_id': 'xxx', 'class_name': '7A', 'tahun_pelajaran_id': 'yyy', 'tahun_pelajaran': '2023/2024'},
+    #   '8_ganjil': {'class_id': 'zzz', 'class_name': '8A', 'tahun_pelajaran_id': 'aaa', 'tahun_pelajaran': '2024/2025'},
+    #   '8_genap': None,  # Mutasi keluar di semester 8 ganjil
+    #   '9_ganjil': None,
+    #   '9_genap': None
+    # }
 
 
 class JabatanModel(BaseModel):
@@ -788,26 +997,68 @@ class RaporSummaryModel(BaseModel):
 # ACHIEVEMENTS (Prestasi - Melekat Lintas TP)
 # ============================================================
 class AchievementModel(BaseModel):
-    """Prestasi siswa - melekat pada siswa lintas TP & semester."""
+    """Prestasi siswa - melekat pada siswa lintas TP & semester (Sesuai EMIS)."""
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     student_id: str  # ID siswa
-    academic_year_id: str  # TP saat prestasi diraih
-    semester: str  # Semester saat prestasi diraih
-    achievement_type: Literal['akademik', 'non_akademik', 'ekstrakurikuler', 'olahraga', 'seni', 'lainnya']
-    title: str  # Nama prestasi
-    description: Optional[str] = None  # Deskripsi prestasi
-    level: Literal['sekolah', 'kecamatan', 'kabupaten', 'provinsi', 'nasional', 'internasional']
-    rank: Optional[str] = None  # Juara 1, 2, 3, dst atau Peserta
-    organizer: Optional[str] = None  # Penyelenggara
-    date: str  # YYYY-MM-DD tanggal prestasi
+
+    # Sesuai EMIS
+    tahun: int  # Tahun Lomba
+    nama_lomba: str  # Nama Lomba
+    bidang_lomba: str  # 'Akademik' | 'Keagamaan' | 'Teknologi' | 'Olahraga' | dll
+    nama_penyelenggara: str  # Nama Penyelenggara
+    tingkat_lomba: str  # 'Kabupaten/Kota' | 'Provinsi' | 'Nasional' | 'Internasional' | 'Lainnya'
+    peringkat: str  # 'Tidak Meraih Juara' | 'Juara 1/Medali Emas' | dll
+    kategori_lomba: str  # 'Individu' | 'Kelompok'
+
+    # Additional fields for existing system compatibility
+    academic_year_id: Optional[str] = None  # TP saat prestasi diraih (optional)
+    semester: Optional[str] = None  # Semester saat prestasi diraih (optional)
     certificate_url: Optional[str] = None  # Upload sertifikat
     photo_url: Optional[str] = None  # Foto dokumentasi
+
+    # Tracking
     recorded_by: str  # User yang input
     recorded_at: datetime = Field(default_factory=datetime.utcnow)
     verified: bool = False  # Verifikasi oleh admin
     verified_by: Optional[str] = None
     verified_at: Optional[datetime] = None
+
+
+# ============================================================
+# BEASISWA & BANTUAN (Sesuai EMIS)
+# ============================================================
+class BeasiswaModel(BaseModel):
+    """Beasiswa dan bantuan yang diterima siswa."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # ID siswa
+    tahun: int  # Tahun menerima beasiswa
+    kategori: str  # 'Beasiswa Lainnya' | 'Beasiswa Berprestasi' | 'Beasiswa Kurang Mampu/Miskin' | 'Beasiswa Miskin dan Berprestasi'
+    nama_beasiswa: str  # Nama Beasiswa/Bantuan
+    jenis_instansi_pemberi: str  # 'Kementerian Agama' | 'Kementerian Lain' | 'Pemerintah Daerah' | dll
+    nama_instansi_pemberi: str  # Nama Instansi Pemberi
+    jangka_waktu_bulan: Optional[int] = None  # Jangka Waktu (Bulan)
+    nominal: Optional[float] = None  # Nominal Beasiswa (Rupiah)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str  # User yang input
+
+
+# ============================================================
+# PENDIDIKAN LAIN (Sesuai EMIS)
+# ============================================================
+class PendidikanLainModel(BaseModel):
+    """Pendidikan lain di luar sekolah formal (TPQ, Kursus, dll)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str  # ID siswa
+    nama_lembaga: str  # Nama Lembaga
+    jenis_lembaga: str  # Jenis Lembaga (TPQ, Kursus Bahasa, dll)
+    mulai_belajar: str  # YYYY-MM-DD
+    frekuensi_belajar: str  # 'Setiap Hari' | 'Seminggu 2-3' | 'Seminggu Sekali' | 'Tidak Rutin'
+    lokasi_lembaga: str  # Alamat Lembaga
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str  # User yang input
 
 
 # ============================================================

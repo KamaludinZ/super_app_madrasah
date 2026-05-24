@@ -81,6 +81,7 @@ def serialize_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Dict[str, Any]:
     if not credentials:
@@ -94,6 +95,17 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="User tidak ditemukan atau dinonaktifkan")
     user['active_role'] = payload.get('active_role',
                                       user['roles'][0] if user.get('roles') else 'guru')
+
+    # Store impersonation info if present in JWT
+    impersonator_id = payload.get('impersonator_id')
+    impersonator_username = payload.get('impersonator_username')
+    if impersonator_id:
+        request.state.impersonator_id = impersonator_id
+        request.state.impersonator_username = impersonator_username
+        user['is_impersonating'] = True
+        user['impersonator_id'] = impersonator_id
+        user['impersonator_username'] = impersonator_username
+
     return serialize_doc(user)
 
 

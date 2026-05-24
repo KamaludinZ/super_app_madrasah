@@ -22,8 +22,10 @@ from routers import (
     app_info,
     auth,
     classes,
+    dokumen_siswa,
     health,
     holidays_tasks,
+    indikator_materi,
     jabatan,
     journals,
     notifications,
@@ -38,6 +40,7 @@ from routers import (
     students,
     subjects,
     tahun_takwim,
+    tatib,
     users,
     verval,
     wali_parent,
@@ -78,6 +81,9 @@ api_router.include_router(promotions.router)
 api_router.include_router(student_records.router)
 api_router.include_router(semesters.router)
 api_router.include_router(verval.router)
+api_router.include_router(dokumen_siswa.router)
+api_router.include_router(indikator_materi.router)
+api_router.include_router(tatib.router)
 
 app.include_router(api_router)
 
