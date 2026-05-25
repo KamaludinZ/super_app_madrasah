@@ -1,0 +1,19 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "admin",
+  "loginPassword": "admin123",
+  "executionArgs": {
+    "projectName": "super_app_madrasah",
+    "projectPath": "C:\\super_app_madrasah\\super_app_madrasah",
+    "testIds": [],
+    "additionalInstruction": "Focus on high-priority test cases. Ensure backend API at port 8000 and frontend at port 3000 are both accessible.",
+    "serverMode": "production",
+    "envs": {
+      "API_KEY": "sk-user-CY3Kbp6vrMKOsZU3E39tbpGSmlP-lj-ldEwwkYBOJgfWFyt1SxGtXKIqp7IUh-enUdgNmbeYcuucgytvwG3ez5o97D89G2e1JJVBqH-ZZdoJ9Z-UNO_M-nU6dfQpcjEvs9o"
+    }
+  },
+  "serverPort": 40421
+}

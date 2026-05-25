@@ -127,3 +127,5 @@ credentials.json
 *.key
 .credentials
 .claude/
+
+testsprite_tests\tmp\config.json

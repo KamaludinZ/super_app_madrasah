@@ -1,0 +1,1763 @@
+[
+  {
+    "id": "TC001",
+    "title": "Log in and reach the current user profile",
+    "description": "This test verifies that a valid user can authenticate and see their current profile with the active role reflected in the app.",
+    "category": "Authentication & Authorization",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the current user profile is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the active role is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Validate an assigned QR and create a journal entry",
+    "description": "This test verifies that a teacher can complete QR attendance validation and create a journal entry for the assigned class session.",
+    "category": "Journal/Attendance System (Jurnal Presisi)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the journal attendance page"
+      },
+      {
+        "type": "action",
+        "description": "Scan a valid QR for the assigned room and schedule"
+      },
+      {
+        "type": "action",
+        "description": "Provide valid GPS coordinates within the allowed geofence"
+      },
+      {
+        "type": "action",
+        "description": "Submit the journal validation"
+      },
+      {
+        "type": "action",
+        "description": "Create the journal entry with notes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the journal entry is created"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation status is recorded as passed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Lock an account after repeated failed sign-ins",
+    "description": "This test verifies that repeated invalid password attempts block further access for the account.",
+    "category": "Authentication & Authorization",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with an invalid password"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Repeat the failed sign-in attempt until the account is locked"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to sign in again with the same username and password"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a lockout message is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify sign in is blocked"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Validate a scheduled QR attendance scan",
+    "description": "This test verifies that a teacher can validate a QR attendance attempt for the correct room and time and proceed to journal creation.",
+    "category": "Schedule Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the QR attendance validation entry"
+      },
+      {
+        "type": "action",
+        "description": "Start a QR validation for the assigned room and slot"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the QR validation succeeds and the journal creation flow becomes available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Log out and end the session",
+    "description": "This test verifies that a signed-in user can log out and no longer access their profile.",
+    "category": "Authentication & Authorization",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the account menu"
+      },
+      {
+        "type": "action",
+        "description": "Log out of the session"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is signed out"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the current user profile is no longer available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Block an unscheduled QR attendance attempt",
+    "description": "This test verifies that a teacher cannot validate a QR attendance attempt when the room or time does not match the assigned schedule.",
+    "category": "Schedule Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the QR attendance validation entry"
+      },
+      {
+        "type": "action",
+        "description": "Start a QR validation for a room or time that does not match the schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a schedule mismatch validation error is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Create a student record with EMIS-compliant data",
+    "description": "This test verifies that administrative staff can create a new student record using valid required data.",
+    "category": "Student Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the student management page"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new student record"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the required EMIS-compliant student data"
+      },
+      {
+        "type": "action",
+        "description": "Submit the student form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the student record is created"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new student appears in the student list"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Switch to an allowed role and keep the new session role",
+    "description": "This test verifies that a permitted user can switch to another role and see that role reflected in their profile.",
+    "category": "Authentication & Authorization",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the role switching control"
+      },
+      {
+        "type": "action",
+        "description": "Select an allowed alternate role"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the role change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the active role has changed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the current user profile remains available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Update school settings successfully",
+    "description": "An administrator can change school, session, GPS, or SMTP settings and see the saved configuration reflected in the UI.",
+    "category": "Admin Features",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the admin username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open settings"
+      },
+      {
+        "type": "action",
+        "description": "Change one editable setting to a valid new value"
+      },
+      {
+        "type": "action",
+        "description": "Save the settings"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a success confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated settings are shown"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Create a teaching schedule entry",
+    "description": "This test verifies that a staff user can create a new teaching schedule entry and see it appear in the schedule list.",
+    "category": "Schedule Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for schedule management"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new schedule entry"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the teacher, room, subject, day, and slot fields with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Submit the schedule form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new schedule entry is displayed in the schedule list"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Record grades for a class",
+    "description": "This verifies that a teacher can save valid student grades for a subject and semester and see the saved grade records.",
+    "category": "Grading & Report Cards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the grade input form"
+      },
+      {
+        "type": "action",
+        "description": "Select a class and subject to grade"
+      },
+      {
+        "type": "action",
+        "description": "Select the current semester"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid scores for the listed students"
+      },
+      {
+        "type": "action",
+        "description": "Submit the grade entry form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify saved grade records are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "View admin system statistics",
+    "description": "An administrator can open the admin dashboard and see system metrics for users, students, classes, journals, and verifications.",
+    "category": "Admin Features",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the admin username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the admin dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system statistics are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify counts for users, students, classes, journals, and verifications are visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Update an existing student record",
+    "description": "This test verifies that staff can edit a student profile and see the updated record in search results.",
+    "category": "Student Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the student management page"
+      },
+      {
+        "type": "action",
+        "description": "Search for an existing student record"
+      },
+      {
+        "type": "action",
+        "description": "Open the student record for editing"
+      },
+      {
+        "type": "action",
+        "description": "Update the student demographic and family data"
+      },
+      {
+        "type": "action",
+        "description": "Save the student record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the student record is updated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated student appears in search results"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "View the current academic context",
+    "description": "This test verifies that an authenticated staff user can open the academic context screens and see the active calendar year, academic year, and semester information.",
+    "category": "Hierarchical Time Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for academic time management"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the current calendar year, academic year, and semester information are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "View assigned teaching classes and subjects",
+    "description": "This verifies that a teacher can open their assigned classes and see the subject list needed for grade entry.",
+    "category": "Grading & Report Cards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the grading area"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify assigned classes and subjects are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Review personal journal history",
+    "description": "This test verifies that a teacher can open their journal history and see previously created journal records.",
+    "category": "Journal/Attendance System (Jurnal Presisi)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the personal journal history page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify journal history entries are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify journal status information is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC017",
+    "title": "Create a class record",
+    "description": "This test verifies that a staff user can create a new class and see it appear in the class list.",
+    "category": "Class Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for class management"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new class"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the class name, grade, semester, and capacity fields with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Submit the class form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new class appears in the class list"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC018",
+    "title": "Switch to a different semester context",
+    "description": "This test verifies that an authenticated staff user can change the active semester context and see the updated academic information reflected in the UI.",
+    "category": "Hierarchical Time Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for academic time management"
+      },
+      {
+        "type": "action",
+        "description": "Select a different academic year or semester"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the active academic context updates to the selected period"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC019",
+    "title": "Review the audit log trail",
+    "description": "An administrator can open the audit log view and see searchable audit trail entries.",
+    "category": "Admin Features",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the admin username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open the audit log page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an audit log trail is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify searchable log entries are visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC020",
+    "title": "Open a student grade summary",
+    "description": "This verifies that an authorized user can retrieve a student grade summary needed for report-card preparation.",
+    "category": "Grading & Report Cards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open a student grade summary view"
+      },
+      {
+        "type": "action",
+        "description": "Search for a student using a known identifier"
+      },
+      {
+        "type": "action",
+        "description": "Open the selected student's summary"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the student grade summary is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify final scores are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC021",
+    "title": "Reject an incomplete student record",
+    "description": "This test verifies that missing required identifiers prevent a student from being created.",
+    "category": "Student Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the student management page"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new student record"
+      },
+      {
+        "type": "action",
+        "description": "Leave a required identifier or EMIS field empty"
+      },
+      {
+        "type": "action",
+        "description": "Submit the student form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the student record is not created"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC022",
+    "title": "Open the weekly schedule grid",
+    "description": "This test verifies that an authenticated user can view the weekly teaching schedule grid for the current semester.",
+    "category": "Schedule Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for schedule management"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the weekly schedule grid is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC023",
+    "title": "Submit bulk attendance for a class",
+    "description": "This test verifies that a homeroom or administrative user can record attendance for multiple students in one class session and see the saved summary.",
+    "category": "Class Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for class management"
+      },
+      {
+        "type": "action",
+        "description": "Start the bulk attendance flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the attendance date and student status entries with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Submit the attendance form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the attendance summary is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC024",
+    "title": "Create a discipline category",
+    "description": "This verifies that authorized staff can create a new discipline category and have it available for later infraction handling.",
+    "category": "Discipline/Conduct Management (Tata Tertib)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the discipline category management view"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new discipline category"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the category details with a unique code and valid severity"
+      },
+      {
+        "type": "action",
+        "description": "Submit the discipline category form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new discipline category is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC025",
+    "title": "Create a system backup",
+    "description": "An administrator can trigger a backup and see confirmation that a backup artifact was generated.",
+    "category": "Admin Features",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the admin username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open backup controls"
+      },
+      {
+        "type": "action",
+        "description": "Trigger a backup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a backup confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify backup generation details are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC026",
+    "title": "Block journal creation when QR validation fails",
+    "description": "This test verifies that invalid QR validation prevents a journal entry from being created.",
+    "category": "Journal/Attendance System (Jurnal Presisi)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the journal attendance page"
+      },
+      {
+        "type": "action",
+        "description": "Scan an expired or mismatched QR payload"
+      },
+      {
+        "type": "action",
+        "description": "Submit the journal validation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a QR validation error is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify journal creation is unavailable"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC027",
+    "title": "Import schedules from a spreadsheet",
+    "description": "This test verifies that a staff user can import schedules from a valid spreadsheet and see an import summary with created schedules.",
+    "category": "Schedule Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for schedule management"
+      },
+      {
+        "type": "action",
+        "description": "Start the schedule import flow"
+      },
+      {
+        "type": "action",
+        "description": "Provide a valid schedule spreadsheet"
+      },
+      {
+        "type": "action",
+        "description": "Submit the import"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an import summary and created schedules are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC028",
+    "title": "Approve a pending verification request",
+    "description": "This verifies that an authorized reviewer can approve a pending verval request and see its status change to approved.",
+    "category": "Data Verification (Verval)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the pending verification queue"
+      },
+      {
+        "type": "action",
+        "description": "Open a pending verification request"
+      },
+      {
+        "type": "action",
+        "description": "Approve the verification request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the request is displayed as approved"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC029",
+    "title": "View the class list",
+    "description": "This test verifies that an authenticated staff user can open the class management area and see the available class list.",
+    "category": "Class Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for class management"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the class list is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC030",
+    "title": "Submit a verification request",
+    "description": "This verifies that a user can submit a verval request with supporting information and see it enter pending status.",
+    "category": "Data Verification (Verval)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the verification request form"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the record details"
+      },
+      {
+        "type": "action",
+        "description": "Attach the supporting document information"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the request notes"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the verification request is displayed as pending"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC031",
+    "title": "Record a discipline handling action",
+    "description": "This verifies that staff can save a handling action for an existing infraction and see it reflected in the case history.",
+    "category": "Discipline/Conduct Management (Tata Tertib)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the infraction handling form"
+      },
+      {
+        "type": "action",
+        "description": "Select an existing infraction"
+      },
+      {
+        "type": "action",
+        "description": "Select a handling type"
+      },
+      {
+        "type": "action",
+        "description": "Fill in handling notes"
+      },
+      {
+        "type": "action",
+        "description": "Submit the handling form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the handling action is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC032",
+    "title": "View a class roster",
+    "description": "This test verifies that a staff user can open a class and see its student roster.",
+    "category": "Class Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for class management"
+      },
+      {
+        "type": "action",
+        "description": "Open a class roster view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the class student roster is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC033",
+    "title": "Review pending verification requests",
+    "description": "This verifies that a reviewer can open the pending verval queue and see submitted requests ready for action.",
+    "category": "Data Verification (Verval)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the pending verification queue"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify pending verification requests are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC034",
+    "title": "View journal attendance statistics",
+    "description": "This test verifies that an authorized leadership or admin user can open aggregated journal attendance statistics.",
+    "category": "Journal/Attendance System (Jurnal Presisi)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the journal statistics page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify attendance statistics are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify journal summary data is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC035",
+    "title": "List available calendar years",
+    "description": "This test verifies that an authenticated user can open the calendar year list and view the available timeline options.",
+    "category": "Hierarchical Time Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for academic time management"
+      },
+      {
+        "type": "action",
+        "description": "Open the calendar year selector"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the available calendar years are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC036",
+    "title": "Review a student's conduct history",
+    "description": "This verifies that authorized staff can open a student's conduct record and view existing infraction history.",
+    "category": "Discipline/Conduct Management (Tata Tertib)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the student conduct history view"
+      },
+      {
+        "type": "action",
+        "description": "Search for a student using a known identifier"
+      },
+      {
+        "type": "action",
+        "description": "Open the selected student's conduct record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify conduct history records are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC037",
+    "title": "Export the student list to Excel",
+    "description": "This test verifies that staff can export the current student list from the student management page.",
+    "category": "Student Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the CAPTCHA field with a valid response"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the student management page"
+      },
+      {
+        "type": "action",
+        "description": "Trigger the student export action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the export action is available"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an export confirmation is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC038",
+    "title": "Validate settings input rules",
+    "description": "An administrator sees validation feedback when invalid settings values are entered and the form is not accepted.",
+    "category": "Admin Features",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the admin username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to open settings"
+      },
+      {
+        "type": "action",
+        "description": "Enter an invalid value into a numeric or format-constrained setting"
+      },
+      {
+        "type": "action",
+        "description": "Save the settings"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a settings validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the invalid settings are not saved"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC039",
+    "title": "Reject invalid grade input",
+    "description": "This verifies that out-of-range or incomplete grade values are blocked and no grade record is saved.",
+    "category": "Grading & Report Cards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the grade input form"
+      },
+      {
+        "type": "action",
+        "description": "Select a class and subject to grade"
+      },
+      {
+        "type": "action",
+        "description": "Select the current semester"
+      },
+      {
+        "type": "action",
+        "description": "Fill an invalid score value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the grade entry form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a grade validation error is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC040",
+    "title": "Prevent duplicate discipline category codes",
+    "description": "This verifies that duplicate category codes or invalid severity values are rejected and no duplicate category is created.",
+    "category": "Discipline/Conduct Management (Tata Tertib)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the discipline category management view"
+      },
+      {
+        "type": "action",
+        "description": "Start creating a new discipline category"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a duplicate category code and invalid severity"
+      },
+      {
+        "type": "action",
+        "description": "Submit the discipline category form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a category validation error is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC041",
+    "title": "Reject incomplete verification submission",
+    "description": "This verifies that missing documents or invalid verval input are blocked and the request is not submitted.",
+    "category": "Data Verification (Verval)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the username field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the verification request form"
+      },
+      {
+        "type": "action",
+        "description": "Fill in incomplete request details"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a verification validation error is visible"
+      }
+    ],
+    "priority": "Low"
+  }
+]

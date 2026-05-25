@@ -35,6 +35,8 @@ export default function RaporPage() {
   const [studentId, setStudentId] = useState(params.get('student_id') || (isSiswa ? user?.id : ''));
   const [semester, setSemester] = useState(params.get('semester') || 'ganjil');
   const [rapor, setRapor] = useState(null);
+  const [allGrades, setAllGrades] = useState(null); // All grades from class 7, 8, 9
+  const [ekstrakurikuler, setEkstrakurikuler] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -56,12 +58,70 @@ export default function RaporPage() {
     }
     setLoading(true);
     try {
+      // Fetch current semester rapor
       const { data } = await api.get(`/grades/rapor/${studentId}`, { params: { semester } });
       setRapor(data);
+
+      // Fetch comprehensive grades from all years (class 7, 8, 9)
+      try {
+        const { data: comprehensiveData } = await api.get(`/grades/student/${studentId}`);
+        // Group grades by subject and organize by grade level (7, 8, 9)
+        const gradesBySubject = {};
+
+        (comprehensiveData || []).forEach(grade => {
+          const subjectKey = grade.subject_id || grade.subject_code;
+          if (!gradesBySubject[subjectKey]) {
+            gradesBySubject[subjectKey] = {
+              subject_name: grade.subject_name || grade.subject_code,
+              class7: {},
+              class8: {},
+              class9: {}
+            };
+          }
+
+          // Determine which class level this grade belongs to
+          const classLevel = grade.class_name?.match(/^(\d)/)?.[1];
+          if (classLevel === '7') {
+            gradesBySubject[subjectKey].class7 = {
+              ulangan: grade.nilai_harian || grade.nilai_ulangan,
+              uts: grade.nilai_uts,
+              uas: grade.nilai_uas
+            };
+          } else if (classLevel === '8') {
+            gradesBySubject[subjectKey].class8 = {
+              ulangan: grade.nilai_harian || grade.nilai_ulangan,
+              uts: grade.nilai_uts,
+              uas: grade.nilai_uas
+            };
+          } else if (classLevel === '9') {
+            gradesBySubject[subjectKey].class9 = {
+              ulangan: grade.nilai_harian || grade.nilai_ulangan,
+              uts: grade.nilai_uts,
+              uas: grade.nilai_uas
+            };
+          }
+        });
+
+        setAllGrades(gradesBySubject);
+      } catch (e) {
+        console.error('Failed to fetch comprehensive grades:', e);
+        setAllGrades({});
+      }
+
+      // Fetch ekstrakurikuler data
+      try {
+        const { data: ekstraData } = await api.get(`/ekstrakurikuler/student/${studentId}`);
+        setEkstrakurikuler(ekstraData || []);
+      } catch (e) {
+        console.error('Failed to fetch ekstrakurikuler:', e);
+        setEkstrakurikuler([]);
+      }
+
       setParams({ student_id: studentId, semester });
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal memuat rapor');
       setRapor(null);
+      setAllGrades(null);
     } finally {
       setLoading(false);
     }
@@ -161,49 +221,125 @@ export default function RaporPage() {
             </CardContent>
           </Card>
 
-          {/* Tabel Nilai */}
+          {/* Tabel Nilai Komprehensif - Kelas 7, 8, 9 */}
           <Card>
             <CardContent className="p-0">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Award className="h-4 w-4 text-[#006837]" />
-                  <h3 className="font-bold">Capaian Nilai Mata Pelajaran</h3>
+                  <h3 className="font-bold">Rekap Nilai Lengkap (Kelas 7, 8, 9)</h3>
                 </div>
-                <Badge variant="outline">{rapor.grades?.length || 0} Mapel</Badge>
+                <Badge variant="outline">{Object.keys(allGrades || {}).length} Mapel</Badge>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead rowSpan={2} className="align-middle border-r text-center w-12">No</TableHead>
+                      <TableHead rowSpan={2} className="align-middle border-r min-w-[180px]">Mata Pelajaran</TableHead>
+                      <TableHead colSpan={3} className="text-center border-r bg-blue-50">Kelas 7</TableHead>
+                      <TableHead colSpan={3} className="text-center border-r bg-green-50">Kelas 8</TableHead>
+                      <TableHead colSpan={3} className="text-center bg-amber-50">Kelas 9</TableHead>
+                    </TableRow>
+                    <TableRow>
+                      <TableHead className="text-center text-xs bg-blue-50">Ulangan</TableHead>
+                      <TableHead className="text-center text-xs bg-blue-50">UTS</TableHead>
+                      <TableHead className="text-center text-xs border-r bg-blue-50">UAS</TableHead>
+                      <TableHead className="text-center text-xs bg-green-50">Ulangan</TableHead>
+                      <TableHead className="text-center text-xs bg-green-50">UTS</TableHead>
+                      <TableHead className="text-center text-xs border-r bg-green-50">UAS</TableHead>
+                      <TableHead className="text-center text-xs bg-amber-50">Ulangan</TableHead>
+                      <TableHead className="text-center text-xs bg-amber-50">UTS</TableHead>
+                      <TableHead className="text-center text-xs bg-amber-50">UAS</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allGrades && Object.entries(allGrades).map(([subjectId, data], i) => (
+                      <TableRow key={subjectId} data-testid={`rapor-comprehensive-row-${i}`}>
+                        <TableCell className="text-center text-slate-500 border-r">{i + 1}</TableCell>
+                        <TableCell className="font-medium border-r">{data.subject_name || '-'}</TableCell>
+
+                        {/* Kelas 7 */}
+                        <TableCell className="font-mono text-center text-sm bg-blue-50/30">
+                          {data.class7?.ulangan != null ? data.class7.ulangan.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm bg-blue-50/30">
+                          {data.class7?.uts != null ? data.class7.uts.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm border-r bg-blue-50/30">
+                          {data.class7?.uas != null ? data.class7.uas.toFixed(1) : '-'}
+                        </TableCell>
+
+                        {/* Kelas 8 */}
+                        <TableCell className="font-mono text-center text-sm bg-green-50/30">
+                          {data.class8?.ulangan != null ? data.class8.ulangan.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm bg-green-50/30">
+                          {data.class8?.uts != null ? data.class8.uts.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm border-r bg-green-50/30">
+                          {data.class8?.uas != null ? data.class8.uas.toFixed(1) : '-'}
+                        </TableCell>
+
+                        {/* Kelas 9 */}
+                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
+                          {data.class9?.ulangan != null ? data.class9.ulangan.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
+                          {data.class9?.uts != null ? data.class9.uts.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
+                          {data.class9?.uas != null ? data.class9.uas.toFixed(1) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(!allGrades || Object.keys(allGrades).length === 0) && (
+                      <TableRow><TableCell colSpan={11} className="text-center py-12 text-slate-500">
+                        <FileText className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                        <div className="font-semibold">Belum ada nilai tercatat</div>
+                        <div className="text-sm mt-1">Data nilai belum tersedia.</div>
+                      </TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabel Ekstrakurikuler */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="h-4 w-4 text-[#006837]" />
+                  <h3 className="font-bold">Kegiatan Ekstrakurikuler</h3>
+                </div>
+                <Badge variant="outline">{ekstrakurikuler.length} Kegiatan</Badge>
               </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">No</TableHead>
-                      <TableHead>Mata Pelajaran</TableHead>
-                      <TableHead>Pengetahuan</TableHead>
-                      <TableHead>Keterampilan</TableHead>
-                      <TableHead>Nilai Akhir</TableHead>
+                      <TableHead>Nama Kegiatan</TableHead>
                       <TableHead>Predikat</TableHead>
-                      <TableHead>Deskripsi</TableHead>
+                      <TableHead>Keterangan</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(rapor.grades || []).map((g, i) => (
-                      <TableRow key={g.id || i} data-testid={`rapor-row-${i}`}>
+                    {ekstrakurikuler.map((ekstra, i) => (
+                      <TableRow key={ekstra.id || i} data-testid={`ekstra-row-${i}`}>
                         <TableCell className="text-center text-slate-500">{i + 1}</TableCell>
-                        <TableCell className="font-medium">
-                          {g.subject_name || g.subject_code || '-'}
-                          {g.teacher_name && <div className="text-xs text-slate-500">{g.teacher_name}</div>}
+                        <TableCell className="font-medium">{ekstra.name || ekstra.activity_name || '-'}</TableCell>
+                        <TableCell className="text-center">
+                          <PredicateBadge p={ekstra.predicate || ekstra.grade} />
                         </TableCell>
-                        <TableCell className="font-mono text-center">{g.nilai_pengetahuan != null ? g.nilai_pengetahuan.toFixed(1) : '-'}</TableCell>
-                        <TableCell className="font-mono text-center">{g.nilai_keterampilan != null ? g.nilai_keterampilan.toFixed(1) : '-'}</TableCell>
-                        <TableCell className="font-mono font-bold text-center">{g.nilai_akhir != null ? g.nilai_akhir.toFixed(2) : '-'}</TableCell>
-                        <TableCell className="text-center"><PredicateBadge p={g.predicate} /></TableCell>
-                        <TableCell className="text-xs text-slate-700 max-w-[280px]">{g.description || <span className="italic text-slate-400">-</span>}</TableCell>
+                        <TableCell className="text-sm text-slate-700">{ekstra.description || ekstra.notes || '-'}</TableCell>
                       </TableRow>
                     ))}
-                    {(!rapor.grades || rapor.grades.length === 0) && (
-                      <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
-                        <FileText className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-                        <div className="font-semibold">Belum ada nilai untuk semester ini</div>
-                        <div className="text-sm mt-1">Guru mata pelajaran belum menginput nilai.</div>
+                    {ekstrakurikuler.length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">
+                        <div className="text-sm">Belum ada kegiatan ekstrakurikuler tercatat</div>
                       </TableCell></TableRow>
                     )}
                   </TableBody>
