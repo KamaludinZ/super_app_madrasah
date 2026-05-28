@@ -45,7 +45,10 @@
       "Bash(serve:*)",
       "mcp__TestSprite__testsprite_generate_frontend_test_plan",
       "mcp__TestSprite__testsprite_generate_code_and_execute",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git -C /home/puskomdev/super_app_madrasah status)",
+      "Bash(git -C /home/puskomdev/super_app_madrasah config user.name)",
+      "Bash(git -C /home/puskomdev/super_app_madrasah config user.email)"
     ],
     "deny": [],
     "ask": []
