@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: backend
-    ports:
-      - "${PORT:-8000}:8000"
+    expose:
+      - "8000"
     environment:
       - MONGO_URL=${MONGO_URL}
       - DB_NAME=${DB_NAME:-super_app_madrasah}
