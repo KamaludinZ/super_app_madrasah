@@ -24,11 +24,18 @@ FROM python:3.11-slim AS backend
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for Python packages (numpy, pandas, cryptography, Pillow, etc.)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements
