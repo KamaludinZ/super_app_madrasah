@@ -28,6 +28,13 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ============================================================
+# LOGGING (Initialize first so it can be used everywhere)
+# ============================================================
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("matsandatama")
+
+# ============================================================
 # DNS RESOLVER FIX FOR MONGODB ATLAS
 # ============================================================
 # Fix DNS resolution issues by using Google DNS
@@ -36,7 +43,7 @@ try:
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
 except Exception as e:
-    print(f"DNS resolver config warning: {e}")
+    logger.warning(f"DNS resolver config warning: {e}")
 
 # ============================================================
 # DATABASE
@@ -53,6 +60,20 @@ db_name = os.getenv('DB_NAME', 'super_app_madrasah')
 if not db_name:
     raise ValueError("DB_NAME environment variable is required")
 
+# Clean up MongoDB URL - remove certificate path if file doesn't exist
+# This fixes issues with MongoDB URLs that reference non-existent certificate files
+if 'tlsCAFile=' in mongo_url:
+    import re
+    cert_match = re.search(r'tlsCAFile=([^&]+)', mongo_url)
+    if cert_match:
+        cert_path = cert_match.group(1)
+        if not os.path.exists(cert_path):
+            logger.warning(f"Certificate file not found: {cert_path}, removing from connection string")
+            mongo_url = re.sub(r'&?tlsCAFile=[^&]+&?', '', mongo_url)
+            # Clean up double ampersands or trailing ampersands
+            mongo_url = re.sub(r'&+', '&', mongo_url).rstrip('&?')
+            logger.info(f"Using MongoDB URL without certificate validation")
+
 try:
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
     db = client[db_name]
@@ -65,13 +86,6 @@ except Exception as e:
 # SECURITY
 # ============================================================
 security = HTTPBearer(auto_error=False)
-
-# ============================================================
-# LOGGING
-# ============================================================
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("matsandatama")
 
 
 # ============================================================
