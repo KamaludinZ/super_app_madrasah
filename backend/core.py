@@ -41,9 +41,25 @@ except Exception as e:
 # ============================================================
 # DATABASE
 # ============================================================
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.getenv('MONGO_URL')
+if not mongo_url:
+    raise ValueError(
+        "MONGO_URL environment variable is required. "
+        "Please set it in Coolify or your .env file. "
+        "Example: mongodb://user:pass@host:27017 or mongodb+srv://..."
+    )
+
+db_name = os.getenv('DB_NAME', 'super_app_madrasah')
+if not db_name:
+    raise ValueError("DB_NAME environment variable is required")
+
+try:
+    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
+    db = client[db_name]
+    logger.info(f"MongoDB client initialized for database: {db_name}")
+except Exception as e:
+    logger.error(f"Failed to initialize MongoDB client: {e}")
+    raise
 
 # ============================================================
 # SECURITY
