@@ -4,20 +4,20 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Copy package files
-COPY frontend/package.json frontend/yarn.lock* frontend/package-lock.json* ./
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
 
-# Install dependencies
-RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
-    elif [ -f package-lock.json ]; then npm ci; \
-    else npm install; fi
+# Copy package files
+COPY frontend/package.json frontend/package-lock.json* ./
+
+# Install dependencies with legacy peer deps to handle React 19
+RUN npm install --legacy-peer-deps --verbose
 
 # Copy frontend source
 COPY frontend/ .
 
 # Build frontend
-RUN if [ -f yarn.lock ]; then yarn build; \
-    else npm run build; fi
+RUN npm run build
 
 # Stage 2: Build Backend
 FROM python:3.11-slim AS backend
