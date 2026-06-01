@@ -11,6 +11,10 @@ RUN npm ci --legacy-peer-deps
 
 COPY . .
 
+# Accept build arguments for React environment variables
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
+
 # Build production
 RUN npm run build
 
