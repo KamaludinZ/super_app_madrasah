@@ -474,6 +474,14 @@ class ScheduleModel(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class JournalAttendanceDetail(BaseModel):
+    """Detail absensi siswa per entri jurnal."""
+    model_config = ConfigDict(extra="ignore")
+    student_id: str
+    status: Literal['hadir', 'sakit', 'izin', 'alpa'] = 'hadir'
+    note: Optional[str] = None
+
+
 class JournalModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -489,6 +497,7 @@ class JournalModel(BaseModel):
     siswa_tidak_hadir: int = 0
     siswa_izin: int = 0
     siswa_sakit: int = 0
+    attendance_details: List[JournalAttendanceDetail] = Field(default_factory=list)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     scheduled_start: Optional[str] = None
     scheduled_end: Optional[str] = None
@@ -785,6 +794,7 @@ class JournalCreateRequest(BaseModel):
     siswa_tidak_hadir: int = 0
     siswa_izin: int = 0
     siswa_sakit: int = 0
+    attendance_details: List[JournalAttendanceDetail] = Field(default_factory=list)
 
 
 class QRValidateRequest(BaseModel):

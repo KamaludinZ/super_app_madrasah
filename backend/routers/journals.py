@@ -1,12 +1,11 @@
 """Jurnal: validate / create / my / by-class + admin jurnal rekap & stats."""
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any, Set
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 
 from core import (
     db,
-    get_active_academic_year,
     get_active_context,
     get_current_user,
     get_settings,
@@ -14,6 +13,11 @@ from core import (
     log_security,
     require_role,
     serialize_doc,
+)
+from fastapi.responses import StreamingResponse
+from journal_exports import (
+    export_monthly_teacher_journal_excel,
+    export_monthly_teacher_journal_pdf,
 )
 from journal_core import (
     current_day_id,
@@ -132,6 +136,7 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
         materi=req.materi, catatan=req.catatan,
         siswa_hadir=req.siswa_hadir, siswa_tidak_hadir=req.siswa_tidak_hadir,
         siswa_izin=req.siswa_izin, siswa_sakit=req.siswa_sakit,
+        attendance_details=req.attendance_details,
         scheduled_start=validation['context'].get('start_time'),
         scheduled_end=validation['context'].get('end_time'),
         validations=validation,
@@ -289,6 +294,7 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
         'materi': req.materi, 'catatan': req.catatan,
         'siswa_hadir': req.siswa_hadir, 'siswa_tidak_hadir': req.siswa_tidak_hadir,
         'siswa_izin': req.siswa_izin, 'siswa_sakit': req.siswa_sakit,
+        'attendance_details': [a.model_dump() for a in req.attendance_details],
         'started_at': now_wib().isoformat(),
         'scheduled_start': validation['context'].get('start_time'),
         'scheduled_end': validation['context'].get('end_time'),
@@ -462,3 +468,151 @@ async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))
             'count': r['count'],
         })
     return enriched
+
+
+async def _collect_student_names_from_journals(journals: List[Dict[str, Any]]) -> Dict[str, str]:
+    student_ids: Set[str] = set()
+    for j in journals:
+        for rec in (j.get('attendance_details') or []):
+            sid = rec.get('student_id')
+            if sid:
+                student_ids.add(sid)
+
+    if not student_ids:
+        return {}
+
+    users = await db.users.find({'id': {'$in': list(student_ids)}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(None)
+    return {u.get('id'): (u.get('full_name') or u.get('id')) for u in users}
+
+
+def _extract_leadership(settings: Dict[str, Any], position: str) -> Dict[str, str]:
+    for item in (settings.get('leadership') or []):
+        if (item.get('position') or '').strip().lower() == position:
+            return {'name': item.get('name') or '-', 'nip': item.get('nip') or '-'}
+    return {'name': '-', 'nip': '-'}
+
+
+@router.get("/jurnal/export/excel")
+async def export_jurnal_excel(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user),
+):
+    roles = user.get('roles', [])
+    is_admin = 'admin' in roles
+
+    target_teacher_id = teacher_id if (is_admin and teacher_id) else user['id']
+    if teacher_id and not is_admin:
+        raise HTTPException(status_code=403, detail="Hanya admin yang bisa memilih teacher_id")
+
+    start_bound = f"{year}-{month:02d}-01T00:00:00"
+    if month == 12:
+        end_bound = f"{year + 1}-01-01T00:00:00"
+    else:
+        end_bound = f"{year}-{month + 1:02d}-01T00:00:00"
+
+    q: Dict[str, Any] = {
+        'teacher_id': target_teacher_id,
+        'started_at': {'$gte': start_bound, '$lt': end_bound},
+    }
+    if class_id:
+        q['class_id'] = class_id
+
+    ctx = await get_active_context(user)
+    if ctx.get('semester_id'):
+        q['semester_id'] = ctx['semester_id']
+
+    journals = await db.journals.find(q, {'_id': 0}).sort('started_at', 1).to_list(2000)
+    if not journals:
+        raise HTTPException(status_code=404, detail="Data jurnal tidak ditemukan")
+
+    teacher = await db.users.find_one({'id': target_teacher_id}, {'_id': 0, 'full_name': 1})
+    teacher_name = teacher.get('full_name') if teacher else 'Guru'
+
+    for j in journals:
+        cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
+        j['class_name'] = cls.get('name') if cls else '-'
+
+    student_map = await _collect_student_names_from_journals(journals)
+    payload = export_monthly_teacher_journal_excel(
+        journals=journals,
+        teacher_name=teacher_name,
+        month=month,
+        year=year,
+        student_name_map=student_map,
+    )
+    filename = f"jurnal_{teacher_name.replace(' ', '_')}_{year}_{month:02d}.xlsx"
+    return StreamingResponse(
+        iter([payload]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/jurnal/export/pdf")
+async def export_jurnal_pdf(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user),
+):
+    roles = user.get('roles', [])
+    is_admin = 'admin' in roles
+
+    target_teacher_id = teacher_id if (is_admin and teacher_id) else user['id']
+    if teacher_id and not is_admin:
+        raise HTTPException(status_code=403, detail="Hanya admin yang bisa memilih teacher_id")
+
+    start_bound = f"{year}-{month:02d}-01T00:00:00"
+    if month == 12:
+        end_bound = f"{year + 1}-01-01T00:00:00"
+    else:
+        end_bound = f"{year}-{month + 1:02d}-01T00:00:00"
+
+    q: Dict[str, Any] = {
+        'teacher_id': target_teacher_id,
+        'started_at': {'$gte': start_bound, '$lt': end_bound},
+    }
+    if class_id:
+        q['class_id'] = class_id
+
+    ctx = await get_active_context(user)
+    if ctx.get('semester_id'):
+        q['semester_id'] = ctx['semester_id']
+
+    journals = await db.journals.find(q, {'_id': 0}).sort('started_at', 1).to_list(2000)
+    if not journals:
+        raise HTTPException(status_code=404, detail="Data jurnal tidak ditemukan")
+
+    teacher = await db.users.find_one({'id': target_teacher_id}, {'_id': 0, 'full_name': 1, 'nip_nuptk': 1})
+    teacher_name = teacher.get('full_name') if teacher else 'Guru'
+    teacher_nip = teacher.get('nip_nuptk') if teacher else '-'
+
+    for j in journals:
+        cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
+        j['class_name'] = cls.get('name') if cls else '-'
+
+    settings = await get_settings()
+    head = _extract_leadership(settings, 'kepala_madrasah')
+    student_map = await _collect_student_names_from_journals(journals)
+
+    payload = export_monthly_teacher_journal_pdf(
+        journals=journals,
+        teacher_name=teacher_name,
+        teacher_nip=teacher_nip or '-',
+        month=month,
+        year=year,
+        city_label='Malang',
+        head_name=head['name'],
+        head_nip=head['nip'],
+        student_name_map=student_map,
+    )
+    filename = f"jurnal_{teacher_name.replace(' ', '_')}_{year}_{month:02d}.pdf"
+    return StreamingResponse(
+        iter([payload]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
