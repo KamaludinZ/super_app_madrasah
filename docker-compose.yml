@@ -1,25 +1,49 @@
-version: '3.8'
-
 services:
+  mongodb:
+    image: mongo:7.0
+    container_name: superapp-mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-this-password}
+      MONGO_INITDB_DATABASE: ${DB_NAME:-super_app_madrasah}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - superapp-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-      target: backend
-    expose:
-      - "8000"
+    container_name: superapp-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
     environment:
-      - MONGO_URL=${MONGO_URL}
-      - DB_NAME=${DB_NAME:-super_app_madrasah}
-      - JWT_SECRET=${JWT_SECRET}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      - SERVICE_URL_BACKEND=${SERVICE_URL_BACKEND}
-      - SERVICE_FQDN_BACKEND=${SERVICE_FQDN_BACKEND}
-      - SERVICE_URL_FRONTEND=${SERVICE_URL_FRONTEND}
-      - SERVICE_FQDN_FRONTEND=${SERVICE_FQDN_FRONTEND}
+      MONGO_URL: ${MONGO_URL:-mongodb://admin:change-this-password@mongodb:27017/super_app_madrasah?authSource=admin}
+      DB_NAME: ${DB_NAME:-super_app_madrasah}
+      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-min-32-chars}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost}
+      SERVICE_URL_BACKEND: ${SERVICE_URL_BACKEND:-http://localhost:8000}
+      SERVICE_FQDN_BACKEND: ${SERVICE_FQDN_BACKEND:-localhost}
+      SERVICE_URL_FRONTEND: ${SERVICE_URL_FRONTEND:-http://localhost}
+      SERVICE_FQDN_FRONTEND: ${SERVICE_FQDN_FRONTEND:-localhost}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./uploads:/app/uploads
-    restart: unless-stopped
+    networks:
+      - superapp-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -27,5 +51,30 @@ services:
       retries: 3
       start_period: 40s
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: superapp-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - superapp-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
 volumes:
+  mongodb_data:
   uploads:
+
+networks:
+  superapp-network:
+    driver: bridge
