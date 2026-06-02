@@ -143,9 +143,10 @@ app.add_middleware(ErrorLoggingMiddleware)
 @app.on_event("startup")
 async def startup_event():
     try:
-        from seed_data import refresh_demo_schedule, seed_all
+        from seed_data import is_production_env, refresh_demo_schedule, seed_all
         await seed_all(db)
-        await refresh_demo_schedule(db)
+        if not is_production_env():
+            await refresh_demo_schedule(db)
     except Exception as e:
         logger.error(f"Seed error: {e}")
 

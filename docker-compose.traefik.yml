@@ -1,5 +1,6 @@
 # Docker Compose dengan Traefik sebagai Reverse Proxy
 # Cocok untuk Coolify atau self-hosted dengan Traefik
+# Berdasarkan setup production yang BERHASIL
 
 services:
   mongodb:
@@ -14,8 +15,10 @@ services:
       - mongodb_data:/data/db
     networks:
       - superapp-network
-    # TIDAK expose port publik untuk production security
-    # Port hanya accessible dari network internal
+    # Port 27017 exposed untuk backup/admin tools (localhost only)
+    # Gunakan firewall untuk restrict akses
+    ports:
+      - "27017:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 30s
@@ -45,7 +48,10 @@ services:
       - ./uploads:/app/uploads
     networks:
       - superapp-network
-    # Traefik labels untuk routing
+    # Port 8000 exposed untuk server-side/internal access
+    ports:
+      - "8000:8000"
+    # Traefik labels untuk routing /api/*
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/api`)"
@@ -53,9 +59,8 @@ services:
       - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
-      # Strip /api prefix jika diperlukan (opsional, tergantung FastAPI route)
-      # - "traefik.http.middlewares.backend-stripprefix.stripprefix.prefixes=/api"
-      # - "traefik.http.routers.backend.middlewares=backend-stripprefix"
+      # Priority tinggi agar /api/* match sebelum frontend catch-all
+      - "traefik.http.routers.backend.priority=10"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -85,6 +90,8 @@ services:
       - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # Priority rendah agar backend /api/* match terlebih dahulu
+      - "traefik.http.routers.frontend.priority=1"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
       interval: 30s

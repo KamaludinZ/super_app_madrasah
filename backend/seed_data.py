@@ -15,7 +15,48 @@ from journal_core import now_wib, current_day_id
 WIB_TZ = timezone(timedelta(hours=7))
 
 
+def is_production_env() -> bool:
+    return os.environ.get("ENV", "development").strip().lower() == "production"
+
+
+def make_user(username, password, full_name, roles, **kw):
+    return {
+        'id': str(uuid.uuid4()),
+        'username': username,
+        'password_hash': hash_password(password),
+        'full_name': full_name,
+        'roles': roles,
+        'is_active': True,
+        'created_at': datetime.utcnow().isoformat(),
+        **kw,
+    }
+
+
+async def seed_production_minimal(db: Any):
+    """Production seeding: only ensure admin account exists."""
+    admin_exists = await db.users.count_documents({'username': 'admin'})
+    if admin_exists > 0:
+        print("[seed] Production mode: admin already exists, skipping admin seed.")
+        return
+
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    admin = make_user(
+        'admin',
+        admin_password,
+        'Administrator MATSANDATAMA',
+        ['admin'],
+        email='admin@matsandatama.sch.id'
+    )
+    await db.users.insert_one(admin)
+    print("[seed] Production mode: admin account created.")
+    print("[seed] Data lainnya ditambahkan manual di production.")
+
+
 async def seed_all(db: Any):
+    if is_production_env():
+        await seed_production_minimal(db)
+        return
+
     # Skip if users already exist
     user_count = await db.users.count_documents({})
     if user_count > 0:
@@ -154,18 +195,6 @@ async def seed_all(db: Any):
     # ============================================================
     # 6. DEMO USERS (10 accounts covering all roles)
     # ============================================================
-    def make_user(username, password, full_name, roles, **kw):
-        return {
-            'id': str(uuid.uuid4()),
-            'username': username,
-            'password_hash': hash_password(password),
-            'full_name': full_name,
-            'roles': roles,
-            'is_active': True,
-            'created_at': datetime.utcnow().isoformat(),
-            **kw,
-        }
-
     # 1. Admin
     admin = make_user('admin', 'admin123', 'Administrator MATSANDATAMA', ['admin'],
                        email='admin@matsandatama.sch.id')
@@ -505,6 +534,10 @@ async def refresh_demo_schedule(db: Any):
     Ensures there's always an ACTIVE NOW schedule for guru1 in R-7A for demo/testing.
     Also ensures settings has default active_days and teaching_slots.
     """
+    if is_production_env():
+        print("[refresh] Production mode: skip refresh_demo_schedule.")
+        return
+
     try:
         # Backfill settings defaults if missing
         from models import DEFAULT_ACTIVE_DAYS, DEFAULT_TEACHING_SLOTS
