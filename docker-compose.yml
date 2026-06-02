@@ -39,6 +39,12 @@ services:
       SERVICE_URL_FRONTEND: ${SERVICE_URL_FRONTEND:-http://localhost}
       SERVICE_FQDN_FRONTEND: ${SERVICE_FQDN_FRONTEND:-localhost}
       ENV: ${ENV:-production}
+      # Auto-update (default aman: nonaktif)
+      AUTO_UPDATE_ENABLED: ${AUTO_UPDATE_ENABLED:-false}
+      AUTO_UPDATE_BRANCH: ${AUTO_UPDATE_BRANCH:-main}
+      GITHUB_REPO: ${GITHUB_REPO:-KamaludinZ/super_app_madrasah}
+      # Opsional: set di environment host/Coolify secret
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

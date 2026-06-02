@@ -1,5 +1,5 @@
-# TODO - Tambah Tombol Hapus Admin GTK & Data Siswa
+# TODO - Persiapan Production Auto-Update
 
-- [x] Tambah aksi hapus di halaman `/admin/gtk` (`AdminGTKPage.js`)
-- [x] Tambah aksi hapus di halaman data siswa `/admin/siswa` (`DataSiswaPage.js`)
-- [x] Verifikasi tidak ada error import/sintaks pada frontend
+- [x] Update `docker-compose.yml` untuk env auto-update (default aman)
+- [x] Update `COOLIFY_DEPLOYMENT.md` dengan panduan operasional auto-update production
+- [x] Verifikasi minimal backend/frontend tetap berjalan setelah perubahan

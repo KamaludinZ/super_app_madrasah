@@ -167,7 +167,62 @@ Ini membuat deployment lebih simpel dan minim masalah CORS.
 
 ---
 
-## 7) Hardening Production (Wajib Disarankan)
+## 7) Auto-Update Production dari `/admin/app-info`
+
+Fitur ini memungkinkan admin memicu proses update langsung dari UI admin.
+
+### 7.1 Environment Variable yang Dibutuhkan (Backend)
+Tambahkan env berikut di production (Coolify/VPS):
+
+```env
+# Enable/disable auto-update trigger dari panel admin
+AUTO_UPDATE_ENABLED=false
+
+# Branch repo yang dipakai untuk update
+AUTO_UPDATE_BRANCH=main
+
+# Repo GitHub sumber update
+GITHUB_REPO=KamaludinZ/super_app_madrasah
+
+# Opsional (disarankan) untuk private repo / rate-limit tinggi
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxx
+```
+
+Catatan:
+- Default aman: `AUTO_UPDATE_ENABLED=false`.
+- Aktifkan menjadi `true` hanya jika Anda siap dengan alur operasional update.
+
+### 7.2 Endpoint Operasional
+Endpoint ini hanya untuk role admin:
+
+- `GET /api/app-info/update-status`  
+  Untuk melihat status proses update (`idle/running/success/failed`).
+
+- `POST /api/app-info/apply-update`  
+  Untuk memulai proses update otomatis.
+
+### 7.3 Alur Operasional Aman di Production
+1. Login sebagai admin → buka `/admin/app-info`.
+2. Klik **Cek Update**.
+3. Jika update tersedia dan `AUTO_UPDATE_ENABLED=true`, klik **Update Sekarang**.
+4. Pantau status pada panel auto-update.
+5. Setelah status `success`, lakukan restart service/redeploy stack agar seluruh perubahan aktif sempurna.
+
+### 7.4 Rollback / Emergency Disable
+Jika perlu menonaktifkan cepat:
+1. Set `AUTO_UPDATE_ENABLED=false`
+2. Redeploy/restart backend
+3. Tombol update tetap tampil, tetapi eksekusi akan ditolak aman oleh backend
+
+### 7.5 Catatan Keamanan Penting
+- Jangan hardcode `GITHUB_TOKEN` di repository.
+- Simpan token di secret manager Coolify / environment host.
+- Batasi akses admin dan aktifkan HTTPS.
+- Audit log perubahan deployment secara berkala.
+
+---
+
+## 8) Hardening Production (Wajib Disarankan)
 
 - Gunakan password kuat untuk Mongo root/user
 - Jangan expose port MongoDB ke internet publik
@@ -178,7 +233,7 @@ Ini membuat deployment lebih simpel dan minim masalah CORS.
 
 ---
 
-## 8) Checklist Go-Live
+## 9) Checklist Go-Live
 
 - [ ] `.env` production terisi aman
 - [ ] `JWT_SECRET` random kuat
@@ -191,7 +246,7 @@ Ini membuat deployment lebih simpel dan minim masalah CORS.
 
 ---
 
-## 9) Command Operasional Penting
+## 10) Command Operasional Penting
 
 ```bash
 # Build ulang dan jalankan

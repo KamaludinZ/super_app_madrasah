@@ -17,6 +17,8 @@ export default function AdminAppInfoPage() {
   const [checking, setChecking] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -104,6 +106,63 @@ export default function AdminAppInfoPage() {
       setChecking(false);
     }
   };
+
+  const pollUpdateStatus = async () => {
+    try {
+      const { data } = await api.get('/app-info/update-status');
+      setUpdateStatus(data);
+
+      if (data?.state === 'running') {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const applyUpdate = async () => {
+    setUpdating(true);
+    try {
+      const { data } = await api.post('/app-info/apply-update');
+      if (!data?.ok) {
+        toast.error(data?.message || 'Gagal memulai auto-update');
+        await pollUpdateStatus();
+        return;
+      }
+
+      toast.success(data.message || 'Proses update dimulai');
+      let attempts = 0;
+      const maxAttempts = 60; // ~2 menit (interval 2 detik)
+
+      while (attempts < maxAttempts) {
+        // eslint-disable-next-line no-await-in-loop
+        const stillRunning = await pollUpdateStatus();
+        if (!stillRunning) break;
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts += 1;
+      }
+
+      await pollUpdateStatus();
+      if (updateStatus?.state === 'success') {
+        toast.success('Auto-update selesai. Silakan restart service bila diperlukan.');
+      } else if (updateStatus?.state === 'failed') {
+        toast.error(updateStatus?.message || 'Auto-update gagal');
+      } else {
+        toast.info('Auto-update diproses. Pantau status di panel.');
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Gagal menjalankan auto-update');
+      await pollUpdateStatus();
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    pollUpdateStatus();
+  }, []);
 
   if (loading) {
     return (
@@ -392,7 +451,7 @@ export default function AdminAppInfoPage() {
                         Update Tersedia: v{updateInfo.latest_version}
                       </h4>
                       <p className="text-sm text-amber-700 mb-3">
-                        Versi baru tersedia. Silakan download dan install untuk mendapatkan fitur terbaru.
+                        Versi baru tersedia. Anda dapat jalankan update otomatis langsung dari panel ini.
                       </p>
                       {updateInfo.release_notes && (
                         <div className="bg-white p-3 rounded border border-amber-200 mb-3">
@@ -402,15 +461,30 @@ export default function AdminAppInfoPage() {
                           </div>
                         </div>
                       )}
-                      {updateInfo.download_url && (
+                      <div className="flex flex-wrap gap-2">
                         <Button
-                          onClick={() => window.open(updateInfo.download_url, '_blank')}
-                          className="bg-amber-600 hover:bg-amber-700 gap-2"
+                          onClick={applyUpdate}
+                          disabled={updating || updateStatus?.state === 'running'}
+                          className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                         >
-                          <ExternalLink className="h-4 w-4" />
-                          Download Update
+                          {updating || updateStatus?.state === 'running' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Zap className="h-4 w-4" />
+                          )}
+                          Update Sekarang
                         </Button>
-                      )}
+                        {updateInfo.download_url && (
+                          <Button
+                            onClick={() => window.open(updateInfo.download_url, '_blank')}
+                            variant="outline"
+                            className="gap-2"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Download Manual
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -463,19 +537,48 @@ export default function AdminAppInfoPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-500">
-                  Terakhir dicek: {new Date(updateInfo.checked_at).toLocaleString('id-ID')}
-                </p>
-                {updateInfo.github_configured && (
-                  <Badge variant="outline" className="text-xs">
-                    {updateInfo.error ? (
-                      <span className="text-rose-600">Koneksi Error</span>
-                    ) : (
-                      <span className="text-emerald-600">Terhubung ke GitHub</span>
+              <div className="space-y-3">
+                {updateStatus && (
+                  <div className={`p-3 rounded-lg border ${
+                    updateStatus.state === 'success'
+                      ? 'bg-emerald-50 border-emerald-200'
+                      : updateStatus.state === 'failed'
+                      ? 'bg-rose-50 border-rose-200'
+                      : updateStatus.state === 'running'
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <p className="text-sm font-semibold text-slate-800">
+                      Status Auto-Update: {updateStatus.state}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-1">{updateStatus.message}</p>
+                    {updateStatus.target_version && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        Target versi: v{updateStatus.target_version}
+                      </p>
                     )}
-                  </Badge>
+                    {updateStatus.enabled === false && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Auto-update belum aktif. Set env <code>AUTO_UPDATE_ENABLED=true</code> di backend.
+                      </p>
+                    )}
+                  </div>
                 )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
+                    Terakhir dicek: {new Date(updateInfo.checked_at).toLocaleString('id-ID')}
+                  </p>
+                  {updateInfo.github_configured && (
+                    <Badge variant="outline" className="text-xs">
+                      {updateInfo.error ? (
+                        <span className="text-rose-600">Koneksi Error</span>
+                      ) : (
+                        <span className="text-emerald-600">Terhubung ke GitHub</span>
+                      )}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           ) : (

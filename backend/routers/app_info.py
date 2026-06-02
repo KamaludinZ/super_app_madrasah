@@ -1,6 +1,9 @@
 """Application Info and Update endpoints."""
+import asyncio
 import os
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Optional
 
 import httpx
@@ -25,6 +28,20 @@ UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 # GitHub Personal Access Token (optional, for private repos or higher rate limits)
 # Set via environment variable: GITHUB_TOKEN=your_token_here
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+# Auto-update controls (must be explicitly enabled in production)
+AUTO_UPDATE_ENABLED = os.environ.get("AUTO_UPDATE_ENABLED", "false").lower() == "true"
+AUTO_UPDATE_BRANCH = os.environ.get("AUTO_UPDATE_BRANCH", "main")
+AUTO_UPDATE_STATUS = {
+    "state": "idle",  # idle | running | success | failed
+    "message": "Belum ada proses update",
+    "started_at": None,
+    "finished_at": None,
+    "target_version": None,
+    "current_version": CURRENT_VERSION,
+    "log": [],
+}
+AUTO_UPDATE_LOCK = asyncio.Lock()
 
 
 @router.get("/app-info")
@@ -191,6 +208,140 @@ def compare_versions(version1: str, version2: str) -> bool:
         return False  # Versions are equal
     except Exception:
         return False
+
+
+@router.get("/app-info/update-status")
+async def get_update_status(user: Dict = Depends(require_role("admin"))):
+    """Get current auto-update status (admin only)."""
+    return {
+        "enabled": AUTO_UPDATE_ENABLED,
+        **AUTO_UPDATE_STATUS,
+        "checked_at": datetime.utcnow().isoformat()
+    }
+
+
+async def _run_auto_update(target_version: str):
+    """Run safe auto-update routine in background."""
+    repo_root = Path(__file__).resolve().parents[2]  # project root
+    backend_dir = repo_root / "backend"
+    frontend_dir = repo_root / "frontend"
+
+    AUTO_UPDATE_STATUS.update({
+        "state": "running",
+        "message": "Memulai proses update...",
+        "started_at": datetime.utcnow().isoformat(),
+        "finished_at": None,
+        "target_version": target_version,
+        "current_version": CURRENT_VERSION,
+        "log": [],
+    })
+
+    commands = [
+        {"cmd": ["git", "fetch", "--all"], "cwd": str(repo_root), "label": "git fetch"},
+        {"cmd": ["git", "checkout", AUTO_UPDATE_BRANCH], "cwd": str(repo_root), "label": "git checkout"},
+        {"cmd": ["git", "pull", "origin", AUTO_UPDATE_BRANCH], "cwd": str(repo_root), "label": "git pull"},
+        {"cmd": ["python", "-m", "pip", "install", "-r", "requirements.txt"], "cwd": str(backend_dir), "label": "install backend deps"},
+        {"cmd": ["npm", "install"], "cwd": str(frontend_dir), "label": "install frontend deps"},
+        {"cmd": ["npm", "run", "build"], "cwd": str(frontend_dir), "label": "build frontend"},
+    ]
+
+    try:
+        for item in commands:
+            process = subprocess.run(
+                item["cmd"],
+                cwd=item["cwd"],
+                capture_output=True,
+                text=True,
+                shell=False,
+                check=False,
+            )
+            AUTO_UPDATE_STATUS["log"].append({
+                "step": item["label"],
+                "returncode": process.returncode,
+                "stdout": (process.stdout or "")[-2000:],
+                "stderr": (process.stderr or "")[-2000:],
+            })
+            if process.returncode != 0:
+                AUTO_UPDATE_STATUS.update({
+                    "state": "failed",
+                    "message": f"Gagal pada langkah: {item['label']}",
+                    "finished_at": datetime.utcnow().isoformat(),
+                })
+                return
+
+        AUTO_UPDATE_STATUS.update({
+            "state": "success",
+            "message": (
+                "Update kode & dependency selesai. "
+                "Silakan restart service backend/frontend (atau redeploy container) "
+                "agar versi baru aktif."
+            ),
+            "finished_at": datetime.utcnow().isoformat(),
+            "current_version": target_version or CURRENT_VERSION,
+        })
+    except Exception as e:
+        AUTO_UPDATE_STATUS.update({
+            "state": "failed",
+            "message": f"Update gagal: {str(e)}",
+            "finished_at": datetime.utcnow().isoformat(),
+        })
+
+
+@router.post("/app-info/apply-update")
+async def apply_update(user: Dict = Depends(require_role("admin"))):
+    """Apply update from GitHub release (admin only, guarded)."""
+    if not AUTO_UPDATE_ENABLED:
+        return {
+            "ok": False,
+            "message": "AUTO_UPDATE_ENABLED=false. Aktifkan env AUTO_UPDATE_ENABLED=true untuk menjalankan update otomatis.",
+            "enabled": False,
+            "status": AUTO_UPDATE_STATUS
+        }
+
+    if AUTO_UPDATE_STATUS.get("state") == "running":
+        return {
+            "ok": False,
+            "message": "Proses update sedang berjalan",
+            "enabled": True,
+            "status": AUTO_UPDATE_STATUS
+        }
+
+    # Check latest release first
+    update_check = await check_for_updates(user)
+    if update_check.get("error"):
+        return {
+            "ok": False,
+            "message": f"Tidak bisa memulai update: {update_check.get('message')}",
+            "enabled": True,
+            "status": AUTO_UPDATE_STATUS
+        }
+
+    if not update_check.get("has_update"):
+        return {
+            "ok": False,
+            "message": "Tidak ada update baru untuk diterapkan.",
+            "enabled": True,
+            "status": AUTO_UPDATE_STATUS
+        }
+
+    target_version = update_check.get("latest_version")
+    async with AUTO_UPDATE_LOCK:
+        if AUTO_UPDATE_STATUS.get("state") == "running":
+            return {
+                "ok": False,
+                "message": "Proses update sedang berjalan",
+                "enabled": True,
+                "status": AUTO_UPDATE_STATUS
+            }
+        asyncio.create_task(_run_auto_update(target_version=target_version))
+
+    return {
+        "ok": True,
+        "message": f"Proses update ke v{target_version} dimulai",
+        "enabled": True,
+        "target_version": target_version,
+        "status": AUTO_UPDATE_STATUS
+    }
 
 
 @router.get("/app-info/system-health")
