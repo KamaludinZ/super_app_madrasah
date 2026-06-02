@@ -45,8 +45,8 @@ services:
       GITHUB_REPO: ${GITHUB_REPO:-KamaludinZ/super_app_madrasah}
       # Opsional: set di environment host/Coolify secret
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    expose:
+      - "8000"
     volumes:
       - ./uploads:/app/uploads
     networks:
