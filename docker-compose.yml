@@ -14,7 +14,7 @@ services:
     networks:
       - superapp-network
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin \"mongodb://localhost:27017/admin\" --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -26,11 +26,13 @@ services:
       dockerfile: Dockerfile
     container_name: superapp-backend
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mongodb:
         condition: service_healthy
     environment:
-      MONGO_URL: ${MONGO_URL:-mongodb://admin:change-this-password@mongodb:27017/super_app_madrasah?authSource=admin}
+      MONGO_URL: ${MONGO_URL:-mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-change-this-password}@mongodb:27017/${DB_NAME:-super_app_madrasah}?authSource=admin}
       DB_NAME: ${DB_NAME:-super_app_madrasah}
       JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-min-32-chars}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost}
@@ -68,6 +70,8 @@ services:
         REACT_APP_BACKEND_URL: ""
     container_name: superapp-frontend
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_healthy
