@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Users, Search, GraduationCap, Eye, KeyRound, Pencil, QrCode,
-  UserCheck, UserX, ShieldAlert, History, Loader2, Hash,
+  UserCheck, UserX, ShieldAlert, History, Loader2, Hash, Trash2,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
@@ -72,6 +72,17 @@ export default function DataSiswaPage() {
   });
 
   const refresh = () => loadStudents(selectedClass);
+
+  const handleDelete = async (student) => {
+    if (!window.confirm(`Hapus data siswa ${student.full_name} (${student.nisn || student.id})?`)) return;
+    try {
+      await api.delete(`/users/${student.id}`);
+      toast.success('Data siswa berhasil dihapus');
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menghapus data siswa');
+    }
+  };
 
   return (
     <div className="space-y-6" data-testid="data-siswa-page">
@@ -188,6 +199,17 @@ export default function DataSiswaPage() {
                               className="gap-1 text-amber-700 hover:bg-amber-50"
                               data-testid={`edit-${s.id}`}>
                               <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDelete(s)}
+                              className="gap-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                              data-testid={`delete-${s.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Hapus
                             </Button>
                           )}
                         </div>

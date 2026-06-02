@@ -1,6 +1,5 @@
-# TODO - Production Seed & Environment Behavior
+# TODO - Tambah Tombol Hapus Admin GTK & Data Siswa
 
-- [x] Update `docker-compose.yml` agar default `ENV=production` pada backend
-- [x] Update `backend/seed_data.py` agar mode production hanya seed akun admin (data lain manual)
-- [x] Update `backend/server.py` agar `refresh_demo_schedule` tidak dijalankan saat production
-- [x] Verifikasi endpoint app info menampilkan environment production saat deploy production
+- [x] Tambah aksi hapus di halaman `/admin/gtk` (`AdminGTKPage.js`)
+- [x] Tambah aksi hapus di halaman data siswa `/admin/siswa` (`DataSiswaPage.js`)
+- [x] Verifikasi tidak ada error import/sintaks pada frontend

@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Users, Search, Briefcase, GraduationCap, Eye, KeyRound, Pencil, Loader2,
-  UserCheck, UserMinus,
+  UserCheck, UserMinus, Trash2,
 } from 'lucide-react';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
@@ -63,6 +63,17 @@ export default function AdminGTKPage() {
   const counts = {
     guru: users.filter((u) => (u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
     tendik: users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
+  };
+
+  const handleDelete = async (u) => {
+    if (!window.confirm(`Hapus data GTK ${u.full_name} (${u.username})?`)) return;
+    try {
+      await api.delete(`/users/${u.id}`);
+      toast.success('Data GTK berhasil dihapus');
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menghapus data GTK');
+    }
   };
 
   return (
@@ -212,6 +223,15 @@ export default function AdminGTKPage() {
                               <Button size="sm" variant="ghost" onClick={() => setDetailUser({ ...u, _autoEdit: true })}
                                 className="gap-1 text-amber-700 hover:bg-amber-50" data-testid={`gtk-edit-${u.id}`}>
                                 <Pencil className="h-3.5 w-3.5" /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDelete(u)}
+                                className="gap-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                data-testid={`gtk-delete-${u.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Hapus
                               </Button>
                             </div>
                           </TableCell>
