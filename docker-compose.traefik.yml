@@ -1,0 +1,101 @@
+# Docker Compose dengan Traefik sebagai Reverse Proxy
+# Cocok untuk Coolify atau self-hosted dengan Traefik
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: superapp-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-this-password}
+      MONGO_INITDB_DATABASE: ${DB_NAME:-super_app_madrasah}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - superapp-network
+    # TIDAK expose port publik untuk production security
+    # Port hanya accessible dari network internal
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: superapp-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_URL: ${MONGO_URL:-mongodb://admin:change-this-password@mongodb:27017/super_app_madrasah?authSource=admin}
+      DB_NAME: ${DB_NAME:-super_app_madrasah}
+      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-min-32-chars}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost}
+      SERVICE_URL_BACKEND: ${SERVICE_URL_BACKEND:-http://localhost:8000}
+      SERVICE_FQDN_BACKEND: ${SERVICE_FQDN_BACKEND:-localhost}
+      SERVICE_URL_FRONTEND: ${SERVICE_URL_FRONTEND:-http://localhost}
+      SERVICE_FQDN_FRONTEND: ${SERVICE_FQDN_FRONTEND:-localhost}
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - superapp-network
+    # Traefik labels untuk routing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      # Strip /api prefix jika diperlukan (opsional, tergantung FastAPI route)
+      # - "traefik.http.middlewares.backend-stripprefix.stripprefix.prefixes=/api"
+      # - "traefik.http.routers.backend.middlewares=backend-stripprefix"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.traefik
+      args:
+        # Frontend fetch ke domain yang sama, Traefik route /api ke backend
+        REACT_APP_BACKEND_URL: ""
+    container_name: superapp-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - superapp-network
+    # Traefik labels untuk routing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mongodb_data:
+  uploads:
+
+networks:
+  superapp-network:
+    driver: bridge

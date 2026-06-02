@@ -1,0 +1,38 @@
+# ── Dockerfile untuk deployment dengan Traefik ──────────────
+# Nginx hanya serve static files, TIDAK proxy ke backend
+# Traefik handle routing /api ke backend service
+
+# ── Stage 1: Build React ─────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Salin dependency files terlebih dahulu agar layer di-cache
+COPY package*.json ./
+
+# Install dependencies (--legacy-peer-deps diperlukan untuk React 19 + beberapa paket)
+RUN npm ci --legacy-peer-deps
+
+COPY . .
+
+# Accept build arguments for React environment variables
+# Kosongkan karena frontend akan fetch ke domain yang sama
+# Traefik route /api/* ke backend
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
+
+# Build production
+RUN npm run build
+
+# ── Stage 2: Serve dengan Nginx ──────────────────────────────
+FROM nginx:1.27-alpine
+
+# Salin hasil build React
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Salin konfigurasi nginx untuk Traefik (no proxy, static only)
+COPY nginx-traefik.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
