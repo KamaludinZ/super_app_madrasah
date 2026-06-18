@@ -1172,15 +1172,19 @@ class StudentMasterRecordModel(BaseModel):
 class VervalRequestModel(BaseModel):
     """
     Model untuk request verifikasi dan validasi data user.
-    Digunakan saat siswa/guru/tendik mengajukan perubahan data yang perlu di-approve admin.
+    Digunakan saat siswa/guru/tendik mengajukan perubahan data yang perlu di-approve admin/wali kelas.
     """
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str  # ID user yang mengajukan
+    user_id: str  # ID user pemilik data yang diajukan
     user_type: str  # 'siswa' | 'guru' | 'tenaga_kependidikan'
-    request_type: str = 'update'  # 'update' | 'create' (untuk future expansion)
+    request_type: str = 'profile_update'  # 'profile_update' | 'prestasi_create'
 
-    # Data lama (sebelum perubahan) - snapshot dari user doc saat ini
+    # Target apply saat approve
+    target_collection: str = 'users'  # 'users' | 'achievements'
+    target_id: Optional[str] = None  # optional, diisi jika update existing doc
+
+    # Data lama (sebelum perubahan) - snapshot
     old_data: Dict[str, Any] = Field(default_factory=dict)
 
     # Data baru yang diajukan (perubahan yang diminta)
@@ -1189,15 +1193,16 @@ class VervalRequestModel(BaseModel):
     # Status: 'pending' | 'approved' | 'rejected'
     status: str = 'pending'
 
-    # Admin notes/catatan saat approve/reject
+    # Catatan reviewer saat approve/reject
     admin_notes: Optional[str] = None
 
-    # Tracking
+    # Tracking submit
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    submitted_by: str  # user_id yang submit (biasanya sama dengan user_id)
+    submitted_by: str  # user_id yang submit
     submitted_by_name: Optional[str] = None  # nama lengkap untuk display
 
-    # Approval tracking
+    # Tracking review
     reviewed_at: Optional[datetime] = None
-    reviewed_by: Optional[str] = None  # admin user_id
-    reviewed_by_name: Optional[str] = None  # admin nama lengkap
+    reviewed_by: Optional[str] = None  # reviewer user_id (admin/wali_kelas)
+    reviewed_by_name: Optional[str] = None  # reviewer nama lengkap
+    reviewed_by_role: Optional[str] = None  # 'admin' | 'wali_kelas'
