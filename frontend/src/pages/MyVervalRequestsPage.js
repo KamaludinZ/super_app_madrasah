@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, Eye, Clock, AlertCircle, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, Eye, Clock, AlertCircle, FileText, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -41,6 +41,19 @@ export default function MyVervalRequestsPage() {
     return <Badge variant="secondary">{status}</Badge>;
   };
 
+  const requestTypeLabel = (rt) => {
+    if (rt === 'prestasi_create') return 'Pengajuan Prestasi';
+    return 'Perubahan Profil';
+  };
+
+  const pretty = (v) => {
+    if (v === null || v === undefined || v === '') return <span className="text-slate-400 italic">Tidak ada data</span>;
+    if (typeof v === 'object') {
+      return <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(v, null, 2)}</pre>;
+    }
+    return String(v);
+  };
+
   const renderComparison = () => {
     if (!selectedRequest) return null;
     const { old_data, new_data } = selectedRequest;
@@ -59,9 +72,37 @@ export default function MyVervalRequestsPage() {
       address: 'Alamat',
     };
 
-    // Cari field yang berubah
-    const changedFields = Object.keys(new_data).filter(key => {
-      return new_data[key] !== old_data[key];
+    if (selectedRequest.request_type === 'prestasi_create') {
+      const fields = Object.keys(new_data || {});
+      if (fields.length === 0) {
+        return <div className="text-center py-8 text-slate-500">Tidak ada data prestasi yang diajukan</div>;
+      }
+      return (
+        <div className="space-y-4">
+          {fields.map(field => (
+            <div key={field} className="grid grid-cols-2 gap-4 border rounded-lg p-4">
+              <div>
+                <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SEBELUM</Label>
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 min-h-[60px]">
+                  <p className="text-sm text-slate-900 break-words">{pretty((old_data || {})[field])}</p>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - PENGAJUAN BARU</Label>
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[60px]">
+                  <p className="text-sm text-slate-900 font-semibold break-words">{pretty((new_data || {})[field])}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    const changedFields = Object.keys(new_data || {}).filter((key) => {
+      const left = JSON.stringify((old_data || {})[key]);
+      const right = JSON.stringify((new_data || {})[key]);
+      return left !== right;
     });
 
     if (changedFields.length === 0) {
@@ -75,13 +116,13 @@ export default function MyVervalRequestsPage() {
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SEBELUM</Label>
               <div className="bg-slate-50 border border-slate-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 break-words">{old_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 break-words">{pretty((old_data || {})[field])}</p>
               </div>
             </div>
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - PERUBAHAN</Label>
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 font-semibold break-words">{new_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 font-semibold break-words">{pretty((new_data || {})[field])}</p>
               </div>
             </div>
           </div>
@@ -233,6 +274,17 @@ export default function MyVervalRequestsPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div><span className="text-slate-600">Status:</span> {statusBadge(selectedRequest.status)}</div>
                     <div><span className="text-slate-600">Tanggal Pengajuan:</span> {new Date(selectedRequest.created_at).toLocaleString('id-ID')}</div>
+                    <div><span className="text-slate-600">Jenis Pengajuan:</span> <strong>{requestTypeLabel(selectedRequest.request_type)}</strong></div>
+                    <div><span className="text-slate-600">Target:</span> <span className="font-mono">{selectedRequest.target_collection || '-'}</span></div>
+                    {selectedRequest.reviewed_by_role && (
+                      <div className="col-span-2">
+                        <span className="text-slate-600">Role Reviewer:</span>{' '}
+                        <Badge variant="outline" className="ml-1">
+                          <ShieldCheck className="h-3 w-3 mr-1" />
+                          {selectedRequest.reviewed_by_role}
+                        </Badge>
+                      </div>
+                    )}
                     {selectedRequest.reviewed_by_name && (
                       <>
                         <div><span className="text-slate-600">Direview oleh:</span> <strong>{selectedRequest.reviewed_by_name}</strong></div>

@@ -15,12 +15,11 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
 const EMPTY = {
-  username: '', password: '', full_name: '', nip_nuptk: '', nisn: '', email: '', phone: '',
+  username: '', password: '', full_name: '', email: '', phone: '',
   roles: [], homeroom_class_id: '', student_class_id: '', parent_of: [],
-  gender: '', birth_place: '', birth_date: '', address: '',
+  gender: '', birth_place: '', birth_date: '',
   mutation_type: '', mutation_date: '', mutation_note: '',
   jabatan_ids: [],
-  nism: '', nomor_peserta_ujian: '',
 };
 
 const ROLE_TABS = [
@@ -56,6 +55,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [studentsList, setStudentsList] = useState([]);
   const [impersonatingUserId, setImpersonatingUserId] = useState(null);
+  const [gtkWithoutAccount, setGtkWithoutAccount] = useState([]);
 
   const refresh = async () => {
     const { data } = await api.get('/users');
@@ -74,6 +74,13 @@ export default function AdminUsersPage() {
         setUsers(u.data); setRoles(r.data); setClasses(c.data); setJabatanList(j.data);
         const studs = await api.get('/users', { params: { role: 'siswa' } });
         setStudentsList(studs.data);
+
+        const gtkRoles = ['guru', 'wali_kelas', 'tenaga_kependidikan', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
+        const noAccountGtk = (u.data || []).filter((usr) =>
+          (usr.roles || []).some((rr) => gtkRoles.includes(rr)) &&
+          (!usr.username || !String(usr.username).trim())
+        );
+        setGtkWithoutAccount(noAccountGtk);
       } catch (e) { /* */ } finally { setLoading(false); }
     })();
   }, []);
@@ -81,7 +88,7 @@ export default function AdminUsersPage() {
   const openCreate = () => {
     setEditing(null);
     const initialRoles = activeTab !== 'all' ? [activeTab] : [];
-    setForm({ ...EMPTY, roles: initialRoles }); setOpen(true);
+    setForm({ ...EMPTY, roles: initialRoles, gtk_source_user_id: '' }); setOpen(true);
   };
   const openEdit = (u) => {
     setEditing(u); setOpen(true);
@@ -94,8 +101,6 @@ export default function AdminUsersPage() {
       mutation_date: u.mutation_date || '',
       mutation_note: u.mutation_note || '',
       jabatan_ids: u.jabatan_ids || [],
-      nism: u.nism || '',
-      nomor_peserta_ujian: u.nomor_peserta_ujian || '',
     });
   };
 
@@ -114,9 +119,15 @@ export default function AdminUsersPage() {
       toast.error('Username, nama, dan minimal 1 peran wajib diisi');
       return;
     }
+
+    if (form.roles.some((r) => ['siswa', 'alumni'].includes(r))) {
+      toast.error('Peran siswa/alumni hanya dikelola di menu Pengguna Siswa');
+      return;
+    }
     try {
       if (editing) {
         const payload = { ...form };
+        delete payload.gtk_source_user_id;
         // Mutation fields are saved via separate endpoint
         const mutationPayload = {
           mutation_type: payload.mutation_type || null,
@@ -128,6 +139,12 @@ export default function AdminUsersPage() {
         delete payload.mutation_note;
         if (!payload.password) delete payload.password;
         else { payload.new_password = payload.password; delete payload.password; }
+
+        // Cleanup: field siswa dikelola di /admin/pengguna-siswa, bukan /admin/users
+        delete payload.nisn;
+        delete payload.nism;
+        delete payload.nomor_peserta_ujian;
+
         await api.put(`/users/${editing.id}`, payload);
         // Always update mutation if user has siswa role (so admin can clear it too)
         if ((editing.roles || []).includes('siswa')) {
@@ -137,9 +154,16 @@ export default function AdminUsersPage() {
       } else {
         if (!form.password) { toast.error('Password wajib diisi untuk user baru'); return; }
         const payload = { ...form };
+        delete payload.gtk_source_user_id;
         delete payload.mutation_type;
         delete payload.mutation_date;
         delete payload.mutation_note;
+
+        // Cleanup: field siswa dikelola di /admin/pengguna-siswa, bukan /admin/users
+        delete payload.nisn;
+        delete payload.nism;
+        delete payload.nomor_peserta_ujian;
+
         await api.post('/users', payload);
         toast.success('User berhasil dibuat');
       }
@@ -334,6 +358,45 @@ export default function AdminUsersPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit Pengguna' : 'Tambah Pengguna Baru'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
+            {!editing && (
+              <div className="sm:col-span-2">
+                <Label>Pengguna GTK belum memiliki akun</Label>
+                <Select
+                  value={form.gtk_source_user_id || ''}
+                  onValueChange={(v) => {
+                    if (v === '__none') return;
+                    const selected = gtkWithoutAccount.find((g) => g.id === v);
+                    setForm((prev) => ({
+                      ...prev,
+                      gtk_source_user_id: v,
+                      full_name: selected?.full_name || prev.full_name,
+                      gender: selected?.gender || prev.gender,
+                      birth_place: selected?.birth_place || prev.birth_place,
+                      birth_date: selected?.birth_date || prev.birth_date,
+                      email: selected?.email || prev.email,
+                      phone: selected?.phone || prev.phone,
+                      roles: (selected?.roles || prev.roles).filter((r) => !['siswa', 'alumni'].includes(r)),
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih GTK yang belum memiliki akun..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {gtkWithoutAccount.length === 0 ? (
+                      <SelectItem value="__none">Tidak ada GTK yang belum memiliki akun</SelectItem>
+                    ) : (
+                      gtkWithoutAccount.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.full_name || '(Tanpa Nama)'} {g.nip_nuptk ? `- ${g.nip_nuptk}` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div>
               <Label>Username *</Label>
               <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} disabled={!!editing} data-testid="user-form-username" />
@@ -344,48 +407,32 @@ export default function AdminUsersPage() {
             </div>
             <div className="sm:col-span-2">
               <Label>Nama Lengkap *</Label>
-              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} data-testid="user-form-fullname" />
-            </div>
-            <div>
-              <Label>NIP/NUPTK</Label>
-              <Input value={form.nip_nuptk || ''} onChange={(e) => setForm({ ...form, nip_nuptk: e.target.value })} />
-            </div>
-            <div>
-              <Label>NISN (Siswa)</Label>
-              <Input value={form.nisn || ''} onChange={(e) => setForm({ ...form, nisn: e.target.value })} />
-            </div>
-            <div>
-              <Label>NISM (Siswa)</Label>
-              <Input value={form.nism || ''} onChange={(e) => setForm({ ...form, nism: e.target.value })} placeholder="NIS Madrasah" />
-            </div>
-            <div>
-              <Label>Nomor Peserta Ujian (Siswa)</Label>
-              <Input value={form.nomor_peserta_ujian || ''} onChange={(e) => setForm({ ...form, nomor_peserta_ujian: e.target.value })} placeholder="No. Peserta Ujian Madrasah" />
+              <Input value={form.full_name} disabled readOnly data-testid="user-form-fullname" />
             </div>
             <div>
               <Label>Jenis Kelamin</Label>
-              <Select value={form.gender || ''} onValueChange={(v) => setForm({...form, gender: v})}>
-                <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="L">Laki-laki</SelectItem>
-                  <SelectItem value="P">Perempuan</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                value={form.gender === 'L' ? 'Laki-laki' : form.gender === 'P' ? 'Perempuan' : ''}
+                disabled
+                readOnly
+                placeholder="-"
+              />
             </div>
-            <div><Label>Tempat Lahir</Label><Input value={form.birth_place || ''} onChange={(e) => setForm({...form, birth_place: e.target.value})} /></div>
-            <div><Label>Tgl Lahir</Label><Input type="date" value={form.birth_date || ''} onChange={(e) => setForm({...form, birth_date: e.target.value})} /></div>
-            <div><Label>Email</Label><Input value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>HP</Label><Input value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-            <div className="sm:col-span-2"><Label>Alamat</Label><Input value={form.address || ''} onChange={(e) => setForm({...form, address: e.target.value})} /></div>
+            <div><Label>Tempat Lahir</Label><Input value={form.birth_place || ''} disabled readOnly /></div>
+            <div><Label>Tgl Lahir</Label><Input type="date" value={form.birth_date || ''} disabled readOnly /></div>
+            <div><Label>Email</Label><Input value={form.email || ''} disabled readOnly /></div>
+            <div><Label>HP</Label><Input value={form.phone || ''} disabled readOnly /></div>
             <div className="sm:col-span-2">
               <Label>Peran (boleh lebih dari satu) *</Label>
               <div className="grid grid-cols-2 gap-2 mt-2 max-h-56 overflow-y-auto p-2 border border-slate-200 rounded-lg">
-                {roles.map((r) => (
-                  <label key={r.value} className="flex items-center gap-2 cursor-pointer text-sm" data-testid={`role-checkbox-${r.value}`}>
-                    <Checkbox checked={form.roles.includes(r.value)} onCheckedChange={() => toggleRole(r.value)} />
-                    <span>{r.label}</span>
-                  </label>
-                ))}
+                {roles
+                  .filter((r) => !['siswa', 'alumni'].includes(r.value))
+                  .map((r) => (
+                    <label key={r.value} className="flex items-center gap-2 cursor-pointer text-sm" data-testid={`role-checkbox-${r.value}`}>
+                      <Checkbox checked={form.roles.includes(r.value)} onCheckedChange={() => toggleRole(r.value)} />
+                      <span>{r.label}</span>
+                    </label>
+                  ))}
               </div>
             </div>
             {(form.roles.includes('guru') || form.roles.includes('tenaga_kependidikan')) && (
@@ -412,60 +459,6 @@ export default function AdminUsersPage() {
                   <SelectTrigger><SelectValue placeholder="Pilih kelas..." /></SelectTrigger>
                   <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
-              </div>
-            )}
-            {form.roles.includes('siswa') && (
-              <div className="sm:col-span-2">
-                <Label>Kelas Siswa</Label>
-                <Select value={form.student_class_id || ''} onValueChange={(v) => setForm({ ...form, student_class_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Pilih kelas..." /></SelectTrigger>
-                  <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            )}
-            {form.roles.includes('siswa') && editing && (
-              <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3" data-testid="mutation-section">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <ArrowRightLeft className="h-4 w-4 text-amber-700" />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-amber-900">Status Mutasi Siswa</div>
-                    <div className="text-xs text-amber-800/80">Catat siswa pindah masuk / keluar di TP aktif</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Tipe Mutasi</Label>
-                    <Select value={form.mutation_type || '_none'} onValueChange={(v) => setForm({ ...form, mutation_type: v === '_none' ? '' : v })}>
-                      <SelectTrigger data-testid="mutation-type-select"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">Tidak Ada Mutasi</SelectItem>
-                        <SelectItem value="masuk">Mutasi Masuk (dari sekolah lain)</SelectItem>
-                        <SelectItem value="keluar">Mutasi Keluar (pindah/keluar)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Tanggal Mutasi</Label>
-                    <Input type="date" value={form.mutation_date || ''}
-                      onChange={(e) => setForm({ ...form, mutation_date: e.target.value })}
-                      disabled={!form.mutation_type}
-                      data-testid="mutation-date" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Keterangan</Label>
-                  <Input value={form.mutation_note || ''} onChange={(e) => setForm({ ...form, mutation_note: e.target.value })}
-                    placeholder="Mis. asal sekolah, alasan keluar, dll"
-                    disabled={!form.mutation_type}
-                    data-testid="mutation-note" />
-                </div>
-                {form.mutation_type && (
-                  <div className="text-xs text-amber-800 bg-white border border-amber-200 rounded-lg p-2">
-                    <strong>Catatan:</strong> Mutasi <strong>{form.mutation_type === 'masuk' ? 'Masuk' : 'Keluar'}</strong> akan tercatat di TP aktif & status akun otomatis di-{form.mutation_type === 'masuk' ? 'aktifkan' : 'nonaktifkan'}.
-                  </div>
-                )}
               </div>
             )}
           </div>

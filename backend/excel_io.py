@@ -517,3 +517,79 @@ def parse_nism_update_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
         })
 
     return rows
+
+
+# ============================================================
+# TEMPLATE AKUN SISWA BELUM MEMILIKI AKUN LOGIN
+# ============================================================
+def student_account_bulk_template(students: List[Dict[str, Any]]) -> bytes:
+    """
+    Generate template Excel untuk membuat akun login siswa secara massal.
+    Hanya memuat siswa yang belum memiliki username.
+    """
+    headers = ['id', 'nama_lengkap', 'nisn', 'username', 'password']
+    examples = []
+
+    for s in students:
+        examples.append([
+            s.get('id', ''),
+            s.get('full_name', ''),
+            s.get('nisn', '') or '',
+            '',
+            '',
+        ])
+
+    instructions = [
+        "Template ini hanya berisi siswa yang belum memiliki akun login (username kosong).",
+        "",
+        "Cara pakai:",
+        "1. Isi kolom 'username' dan 'password' untuk setiap siswa yang ingin dibuatkan akun.",
+        "2. Jangan mengubah kolom 'id', 'nama_lengkap', dan 'nisn'.",
+        "3. Upload kembali file ini melalui menu Pengguna Siswa.",
+        "",
+        "Validasi:",
+        "- username wajib diisi dan harus unik",
+        "- password wajib diisi",
+        "- baris dengan username/password kosong akan dilewati",
+    ]
+
+    wb = _make_workbook_with_data(
+        sheet_name="Template Akun Siswa",
+        headers=headers,
+        examples=examples,
+        col_widths=[38, 30, 16, 20, 16],
+        instructions=instructions,
+    )
+    return workbook_to_bytes(wb)
+
+
+def parse_student_account_bulk_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """
+    Parse template akun siswa massal.
+    Return rows dengan keys: id, username, password, _row
+    """
+    wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    rows = []
+
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or not any(row):
+            continue
+
+        student_id = str(row[0]).strip() if row[0] else ''
+        username = str(row[3]).strip() if len(row) > 3 and row[3] else ''
+        password = str(row[4]).strip() if len(row) > 4 and row[4] else ''
+
+        if not student_id:
+            continue
+        if not username or not password:
+            continue
+
+        rows.append({
+            'id': student_id,
+            'username': username,
+            'password': password,
+            '_row': idx,
+        })
+
+    return rows

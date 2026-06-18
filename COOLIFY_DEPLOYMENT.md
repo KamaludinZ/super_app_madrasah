@@ -96,6 +96,17 @@ Jika frontend dibuka dari domain/IP server, aplikasi harus bisa akses API via `/
 
 ---
 
+## 4) Deploy di Coolify (Rekomendasi Stabil untuk Kasus Koneksi Gagal)
+
+### 4.0 Prinsip penting agar frontend-backend-mongodb pasti terhubung
+- Gunakan **service name internal docker network**, bukan `localhost`.
+- Di stack compose, backend harus pakai host MongoDB: `mongodb`.
+- Frontend jangan panggil backend via domain external dari browser untuk operasi internal container; gunakan reverse proxy Nginx `/api` → `http://backend:8000`.
+- Hindari `container_name` tetap (fixed) di production Coolify karena berpotensi bentrok saat recreate/redeploy.
+- Bedakan konfigurasi:
+  - `docker-compose.yml` → production/coolify
+  - `docker-compose.override.yml` → local testing (port mapping 3000/8000/27017)
+
 ## 4) Deploy di Coolify
 
 Ada 2 opsi yang disarankan:
@@ -109,8 +120,8 @@ Ada 2 opsi yang disarankan:
 6. Deploy
 
 Catatan:
-- Untuk production, idealnya service MongoDB tidak dipublish keluar.
-- Jika perlu, hapus mapping port MongoDB dari compose di environment production.
+- Untuk production, MongoDB **tidak perlu dipublish ke internet**.
+- Compose production di repo ini sudah disiapkan untuk koneksi internal antar service.
 
 ## Opsi B: Service terpisah di Coolify
 1. Buat resource MongoDB (managed / docker image `mongo:7`)
@@ -120,15 +131,34 @@ Catatan:
 5. Domain publik diarahkan ke frontend
 6. Backend domain opsional (misal `api.domainanda.com`) bila ingin akses langsung
 
-Env backend wajib:
-- `MONGO_URL`
+Env backend wajib (jangan pakai default dummy di production):
+- `MONGO_ROOT_USERNAME`
+- `MONGO_ROOT_PASSWORD`
 - `DB_NAME`
-- `JWT_SECRET`
-- `CORS_ORIGINS`
+- `MONGO_URL`  
+  Contoh internal stack:
+  `mongodb://<MONGO_ROOT_USERNAME>:<MONGO_ROOT_PASSWORD>@mongodb:27017/<DB_NAME>?authSource=admin`
+- `JWT_SECRET` (minimal 32 karakter random kuat)
+- `CORS_ORIGINS`  
+  Contoh: `https://app.domainanda.com`
+- `SERVICE_URL_FRONTEND` / `SERVICE_FQDN_FRONTEND`
+- `SERVICE_URL_BACKEND` / `SERVICE_FQDN_BACKEND`
 
 Env frontend:
-- Umumnya kosongkan `REACT_APP_BACKEND_URL` jika pakai proxy `/api`.
-- Isi URL backend jika frontend & backend beda domain dan tidak pakai reverse-proxy path.
+- Tetap kosongkan `REACT_APP_BACKEND_URL` jika memakai proxy `/api` (disarankan).
+
+### 4.1 Checklist anti-gagal koneksi saat deploy/redeploy
+1. Backend log harus menunjukkan startup selesai dan health 200.
+2. Frontend log Nginx harus naik normal tanpa upstream error.
+3. Cek dari browser:
+   - `https://app.domainanda.com` terbuka
+   - request `/api/health` dari frontend berhasil.
+4. Jika frontend terbuka tapi API gagal:
+   - pastikan `frontend/nginx.conf` masih `proxy_pass http://backend:8000/api/;`
+   - pastikan service backend bernama `backend` di compose.
+5. Jika backend gagal konek Mongo:
+   - verifikasi `MONGO_URL` menggunakan host `mongodb` (bukan localhost).
+   - verifikasi credential env yang sama dengan Mongo service.
 
 ---
 

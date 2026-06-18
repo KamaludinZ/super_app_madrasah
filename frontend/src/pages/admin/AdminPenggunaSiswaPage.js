@@ -31,6 +31,7 @@ export default function AdminPenggunaSiswaPage() {
   const [nismDialogOpen, setNismDialogOpen] = useState(false);
   const [selectedClassForNism, setSelectedClassForNism] = useState('');
   const [importingNism, setImportingNism] = useState(false);
+  const [importingBulkAkun, setImportingBulkAkun] = useState(false);
   const [impersonatingUserId, setImpersonatingUserId] = useState(null);
 
   const refresh = async () => {
@@ -95,6 +96,18 @@ export default function AdminPenggunaSiswaPage() {
         payload.roles = ['siswa'];
         if (!payload.password) delete payload.password;
         else { payload.new_password = payload.password; delete payload.password; }
+
+        // Read-only fields di menu ini: diatur dari Detail Siswa (/admin/siswa)
+        delete payload.nisn;
+        delete payload.nism;
+        delete payload.nomor_peserta_ujian;
+        delete payload.gender;
+        delete payload.birth_place;
+        delete payload.birth_date;
+        delete payload.email;
+        delete payload.phone;
+        delete payload.address;
+
         await api.put(`/users/${editing.id}`, payload);
         // Always update mutation for student
         await api.put(`/admin/users/${editing.id}/mutation`, mutationPayload);
@@ -107,6 +120,18 @@ export default function AdminPenggunaSiswaPage() {
         delete payload.mutation_note;
         // Auto-set role to siswa
         payload.roles = ['siswa'];
+
+        // Read-only fields di menu ini: diatur dari Detail Siswa (/admin/siswa)
+        delete payload.nisn;
+        delete payload.nism;
+        delete payload.nomor_peserta_ujian;
+        delete payload.gender;
+        delete payload.birth_place;
+        delete payload.birth_date;
+        delete payload.email;
+        delete payload.phone;
+        delete payload.address;
+
         await api.post('/users', payload);
         toast.success('Siswa berhasil ditambahkan');
       }
@@ -194,6 +219,55 @@ export default function AdminPenggunaSiswaPage() {
     }
   };
 
+  const handleDownloadBulkAkunTemplate = async () => {
+    try {
+      const response = await api.get('/students/bulk-account-template', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'template_akun_siswa_belum_punya_akun.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Template akun siswa berhasil diunduh');
+    } catch (e) {
+      toast.error('Gagal mengunduh template akun siswa');
+    }
+  };
+
+  const handleImportBulkAkun = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingBulkAkun(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const { data } = await api.post('/students/import-bulk-accounts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (data.errors && data.errors.length > 0) {
+        toast.warning(`Akun dibuat ${data.success.length || data.success} dari ${data.total_rows} baris. Error: ${data.errors.length}`, {
+          duration: 5000,
+        });
+        console.error('Bulk akun errors:', data.errors);
+      } else {
+        toast.success(`Berhasil membuat ${data.success.length || data.success} akun siswa`);
+      }
+
+      refresh();
+    } catch (e) {
+      toast.error('Gagal import akun massal: ' + (e?.response?.data?.detail || e.message));
+    } finally {
+      setImportingBulkAkun(false);
+      event.target.value = '';
+    }
+  };
+
   const filtered = students.filter((u) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -213,7 +287,28 @@ export default function AdminPenggunaSiswaPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Kelola Pengguna Siswa</h1>
           <p className="text-sm text-slate-600 mt-1">{students.length} akun siswa terdaftar</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleDownloadBulkAkunTemplate} variant="outline" className="gap-2" data-testid="download-bulk-akun-template">
+            <Download className="h-4 w-4" /> Template Akun Siswa
+          </Button>
+          <input
+            type="file"
+            accept=".xlsx,.xlsm"
+            onChange={handleImportBulkAkun}
+            disabled={importingBulkAkun}
+            className="hidden"
+            id="bulk-akun-file-input"
+          />
+          <Button
+            onClick={() => document.getElementById('bulk-akun-file-input').click()}
+            variant="outline"
+            className="gap-2"
+            disabled={importingBulkAkun}
+            data-testid="upload-bulk-akun-template"
+          >
+            <Upload className="h-4 w-4" />
+            {importingBulkAkun ? 'Proses Akun Massal...' : 'Upload Akun Massal'}
+          </Button>
           <Button onClick={() => setNismDialogOpen(true)} variant="outline" className="gap-2" data-testid="update-nism-button">
             <FileSpreadsheet className="h-4 w-4" /> Update NISM
           </Button>
@@ -400,41 +495,44 @@ export default function AdminPenggunaSiswaPage() {
               <Label>NISN</Label>
               <Input
                 value={form.nisn || ''}
-                onChange={(e) => setForm({ ...form, nisn: e.target.value })}
-                placeholder="Nomor Induk Siswa Nasional"
+                disabled
+                readOnly
+                placeholder="Diatur dari Detail Siswa (/admin/siswa)"
               />
             </div>
             <div>
               <Label>NISM</Label>
               <Input
                 value={form.nism || ''}
-                onChange={(e) => setForm({ ...form, nism: e.target.value })}
-                placeholder="NIS Madrasah"
+                disabled
+                readOnly
+                placeholder="Diatur dari Detail Siswa (/admin/siswa)"
               />
             </div>
             <div className="sm:col-span-2">
               <Label>Nomor Peserta Ujian</Label>
               <Input
                 value={form.nomor_peserta_ujian || ''}
-                onChange={(e) => setForm({ ...form, nomor_peserta_ujian: e.target.value })}
-                placeholder="Nomor Peserta Ujian Madrasah"
+                disabled
+                readOnly
+                placeholder="Diatur dari Detail Siswa (/admin/siswa)"
               />
             </div>
             <div>
               <Label>Jenis Kelamin</Label>
-              <Select value={form.gender || ''} onValueChange={(v) => setForm({...form, gender: v})}>
-                <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="L">Laki-laki</SelectItem>
-                  <SelectItem value="P">Perempuan</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                value={form.gender === 'L' ? 'Laki-laki' : form.gender === 'P' ? 'Perempuan' : ''}
+                disabled
+                readOnly
+                placeholder="-"
+              />
             </div>
             <div>
               <Label>Tempat Lahir</Label>
               <Input
                 value={form.birth_place || ''}
-                onChange={(e) => setForm({...form, birth_place: e.target.value})}
+                disabled
+                readOnly
               />
             </div>
             <div>
@@ -442,7 +540,8 @@ export default function AdminPenggunaSiswaPage() {
               <Input
                 type="date"
                 value={form.birth_date || ''}
-                onChange={(e) => setForm({...form, birth_date: e.target.value})}
+                disabled
+                readOnly
               />
             </div>
             <div>
@@ -459,21 +558,24 @@ export default function AdminPenggunaSiswaPage() {
               <Input
                 type="email"
                 value={form.email || ''}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                disabled
+                readOnly
               />
             </div>
             <div>
               <Label>No. HP</Label>
               <Input
                 value={form.phone || ''}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                disabled
+                readOnly
               />
             </div>
             <div className="sm:col-span-2">
               <Label>Alamat</Label>
               <Input
                 value={form.address || ''}
-                onChange={(e) => setForm({...form, address: e.target.value})}
+                disabled
+                readOnly
               />
             </div>
 

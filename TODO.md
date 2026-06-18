@@ -1,13 +1,12 @@
-# TODO - Full Implement + Testing Verval Workflow (A/B/C)
-
-- [ ] Backend: perluas model/verval flow untuk request_type `profile_update` & `prestasi_create`
-- [ ] Backend: reviewer role `admin` + `wali_kelas`, termasuk filtering scope data
-- [ ] Backend: approval logic apply ke `users` (profile_update) dan `achievements` (prestasi_create)
-- [ ] Backend: reject logic + audit + validasi ownership submitter
-- [ ] Frontend siswa: submit perubahan profil jadi verval request (bukan direct update) untuk role siswa
-- [ ] Frontend siswa: submit prestasi jadi verval request (`old_data` kosong, `new_data` berisi payload)
-- [ ] Frontend reviewer: halaman verval menampilkan tipe request + diff before/after + aksi approve/reject
-- [ ] API testing (curl): profile_update flow submit/list/approve/reject + verifikasi side effects
-- [ ] API testing (curl): prestasi_create flow submit/list/approve/reject + verifikasi side effects
-- [ ] UI testing critical flow: siswa submit + reviewer review approve/reject
-- [ ] Bugfix dari hasil testing hingga alur stabil
+- [x] Review existing `/admin/pengguna-siswa` + backend users import capabilities
+- [x] Backend: add Excel template generator for siswa tanpa akun login
+- [x] Backend: add Excel parser for bulk akun siswa creation
+- [x] Backend: add endpoints download/upload bulk akun siswa (hanya siswa tanpa username)
+- [x] Frontend: add buttons for download/upload template akun siswa massal
+- [x] Frontend: wire upload flow + toast summary + refresh table
+- [x] Run critical-path test for new bulk account flow
+- [x] Update TODO completion status
+- [ ] Refactor docker-compose untuk production Coolify (network/env/healthcheck stabil)
+- [ ] Tambahkan docker-compose.override.yml khusus local port mapping (3000/8000/27017)
+- [ ] Perbarui COOLIFY_DEPLOYMENT.md dengan panduan env + koneksi frontend-backend yang tuntas
+- [ ] Validasi stack setelah perubahan compose (config + up)

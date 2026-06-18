@@ -188,9 +188,20 @@ export default function AchievementsPage() {
       if (editing) {
         await api.put(`/achievements/${editing.id}`, payload);
         toast.success('Prestasi diperbarui');
-      } else {
+      } else if (isAdmin) {
         await api.post('/achievements', payload);
         toast.success('Prestasi disimpan');
+      } else {
+        await api.post('/verval-requests', {
+          user_id: user?.id,
+          user_type: isSiswa ? 'siswa' : (isTendik ? 'tenaga_kependidikan' : 'guru'),
+          request_type: 'prestasi_create',
+          target_collection: 'achievements',
+          target_id: null,
+          old_data: {},
+          new_data: payload,
+        });
+        toast.success('Pengajuan prestasi dikirim untuk review');
       }
       setOpen(false);
       await refresh();

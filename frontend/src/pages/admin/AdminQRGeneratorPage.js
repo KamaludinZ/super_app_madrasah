@@ -22,6 +22,10 @@ export default function AdminQRGeneratorPage() {
   const [selectedTemplate, setSelectedTemplate] = useState('default');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedRoomsBulk, setSelectedRoomsBulk] = useState([]);
+  const [paperSize, setPaperSize] = useState('A4');
+  const [outputFormat, setOutputFormat] = useState('pdf');
+  const [bulkMode, setBulkMode] = useState('grade');
   const [qrPreview, setQrPreview] = useState(null);
   const [cardPreview, setCardPreview] = useState(null);
   const [bulkPreview, setBulkPreview] = useState(null);
@@ -71,34 +75,48 @@ export default function AdminQRGeneratorPage() {
       const url = URL.createObjectURL(blob);
       setCardPreview(url);
       setBulkPreview(null);
-      toast.success('Kartu B5 berhasil dibuat');
+      toast.success('Kartu B3 berhasil dibuat');
     } catch (e) { toast.error(e.message || 'Gagal'); }
   };
 
-  const generateBulkByGrade = async () => {
-    if (!selectedGrade) { toast.error('Pilih jenjang kelas dulu'); return; }
+  const generateBulk = async () => {
     try {
       const form = new FormData();
-      form.append('grade', selectedGrade);
       if (selectedTemplate && selectedTemplate !== 'default') form.append('template_id', selectedTemplate);
+      form.append('paper_size', paperSize);
+      form.append('output_format', outputFormat);
+
+      let endpoint = '';
+      let filenameBase = 'kartu-kelas';
+
+      if (bulkMode === 'grade') {
+        if (!selectedGrade) { toast.error('Pilih jenjang kelas dulu'); return; }
+        endpoint = '/api/qr-cards/bulk-by-grade';
+        form.append('grade', selectedGrade);
+        filenameBase = `kartu-kelas-${selectedGrade}`;
+      } else {
+        if (selectedRoomsBulk.length === 0) { toast.error('Pilih minimal 1 ruangan'); return; }
+        endpoint = '/api/qr-cards/bulk-by-rooms';
+        form.append('room_ids', selectedRoomsBulk.join(','));
+        filenameBase = `kartu-ruangan-terpilih-${selectedRoomsBulk.length}`;
+      }
 
       const token = localStorage.getItem('matsa_token');
-      const r = await fetch(`${BACKEND_URL}/api/qr-cards/bulk-by-grade`, {
+      const r = await fetch(`${BACKEND_URL}${endpoint}`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
       });
       if (!r.ok) {
         const errorText = await r.text();
-        console.error('Bulk generation error:', r.status, errorText);
-        throw new Error(`Gagal generate bulk (${r.status}): ${errorText.substring(0, 100)}`);
+        throw new Error(`Gagal generate (${r.status}): ${errorText.substring(0, 120)}`);
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
-      setBulkPreview({ url, type: blob.type, filename: `kartu-kelas-${selectedGrade}.${blob.type.includes('pdf') ? 'pdf' : 'png'}` });
+      const ext = blob.type.includes('pdf') ? 'pdf' : 'png';
+      setBulkPreview({ url, type: blob.type, filename: `${filenameBase}-${paperSize}.${ext}` });
       setCardPreview(null);
       setQrPreview(null);
-      toast.success(`Kartu untuk semua kelas ${selectedGrade} berhasil dibuat!`);
+      toast.success('File bulk siap diunduh/dicetak');
     } catch (e) {
-      console.error('Exception in generateBulkByGrade:', e);
       toast.error(e.message || 'Gagal');
     }
   };
@@ -156,14 +174,14 @@ export default function AdminQRGeneratorPage() {
       <div>
         <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><QrCode className="h-3 w-3 mr-1" /> QR Generator</Badge>
         <h1 className="text-2xl sm:text-3xl font-bold">Generator QR Code Ruangan</h1>
-        <p className="text-sm text-slate-600 mt-1">Buat QR Code unik per ruangan + Kartu B5 portrait untuk dicetak & ditempel</p>
+        <p className="text-sm text-slate-600 mt-1">Buat QR Code unik per ruangan + Kartu B3 portrait untuk dicetak & ditempel</p>
       </div>
 
       <Tabs defaultValue="generate">
         <TabsList>
           <TabsTrigger value="generate" data-testid="qr-tab-generate">Generate Per Ruangan</TabsTrigger>
           <TabsTrigger value="bulk" data-testid="qr-tab-bulk">Cetak Per Jenjang</TabsTrigger>
-          <TabsTrigger value="templates" data-testid="qr-tab-templates">Template Kartu B5</TabsTrigger>
+          <TabsTrigger value="templates" data-testid="qr-tab-templates">Template Kartu B3</TabsTrigger>
         </TabsList>
 
         <TabsContent value="generate" className="mt-4">
@@ -183,7 +201,7 @@ export default function AdminQRGeneratorPage() {
                     <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div><Label>Template Latar Belakang Kartu B5</Label>
+                <div><Label>Template Latar Belakang Kartu B3</Label>
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                     <SelectTrigger data-testid="qr-template-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -203,7 +221,7 @@ export default function AdminQRGeneratorPage() {
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button onClick={generateQR} variant="outline" className="flex-1" data-testid="generate-qr-only"><QrCode className="h-4 w-4 mr-1" /> Preview QR</Button>
-                  <Button onClick={generateCard} className="flex-1 bg-[#006837] hover:bg-[#0B7A3B]" data-testid="generate-qr-card"><Printer className="h-4 w-4 mr-1" /> Generate Kartu B5</Button>
+                  <Button onClick={generateCard} className="flex-1 bg-[#006837] hover:bg-[#0B7A3B]" data-testid="generate-qr-card"><Printer className="h-4 w-4 mr-1" /> Generate Kartu B3</Button>
                 </div>
               </CardContent>
             </Card>
@@ -213,9 +231,13 @@ export default function AdminQRGeneratorPage() {
                 <h2 className="text-base font-semibold mb-3">Preview</h2>
                 {cardPreview ? (
                   <div className="space-y-3">
-                    <img src={cardPreview} alt="B5 Card" className="w-full max-w-md mx-auto rounded-lg shadow-lg border border-[#C8A24A]" data-testid="qr-generator-preview" />
-                    <Button onClick={downloadCard} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="qr-generator-download-button"><Download className="h-4 w-4" /> Download Kartu B5 (PNG)</Button>
-                    <div className="text-sm text-slate-500 text-center">Cetak pada kertas B5 portrait • 1386x1969 px @ 200 DPI</div>
+                    <div className="w-full max-w-2xl mx-auto">
+                      <div className="mx-auto w-full max-w-[420px] aspect-[2772/3920] rounded-lg border border-[#C8A24A] bg-white shadow-lg overflow-hidden">
+                        <img src={cardPreview} alt="B3 Card" className="w-full h-full object-contain" data-testid="qr-generator-preview" />
+                      </div>
+                    </div>
+                    <Button onClick={downloadCard} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="qr-generator-download-button"><Download className="h-4 w-4" /> Download Kartu B3 (PNG)</Button>
+                    <div className="text-sm text-slate-500 text-center">Canvas B3 portrait • 2772x3920 px @ 200 DPI</div>
                     <div className="text-sm text-emerald-700 font-semibold text-center bg-emerald-50 p-2 rounded-lg border border-emerald-200">✓ Token kelas ditampilkan di bawah QR code</div>
                   </div>
                 ) : qrPreview ? (
@@ -254,7 +276,7 @@ export default function AdminQRGeneratorPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Template Latar Belakang Kartu B5</Label>
+                <div><Label>Template Latar Belakang Kartu B3</Label>
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -269,7 +291,7 @@ export default function AdminQRGeneratorPage() {
                     <div className="text-sm text-blue-900">
                       <div className="font-semibold mb-1">Format Output:</div>
                       <ul className="text-xs space-y-1 list-disc list-inside">
-                        <li>Kartu disusun dalam kertas A4 (2 kartu per halaman)</li>
+                        <li>Kartu B3 disusun dalam kertas A4 (4 kartu per halaman)</li>
                         <li>Format PDF untuk multiple pages</li>
                         <li>Siap langsung untuk dicetak</li>
                         <li>Token kelas otomatis ditampilkan</li>
@@ -277,15 +299,79 @@ export default function AdminQRGeneratorPage() {
                     </div>
                   </div>
                 </div>
-                <Button onClick={generateBulkByGrade} disabled={!selectedGrade} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2 h-12 text-base" data-testid="generate-bulk-button">
-                  <Printer className="h-5 w-5" /> Generate Semua Kartu Kelas {selectedGrade || ''}
+                <div><Label>Mode Bulk</Label>
+                  <Select value={bulkMode} onValueChange={setBulkMode}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="grade">Per Jenjang</SelectItem>
+                      <SelectItem value="rooms">Per Ruangan Terpilih</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {bulkMode === 'grade' ? (
+                  <div><Label>Pilih Jenjang Kelas</Label>
+                    <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                      <SelectTrigger data-testid="qr-grade-select"><SelectValue placeholder="Pilih jenjang (7, 8, atau 9)..." /></SelectTrigger>
+                      <SelectContent>
+                        {grades.map((g) => {
+                          const count = classes.filter(c => c.grade === g).length;
+                          return <SelectItem key={g} value={String(g)}>Kelas {g} ({count} kelas)</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Pilih Ruangan (multi-select)</Label>
+                    <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-1 bg-white">
+                      {rooms.map((r) => {
+                        const checked = selectedRoomsBulk.includes(r.id);
+                        return (
+                          <label key={r.id} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) setSelectedRoomsBulk((prev) => [...prev, r.id]);
+                                else setSelectedRoomsBulk((prev) => prev.filter((id) => id !== r.id));
+                              }}
+                            />
+                            <span>{r.name} {r.description ? `- ${r.description}` : ''}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label>Ukuran Kertas</Label>
+                    <Select value={paperSize} onValueChange={setPaperSize}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A4">A4</SelectItem>
+                        <SelectItem value="F4">F4</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Format Output</Label>
+                    <Select value={outputFormat} onValueChange={setOutputFormat}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pdf">PDF (Rekomendasi Cetak)</SelectItem>
+                        <SelectItem value="png">PNG</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button onClick={generateBulk} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2 h-12 text-base" data-testid="generate-bulk-button">
+                  <Printer className="h-5 w-5" /> Generate Dokumen Bulk
                 </Button>
               </CardContent>
             </Card>
 
             <Card className="surface-ivory">
               <CardContent className="p-5">
-                <h2 className="text-base font-semibold mb-3">Preview & Download</h2>
+                <h2 className="text-base font-semibold mb-3">Preview & Download (A4/F4)</h2>
                 {bulkPreview ? (
                   <div className="space-y-3">
                     {bulkPreview.type.includes('pdf') ? (
@@ -296,7 +382,11 @@ export default function AdminQRGeneratorPage() {
                         <iframe src={bulkPreview.url} className="w-full h-96 border rounded-lg mb-3" title="PDF Preview" />
                       </div>
                     ) : (
-                      <img src={bulkPreview.url} alt="Bulk Cards" className="w-full rounded-lg shadow-lg border border-[#C8A24A]" />
+                      <div className="w-full rounded-lg shadow-lg border border-[#C8A24A] bg-white p-2">
+                        <div className="w-full aspect-[1654/2339] overflow-hidden rounded-md">
+                          <img src={bulkPreview.url} alt="Bulk Cards" className="w-full h-full object-contain" />
+                        </div>
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <Button onClick={downloadBulk} className="flex-1 bg-[#006837] hover:bg-[#0B7A3B] gap-2"><Download className="h-4 w-4" /> Download</Button>
@@ -319,8 +409,8 @@ export default function AdminQRGeneratorPage() {
         <TabsContent value="templates" className="mt-4 space-y-4">
           <Card>
             <CardContent className="p-5">
-              <h2 className="text-base font-semibold mb-3">Upload Template Latar Belakang Kartu B5</h2>
-              <p className="text-xs text-slate-600 mb-3">Ukuran ideal: <strong>1386 x 1969 px</strong> (B5 portrait @ 200 DPI). Format PNG/JPG.</p>
+              <h2 className="text-base font-semibold mb-3">Upload Template Latar Belakang Kartu B3</h2>
+              <p className="text-xs text-slate-600 mb-3">Ukuran ideal: <strong>2772 x 3920 px</strong> (B3 portrait @ 200 DPI). Format PNG/JPG.</p>
               <div className="flex gap-2 mb-3">
                 <Input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="Nama template (mis: 'TP 2025/2026')" className="flex-1" data-testid="qr-template-name-input" />
                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="gap-2" data-testid="qr-template-upload-button"><Upload className="h-4 w-4" /> Pilih File</Button>
@@ -333,7 +423,7 @@ export default function AdminQRGeneratorPage() {
                   </div>
                 ) : templates.map((t) => (
                   <div key={t.id} className="relative rounded-xl border border-slate-200 overflow-hidden group">
-                    <img src={t.image_b64} alt={t.name} className="w-full aspect-[1386/1969] object-cover" />
+                    <img src={t.image_b64} alt={t.name} className="w-full aspect-[2772/3920] object-cover" />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-white text-sm">{t.name}</div>
                     <button onClick={() => deleteTemplate(t)} className="absolute top-2 right-2 p-1 bg-white/90 rounded-full shadow opacity-0 group-hover:opacity-100"><Trash2 className="h-3 w-3 text-rose-600" /></button>
                   </div>

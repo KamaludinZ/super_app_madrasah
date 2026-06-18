@@ -1,13 +1,13 @@
 """Rooms CRUD + QR code + B5 card + QR templates + Excel import."""
 import base64
 import io
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import pyotp
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
-from core import db, get_current_user, get_settings, log_audit, require_role, serialize_doc
+from core import db, get_current_user, get_settings, log_audit, require_role, serialize_doc, logger, get_active_context
 from excel_io import parse_room_rows, room_template
 from journal_core import (
     create_b5_card,
@@ -177,41 +177,60 @@ async def generate_qr_card(rid: str, template_id: Optional[str] = Form(None),
                              headers={"Content-Disposition": f'inline; filename="qr-card-{rid}.png"'})
 
 
-@router.post("/qr-cards/bulk-by-grade")
-async def generate_bulk_qr_cards_by_grade(grade: int = Form(...),
-                                           template_id: Optional[str] = Form(None),
-                                           user: Dict = Depends(require_role('admin'))):
-    """Generate QR cards for all classes in a specific grade level"""
+def _resolve_paper_size(paper_size: str):
+    p = (paper_size or "A4").upper()
+    if p == "F4":
+        return 1654, 2606, "F4"
+    return 1654, 2339, "A4"
+
+
+def _get_resample_method(PILImage):
+    try:
+        return PILImage.Resampling.LANCZOS
+    except AttributeError:
+        return PILImage.LANCZOS
+
+
+async def _load_template_bytes(template_id: Optional[str]) -> Optional[bytes]:
+    if not template_id:
+        return None
+    tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
+    logger.info(f"[QR-CARD] Template found: {tpl is not None}")
+    if not tpl or not tpl.get('image_b64'):
+        return None
+    b64 = tpl['image_b64']
+    if ',' in b64:
+        b64 = b64.split(',', 1)[1]
+    return base64.b64decode(b64)
+
+
+async def _build_card_images_from_class_docs(classes_list: List[Dict], template_bytes: Optional[bytes]):
     from PIL import Image as PILImage
 
-    logger.info(f"[BULK] Starting bulk generation for grade {grade}, template_id: {template_id}")
-
-    # Get all classes for this grade
-    classes_list = await db.classes.find({'grade': grade}, {'_id': 0}).to_list(100)
-    if not classes_list:
-        raise HTTPException(404, f"Tidak ada kelas untuk jenjang {grade}")
-
-    logger.info(f"[BULK] Found {len(classes_list)} classes for grade {grade}")
-
     settings = await get_settings()
-    template_bytes = None
-    if template_id:
-        tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
-        logger.info(f"[BULK] Template found: {tpl is not None}")
-        if tpl and tpl.get('image_b64'):
-            b64 = tpl['image_b64']
-            if ',' in b64:
-                b64 = b64.split(',', 1)[1]
-            template_bytes = base64.b64decode(b64)
-            logger.info(f"[BULK] Template loaded: {len(template_bytes)} bytes")
-
-    # Generate cards for each class
     card_images = []
-    for cls in sorted(classes_list, key=lambda x: x.get('name', '')):
+
+    # Deduplicate by room_id so each class/room appears once in bulk output
+    # (prevents old-semester duplicate classes from being printed together)
+    dedup_map = {}
+    for cls in classes_list:
         room_id = cls.get('room_id')
         if not room_id:
             continue
+        current = dedup_map.get(room_id)
 
+        # Prefer newer record by updated_at/created_at if duplicate room_id exists
+        if current is None:
+            dedup_map[room_id] = cls
+            continue
+
+        current_ts = current.get('updated_at') or current.get('created_at') or ''
+        candidate_ts = cls.get('updated_at') or cls.get('created_at') or ''
+        if str(candidate_ts) > str(current_ts):
+            dedup_map[room_id] = cls
+
+    for cls in sorted(dedup_map.values(), key=lambda x: x.get('name', '')):
+        room_id = cls.get('room_id')
         room = await db.rooms.find_one({'id': room_id}, {'_id': 0})
         if not room:
             continue
@@ -227,74 +246,143 @@ async def generate_bulk_qr_cards_by_grade(grade: int = Form(...),
             class_token=cls.get('token'),
         )
         card_images.append(PILImage.open(io.BytesIO(png_bytes)))
+    return card_images
 
-    if not card_images:
-        raise HTTPException(404, f"Tidak ada kartu yang bisa dibuat untuk jenjang {grade}")
 
-    # Create A4 layout (2 cards per page in portrait)
-    # A4 @ 200 DPI = 1654 x 2339 px
-    # B5 card = 1386 x 1969 px
-    # THIN MARGINS for maximum card size
-    A4_W, A4_H = 1654, 2339
-    CARD_W, CARD_H = 1386, 1969
+def _compose_pages(card_images, paper_size: str = "A4"):
+    from PIL import Image as PILImage
 
-    # Very thin margins (20px = 2.5mm @ 200 DPI)
-    MARGIN_TOP = 20
-    MARGIN_BOTTOM = 20
-    MARGIN_LEFT = 20
-    MARGIN_RIGHT = 20
-    CARD_GAP = 20  # Gap between 2 cards
+    page_w, page_h, paper = _resolve_paper_size(paper_size)
+    # Source card canvas standardized to B3
+    card_w, card_h = 2772, 3920
+    margin_top = margin_bottom = margin_left = margin_right = 20
+    gap_x = 20
+    gap_y = 20
 
-    # Calculate scaling to fit 2 cards on A4 with thin margins
-    available_w = A4_W - MARGIN_LEFT - MARGIN_RIGHT
-    available_h = A4_H - MARGIN_TOP - MARGIN_BOTTOM - CARD_GAP
-    scale = min(available_w / CARD_W, available_h / (CARD_H * 2))
-    scaled_w = int(CARD_W * scale)
-    scaled_h = int(CARD_H * scale)
+    # Target layout: 4 cards per A4/F4 page (2 columns x 2 rows)
+    available_w = page_w - margin_left - margin_right - gap_x
+    available_h = page_h - margin_top - margin_bottom - gap_y
+    scale = min(available_w / (card_w * 2), available_h / (card_h * 2))
+    scaled_w = int(card_w * scale)
+    scaled_h = int(card_h * scale)
 
-    logger.info(f"[BULK] A4 size: {A4_W}x{A4_H}, Card original: {CARD_W}x{CARD_H}")
-    logger.info(f"[BULK] Scale: {scale:.3f}, Scaled card: {scaled_w}x{scaled_h}")
+    logger.info(f"[BULK] Paper {paper}: {page_w}x{page_h}, scaled B3 card: {scaled_w}x{scaled_h}, layout: 2x2")
 
+    resample_method = _get_resample_method(PILImage)
     pages = []
-    # Use compatibility for PIL resize
-    try:
-        resample_method = PILImage.Resampling.LANCZOS
-    except AttributeError:
-        resample_method = PILImage.LANCZOS
 
-    for i in range(0, len(card_images), 2):
-        page = PILImage.new('RGB', (A4_W, A4_H), color=(255, 255, 255))
+    cards_per_page = 4
+    for i in range(0, len(card_images), cards_per_page):
+        page = PILImage.new('RGB', (page_w, page_h), color=(255, 255, 255))
+        batch = card_images[i:i + cards_per_page]
 
-        # First card (top) - centered horizontally, tight top margin
-        card1 = card_images[i].resize((scaled_w, scaled_h), resample_method)
-        x1 = (A4_W - scaled_w) // 2
-        y1 = MARGIN_TOP
-        page.paste(card1, (x1, y1))
+        # Compute centered grid origin
+        total_grid_w = (scaled_w * 2) + gap_x
+        total_grid_h = (scaled_h * 2) + gap_y
+        grid_x0 = (page_w - total_grid_w) // 2
+        grid_y0 = (page_h - total_grid_h) // 2
 
-        # Second card (bottom) if exists
-        if i + 1 < len(card_images):
-            card2 = card_images[i + 1].resize((scaled_w, scaled_h), resample_method)
-            x2 = (A4_W - scaled_w) // 2
-            y2 = y1 + scaled_h + CARD_GAP
-            page.paste(card2, (x2, y2))
+        for idx, img in enumerate(batch):
+            row = idx // 2
+            col = idx % 2
+            x = grid_x0 + col * (scaled_w + gap_x)
+            y = grid_y0 + row * (scaled_h + gap_y)
+            card = img.resize((scaled_w, scaled_h), resample_method)
+            page.paste(card, (x, y))
 
         pages.append(page)
 
-    # Save all pages as multi-page PDF or combine to single large image
+    return pages
+
+
+def _stream_pages(pages, filename_prefix: str, output_format: str = "pdf"):
+    fmt = (output_format or "pdf").lower()
     output = io.BytesIO()
-    if len(pages) == 1:
+
+    if fmt == "png":
         pages[0].save(output, format='PNG', optimize=True)
         media_type = 'image/png'
-        filename = f'qr-cards-grade-{grade}.png'
+        filename = f'{filename_prefix}.png'
     else:
-        # Save as PDF for multiple pages
-        pages[0].save(output, format='PDF', save_all=True, append_images=pages[1:], optimize=True)
+        if len(pages) == 1:
+            pages[0].save(output, format='PDF', optimize=True)
+        else:
+            pages[0].save(output, format='PDF', save_all=True, append_images=pages[1:], optimize=True)
         media_type = 'application/pdf'
-        filename = f'qr-cards-grade-{grade}.pdf'
+        filename = f'{filename_prefix}.pdf'
 
     output.seek(0)
-    return StreamingResponse(output, media_type=media_type,
-                             headers={"Content-Disposition": f'inline; filename="{filename}"'})
+    return StreamingResponse(
+        output,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
+    )
+
+
+@router.post("/qr-cards/bulk-by-grade")
+async def generate_bulk_qr_cards_by_grade(
+    grade: int = Form(...),
+    template_id: Optional[str] = Form(None),
+    paper_size: str = Form("A4"),
+    output_format: str = Form("pdf"),
+    user: Dict = Depends(require_role('admin'))
+):
+    context = await get_active_context(user)
+    semester_id = context.get('semester_id')
+    academic_year_id = context.get('academic_year_id')
+
+    query = {'grade': grade}
+    if semester_id:
+        query['semester_id'] = semester_id
+    if academic_year_id:
+        query['academic_year_id'] = academic_year_id
+
+    classes_list = await db.classes.find(query, {'_id': 0}).to_list(100)
+    if not classes_list:
+        raise HTTPException(404, f"Tidak ada kelas untuk jenjang {grade}")
+
+    template_bytes = await _load_template_bytes(template_id)
+    card_images = await _build_card_images_from_class_docs(classes_list, template_bytes)
+    if not card_images:
+        raise HTTPException(404, f"Tidak ada kartu yang bisa dibuat untuk jenjang {grade}")
+
+    pages = _compose_pages(card_images, paper_size=paper_size)
+    return _stream_pages(pages, filename_prefix=f"qr-cards-grade-{grade}", output_format=output_format)
+
+
+@router.post("/qr-cards/bulk-by-rooms")
+async def generate_bulk_qr_cards_by_rooms(
+    room_ids: str = Form(...),
+    template_id: Optional[str] = Form(None),
+    paper_size: str = Form("A4"),
+    output_format: str = Form("pdf"),
+    user: Dict = Depends(require_role('admin'))
+):
+    selected_ids = [s.strip() for s in room_ids.split(',') if s.strip()]
+    if not selected_ids:
+        raise HTTPException(400, "room_ids wajib diisi")
+
+    context = await get_active_context(user)
+    semester_id = context.get('semester_id')
+    academic_year_id = context.get('academic_year_id')
+
+    query = {'room_id': {'$in': selected_ids}}
+    if semester_id:
+        query['semester_id'] = semester_id
+    if academic_year_id:
+        query['academic_year_id'] = academic_year_id
+
+    classes_list = await db.classes.find(query, {'_id': 0}).to_list(500)
+    if not classes_list:
+        raise HTTPException(404, "Tidak ada kelas untuk ruangan terpilih")
+
+    template_bytes = await _load_template_bytes(template_id)
+    card_images = await _build_card_images_from_class_docs(classes_list, template_bytes)
+    if not card_images:
+        raise HTTPException(404, "Tidak ada kartu yang bisa dibuat untuk ruangan terpilih")
+
+    pages = _compose_pages(card_images, paper_size=paper_size)
+    return _stream_pages(pages, filename_prefix="qr-cards-selected-rooms", output_format=output_format)
 
 
 # ============================================================

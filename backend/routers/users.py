@@ -14,7 +14,12 @@ from core import (
     require_role,
     serialize_doc,
 )
-from excel_io import parse_user_rows, user_template
+from excel_io import (
+    parse_student_account_bulk_rows,
+    parse_user_rows,
+    student_account_bulk_template,
+    user_template,
+)
 from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest, MutationMasukSubmit, MutationKeluarSubmit
 
 router = APIRouter()
@@ -66,6 +71,97 @@ async def users_import(file: UploadFile = File(...), request: Request = None,
     return {'success': success, 'errors': errors}
 
 
+@router.get("/students/bulk-account-template")
+async def students_bulk_account_template(user: Dict = Depends(require_role('admin'))):
+    students = await db.users.find(
+        {
+            'roles': 'siswa',
+            '$or': [
+                {'username': {'$exists': False}},
+                {'username': None},
+                {'username': ''},
+            ]
+        },
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1}
+    ).sort('full_name', 1).to_list(5000)
+
+    return StreamingResponse(
+        io.BytesIO(student_account_bulk_template(students)),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_akun_siswa_belum_punya_akun.xlsx"'},
+    )
+
+
+@router.post("/students/import-bulk-accounts")
+async def students_import_bulk_accounts(
+    file: UploadFile = File(...),
+    request: Request = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+
+    contents = await file.read()
+    try:
+        rows = parse_student_account_bulk_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Error parsing Excel: {e}")
+
+    success = []
+    errors = []
+
+    for row in rows:
+        row_no = row.get('_row')
+        sid = row.get('id')
+        username = (row.get('username') or '').strip()
+        password = row.get('password') or ''
+
+        try:
+            if not username or not password:
+                errors.append({'row': row_no, 'error': 'Username dan password wajib diisi'})
+                continue
+
+            username_conflict = await db.users.find_one({'username': username})
+            if username_conflict:
+                errors.append({'row': row_no, 'error': f"Username {username} sudah digunakan"})
+                continue
+
+            student = await db.users.find_one({'id': sid})
+            if not student:
+                errors.append({'row': row_no, 'error': f"User dengan id {sid} tidak ditemukan"})
+                continue
+
+            if 'siswa' not in (student.get('roles') or []):
+                errors.append({'row': row_no, 'error': "User bukan role siswa"})
+                continue
+
+            current_username = (student.get('username') or '').strip()
+            if current_username:
+                errors.append({'row': row_no, 'error': f"Siswa sudah memiliki akun ({current_username})"})
+                continue
+
+            await db.users.update_one(
+                {'id': sid},
+                {'$set': {'username': username, 'password_hash': hash_password(password)}}
+            )
+            success.append(username)
+
+        except Exception as e:
+            errors.append({'row': row_no, 'error': str(e)})
+
+    if request:
+        await log_audit(
+            user,
+            'import_bulk_student_accounts',
+            'users',
+            None,
+            details={'success': len(success), 'errors': len(errors)},
+            request=request
+        )
+
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
 # GET /users/{uid} must be BEFORE GET /users to avoid path conflicts
 @router.get("/users/{uid}")
 async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
@@ -110,6 +206,22 @@ async def create_user(req: UserCreateRequest, request: Request, user: Dict = Dep
 @router.put("/users/{uid}")
 async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: Dict = Depends(require_role('admin'))):
     update = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
+
+    # Validasi NIK & Nomor KK harus 16 digit angka
+    nik = update.get('nik')
+    if nik is not None:
+        nik = ''.join(ch for ch in str(nik) if ch.isdigit())
+        if len(nik) != 16:
+            raise HTTPException(400, "NIK harus 16 digit angka")
+        update['nik'] = nik
+
+    nomor_kk = update.get('nomor_kk')
+    if nomor_kk is not None:
+        nomor_kk = ''.join(ch for ch in str(nomor_kk) if ch.isdigit())
+        if len(nomor_kk) != 16:
+            raise HTTPException(400, "Nomor KK harus 16 digit angka")
+        update['nomor_kk'] = nomor_kk
+
     if 'new_password' in update:
         update['password_hash'] = hash_password(update.pop('new_password'))
     res = await db.users.update_one({'id': uid}, {'$set': update})

@@ -187,6 +187,42 @@ def _wrap_text(text: str, font, max_width: int, draw) -> List[str]:
     return lines
 
 
+def _fit_font_size(text: str, font_paths: List[str], start_size: int, min_size: int, max_width: int, draw):
+    """Shrink font size until text fits max_width."""
+    size = start_size
+    while size >= min_size:
+        font = None
+        for p in font_paths:
+            if os.path.exists(p):
+                try:
+                    font = ImageFont.truetype(p, size)
+                    break
+                except Exception:
+                    pass
+        if font is None:
+            font = ImageFont.load_default()
+            return font, size
+
+        bbox = draw.textbbox((0, 0), text, font=font)
+        width = bbox[2] - bbox[0]
+        if width <= max_width:
+            return font, size
+        size -= 4
+
+    # Fallback min size
+    font = None
+    for p in font_paths:
+        if os.path.exists(p):
+            try:
+                font = ImageFont.truetype(p, min_size)
+                break
+            except Exception:
+                pass
+    if font is None:
+        font = ImageFont.load_default()
+    return font, min_size
+
+
 def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     template_bytes: Optional[bytes] = None,
                     school_name: str = "MTsN 2 Kota Malang",
@@ -199,7 +235,7 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     Text sizing optimized for B5 print quality with clear hierarchy and proper spacing.
     Supports custom background templates while maintaining text legibility.
     """
-    W, H = 1386, 1969
+    W, H = 2772, 3920
 
     # Load background - either custom template or default cream color
     use_template = False
@@ -253,19 +289,20 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     pass
         return ImageFont.load_default()
 
-    # PROFESSIONAL B5-OPTIMIZED FONT SIZES WITH HIERARCHY
-    # All sizes properly scaled for B5 print (176mm x 250mm @ 200 DPI)
-    # Minimum body text: 12pt = ~32px @ 200 DPI
-    font_app_name_header = load_font(font_paths_bold, 140)      # 52pt - App name (largest)
-    font_school_header = load_font(font_paths_regular, 85)      # 32pt - School name
-    font_class_huge = load_font(font_paths_bold, 420)           # 158pt - Giant class number (e.g., "7A")
-    font_room_label = load_font(font_paths_bold, 110)           # 41pt - "RUANGAN 7A"
-    font_instruction_title = load_font(font_paths_bold, 100)    # 37pt - "E-JURNAL PRESISI"
-    font_instruction_medium = load_font(font_paths_regular, 70) # 26pt - Medium text
-    font_token_label = load_font(font_paths_regular, 75)        # 28pt - "TOKEN KELAS" label
-    font_token_value = load_font(font_paths_bold, 130)          # 49pt - Token value (huge!)
-    font_footer = load_font(font_paths_bold, 58)                # 22pt - Footer text
-    font_body_text = load_font(font_paths_regular, 42)          # 16pt - Body text (min 12pt)
+    # PROFESSIONAL B5-OPTIMIZED FONT SIZES WITH BETTER PROPORTION
+    # Rebalanced to avoid oversized typography on template and non-template backgrounds
+    # User requested: reduce typography significantly (~40%)
+    # Requested again: reduce ~70% from current visual scale
+    font_app_name_header = load_font(font_paths_bold, 85)
+    font_school_header = load_font(font_paths_regular, 52)
+    font_class_huge = load_font(font_paths_bold, 246)
+    font_room_label = load_font(font_paths_bold, 90)
+    font_instruction_title = load_font(font_paths_bold, 52)
+    font_instruction_medium = load_font(font_paths_regular, 34)
+    font_token_label = load_font(font_paths_regular, 52)
+    font_token_value = load_font(font_paths_bold, 71)
+    font_footer = load_font(font_paths_bold, 34)
+    font_body_text = load_font(font_paths_regular, 22)
 
     # Professional color palette
     HUNTER_GREEN = (0, 104, 55)      # Deep hunter green for headers
@@ -294,15 +331,37 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         draw.text((W // 2, 120), app_name.upper(), fill="white", font=font_app_name_header, anchor="mm")
         draw.text((W // 2, 220), school_name, fill="white", font=font_school_header, anchor="mm")
 
-    # Main content area - centered and well-spaced
-    content_start_y = 450 if not use_template else 320
+    # Main content safe zones
+    content_top = 360 if use_template else 430
+    content_bottom = H - (230 if not use_template else 180)
+    max_text_width = int(W * 0.86)
 
-    # CLASS NAME - Huge, centered, highly prominent (e.g., "7A")
-    draw.text((W // 2, content_start_y), class_name, fill=HUNTER_GREEN, font=font_class_huge, anchor="mm")
+    # Dynamic fit for class text
+    class_text = str(class_name or "")
+    font_class_huge, _ = _fit_font_size(
+        class_text,
+        font_paths_bold,
+        start_size=246,
+        min_size=104,
+        max_width=max_text_width,
+        draw=draw,
+    )
 
-    # ROOM LABEL - Clear and readable below class name
-    room_y = content_start_y + 250
-    draw.text((W // 2, room_y), f"RUANGAN {room_name}", fill=HUNTER_GREEN, font=font_room_label, anchor="mm")
+    class_y = int(content_top * 1.68)
+    draw.text((W // 2, class_y), class_text, fill=HUNTER_GREEN, font=font_class_huge, anchor="mm")
+
+    # Dynamic fit for room label
+    room_text = f"RUANGAN {room_name}"
+    font_room_label, _ = _fit_font_size(
+        room_text,
+        font_paths_bold,
+        start_size=90,
+        min_size=48,
+        max_width=max_text_width,
+        draw=draw,
+    )
+    room_y = class_y + 423
+    draw.text((W // 2, room_y), room_text, fill=HUNTER_GREEN, font=font_room_label, anchor="mm")
 
     # QR CODE - Central element in white panel with gold border
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=22, border=2)
@@ -310,7 +369,7 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
 
-    qr_size = 800
+    qr_size = 1988
     # Use LANCZOS with compatibility for both old and new PIL versions
     try:
         resample_method = Image.Resampling.LANCZOS
@@ -318,10 +377,10 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         resample_method = Image.LANCZOS
     qr_img = qr_img.resize((qr_size, qr_size), resample_method)
     qr_x = (W - qr_size) // 2
-    qr_y = room_y + 100
+    qr_y = room_y + 214
 
     # White panel with polished gold border for QR code
-    panel_padding = 40
+    panel_padding = 78
     draw.rectangle(
         [(qr_x - panel_padding, qr_y - panel_padding),
          (qr_x + qr_size + panel_padding, qr_y + qr_size + panel_padding)],
@@ -330,29 +389,69 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     bg.paste(qr_img, (qr_x, qr_y))
 
     # E-JURNAL PRESISI label below QR
-    instruction_y = qr_y + qr_size + 80
+    instruction_y = qr_y + qr_size + 252
     draw.text((W // 2, instruction_y), "E-JURNAL PRESISI",
               fill=INK_BLACK, font=font_instruction_title, anchor="mm")
 
-    # TOKEN KELAS section - if provided, display in green footer band area
+    # TOKEN KELAS section - auto-fit and safer vertical spacing
     if class_token and not use_template:
-        # Token displayed in the lower green band area
-        token_y = H - 75
-        # Use two-column layout: "TOKEN KELAS" on left side, actual token on right
+        token_value_text = str(class_token)
+
+        # Keep token area inside bottom band, with safer font scale
         token_label_x = W // 4
         token_value_x = 3 * W // 4
+        token_y = H - 55
+
+        token_value_font, _ = _fit_font_size(
+            token_value_text,
+            font_paths_bold,
+            start_size=71,
+            min_size=52,
+            max_width=int(W * 0.38),
+            draw=draw,
+        )
 
         draw.text((token_label_x, token_y), "TOKEN KELAS",
                   fill="white", font=font_token_label, anchor="mm")
-        draw.text((token_value_x, token_y), str(class_token),
-                  fill="white", font=font_token_value, anchor="mm")
+        draw.text((token_value_x, token_y), token_value_text,
+                  fill="white", font=token_value_font, anchor="mm")
+
     elif class_token and use_template:
-        # For custom templates, show token below QR area
-        token_y = instruction_y + 100
-        draw.text((W // 2, token_y), "TOKEN KELAS",
+        token_value_text = str(class_token)
+        token_area_start = instruction_y + 74
+        token_area_end = content_bottom
+        token_mid = min(token_area_start + 74, token_area_end - 74)
+
+        token_value_font, _ = _fit_font_size(
+            token_value_text,
+            font_paths_bold,
+            start_size=71,
+            min_size=52,
+            max_width=int(W * 0.78),
+            draw=draw,
+        )
+
+        # Light backdrop for readability on busy templates
+        pad_x = 65
+        pad_y = 28
+        label_bbox = draw.textbbox((0, 0), "TOKEN KELAS", font=font_token_label)
+        value_bbox = draw.textbbox((0, 0), token_value_text, font=token_value_font)
+        box_w = max(label_bbox[2] - label_bbox[0], value_bbox[2] - value_bbox[0]) + (pad_x * 2)
+        box_h = (label_bbox[3] - label_bbox[1]) + (value_bbox[3] - value_bbox[1]) + (pad_y * 3)
+        box_x1 = (W - box_w) // 2
+        box_y1 = token_mid - (box_h // 2)
+        box_x2 = box_x1 + box_w
+        box_y2 = box_y1 + box_h
+
+        draw.rectangle([(box_x1, box_y1), (box_x2, box_y2)], fill=(255, 255, 255), outline=POLISHED_GOLD, width=4)
+
+        label_y = box_y1 + pad_y + ((label_bbox[3] - label_bbox[1]) // 2)
+        value_y = label_y + (label_bbox[3] - label_bbox[1]) + pad_y + ((value_bbox[3] - value_bbox[1]) // 2)
+
+        draw.text((W // 2, label_y), "TOKEN KELAS",
                   fill=MEDIUM_GRAY, font=font_token_label, anchor="mm")
-        draw.text((W // 2, token_y + 90), str(class_token),
-                  fill=HUNTER_GREEN, font=font_token_value, anchor="mm")
+        draw.text((W // 2, value_y), token_value_text,
+                  fill=HUNTER_GREEN, font=token_value_font, anchor="mm")
 
     buf = io.BytesIO()
     bg.save(buf, "PNG", optimize=True, dpi=(200, 200))

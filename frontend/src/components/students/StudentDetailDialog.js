@@ -69,6 +69,8 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
   const [busy, setBusy] = useState(false);
   const [classHistory, setClassHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [initialDetailSnapshot, setInitialDetailSnapshot] = useState(EMPTY_DETAIL);
+  const [fieldErrors, setFieldErrors] = useState({ nik: '', nomor_kk: '' });
 
   useEffect(() => {
     if (!student?.id) return;
@@ -78,7 +80,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
         const { data } = await api.get(`/students/${student.id}/detail`);
         setStudentData(data.student);
         if (data.detail) {
-          setDetail({ ...EMPTY_DETAIL, ...data.detail,
+          const normalized = { ...EMPTY_DETAIL, ...data.detail,
             ayah: { ...EMPTY_PARENT, ...(data.detail.ayah || {}) },
             ibu: { ...EMPTY_PARENT, ...(data.detail.ibu || {}) },
             wali: { ...EMPTY_PARENT, ...EMPTY_DETAIL.wali, ...(data.detail.wali || {}) },
@@ -86,9 +88,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
             alamat_ibu: { ...EMPTY_ADDR, ...(data.detail.alamat_ibu || {}) },
             alamat_wali: { ...EMPTY_ADDR, ...EMPTY_DETAIL.alamat_wali, ...(data.detail.alamat_wali || {}) },
             alamat_siswa: { ...EMPTY_ADDR, ...EMPTY_DETAIL.alamat_siswa, ...(data.detail.alamat_siswa || {}) },
-          });
+          };
+          setDetail(normalized);
+          setInitialDetailSnapshot(normalized);
         } else {
           setDetail(EMPTY_DETAIL);
+          setInitialDetailSnapshot(EMPTY_DETAIL);
         }
       } catch (e) {
         toast.error('Gagal memuat detail');
@@ -126,8 +131,77 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
         if (payload[k] === '' || payload[k] == null) payload[k] = null;
         else payload[k] = parseInt(payload[k]);
       });
-      await api.put(`/students/${student.id}/detail`, payload);
-      toast.success('Detail siswa disimpan');
+      // Validasi NIK & Nomor KK (jika diisi) harus 16 digit angka
+      const cleanDigits = (val) => String(val || '').replace(/\D/g, '');
+      const nikDigits = cleanDigits(payload.nik);
+      const kkDigits = cleanDigits(payload.nomor_kk);
+
+      // Wajib tepat 16 digit (tidak boleh kurang/lebih) jika field diisi
+      const nextErrors = { nik: '', nomor_kk: '' };
+      if ((payload.nik || '').trim() && nikDigits.length !== 16) {
+        nextErrors.nik = 'NIK harus tepat 16 digit angka';
+      }
+      if ((payload.nomor_kk || '').trim() && kkDigits.length !== 16) {
+        nextErrors.nomor_kk = 'Nomor KK harus tepat 16 digit angka';
+      }
+      setFieldErrors(nextErrors);
+
+      if (nextErrors.nik || nextErrors.nomor_kk) {
+        toast.error(nextErrors.nik || nextErrors.nomor_kk);
+        setBusy(false);
+        return;
+      }
+
+      // Normalisasi nilai angka-only maksimal 16 digit
+      payload.nik = nikDigits ? nikDigits.slice(0, 16) : '';
+      payload.nomor_kk = kkDigits ? kkDigits.slice(0, 16) : '';
+
+      if (isAdmin) {
+        // Admin simpan langsung (tanpa verval)
+        await api.put(`/api/users/${student.id}`, {
+          agama: payload.agama || null,
+          nik: payload.nik || null,
+          nomor_kk: payload.nomor_kk || null,
+          nama_kepala_keluarga: payload.nama_kepala_keluarga || null,
+          ibu_nama: payload?.ibu?.nama || null,
+        });
+        await api.put(`/students/${student.id}/detail`, payload);
+
+        // Refetch agar nilai terbaru langsung terlihat di dialog
+        const { data: refreshed } = await api.get(`/students/${student.id}/detail`);
+        setStudentData(refreshed.student);
+        if (refreshed.detail) {
+          const normalized = { ...EMPTY_DETAIL, ...refreshed.detail,
+            ayah: { ...EMPTY_PARENT, ...(refreshed.detail.ayah || {}) },
+            ibu: { ...EMPTY_PARENT, ...(refreshed.detail.ibu || {}) },
+            wali: { ...EMPTY_PARENT, ...EMPTY_DETAIL.wali, ...(refreshed.detail.wali || {}) },
+            alamat_ayah: { ...EMPTY_ADDR, ...(refreshed.detail.alamat_ayah || {}) },
+            alamat_ibu: { ...EMPTY_ADDR, ...(refreshed.detail.alamat_ibu || {}) },
+            alamat_wali: { ...EMPTY_ADDR, ...EMPTY_DETAIL.alamat_wali, ...(refreshed.detail.alamat_wali || {}) },
+            alamat_siswa: { ...EMPTY_ADDR, ...EMPTY_DETAIL.alamat_siswa, ...(refreshed.detail.alamat_siswa || {}) },
+          };
+          setDetail(normalized);
+          setInitialDetailSnapshot(normalized);
+        }
+
+        toast.success('Detail siswa disimpan');
+      } else {
+        await api.post('/verval-requests', {
+          user_id: student.id,
+          user_type: (studentData?.roles || student?.roles || []).includes('siswa')
+            ? 'siswa'
+            : (studentData?.roles || student?.roles || []).includes('tenaga_kependidikan')
+              ? 'tenaga_kependidikan'
+              : 'guru',
+          request_type: 'profile_update',
+          target_collection: 'users',
+          target_id: student.id,
+          old_data: initialDetailSnapshot || {},
+          new_data: payload,
+        });
+        toast.success('Pengajuan perubahan data dikirim untuk review');
+      }
+      setInitialDetailSnapshot(payload);
       setEditMode(false);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan');
@@ -199,7 +273,11 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                 <FormRow label="Tanggal Lahir" value={studentData?.birth_date} readOnly mono />
                 <SelectRow label="Warga Negara *" value={detail.citizenship} options={['WNI', 'WNA']} onChange={(v) => setField('citizenship', v)} disabled={!editMode} testid="citizenship" />
                 {detail.citizenship === 'WNI' && (
-                  <InputRow label="NIK (16 digit)" value={detail.nik} onChange={(v) => setField('nik', v)} disabled={!editMode} mono placeholder="3573...." />
+                  <InputRow label="NIK (16 digit)" value={detail.nik} onChange={(v) => {
+                    const next = String(v || '').replace(/\D/g, '').slice(0, 16);
+                    setField('nik', next);
+                    setFieldErrors((prev) => ({ ...prev, nik: next.length === 0 || next.length === 16 ? '' : 'NIK harus tepat 16 digit angka' }));
+                  }} disabled={!editMode} mono placeholder="3573...." maxLength={16} error={fieldErrors.nik} inputMode="numeric" />
                 )}
                 {detail.citizenship === 'WNA' && (
                   <>
@@ -228,7 +306,11 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
               </Section>
 
               <Section title="Kartu Keluarga" icon={Hash}>
-                <InputRow label="Nomor KK" value={detail.nomor_kk} onChange={(v) => setField('nomor_kk', v)} disabled={!editMode} mono />
+                <InputRow label="Nomor KK" value={detail.nomor_kk} onChange={(v) => {
+                  const next = String(v || '').replace(/\D/g, '').slice(0, 16);
+                  setField('nomor_kk', next);
+                  setFieldErrors((prev) => ({ ...prev, nomor_kk: next.length === 0 || next.length === 16 ? '' : 'Nomor KK harus tepat 16 digit angka' }));
+                }} disabled={!editMode} mono maxLength={16} error={fieldErrors.nomor_kk} />
                 <InputRow label="Nama Kepala Keluarga" value={detail.nama_kepala_keluarga} onChange={(v) => setField('nama_kepala_keluarga', v)} disabled={!editMode} />
               </Section>
             </TabsContent>
@@ -383,13 +465,14 @@ function FormRow({ label, value, readOnly, mono }) {
   );
 }
 
-function InputRow({ label, value, onChange, type = 'text', disabled, readOnly, mono, maxLength, placeholder }) {
+function InputRow({ label, value, onChange, type = 'text', disabled, readOnly, mono, maxLength, placeholder, error, inputMode }) {
   if (readOnly) return <FormRow label={label} value={value} mono={mono} />;
   return (
     <div>
       <Label className="text-xs uppercase text-slate-500">{label}</Label>
-      <Input type={type} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} maxLength={maxLength} placeholder={placeholder}
-        className={`mt-1 ${mono ? 'font-mono' : ''}`} />
+      <Input type={type} inputMode={inputMode} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} maxLength={maxLength} placeholder={placeholder}
+        className={`mt-1 ${mono ? 'font-mono' : ''} ${error ? 'border-red-500 focus-visible:ring-red-500' : ''}`} />
+      {error ? <p className="text-xs text-red-600 mt-1">{error}</p> : null}
     </div>
   );
 }

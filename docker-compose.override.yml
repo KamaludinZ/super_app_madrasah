@@ -1,0 +1,18 @@
+services:
+  mongodb:
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+
+  backend:
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost}
+      SERVICE_URL_BACKEND: ${SERVICE_URL_BACKEND:-http://localhost:8000}
+      SERVICE_FQDN_BACKEND: ${SERVICE_FQDN_BACKEND:-localhost}
+      SERVICE_URL_FRONTEND: ${SERVICE_URL_FRONTEND:-http://localhost:3000}
+      SERVICE_FQDN_FRONTEND: ${SERVICE_FQDN_FRONTEND:-localhost}
+
+  frontend:
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"

@@ -783,6 +783,13 @@ class UserUpdateRequest(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
 
+    # Data EMIS siswa yang bisa diupdate admin langsung (tanpa verval)
+    agama: Optional[str] = None
+    nik: Optional[str] = None
+    nomor_kk: Optional[str] = None
+    nama_kepala_keluarga: Optional[str] = None
+    ibu_nama: Optional[str] = None
+
 
 class JournalCreateRequest(BaseModel):
     qr_token: str
