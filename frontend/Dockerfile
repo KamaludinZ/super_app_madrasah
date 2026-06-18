@@ -28,8 +28,11 @@ FROM nginx:1.27-alpine
 # Salin hasil build React
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# Salin konfigurasi nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Salin konfigurasi nginx template (akan di-render dengan envsubst saat container start)
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+
+# Default upstream untuk backend (bisa dioverride di Coolify env)
+ENV BACKEND_UPSTREAM=http://backend:8000
 
 EXPOSE 80
 
