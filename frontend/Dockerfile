@@ -6,8 +6,12 @@ WORKDIR /app
 # Salin dependency files terlebih dahulu agar layer di-cache
 COPY package*.json ./
 
-# Install dependencies (--legacy-peer-deps diperlukan untuk React 19 + beberapa paket)
-RUN npm install --legacy-peer-deps
+# Install dependencies dengan retry/timeouts yang lebih aman untuk environment build server
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-timeout 300000 && \
+    npm install --legacy-peer-deps
 
 COPY . .
 

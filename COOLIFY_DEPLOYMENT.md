@@ -160,6 +160,34 @@ Env frontend:
    - verifikasi `MONGO_URL` menggunakan host `mongodb` (bukan localhost).
    - verifikasi credential env yang sama dengan Mongo service.
 
+### 4.2 Troubleshooting Error Build Coolify (metadata base image / BuildKit)
+Jika log berhenti seperti ini:
+- `load metadata for docker.io/library/python:3.11-slim`
+- lalu deployment gagal sebelum step build berikutnya
+
+Maka biasanya masalah ada di konektivitas registry/build host, bukan kode aplikasi.
+Lakukan urutan berikut:
+
+1. **Redeploy sekali lagi** (kadang transient network issue BuildKit).
+2. Di server Coolify, pastikan bisa pull image dasar manual:
+   - `docker pull python:3.11-slim`
+   - `docker pull node:20-alpine`
+   - `docker pull nginx:1.27-alpine`
+3. Pastikan DNS server host stabil (8.8.8.8 / 1.1.1.1) dan outbound HTTPS ke Docker Hub tidak diblok.
+4. Jika memakai proxy/corporate firewall, whitelist:
+   - `registry-1.docker.io`
+   - `auth.docker.io`
+   - `production.cloudflare.docker.com`
+5. Bersihkan cache build yang rusak lalu redeploy:
+   - prune builder/cache/image yang tidak terpakai di host Coolify.
+6. Jika masih gagal, pindah sementara ke mirror registry (opsional) atau jadwalkan deploy ulang saat jaringan stabil.
+
+Catatan:
+- Repo ini sudah di-hardening untuk mengurangi kegagalan build dependency:
+  - `backend/Dockerfile`: pip timeout + retries + upgrade tooling.
+  - `frontend/Dockerfile`: npm fetch retry/timeouts.
+- Jadi jika error tetap di tahap metadata image, fokus utama troubleshooting adalah jaringan/registry di host Coolify.
+
 ---
 
 ## 5) Konfigurasi MongoDB
