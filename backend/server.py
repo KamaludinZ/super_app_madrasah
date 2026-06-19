@@ -130,8 +130,12 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
                 logger.error(f"Failed to log error: {log_err}")
                 logger.error(f"Original error: {exc}")
 
-            # Re-raise the exception to let FastAPI handle it
-            raise exc
+            # Return JSON 500 instead of re-raise so response still passes middleware stack
+            # (including CORS middleware) and browser receives proper CORS headers.
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error"}
+            )
 
 
 app.add_middleware(ErrorLoggingMiddleware)
