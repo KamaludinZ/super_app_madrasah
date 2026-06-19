@@ -66,8 +66,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    expose:
-      - "80"
+    ports:
+      - "8080:80"
     networks:
       - superapp-network
     healthcheck:

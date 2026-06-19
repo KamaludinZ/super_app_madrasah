@@ -1,8 +1,14 @@
-# TODO - Perbaikan Deploy Frontend Coolify
+# TODO - Import Data Awal & Akun Massal GTK/Siswa
 
-- [x] Audit referensi config/skrip lama terkait nginx/entrypoint (termasuk kemungkinan `emergen.sh`).
-- [x] Update `frontend/Dockerfile` untuk default `BACKEND_UPSTREAM` yang aman di environment Coolify.
-- [x] Update `frontend/nginx.conf` agar tidak gagal start saat `BACKEND_UPSTREAM` tidak valid/terisi.
-- [x] Verifikasi konfigurasi terkait Traefik agar tidak conflict.
-- [ ] Jalankan pengujian critical-path (build & run, akses `/`, cek proxy `/api/health`).
-- [x] Update TODO sesuai progres.
+- [ ] Hapus tombol download/upload akun massal dari `/admin/pengguna-siswa`.
+- [ ] Tambah template + parser Excel untuk import data awal GTK (tanpa username/password).
+- [ ] Tambah template + parser Excel untuk import data awal Siswa (tanpa username/password).
+- [ ] Tambah endpoint backend import data awal GTK.
+- [ ] Tambah endpoint backend import data awal Siswa.
+- [ ] Tambah endpoint/template akun massal GTK.
+- [ ] Rapikan `/admin/import` jadi alur terpisah:
+  - [ ] Import Data Awal GTK
+  - [ ] Import Data Awal Siswa
+  - [ ] Import Akun Massal GTK
+  - [ ] Import Akun Massal Siswa
+- [ ] Testing critical-path endpoint + UI.

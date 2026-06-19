@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   FileSpreadsheet, Download, Upload, CheckCircle2, AlertCircle,
-  Users as UsersIcon, BookOpen, Building2, BookMarked, GraduationCap, Info,
+  Users as UsersIcon, GraduationCap, Info, KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,46 +14,51 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const ENTITIES = [
   {
-    key: 'users', label: 'Pengguna', icon: UsersIcon,
+    key: 'gtk-initial',
+    label: 'Data Awal GTK',
+    icon: UsersIcon,
+    templateName: 'template_data_awal_gtk_matsandatama.xlsx',
+    templateUrl: '/api/users/gtk-initial-template',
+    importUrl: '/api/users/import-gtk-initial',
+    description: 'Import data awal GTK tanpa username/password. Hasil data masuk ke data GTK (master pengguna non-siswa).',
+    fields: ['nama_lengkap*', 'roles* (pisah koma)', 'nip_nuptk', 'email', 'phone', 'gender (L/P)'],
+  },
+  {
+    key: 'students-initial',
+    label: 'Data Awal Siswa',
+    icon: GraduationCap,
+    templateName: 'template_data_awal_siswa_matsandatama.xlsx',
+    templateUrl: '/api/students/initial-template',
+    importUrl: '/api/students/import-initial',
+    description: 'Import data awal siswa tanpa username/password. Hasil data masuk ke data siswa master.',
+    fields: ['nama_lengkap*', 'nisn*', 'gender (L/P)', 'kelas* (mis. 7A)', 'tempat_lahir', 'tgl_lahir (YYYY-MM-DD)', 'alamat', 'email', 'phone'],
+  },
+  {
+    key: 'gtk-account-bulk',
+    label: 'Akun Massal GTK',
+    icon: KeyRound,
     templateName: 'template_pengguna_matsandatama.xlsx',
     templateUrl: '/api/users/excel-template',
     importUrl: '/api/users/import-excel',
-    description: 'Tambah Admin, Guru, Wali Kelas, Tendik, dll. (selain siswa).',
-    fields: ['username*', 'password*', 'nama_lengkap*', 'roles* (pisah koma)', 'nip_nuptk', 'nisn', 'email', 'phone', 'gender (L/P)', 'kelas_siswa', 'wali_kelas'],
+    description: 'Buat akun login massal untuk GTK (guru/tendik/wali kelas/dll). Hasil akun masuk ke /admin/users.',
+    fields: ['username*', 'password*', 'nama_lengkap*', 'roles*', 'nip_nuptk', 'email', 'phone', 'gender (L/P)'],
   },
   {
-    key: 'students', label: 'Siswa', icon: GraduationCap,
-    templateName: 'template_siswa_matsandatama.xlsx',
-    templateUrl: '/api/students/excel-template',
-    importUrl: '/api/students/import-excel',
-    description: 'Khusus pendaftaran massal siswa (role siswa otomatis).',
-    fields: ['username*', 'password*', 'nama_lengkap*', 'nisn*', 'gender (L/P)', 'kelas* (mis. 7A)', 'tempat_lahir', 'tgl_lahir (YYYY-MM-DD)', 'alamat', 'email', 'phone'],
-  },
-  {
-    key: 'classes', label: 'Kelas', icon: BookOpen,
-    templateName: 'template_kelas_matsandatama.xlsx',
-    templateUrl: '/api/classes/excel-template',
-    importUrl: '/api/classes/import-excel',
-    description: 'Kelas dibuat di Tahun Pelajaran AKTIF.',
-    fields: ['nama*', 'tingkat* (7/8/9)', 'paralel*', 'wali_kelas_username', 'ruang_kode', 'is_accelerated (ya/tidak)'],
-  },
-  {
-    key: 'rooms', label: 'Ruangan', icon: Building2,
-    templateName: 'template_ruangan_matsandatama.xlsx',
-    templateUrl: '/api/rooms/excel-template',
-    importUrl: '/api/rooms/import-excel',
-    description: 'Ruangan kelas/lab dengan koordinat GPS opsional.',
-    fields: ['kode*', 'deskripsi', 'lat', 'lon', 'radius_meter (default 30)', 'gps_aktif (ya/tidak)', 'qr_mode (static/dynamic)'],
-  },
-  {
-    key: 'subjects', label: 'Mata Pelajaran', icon: BookMarked,
-    templateName: 'template_mapel_matsandatama.xlsx',
-    templateUrl: '/api/subjects/excel-template',
-    importUrl: '/api/subjects/import-excel',
-    description: 'Mata pelajaran dengan kode unik.',
-    fields: ['kode*', 'nama*'],
+    key: 'students-account-bulk',
+    label: 'Akun Massal Siswa',
+    icon: KeyRound,
+    templateName: 'template_akun_siswa_belum_punya_akun.xlsx',
+    templateUrl: '/api/students/bulk-account-template',
+    importUrl: '/api/students/import-bulk-accounts',
+    description: 'Buat akun login siswa dari daftar siswa yang belum punya akun. Hasil akun masuk ke /admin/pengguna-siswa.',
+    fields: ['id*', 'nama_lengkap', 'nisn', 'username*', 'password*'],
   },
 ];
+
+function normalizeSuccessCount(success) {
+  if (Array.isArray(success)) return success.length;
+  return Number(success || 0);
+}
 
 function ImportTab({ entity }) {
   const [busy, setBusy] = useState(false);
@@ -84,10 +89,11 @@ function ImportTab({ entity }) {
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.xlsx')) {
-      toast.error('Hanya file .xlsx yang didukung');
+    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xlsm')) {
+      toast.error('Hanya file .xlsx/.xlsm yang didukung');
       return;
     }
+
     setBusy(true);
     setResult(null);
     try {
@@ -101,15 +107,17 @@ function ImportTab({ entity }) {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || 'Gagal import');
-      setResult({
-        success: data.success || 0,
-        errors: data.errors || [],
-        total: data.total_rows || 0,
-      });
-      if (data.success > 0) {
-        toast.success(`Berhasil import ${data.success} dari ${data.total_rows} baris`);
-      } else if (data.errors?.length) {
-        toast.warning(`Tidak ada data berhasil. ${data.errors.length} baris error.`);
+
+      const errors = data.errors || [];
+      const total = data.total_rows || 0;
+      const success = normalizeSuccessCount(data.success);
+
+      setResult({ success, errors, total });
+
+      if (success > 0) {
+        toast.success(`Berhasil import ${success} dari ${total} baris`);
+      } else if (errors.length) {
+        toast.warning(`Tidak ada data berhasil. ${errors.length} baris error.`);
       } else {
         toast.info('File kosong, tidak ada data diimport');
       }
@@ -130,7 +138,7 @@ function ImportTab({ entity }) {
               <Icon className="h-6 w-6 text-[#006837]" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-slate-900">Import {entity.label}</h3>
+              <h3 className="text-lg font-bold text-slate-900">{entity.label}</h3>
               <p className="text-sm text-slate-600 mt-1">{entity.description}</p>
             </div>
           </div>
@@ -141,9 +149,9 @@ function ImportTab({ entity }) {
             <AlertDescription className="text-amber-900 text-sm">
               <ol className="list-decimal pl-5 space-y-1 mt-1">
                 <li>Klik <strong>Unduh Template</strong>, buka di Excel/LibreOffice.</li>
-                <li>Isi mulai baris ke-2 sesuai kolom. Kolom dengan tanda <strong>*</strong> wajib diisi.</li>
-                <li>Simpan sebagai <code>.xlsx</code>, lalu klik <strong>Pilih File</strong> untuk upload.</li>
-                <li>Tunggu hasil. Baris yang error tidak menggagalkan baris lain.</li>
+                <li>Isi mulai baris ke-2 sesuai kolom. Kolom bertanda <strong>*</strong> wajib diisi.</li>
+                <li>Simpan sebagai <code>.xlsx</code> atau <code>.xlsm</code>, lalu klik <strong>Pilih File</strong>.</li>
+                <li>Tunggu hasil. Baris error tidak menggagalkan baris lain.</li>
               </ol>
             </AlertDescription>
           </Alert>
@@ -160,17 +168,29 @@ function ImportTab({ entity }) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button onClick={downloadTemplate} variant="outline"
+            <Button
+              onClick={downloadTemplate}
+              variant="outline"
               className="h-12 gap-2 border-[#006837] text-[#006837] hover:bg-[#006837]/5"
-              data-testid={`download-template-${entity.key}`}>
+              data-testid={`download-template-${entity.key}`}
+            >
               <Download className="h-4 w-4" /> Unduh Template Excel
             </Button>
-            <Button onClick={() => inputRef.current?.click()} disabled={busy}
+            <Button
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
               className="h-12 gap-2 bg-[#006837] hover:bg-[#0B7A3B]"
-              data-testid={`upload-file-${entity.key}`}>
+              data-testid={`upload-file-${entity.key}`}
+            >
               <Upload className="h-4 w-4" /> {busy ? 'Mengunggah...' : 'Pilih File .xlsx'}
             </Button>
-            <input ref={inputRef} type="file" accept=".xlsx,.xlsm" className="hidden" onChange={handleFile} />
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xlsm"
+              className="hidden"
+              onChange={handleFile}
+            />
           </div>
         </CardContent>
       </Card>
@@ -206,7 +226,7 @@ function ImportTab({ entity }) {
                 <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
                   {result.errors.map((err, i) => (
                     <div key={i} className="text-xs text-rose-900 font-mono py-1 border-b border-rose-100 last:border-0" data-testid={`import-error-${i}`}>
-                      {err}
+                      {typeof err === 'string' ? err : JSON.stringify(err)}
                     </div>
                   ))}
                 </div>
@@ -228,11 +248,11 @@ export default function AdminImportPage() {
         </Badge>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Import Data via Excel</h1>
         <p className="text-sm text-slate-600 mt-1">
-          Tambah data dalam jumlah banyak sekaligus menggunakan file Excel (.xlsx)
+          Alur dipisah: data awal (tanpa akun) dan pembuatan akun massal (dengan username/password)
         </p>
       </div>
 
-      <Tabs defaultValue="users">
+      <Tabs defaultValue="gtk-initial">
         <div className="overflow-x-auto">
           <TabsList className="bg-white border border-slate-200 inline-flex w-auto min-w-full" data-testid="import-entity-tabs">
             {ENTITIES.map((e) => (

@@ -17,7 +17,14 @@ from core import (
     require_role,
     serialize_doc,
 )
-from excel_io import parse_student_rows, student_template, nism_update_template, parse_nism_update_rows
+from excel_io import (
+    parse_nism_update_rows,
+    parse_student_initial_rows,
+    parse_student_rows,
+    nism_update_template,
+    student_initial_template,
+    student_template,
+)
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
 from routers._shared import user_can_view_class
@@ -464,6 +471,114 @@ async def students_import(file: UploadFile = File(...), request: Request = None,
         await db.users.insert_many(new_docs)
     await log_audit(user, 'import_excel', 'student', None, details={'success': success, 'errors': len(errors)}, request=request)
     return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@router.get("/students/initial-template")
+async def students_initial_template_dl(user: Dict = Depends(require_role('admin'))):
+    return StreamingResponse(
+        io.BytesIO(student_initial_template()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_data_awal_siswa_matsandatama.xlsx"'},
+    )
+
+
+@router.post("/students/import-initial")
+async def students_initial_import(file: UploadFile = File(...), request: Request = None,
+                                  user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    rows = parse_student_initial_rows(contents)
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
+    success = 0
+    errors = []
+    new_docs = []
+    for r in rows:
+        try:
+            if not all([r['full_name'], r['nisn'], r['kelas']]):
+                errors.append(f"Baris {r['_row']}: nama_lengkap/nisn/kelas wajib")
+                continue
+            cls_id = classes_map.get(r['kelas'])
+            if not cls_id:
+                errors.append(f"Baris {r['_row']}: kelas '{r['kelas']}' tidak ditemukan")
+                continue
+            existing_nisn = await db.users.find_one({'nisn': r['nisn'], 'roles': 'siswa'})
+            if existing_nisn:
+                errors.append(f"Baris {r['_row']}: NISN '{r['nisn']}' sudah terdaftar")
+                continue
+
+            u = UserModel(
+                username='',
+                password_hash='',
+                full_name=r['full_name'],
+                roles=['siswa'],
+                nisn=r['nisn'],
+                gender=r.get('gender'),
+                student_class_id=cls_id,
+                birth_place=r.get('birth_place'),
+                birth_date=r.get('birth_date'),
+                address=r.get('address'),
+                email=r.get('email'),
+                phone=r.get('phone'),
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r.get('_row', '?')}: {e}")
+
+    if new_docs:
+        await db.users.insert_many(new_docs)
+    await log_audit(
+        user,
+        'import_initial_excel',
+        'student',
+        None,
+        details={'success': success, 'errors': len(errors)},
+        request=request
+    )
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+# ============================================================
+# SISWA BELUM PUNYA AKUN LOGIN
+# ============================================================
+@router.get("/students/without-account")
+async def list_students_without_account(user: Dict = Depends(require_role('admin'))):
+    """List siswa yang belum memiliki username akun login."""
+    q = {
+        'roles': 'siswa',
+        '$or': [
+            {'username': {'$exists': False}},
+            {'username': None},
+            {'username': ''},
+        ]
+    }
+    students = await db.users.find(
+        q,
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'student_class_id': 1}
+    ).sort('full_name', 1).to_list(2000)
+
+    class_ids = list({s.get('student_class_id') for s in students if s.get('student_class_id')})
+    class_map = {}
+    if class_ids:
+        classes = await db.classes.find(
+            {'id': {'$in': class_ids}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(2000)
+        class_map = {c['id']: c.get('name') for c in classes}
+
+    return [
+        {
+            'id': s.get('id'),
+            'full_name': s.get('full_name'),
+            'nisn': s.get('nisn'),
+            'student_class_id': s.get('student_class_id'),
+            'class_name': class_map.get(s.get('student_class_id')),
+        }
+        for s in students
+    ]
 
 
 # ============================================================

@@ -15,6 +15,8 @@ from core import (
     serialize_doc,
 )
 from excel_io import (
+    gtk_initial_template,
+    parse_gtk_initial_rows,
     parse_student_account_bulk_rows,
     parse_user_rows,
     student_account_bulk_template,
@@ -69,6 +71,84 @@ async def users_import(file: UploadFile = File(...), request: Request = None,
     if request:
         await log_audit(user, 'import_users', 'users', None, details={'success': len(success), 'errors': len(errors)}, request=request)
     return {'success': success, 'errors': errors}
+
+
+@router.get("/users/gtk-initial-template")
+async def users_gtk_initial_template(user: Dict = Depends(require_role('admin'))):
+    return StreamingResponse(
+        io.BytesIO(gtk_initial_template()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_data_awal_gtk_matsandatama.xlsx"'},
+    )
+
+
+@router.post("/users/import-gtk-initial")
+async def users_gtk_initial_import(file: UploadFile = File(...), request: Request = None,
+                                   user: Dict = Depends(require_role('admin'))):
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+    contents = await file.read()
+    try:
+        rows = parse_gtk_initial_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Error parsing Excel: {e}")
+
+    allowed_roles = {
+        'guru',
+        'wali_kelas',
+        'tenaga_kependidikan',
+        'guru_piket',
+        'guru_bk',
+        'guru_tata_tertib',
+        'guru_ekstrakurikuler',
+    }
+
+    success = 0
+    errors = []
+    new_docs = []
+
+    for row in rows:
+        idx = row.get('_row')
+        try:
+            if not row['full_name'] or not row['roles']:
+                errors.append({'row': idx, 'error': "nama_lengkap dan roles wajib diisi"})
+                continue
+
+            invalid = [r for r in row['roles'] if r not in allowed_roles]
+            if invalid:
+                errors.append({'row': idx, 'error': f"Role tidak valid untuk GTK: {invalid}"})
+                continue
+
+            u = UserModel(
+                username='',
+                password_hash='',
+                full_name=row['full_name'],
+                nip_nuptk=row.get('nip_nuptk'),
+                email=row.get('email'),
+                phone=row.get('phone'),
+                roles=row['roles'],
+                gender=row.get('gender'),
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append({'row': idx, 'error': str(e)})
+
+    if new_docs:
+        await db.users.insert_many(new_docs)
+
+    if request:
+        await log_audit(
+            user,
+            'import_gtk_initial',
+            'users',
+            None,
+            details={'success': success, 'errors': len(errors)},
+            request=request
+        )
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
 
 
 @router.get("/students/bulk-account-template")

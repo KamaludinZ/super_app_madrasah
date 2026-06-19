@@ -299,6 +299,93 @@ def parse_student_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     return rows
 
 
+def student_initial_template() -> bytes:
+    wb = _make_workbook_with_data(
+        sheet_name="Siswa Awal",
+        headers=['nama_lengkap', 'nisn', 'gender', 'kelas', 'tempat_lahir', 'tgl_lahir', 'alamat', 'email', 'phone'],
+        examples=[
+            ['Ahmad Faza Pratama', '0098765101', 'L', '7A', 'Malang', '2012-05-10', 'Jl. Cemorokandang 12', '', '081234567000'],
+            ['Najwa Aulia Rahma', '0098765102', 'P', '7A', 'Malang', '2012-08-22', 'Jl. Sawojajar 5', '', ''],
+        ],
+        col_widths=[28, 14, 8, 10, 14, 12, 26, 22, 14],
+        instructions=[
+            "Import data awal siswa TANPA username/password.",
+            "Kolom WAJIB: nama_lengkap, nisn, kelas.",
+            "'kelas' = NAMA kelas seperti terdaftar (mis. 7A, 8B).",
+            "'gender': L atau P.",
+            "'tgl_lahir' format YYYY-MM-DD (mis. 2012-05-10).",
+            "Akun login dibuat terpisah melalui menu import akun massal.",
+        ],
+    )
+    return workbook_to_bytes(wb)
+
+
+def parse_student_initial_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb['Siswa Awal'] if 'Siswa Awal' in wb.sheetnames else wb.active
+    rows = []
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or all(v is None or str(v).strip() == '' for v in row):
+            continue
+        bd = row[5]
+        if hasattr(bd, 'isoformat'):
+            try:
+                bd = bd.date().isoformat() if hasattr(bd, 'date') else bd.isoformat()
+            except Exception:
+                bd = str(bd)
+        rows.append({
+            '_row': idx,
+            'full_name': str(row[0]).strip() if row[0] else '',
+            'nisn': str(row[1]).strip() if row[1] else None,
+            'gender': str(row[2]).strip().upper() if row[2] else None,
+            'kelas': str(row[3]).strip() if row[3] else None,
+            'birth_place': str(row[4]).strip() if row[4] else None,
+            'birth_date': bd if bd else None,
+            'address': str(row[6]).strip() if row[6] else None,
+            'email': str(row[7]).strip() if row[7] else None,
+            'phone': str(row[8]).strip() if row[8] else None,
+        })
+    return rows
+
+
+def gtk_initial_template() -> bytes:
+    wb = _make_workbook_with_data(
+        sheet_name="GTK Awal",
+        headers=['nama_lengkap', 'roles', 'nip_nuptk', 'email', 'phone', 'gender'],
+        examples=[
+            ['Drs. Andi Pranowo', 'guru', '198001012005011001', 'andi@matsa.sch.id', '081234567890', 'L'],
+            ['Ibu Rina Sari, S.Pd', 'wali_kelas,guru', '199105072015012001', 'rina@matsa.sch.id', '', 'P'],
+        ],
+        col_widths=[30, 24, 22, 25, 14, 8],
+        instructions=[
+            "Import data awal GTK TANPA username/password.",
+            "Kolom WAJIB: nama_lengkap, roles.",
+            "roles dapat berisi: guru, wali_kelas, tenaga_kependidikan, guru_piket, guru_bk, guru_tata_tertib, guru_ekstrakurikuler (bisa gabungan pisah koma).",
+            "Akun login dibuat terpisah melalui menu import akun massal GTK.",
+        ],
+    )
+    return workbook_to_bytes(wb)
+
+
+def parse_gtk_initial_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb['GTK Awal'] if 'GTK Awal' in wb.sheetnames else wb.active
+    rows = []
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or all(v is None or str(v).strip() == '' for v in row):
+            continue
+        rows.append({
+            '_row': idx,
+            'full_name': str(row[0]).strip() if row[0] else '',
+            'roles': [r.strip() for r in str(row[1]).split(',') if r.strip()] if row[1] else [],
+            'nip_nuptk': str(row[2]).strip() if row[2] else None,
+            'email': str(row[3]).strip() if row[3] else None,
+            'phone': str(row[4]).strip() if row[4] else None,
+            'gender': str(row[5]).strip().upper() if row[5] else None,
+        })
+    return rows
+
+
 
 # ============================================================
 # EXPORTERS (snapshot data to Excel)
