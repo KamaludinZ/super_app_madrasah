@@ -31,8 +31,9 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Salin konfigurasi nginx template (akan di-render dengan envsubst saat container start)
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-# Default upstream untuk backend (bisa dioverride di Coolify env)
-ENV BACKEND_UPSTREAM=http://backend:8000
+# Default upstream untuk backend (WAJIB dioverride di Coolify env frontend)
+# Contoh: https://api.domain-anda.com/api/
+ENV BACKEND_UPSTREAM=http://127.0.0.1:65535/api/
 
 EXPOSE 80
 

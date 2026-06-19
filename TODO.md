@@ -1,12 +1,8 @@
-- [x] Review existing `/admin/pengguna-siswa` + backend users import capabilities
-- [x] Backend: add Excel template generator for siswa tanpa akun login
-- [x] Backend: add Excel parser for bulk akun siswa creation
-- [x] Backend: add endpoints download/upload bulk akun siswa (hanya siswa tanpa username)
-- [x] Frontend: add buttons for download/upload template akun siswa massal
-- [x] Frontend: wire upload flow + toast summary + refresh table
-- [x] Run critical-path test for new bulk account flow
-- [x] Update TODO completion status
-- [ ] Refactor docker-compose untuk production Coolify (network/env/healthcheck stabil)
-- [ ] Tambahkan docker-compose.override.yml khusus local port mapping (3000/8000/27017)
-- [ ] Perbarui COOLIFY_DEPLOYMENT.md dengan panduan env + koneksi frontend-backend yang tuntas
-- [ ] Validasi stack setelah perubahan compose (config + up)
+# TODO - Perbaikan Deploy Frontend Coolify
+
+- [x] Audit referensi config/skrip lama terkait nginx/entrypoint (termasuk kemungkinan `emergen.sh`).
+- [x] Update `frontend/Dockerfile` untuk default `BACKEND_UPSTREAM` yang aman di environment Coolify.
+- [x] Update `frontend/nginx.conf` agar tidak gagal start saat `BACKEND_UPSTREAM` tidak valid/terisi.
+- [x] Verifikasi konfigurasi terkait Traefik agar tidak conflict.
+- [ ] Jalankan pengujian critical-path (build & run, akses `/`, cek proxy `/api/health`).
+- [x] Update TODO sesuai progres.
