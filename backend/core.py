@@ -72,7 +72,17 @@ if 'tlsCAFile=' in mongo_url:
             mongo_url = re.sub(r'&?tlsCAFile=[^&]+&?', '', mongo_url)
             # Clean up double ampersands or trailing ampersands
             mongo_url = re.sub(r'&+', '&', mongo_url).rstrip('&?')
-            logger.info(f"Using MongoDB URL without certificate validation")
+
+            # If TLS is enabled and CA file is unavailable, allow invalid certs as fallback
+            # for self-signed/internal cert environments (e.g., managed internal Mongo service).
+            if ('tls=true' in mongo_url or 'ssl=true' in mongo_url) and \
+               'tlsAllowInvalidCertificates=' not in mongo_url and \
+               'ssl_cert_reqs=' not in mongo_url:
+                separator = '&' if '?' in mongo_url else '?'
+                mongo_url = f"{mongo_url}{separator}tlsAllowInvalidCertificates=true"
+                logger.warning("Enabled tlsAllowInvalidCertificates=true fallback because tlsCAFile is missing")
+
+            logger.info("Using MongoDB URL with fallback TLS settings")
 
 try:
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
