@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, Trash2, GraduationCap, Search, UserMinus, UserPlus, ArrowRightLeft, FileSpreadsheet, LogIn, Loader2, Download, Upload } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -33,6 +34,9 @@ export default function AdminPenggunaSiswaPage() {
   const [importingNism, setImportingNism] = useState(false);
   const [impersonatingUserId, setImpersonatingUserId] = useState(null);
   const [studentsWithoutAccount, setStudentsWithoutAccount] = useState([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [hardDeleteChecked, setHardDeleteChecked] = useState(false);
 
   const refresh = async () => {
     const { data } = await api.get('/users', { params: { role: 'siswa' } });
@@ -142,14 +146,29 @@ export default function AdminPenggunaSiswaPage() {
     }
   };
 
-  const handleDelete = async (u) => {
-    if (!window.confirm(`Hapus siswa ${u.full_name} (${u.username})?`)) return;
+  const openDeleteDialog = (u) => {
+    setDeleteTarget(u);
+    setHardDeleteChecked(false);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await api.delete(`/users/${u.id}`);
-      toast.success('Siswa dihapus');
-      refresh();
+      await api.delete(`/users/${deleteTarget.id}`, {
+        params: { hard_delete: hardDeleteChecked },
+      });
+      toast.success(
+        hardDeleteChecked
+          ? 'Akun siswa dihapus permanen'
+          : 'Akun siswa dinonaktifkan (soft delete), data master siswa tetap ada'
+      );
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      setHardDeleteChecked(false);
+      await refresh();
     } catch (e) {
-      toast.error('Gagal menghapus');
+      toast.error(e?.response?.data?.detail || 'Gagal menghapus akun siswa');
     }
   };
 
@@ -362,7 +381,7 @@ export default function AdminPenggunaSiswaPage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => handleDelete(u)}
+                            onClick={() => openDeleteDialog(u)}
                             className="text-rose-600 hover:text-rose-700"
                             data-testid={`delete-student-${u.username}`}
                           >
@@ -555,6 +574,51 @@ export default function AdminPenggunaSiswaPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
             <Button onClick={handleSubmit} className="bg-[#006837] hover:bg-[#0B7A3B]" data-testid="student-form-submit">
               Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) { setDeleteTarget(null); setHardDeleteChecked(false); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Hapus Akun Siswa</DialogTitle>
+            <DialogDescription>
+              Default sistem menggunakan <strong>soft delete</strong> agar data master siswa tetap aman.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="text-sm text-slate-700">
+              Target: <strong>{deleteTarget?.full_name || '-'}</strong> {deleteTarget?.username ? `(${deleteTarget.username})` : ''}
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Jika <strong>tidak dicentang</strong>, akun hanya dinonaktifkan (soft delete) dan bisa dibuat/diaktifkan kembali.
+            </div>
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <Checkbox
+                checked={hardDeleteChecked}
+                onCheckedChange={(checked) => setHardDeleteChecked(Boolean(checked))}
+                data-testid="student-hard-delete-checkbox"
+              />
+              <span className="text-sm text-rose-700">
+                Hard delete permanen (hapus data user secara permanen)
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeleteTarget(null); setHardDeleteChecked(false); }}>
+              Batal
+            </Button>
+            <Button
+              onClick={handleDelete}
+              className={hardDeleteChecked ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#006837] hover:bg-[#0B7A3B]'}
+              data-testid="student-confirm-delete"
+            >
+              {hardDeleteChecked ? 'Hapus Permanen' : 'Nonaktifkan Akun'}
             </Button>
           </DialogFooter>
         </DialogContent>

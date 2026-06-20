@@ -1,14 +1,17 @@
-# TODO - Import Data Awal & Akun Massal GTK/Siswa
+- [x] Buat override lokal untuk BACKEND_UPSTREAM frontend tanpa mengubah config production
+- [x] Jalankan ulang frontend dengan override lokal
+- [x] Verifikasi status container
+- [x] Verifikasi endpoint /api/settings dan /api/auth/captcha via localhost:8080
+- [x] Pindahkan menu "Verval Data GTK" ke grup "Manajemen Pengguna" di AppShell
+- [x] Tambah halaman admin Buku Induk Kepegawaian
+- [x] Tambah halaman admin Cetak Format Absensi Siswa Manual
+- [x] Tambah route untuk 2 halaman baru di App.js
+- [x] Tambah menu baru di sidebar admin (Buku Induk Kepegawaian, Cetak Format Absensi Siswa Manual)
+- [x] Build ulang frontend dan verifikasi perubahan tampil di UI
 
-- [ ] Hapus tombol download/upload akun massal dari `/admin/pengguna-siswa`.
-- [ ] Tambah template + parser Excel untuk import data awal GTK (tanpa username/password).
-- [ ] Tambah template + parser Excel untuk import data awal Siswa (tanpa username/password).
-- [ ] Tambah endpoint backend import data awal GTK.
-- [ ] Tambah endpoint backend import data awal Siswa.
-- [ ] Tambah endpoint/template akun massal GTK.
-- [ ] Rapikan `/admin/import` jadi alur terpisah:
-  - [ ] Import Data Awal GTK
-  - [ ] Import Data Awal Siswa
-  - [ ] Import Akun Massal GTK
-  - [ ] Import Akun Massal Siswa
-- [ ] Testing critical-path endpoint + UI.
+- [x] Ubah endpoint delete user di backend agar default soft delete, optional hard delete via parameter
+- [x] Tambahkan guard keamanan hard delete (termasuk cegah admin hard-delete akun sendiri)
+- [x] Implementasi dialog konfirmasi hapus akun siswa dengan checklist hard delete (default soft delete)
+- [x] Implementasi dialog konfirmasi hapus akun GTK/Staff dengan checklist hard delete (default soft delete)
+- [ ] Uji alur soft delete: akun nonaktif tanpa menghapus data master siswa/gtk
+- [ ] Uji alur hard delete: hanya terjadi jika checklist hard delete dicentang

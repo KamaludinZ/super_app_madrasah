@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft, LogIn, Loader2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,6 +56,9 @@ export default function AdminUsersPage() {
   const [studentsList, setStudentsList] = useState([]);
   const [impersonatingUserId, setImpersonatingUserId] = useState(null);
   const [gtkWithoutAccount, setGtkWithoutAccount] = useState([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [hardDeleteChecked, setHardDeleteChecked] = useState(false);
 
   const refresh = async () => {
     const { data } = await api.get('/users');
@@ -154,7 +157,7 @@ export default function AdminUsersPage() {
       } else {
         if (!form.password) { toast.error('Password wajib diisi untuk user baru'); return; }
         const payload = { ...form };
-        delete payload.gtk_source_user_id;
+        // kirim gtk_source_user_id agar backend bisa update record master existing (anti duplikasi)
         delete payload.mutation_type;
         delete payload.mutation_date;
         delete payload.mutation_note;
@@ -173,10 +176,30 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleDelete = async (u) => {
-    if (!window.confirm(`Hapus user ${u.username}?`)) return;
-    try { await api.delete(`/users/${u.id}`); toast.success('User dihapus'); refresh(); }
-    catch (e) { toast.error('Gagal menghapus'); }
+  const openDeleteDialog = (u) => {
+    setDeleteTarget(u);
+    setHardDeleteChecked(false);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await api.delete(`/users/${deleteTarget.id}`, {
+        params: { hard_delete: hardDeleteChecked },
+      });
+      toast.success(
+        hardDeleteChecked
+          ? 'Akun pengguna dihapus permanen'
+          : 'Akun pengguna dinonaktifkan (soft delete), data master GTK/Staff tetap ada'
+      );
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      setHardDeleteChecked(false);
+      await refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menghapus akun pengguna');
+    }
   };
 
   const handleImpersonate = async (user) => {
@@ -337,7 +360,7 @@ export default function AdminUsersPage() {
                                 Login Sebagai
                               </Button>
                               <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
-                              <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => openDeleteDialog(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -353,6 +376,51 @@ export default function AdminUsersPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) { setDeleteTarget(null); setHardDeleteChecked(false); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Hapus Akun Pengguna</DialogTitle>
+            <DialogDescription>
+              Default sistem menggunakan <strong>soft delete</strong> agar data master GTK/Staff tetap aman.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="text-sm text-slate-700">
+              Target: <strong>{deleteTarget?.full_name || '-'}</strong> {deleteTarget?.username ? `(${deleteTarget.username})` : ''}
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Jika <strong>tidak dicentang</strong>, akun hanya dinonaktifkan (soft delete) dan bisa dibuat/diaktifkan kembali.
+            </div>
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <Checkbox
+                checked={hardDeleteChecked}
+                onCheckedChange={(checked) => setHardDeleteChecked(Boolean(checked))}
+                data-testid="user-hard-delete-checkbox"
+              />
+              <span className="text-sm text-rose-700">
+                Hard delete permanen (hapus data user secara permanen)
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeleteTarget(null); setHardDeleteChecked(false); }}>
+              Batal
+            </Button>
+            <Button
+              onClick={handleDelete}
+              className={hardDeleteChecked ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#006837] hover:bg-[#0B7A3B]'}
+              data-testid="user-confirm-delete"
+            >
+              {hardDeleteChecked ? 'Hapus Permanen' : 'Nonaktifkan Akun'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

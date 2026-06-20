@@ -14,5 +14,7 @@ services:
       SERVICE_FQDN_FRONTEND: ${SERVICE_FQDN_FRONTEND:-localhost}
 
   frontend:
+    environment:
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-http://backend:8000/api/}
     ports:
       - "${FRONTEND_PORT:-3000}:80"

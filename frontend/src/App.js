@@ -61,6 +61,8 @@ import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
 import AdminPromotionsPage from '@/pages/admin/AdminPromotionsPage';
 import AdminStudentRecordsPage from '@/pages/admin/AdminStudentRecordsPage';
+import AdminBukuIndukKepegawaianPage from '@/pages/admin/AdminBukuIndukKepegawaianPage';
+import AdminCetakAbsensiManualPage from '@/pages/admin/AdminCetakAbsensiManualPage';
 import AdminVervalSiswaPage from '@/pages/admin/AdminVervalSiswaPage';
 import AdminVervalGTKPage from '@/pages/admin/AdminVervalGTKPage';
 import AdminIndikatorMateriPage from '@/pages/admin/AdminIndikatorMateriPage';
@@ -190,6 +192,8 @@ function App() {
             <Route path="/admin/alumni" element={<AdminAlumniPage />} />
             <Route path="/admin/naik-kelas" element={<AdminPromotionsPage />} />
             <Route path="/admin/buku-induk" element={<AdminStudentRecordsPage />} />
+            <Route path="/admin/buku-induk-kepegawaian" element={<AdminBukuIndukKepegawaianPage />} />
+            <Route path="/admin/cetak-absensi-manual" element={<AdminCetakAbsensiManualPage />} />
             <Route path="/admin/verval-siswa" element={<AdminVervalSiswaPage />} />
             <Route path="/admin/verval-gtk" element={<AdminVervalGTKPage />} />
             <Route path="/admin/indikator-materi" element={<AdminIndikatorMateriPage />} />

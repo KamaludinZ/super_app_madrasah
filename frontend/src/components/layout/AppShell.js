@@ -117,18 +117,19 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/pengguna-siswa', label: 'Pengguna Siswa', icon: UserCircle, testid: 'nav-pengguna-siswa' },
           { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-admin-mutasi' },
           { to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-admin-verval-siswa' },
+          { to: '/admin/verval-gtk', label: 'Verval Data GTK', icon: CheckCircle2, testid: 'nav-admin-verval-gtk' },
         ],
       },
       {
         title: 'Manajemen GTK',
         items: [
           { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-gtk' },
+          { to: '/admin/buku-induk-kepegawaian', label: 'Buku Induk Kepegawaian', icon: BookMarked, testid: 'nav-admin-buku-induk-kepegawaian' },
           { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi', icon: UserCheck, testid: 'nav-gtk-absensi' },
           { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-gtk-agenda-guru' },
           { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-gtk-agenda-tendik' },
           { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-gtk-ekinerja' },
           { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-gtk-profesionalitas' },
-          { to: '/admin/verval-gtk', label: 'Verval Data GTK', icon: CheckCircle2, testid: 'nav-admin-verval-gtk' },
         ],
       },
       {
@@ -137,6 +138,7 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-admin-siswa' },
           { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-admin-kehadiran' },
           { to: '/admin/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-admin-buku-induk' },
+          { to: '/admin/cetak-absensi-manual', label: 'Cetak Format Absensi Siswa Manual', icon: FileText, testid: 'nav-admin-cetak-absensi-manual' },
           { to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-admin-pip-penerima' },
           { to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-admin-pip-ajuan' },
           { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-admin-alumni' },

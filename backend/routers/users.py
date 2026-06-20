@@ -1,8 +1,9 @@
 """Users CRUD + Excel import + Mutation set + Mutations list."""
 from datetime import datetime
+import re
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 import io
 
@@ -25,6 +26,21 @@ from excel_io import (
 from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest, MutationMasukSubmit, MutationKeluarSubmit
 
 router = APIRouter()
+
+GTK_ACCOUNT_ROLES = {
+    'guru',
+    'wali_kelas',
+    'tenaga_kependidikan',
+    'guru_piket',
+    'guru_bk',
+    'guru_tata_tertib',
+    'guru_ekstrakurikuler',
+}
+
+def _norm_name(name: Optional[str]) -> str:
+    if not name:
+        return ''
+    return re.sub(r'\s+', ' ', str(name).strip().lower())
 
 
 # IMPORTANT: Routes with literal paths MUST come before parameterized paths
@@ -93,15 +109,7 @@ async def users_gtk_initial_import(file: UploadFile = File(...), request: Reques
     except Exception as e:
         raise HTTPException(400, f"Error parsing Excel: {e}")
 
-    allowed_roles = {
-        'guru',
-        'wali_kelas',
-        'tenaga_kependidikan',
-        'guru_piket',
-        'guru_bk',
-        'guru_tata_tertib',
-        'guru_ekstrakurikuler',
-    }
+    allowed_roles = GTK_ACCOUNT_ROLES
 
     success = 0
     errors = []
@@ -119,18 +127,54 @@ async def users_gtk_initial_import(file: UploadFile = File(...), request: Reques
                 errors.append({'row': idx, 'error': f"Role tidak valid untuk GTK: {invalid}"})
                 continue
 
+            nip = (row.get('nip_nuptk') or '').strip()
+            full_name = (row.get('full_name') or '').strip()
+            norm_name = _norm_name(full_name)
+
+            # Cari existing master GTK (tanpa akun login) untuk update, bukan insert duplikat
+            existing = None
+            if nip:
+                existing = await db.users.find_one({'nip_nuptk': nip, 'roles': {'$in': list(GTK_ACCOUNT_ROLES)}})
+
+            if not existing:
+                existing = await db.users.find_one({
+                    'roles': {'$in': list(GTK_ACCOUNT_ROLES)},
+                    'full_name': {'$regex': f'^{re.escape(full_name)}$', '$options': 'i'}
+                })
+
+            if existing:
+                # Update data master GTK existing, jangan bikin record baru
+                await db.users.update_one(
+                    {'id': existing['id']},
+                    {'$set': {
+                        'full_name': full_name,
+                        'nip_nuptk': nip or existing.get('nip_nuptk'),
+                        'email': row.get('email') or existing.get('email'),
+                        'phone': row.get('phone') or existing.get('phone'),
+                        'gender': row.get('gender') or existing.get('gender'),
+                        'roles': list(set((existing.get('roles') or []) + row['roles'])),
+                        'account_source': 'master_gtk',
+                        'normalized_full_name': norm_name,
+                    }}
+                )
+                success += 1
+                continue
+
             u = UserModel(
                 username='',
                 password_hash='',
-                full_name=row['full_name'],
-                nip_nuptk=row.get('nip_nuptk'),
+                full_name=full_name,
+                nip_nuptk=nip or None,
                 email=row.get('email'),
                 phone=row.get('phone'),
                 roles=row['roles'],
                 gender=row.get('gender'),
+                is_active=True,
             )
             doc = u.model_dump()
             doc['created_at'] = doc['created_at'].isoformat()
+            doc['account_source'] = 'master_gtk'
+            doc['normalized_full_name'] = norm_name
             new_docs.append(doc)
             success += 1
         except Exception as e:
@@ -268,6 +312,49 @@ async def create_user(req: UserCreateRequest, request: Request, user: Dict = Dep
     invalid = [r for r in req.roles if r not in ROLES]
     if invalid:
         raise HTTPException(status_code=400, detail=f"Peran tidak valid: {invalid}")
+
+    # Khusus akun GTK/Staff: update record master existing agar tidak duplikat
+    is_gtk_account = any(r in GTK_ACCOUNT_ROLES for r in req.roles)
+    if is_gtk_account:
+        candidate = None
+        if req.nip_nuptk:
+            candidate = await db.users.find_one({
+                'nip_nuptk': req.nip_nuptk,
+                'roles': {'$in': list(GTK_ACCOUNT_ROLES)}
+            })
+
+        if not candidate:
+            candidate = await db.users.find_one({
+                'roles': {'$in': list(GTK_ACCOUNT_ROLES)},
+                'full_name': {'$regex': f'^{re.escape(req.full_name)}$', '$options': 'i'}
+            })
+
+        # Jika ketemu master GTK yang belum punya akun login -> update record itu
+        if candidate and not (candidate.get('username') or '').strip():
+            update_payload = {
+                'username': req.username,
+                'password_hash': hash_password(req.password),
+                'full_name': req.full_name,
+                'nip_nuptk': req.nip_nuptk or candidate.get('nip_nuptk'),
+                'email': req.email,
+                'phone': req.phone,
+                'roles': list(set((candidate.get('roles') or []) + req.roles)),
+                'homeroom_class_id': req.homeroom_class_id,
+                'student_class_id': req.student_class_id,
+                'parent_of': req.parent_of,
+                'normalized_full_name': _norm_name(req.full_name),
+                'account_source': 'account_activated_from_master',
+                'is_active': True,
+            }
+            await db.users.update_one({'id': candidate['id']}, {'$set': update_payload})
+            await log_audit(
+                user, 'activate_account', 'user', candidate['id'],
+                details={'username': req.username, 'roles': req.roles, 'mode': 'update_existing_master'},
+                request=request
+            )
+            doc = await db.users.find_one({'id': candidate['id']}, {'_id': 0, 'password_hash': 0})
+            return serialize_doc(doc)
+
     u = UserModel(
         username=req.username, password_hash=hash_password(req.password),
         full_name=req.full_name, nip_nuptk=req.nip_nuptk, nisn=req.nisn,
@@ -277,6 +364,7 @@ async def create_user(req: UserCreateRequest, request: Request, user: Dict = Dep
     )
     doc = u.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
+    doc['normalized_full_name'] = _norm_name(req.full_name)
     await db.users.insert_one(doc)
     await log_audit(user, 'create', 'user', u.id, details={'username': req.username, 'roles': req.roles}, request=request)
     doc.pop('password_hash', None)
@@ -313,10 +401,52 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
 
 
 @router.delete("/users/{uid}")
-async def delete_user(uid: str, request: Request, user: Dict = Depends(require_role('admin'))):
-    await db.users.delete_one({'id': uid})
-    await log_audit(user, 'delete', 'user', uid, request=request)
-    return {'message': 'Dihapus'}
+async def delete_user(
+    uid: str,
+    request: Request,
+    hard_delete: bool = Query(False, description="true = hapus permanen, false = nonaktifkan akun (default)"),
+    user: Dict = Depends(require_role('admin'))
+):
+    target = await db.users.find_one({'id': uid})
+    if not target:
+        raise HTTPException(404, "User tidak ditemukan")
+
+    if hard_delete:
+        # Safety guard: jangan izinkan admin hard-delete akun sendiri
+        if uid == user.get('id'):
+            raise HTTPException(400, "Tidak dapat hard delete akun Anda sendiri")
+
+        await db.users.delete_one({'id': uid})
+        await log_audit(
+            user,
+            'delete_hard',
+            'user',
+            uid,
+            details={'mode': 'hard', 'username': target.get('username'), 'full_name': target.get('full_name')},
+            request=request
+        )
+        return {'message': 'Akun dihapus permanen', 'mode': 'hard'}
+
+    # Default SAFE mode: soft delete akun login, data master tetap utuh
+    update = {
+        'is_active': False,
+        'account_deleted_at': datetime.utcnow().isoformat(),
+        'account_deleted_by': user.get('id'),
+        'account_delete_mode': 'soft',
+        # Nonaktifkan kredensial login agar tidak bisa masuk
+        'username': '',
+        'password_hash': '',
+    }
+    await db.users.update_one({'id': uid}, {'$set': update})
+    await log_audit(
+        user,
+        'delete_soft',
+        'user',
+        uid,
+        details={'mode': 'soft', 'full_name': target.get('full_name')},
+        request=request
+    )
+    return {'message': 'Akun dinonaktifkan (soft delete)', 'mode': 'soft'}
 
 
 # ============================================================
