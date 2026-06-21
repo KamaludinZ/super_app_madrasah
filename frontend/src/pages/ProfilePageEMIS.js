@@ -235,6 +235,59 @@ export default function ProfilePageEMIS() {
     loadAcademicYearList();
   }, []);
 
+  // Auto-restore rejected verval data to draft and load it for faster correction
+  useEffect(() => {
+    const restoreRejectedToDraft = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/api/verval-requests`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) return;
+        const requests = await response.json();
+        const latestRejected = (requests || [])
+          .filter((req) => req.status === 'rejected' && req.user_id === studentId)
+          .sort((a, b) => new Date(b.reviewed_at || b.created_at) - new Date(a.reviewed_at || a.created_at))[0];
+
+        if (!latestRejected?.new_data) return;
+
+        const draftKey = `verval_draft_${studentId}`;
+        const existingDraftRaw = localStorage.getItem(draftKey);
+        const existingDraft = existingDraftRaw ? JSON.parse(existingDraftRaw) : null;
+
+        if (!existingDraft?.timestamp || new Date(latestRejected.reviewed_at || latestRejected.created_at) > new Date(existingDraft.timestamp)) {
+          const mergedDraft = {
+            studentData: latestRejected.new_data.studentData || latestRejected.new_data.student || studentData || {},
+            ayahData: latestRejected.new_data.ayahData || latestRejected.new_data.ayah || ayahData || {},
+            ibuData: latestRejected.new_data.ibuData || latestRejected.new_data.ibu || ibuData || {},
+            waliData: latestRejected.new_data.waliData || latestRejected.new_data.wali || waliData || {},
+            alamatAyah: latestRejected.new_data.alamatAyah || latestRejected.new_data.alamat_ayah || alamatAyah || {},
+            alamatIbu: latestRejected.new_data.alamatIbu || latestRejected.new_data.alamat_ibu || alamatIbu || {},
+            alamatWali: latestRejected.new_data.alamatWali || latestRejected.new_data.alamat_wali || alamatWali || {},
+            alamatSiswa: latestRejected.new_data.alamatSiswa || latestRejected.new_data.alamat_siswa || alamatSiswa || {},
+            prestasi: latestRejected.new_data.prestasi || prestasi || [],
+            beasiswa: latestRejected.new_data.beasiswa || beasiswa || [],
+            pendidikanLain: latestRejected.new_data.pendidikanLain || latestRejected.new_data.pendidikan_lain || pendidikanLain || [],
+            timestamp: new Date().toISOString(),
+          };
+          localStorage.setItem(draftKey, JSON.stringify(mergedDraft));
+          checkDraft();
+          loadDraft();
+          toast.info('Draft perbaikan dari ajuan yang ditolak dimuat otomatis.');
+        }
+      } catch (e) {
+        // silent fail, feature should not block profile
+      }
+    };
+
+    if (studentId) {
+      restoreRejectedToDraft();
+    }
+  }, [studentId]);
+
   // Auto-save draft on data change
   useEffect(() => {
     const timer = setTimeout(() => {

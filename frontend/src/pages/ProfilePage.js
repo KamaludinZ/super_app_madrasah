@@ -11,7 +11,7 @@ import { UserCircle, Mail, Phone, MapPin, Calendar, Save, X, User, FileText, Gra
 import { useAuth } from '@/lib/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { VervalDraftAlert, saveVervalDraft, clearVervalDraft } from '@/components/verval/VervalDraftAlert';
+import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
 
 export default function ProfilePage() {
   const { user, refreshMe } = useAuth();
@@ -44,6 +44,11 @@ export default function ProfilePage() {
   const [originalData, setOriginalData] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
   const [vervalKey, setVervalKey] = useState(0);
+  const [vervalStatus, setVervalStatus] = useState({
+    hasDraft: false,
+    hasPending: false,
+    hasRejected: false,
+  });
 
   useEffect(() => {
     if (user) {
@@ -65,8 +70,14 @@ export default function ProfilePage() {
         major: user.major || '',
         certification: user.certification || '',
       };
-      setFormData(initial);
+
+      const draft = getVervalDraft(user.id);
+      const draftData = draft?.new_data || {};
+      const merged = { ...initial, ...draftData };
+
+      setFormData(merged);
       setOriginalData(initial);
+      setHasChanges(Object.keys(merged).some((key) => merged[key] !== initial[key]));
     }
   }, [user]);
 
@@ -124,6 +135,16 @@ export default function ProfilePage() {
     setHasChanges(false);
   };
 
+  const handleAdjustToDraft = () => {
+    if (!user) return;
+    const draft = getVervalDraft(user.id);
+    const draftData = draft?.new_data || {};
+    const merged = { ...originalData, ...draftData };
+    setFormData(merged);
+    setHasChanges(Object.keys(merged).some((key) => merged[key] !== originalData[key]));
+    setEditing(true);
+  };
+
   const getUserType = () => {
     if (!user?.roles) return 'siswa';
     if (user.roles.includes('siswa')) return 'siswa';
@@ -149,7 +170,13 @@ export default function ProfilePage() {
           </p>
         </div>
         {!editing ? (
-          <Button onClick={() => setEditing(true)} variant="outline" size="sm">
+          <Button
+            onClick={() => setEditing(true)}
+            variant="outline"
+            size="sm"
+            disabled={vervalStatus.hasPending}
+            title={vervalStatus.hasPending ? 'Ajuan sedang diproses. Klik "Sesuaikan Kembali" untuk mengedit.' : undefined}
+          >
             Edit Profil
           </Button>
         ) : (
@@ -170,6 +197,8 @@ export default function ProfilePage() {
         userId={user?.id}
         userType={getUserType()}
         onRefresh={handleVervalRefresh}
+        onStatusChange={setVervalStatus}
+        onAdjustToDraft={handleAdjustToDraft}
       />
 
       {/* Tabs Card */}

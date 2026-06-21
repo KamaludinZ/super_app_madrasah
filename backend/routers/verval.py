@@ -308,17 +308,51 @@ async def reject_verval_request(
 async def delete_verval_request(
     request_id: str,
     req: Request,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(get_current_user)
 ):
-    """Delete verval request (admin only)."""
+    """
+    Delete/cancel verval request.
+    - admin: boleh hard delete request apa pun
+    - owner request: hanya boleh cancel request miliknya jika status masih pending
+      (status diubah menjadi cancelled agar jejak audit tetap ada)
+    """
     verval_req = await db.verval_requests.find_one({'id': request_id}, {'_id': 0})
     if not verval_req:
         raise HTTPException(404, "Request tidak ditemukan")
 
-    await db.verval_requests.delete_one({'id': request_id})
-    await log_audit(user, 'delete', 'verval_request', request_id, request=req)
+    is_admin = 'admin' in user.get('roles', [])
+    is_owner = verval_req.get('user_id') == user.get('id')
 
-    return {'message': 'Request berhasil dihapus'}
+    if is_admin:
+        await db.verval_requests.delete_one({'id': request_id})
+        await log_audit(user, 'delete', 'verval_request', request_id, request=req)
+        return {'message': 'Request berhasil dihapus'}
+
+    if not is_owner:
+        raise HTTPException(403, "Tidak memiliki akses untuk membatalkan request ini")
+
+    if verval_req.get('status') != 'pending':
+        raise HTTPException(400, f"Request tidak bisa dibatalkan karena status sudah {verval_req.get('status')}")
+
+    await db.verval_requests.update_one(
+        {'id': request_id},
+        {'$set': {
+            'status': 'cancelled',
+            'cancelled_at': datetime.utcnow().isoformat(),
+            'cancelled_by': user.get('id'),
+            'cancelled_by_name': user.get('full_name')
+        }}
+    )
+    await log_audit(
+        user,
+        'cancel',
+        'verval_request',
+        request_id,
+        details={'user_id': verval_req.get('user_id'), 'request_type': verval_req.get('request_type')},
+        request=req
+    )
+
+    return {'message': 'Request berhasil dibatalkan'}
 
 
 @router.get("/verval-requests/stats/summary")

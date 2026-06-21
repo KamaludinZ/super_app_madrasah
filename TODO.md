@@ -15,3 +15,12 @@
 - [x] Implementasi dialog konfirmasi hapus akun GTK/Staff dengan checklist hard delete (default soft delete)
 - [ ] Uji alur soft delete: akun nonaktif tanpa menghapus data master siswa/gtk
 - [ ] Uji alur hard delete: hanya terjadi jika checklist hard delete dicentang
+- [x] Tambah role-based dispatcher untuk route `/profile` (siswa/guru/tenaga_kependidikan)
+- [x] Implementasi halaman profil terpisah: siswa -> ProfilePageEMIS
+- [x] Implementasi halaman profil terpisah: guru -> ProfilePage
+- [x] Implementasi halaman profil terpisah: tenaga kependidikan -> ProfilePage
+- [ ] Verifikasi routing `/profile` untuk role siswa/guru/tenaga kependidikan
+- [x] Buat halaman baru: ProfilePageSiswa, ProfilePageGuru, ProfilePageTendik
+- [x] Update route profile role-based ke halaman baru
+- [x] Tambah menu sidebar "Profil Saya" untuk siswa, guru, tendik
+- [ ] Verifikasi frontend/backend tetap aktif setelah perubahan

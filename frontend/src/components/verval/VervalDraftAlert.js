@@ -11,7 +11,7 @@ import { toast } from 'sonner';
  * - Shows "Batalkan Ajuan" and "Sesuaikan Kembali" if pending
  * - Shows "Perbaiki" button if rejected with admin notes
  */
-export function VervalDraftAlert({ userId, userType, onRefresh }) {
+export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, onAdjustToDraft }) {
   const [hasDraft, setHasDraft] = useState(false);
   const [draftData, setDraftData] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(null);
@@ -26,14 +26,17 @@ export function VervalDraftAlert({ userId, userType, onRefresh }) {
     try {
       const { data } = await api.get('/verval-requests');
 
-      // Check for pending request
-      const pending = data.find(req => req.status === 'pending' && req.user_id === userId);
-      setPendingRequest(pending);
+      const ownRequests = (data || []).filter(req => req.user_id === userId);
 
-      // Check for latest rejected request
-      const rejected = data
-        .filter(req => req.status === 'rejected' && req.user_id === userId)
-        .sort((a, b) => new Date(b.reviewed_at) - new Date(a.reviewed_at))[0];
+      // Status aktif ditentukan dari request terbaru, agar rejected lama tidak menimpa approved/cancelled terbaru
+      const latestRequest = ownRequests.sort(
+        (a, b) => new Date(b.reviewed_at || b.created_at) - new Date(a.reviewed_at || a.created_at)
+      )[0];
+
+      const pending = latestRequest?.status === 'pending' ? latestRequest : null;
+      const rejected = latestRequest?.status === 'rejected' ? latestRequest : null;
+
+      setPendingRequest(pending);
       setRejectedRequest(rejected);
 
       return { pending, rejected };
@@ -61,8 +64,16 @@ export function VervalDraftAlert({ userId, userType, onRefresh }) {
   };
 
   useEffect(() => {
-    checkDraft();
-    checkRequests();
+    const sync = async () => {
+      const hasDraftNow = checkDraft();
+      const { pending, rejected } = await checkRequests();
+      onStatusChange?.({
+        hasDraft: hasDraftNow,
+        hasPending: !!pending,
+        hasRejected: !!rejected,
+      });
+    };
+    sync();
   }, [STORAGE_KEY, DISMISSED_KEY, userId]);
 
   const handleSubmit = async () => {
@@ -106,8 +117,12 @@ export function VervalDraftAlert({ userId, userType, onRefresh }) {
 
     setSubmitting(true);
     try {
-      // Delete the pending request
-      await api.delete(`/verval-requests/${pendingRequest.id}`);
+      // Delete the pending request (query fallback for backends expecting user_id filter)
+      try {
+        await api.delete(`/verval-requests/${pendingRequest.id}`);
+      } catch (delErr) {
+        await api.delete(`/verval-requests/${pendingRequest.id}?user_id=${userId}`);
+      }
 
       toast.success('Ajuan verval dibatalkan');
 
@@ -121,6 +136,12 @@ export function VervalDraftAlert({ userId, userType, onRefresh }) {
       setPendingRequest(null);
       setHasDraft(true);
       setDraftData(draft);
+      onStatusChange?.({
+        hasDraft: true,
+        hasPending: false,
+        hasRejected: !!rejectedRequest,
+      });
+      onAdjustToDraft?.(draft);
       onRefresh?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal membatalkan ajuan');
@@ -147,9 +168,15 @@ export function VervalDraftAlert({ userId, userType, onRefresh }) {
       setPendingRequest(null);
       setHasDraft(true);
       setDraftData(draft);
+      onStatusChange?.({
+        hasDraft: true,
+        hasPending: false,
+        hasRejected: !!rejectedRequest,
+      });
+      onAdjustToDraft?.(draft);
       onRefresh?.();
     } catch (e) {
-      toast.error('Gagal memindahkan ke draft');
+      toast.error(e?.response?.data?.detail || 'Gagal memindahkan ke draft');
     }
   };
 

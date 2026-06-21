@@ -74,6 +74,9 @@ import AdminTatibDataPage from '@/pages/admin/AdminTatibDataPage';
 import MyVervalRequestsPage from '@/pages/MyVervalRequestsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ProfilePageEMIS from '@/pages/ProfilePageEMIS';
+import ProfilePageSiswa from '@/pages/ProfilePageSiswa';
+import ProfilePageGuru from '@/pages/ProfilePageGuru';
+import ProfilePageTendik from '@/pages/ProfilePageTendik';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
@@ -126,6 +129,17 @@ function DynamicFavicon() {
   }, [settings?.favicon_url, settings?.logo_url]);
 
   return null;
+}
+
+function ProfilePageByRole() {
+  const { user } = useAuth();
+  const roles = user?.roles || [];
+
+  if (roles.includes('siswa')) return <Navigate to="/profile/siswa" replace />;
+  if (roles.includes('guru')) return <Navigate to="/profile/guru" replace />;
+  if (roles.includes('tenaga_kependidikan')) return <Navigate to="/profile/tendik" replace />;
+
+  return <Navigate to="/profile/guru" replace />;
 }
 
 function App() {
@@ -205,7 +219,10 @@ function App() {
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
             <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
             <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
-            <Route path="/profile" element={<ProfilePageEMIS />} />
+            <Route path="/profile" element={<ProfilePageByRole />} />
+            <Route path="/profile/siswa" element={<ProfilePageSiswa />} />
+            <Route path="/profile/guru" element={<ProfilePageGuru />} />
+            <Route path="/profile/tendik" element={<ProfilePageTendik />} />
             <Route path="/profile-old" element={<ProfilePage />} />
             <Route path="/prestasi" element={<AchievementsPage />} />
             <Route path="/ekstrakurikuler" element={<EkstrakurikulerPage />} />

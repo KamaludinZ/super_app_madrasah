@@ -39,10 +39,13 @@ import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog
  * - Array of groups with {title, items} structure (for admin with groups)
  */
 function navForRole(role, userRoles = []) {
-  const items = [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' }];
+  const items = role === 'guru'
+    ? [{ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true }]
+    : [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' }];
 
   if (role === 'guru') {
-    items.push({ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true });
+    items.push({ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' });
+    items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-guru' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
@@ -81,9 +84,11 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler Saya', icon: Sparkles, testid: 'nav-ekstra-coach' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });
   } else if (role === 'tenaga_kependidikan') {
+    items.push({ to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-tendik' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
   } else if (role === 'siswa') {
+    items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });

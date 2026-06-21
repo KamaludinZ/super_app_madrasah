@@ -18,13 +18,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
-export default function AdminGTKDetailPage() {
-  const { id } = useParams();
+export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButton = false }) {
+  const { id: paramId } = useParams();
   const navigate = useNavigate();
+  const id = userIdOverride || paramId;
   const [gtk, setGtk] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState('data-guru');
+  const [activeTab, setActiveTab] = useState('info-akun');
   const [activeSubTab, setActiveSubTab] = useState('data-diri');
 
   // Form states for different tabs
@@ -111,9 +112,11 @@ export default function AdminGTKDetailPage() {
       setLoading(false);
     } catch (e) {
       toast.error('Gagal memuat data GTK');
-      navigate('/admin/gtk');
+      if (!userIdOverride) {
+        navigate('/admin/gtk');
+      }
     }
-  }, [id, navigate]);
+  }, [id, navigate, userIdOverride]);
 
   useEffect(() => {
     loadGTKData();
@@ -152,9 +155,11 @@ export default function AdminGTKDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/admin/gtk')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          {!hideBackButton && (
+            <Button variant="ghost" size="icon" onClick={() => navigate('/admin/gtk')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div>
             <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
               <User className="h-3 w-3 mr-1" /> Detail GTK
@@ -184,6 +189,9 @@ export default function AdminGTKDetailPage() {
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-white border border-slate-200 w-full justify-start overflow-x-auto">
+          <TabsTrigger value="info-akun" className="gap-2">
+            <Settings className="h-4 w-4" /> Info Akun
+          </TabsTrigger>
           <TabsTrigger value="data-guru" className="gap-2">
             <User className="h-4 w-4" /> Data Guru
           </TabsTrigger>
@@ -209,6 +217,52 @@ export default function AdminGTKDetailPage() {
             <FolderOpen className="h-4 w-4" /> Arsip Berkas
           </TabsTrigger>
         </TabsList>
+
+        {/* TAB: INFO AKUN */}
+        <TabsContent value="info-akun">
+          <Card>
+            <CardHeader>
+              <CardTitle>Info Akun</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Nama Lengkap</Label>
+                <Input value={gtk?.full_name || ''} disabled />
+              </div>
+              <div>
+                <Label>Username</Label>
+                <Input value={gtk?.username || ''} disabled />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input value={gtk?.email || ''} disabled />
+              </div>
+              <div>
+                <Label>No. HP</Label>
+                <Input value={gtk?.phone || ''} disabled />
+              </div>
+              <div>
+                <Label>Role</Label>
+                <Input value={(gtk?.roles || []).join(', ')} disabled />
+              </div>
+              <div>
+                <Label>Status Akun</Label>
+                <Input
+                  value={gtk?.is_active === false ? 'Nonaktif' : 'Aktif'}
+                  disabled
+                />
+              </div>
+              <div>
+                <Label>Status Password</Label>
+                <Input value={gtk?.password_status || '-'} disabled />
+              </div>
+              <div>
+                <Label>ID Pengguna</Label>
+                <Input value={gtk?.id || ''} disabled />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* TAB: DATA GURU */}
         <TabsContent value="data-guru">

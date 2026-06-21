@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, Eye, Clock, AlertCircle, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -17,12 +18,16 @@ export default function AdminVervalGTKPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchName, setSearchName] = useState('');
 
   const refresh = async () => {
     setLoading(true);
     try {
-      // Fetch GTK requests (guru + tenaga_kependidikan)
-      const { data } = await api.get('/verval-requests');
+      // Fetch GTK requests (guru + tenaga_kependidikan) with optional status filter
+      const params = {};
+      if (statusFilter !== 'all') params.status = statusFilter;
+      const { data } = await api.get('/verval-requests', { params });
       // Filter on frontend for GTK
       const gtkRequests = data.filter(r => r.user_type === 'guru' || r.user_type === 'tenaga_kependidikan');
       setRequests(gtkRequests);
@@ -33,7 +38,7 @@ export default function AdminVervalGTKPage() {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { refresh(); }, [statusFilter]);
 
   const openDetail = (req) => {
     setSelectedRequest(req);
@@ -137,6 +142,12 @@ export default function AdminVervalGTKPage() {
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const filteredRequests = requests.filter((r) => {
+    const keyword = searchName.trim().toLowerCase();
+    if (!keyword) return true;
+    const name = (r.submitted_by_name || '').toLowerCase();
+    return name.includes(keyword);
+  });
 
   return (
     <div className="space-y-6">
@@ -147,12 +158,31 @@ export default function AdminVervalGTKPage() {
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-bold">Verifikasi & Validasi Data GTK</h1>
           <p className="text-sm text-slate-600 mt-1">
-            {requests.length} total request • {pendingCount} menunggu review
+            {filteredRequests.length} request ditampilkan • {pendingCount} menunggu review
           </p>
         </div>
-        <Button onClick={refresh} variant="outline" disabled={loading}>
-          Refresh
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Semua Status</option>
+            <option value="pending">Menunggu</option>
+            <option value="approved">Disetujui</option>
+            <option value="rejected">Ditolak</option>
+            <option value="cancelled">Dibatalkan</option>
+          </select>
+          <Input
+            placeholder="Cari nama..."
+            value={searchName}
+            onChange={(e) => setSearchName(e.target.value)}
+            className="w-[220px]"
+          />
+          <Button onClick={refresh} variant="outline" disabled={loading}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {pendingCount > 0 && (
@@ -185,11 +215,11 @@ export default function AdminVervalGTKPage() {
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-slate-500">Memuat...</TableCell>
                   </TableRow>
-                ) : requests.length === 0 ? (
+                ) : filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-slate-500">Belum ada request verval</TableCell>
                   </TableRow>
-                ) : requests.map(req => (
+                ) : filteredRequests.map(req => (
                   <TableRow key={req.id}>
                     <TableCell className="text-sm">
                       {new Date(req.created_at).toLocaleDateString('id-ID', {
