@@ -1,21 +1,22 @@
 services:
-  mongodb:
-    image: mongo:7.0
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-this-password}
-      MONGO_INITDB_DATABASE: ${DB_NAME:-super_app_madrasah}
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - superapp-network
-    healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin \"mongodb://localhost:27017/admin\" --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+  # MongoDB Docker Service - DISABLED (using MongoDB Atlas instead)
+  # mongodb:
+  #   image: mongo:7.0
+  #   restart: unless-stopped
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-this-password}
+  #     MONGO_INITDB_DATABASE: ${DB_NAME:-super_app_madrasah}
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - superapp-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "mongosh --quiet -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin \"mongodb://localhost:27017/admin\" --eval \"db.runCommand({ ping: 1 }).ok\" | grep 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 40s
 
   backend:
     build:
@@ -24,9 +25,9 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      mongodb:
-        condition: service_healthy
+    # depends_on:
+    #   mongodb:
+    #     condition: service_healthy
     environment:
       MONGO_URL: ${MONGO_URL:-mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-change-this-password}@mongodb:27017/${DB_NAME:-super_app_madrasah}?authSource=admin}
       DB_NAME: ${DB_NAME:-super_app_madrasah}
@@ -78,7 +79,7 @@ services:
       start_period: 60s
 
 volumes:
-  mongodb_data:
+  # mongodb_data:  # DISABLED - using MongoDB Atlas
   uploads:
 
 networks:
