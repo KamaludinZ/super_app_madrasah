@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, ShieldCheck, RefreshCw, BookOpen, LogIn } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, LogIn, TrendingUp, Calendar, DollarSign, Activity } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -93,16 +93,48 @@ export default function LoginPage() {
           <p className="text-slate-700 max-w-md leading-relaxed">
             Sistem digital terintegrasi untuk pengelolaan akademik, jurnal mengajar, dan layanan administrasi {settings?.school_name || 'MTsN 2 Kota Malang'}.
           </p>
-          <div className="space-y-3 max-w-md">
-            <Feature icon={ShieldCheck} title="Jurnal Presisi" desc="Sistem anti-manipulasi dengan validasi QR + Jadwal + GPS" />
-            <Feature icon={BookOpen} title="Multi-Peran" desc="9 peran berbeda dengan fitur switch role yang seamless" />
-          </div>
-          <div className="pt-4 space-y-2">
-            <Link to="/public/monitoring" className="block text-sm text-[#006837] hover:underline font-medium" data-testid="link-public-monitoring">
-              → Lihat Monitoring Jurnal Publik (Realtime)
+
+          <div className="pt-4 space-y-3 max-w-md">
+            <div className="text-sm font-semibold text-slate-900 mb-3">Layanan Publik Tersedia</div>
+
+            <Link to="/public/monitoring" className="group flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 hover:shadow-md transition-all duration-200" data-testid="link-public-monitoring">
+              <div className="h-10 w-10 rounded-lg bg-blue-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Activity className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-blue-900 text-sm group-hover:text-blue-700">Monitoring Jurnal Publik</div>
+                <div className="text-xs text-blue-700 mt-0.5">Pantau aktivitas mengajar secara realtime</div>
+              </div>
             </Link>
-            <Link to="/public/prestasi" className="block text-sm text-[#006837] hover:underline font-medium" data-testid="link-public-prestasi">
-              → Lihat Prestasi Madrasah
+
+            <Link to="/public/prestasi" className="group flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200 hover:shadow-md transition-all duration-200" data-testid="link-public-prestasi">
+              <div className="h-10 w-10 rounded-lg bg-amber-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <TrendingUp className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-amber-900 text-sm group-hover:text-amber-700">Prestasi Madrasah</div>
+                <div className="text-xs text-amber-700 mt-0.5">Lihat pencapaian dan penghargaan</div>
+              </div>
+            </Link>
+
+            <Link to="/public/agenda" className="group flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 hover:shadow-md transition-all duration-200" data-testid="link-public-agenda">
+              <div className="h-10 w-10 rounded-lg bg-purple-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Calendar className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-purple-900 text-sm group-hover:text-purple-700">Agenda Kegiatan</div>
+                <div className="text-xs text-purple-700 mt-0.5">Jadwal dan kegiatan madrasah</div>
+              </div>
+            </Link>
+
+            <Link to="/public/rkam" className="group flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200 hover:shadow-md transition-all duration-200" data-testid="link-public-rkam">
+              <div className="h-10 w-10 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-emerald-900 text-sm group-hover:text-emerald-700">RKAM & Transparansi Keuangan</div>
+                <div className="text-xs text-emerald-700 mt-0.5">Laporan anggaran dan realisasi dana</div>
+              </div>
             </Link>
           </div>
         </motion.div>
@@ -204,31 +236,39 @@ export default function LoginPage() {
                 </div>
               </form>
 
-              <div className="mt-6 pt-4 border-t border-slate-200 lg:hidden space-y-1">
-                <Link to="/public/monitoring" className="block text-sm text-[#006837] hover:underline" data-testid="link-public-monitoring-mobile">
-                  → Monitoring Publik
+              <div className="mt-6 pt-4 border-t border-slate-200 lg:hidden space-y-2">
+                <div className="text-xs font-semibold text-slate-700 mb-2">Layanan Publik</div>
+
+                <Link to="/public/monitoring" className="group flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors" data-testid="link-public-monitoring-mobile">
+                  <Activity className="h-4 w-4 text-blue-600 shrink-0" />
+                  <div className="flex-1 text-sm font-medium text-blue-900">Monitoring Jurnal</div>
                 </Link>
-                <Link to="/public/prestasi" className="block text-sm text-[#006837] hover:underline" data-testid="link-public-prestasi-mobile">
-                  → Prestasi Madrasah
+
+                <Link to="/public/prestasi" className="group flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors" data-testid="link-public-prestasi-mobile">
+                  <TrendingUp className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div className="flex-1 text-sm font-medium text-amber-900">Prestasi Madrasah</div>
+                </Link>
+
+                <Link to="/public/agenda" className="group flex items-center gap-2 p-3 rounded-lg bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors" data-testid="link-public-agenda-mobile">
+                  <Calendar className="h-4 w-4 text-purple-600 shrink-0" />
+                  <div className="flex-1 text-sm font-medium text-purple-900">Agenda Kegiatan</div>
+                </Link>
+
+                <Link to="/public/rkam" className="group flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors" data-testid="link-public-rkam-mobile">
+                  <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <div className="flex-1 text-sm font-medium text-emerald-900">RKAM & Keuangan</div>
                 </Link>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       </div>
-    </div>
-  );
-}
 
-function Feature({ icon: Icon, title, desc }) {
-  return (
-    <div className="flex items-start gap-3 bg-white/60 border border-slate-200 rounded-xl p-4">
-      <div className="h-10 w-10 rounded-lg bg-[#006837]/10 flex items-center justify-center shrink-0">
-        <Icon className="h-5 w-5 text-[#006837]" />
-      </div>
-      <div>
-        <div className="font-semibold text-slate-900 text-sm">{title}</div>
-        <div className="text-xs text-slate-600">{desc}</div>
+      {/* Version info at bottom */}
+      <div className="absolute bottom-4 left-0 right-0 text-center">
+        <p className="text-xs text-slate-500">
+          Super Apps MATSANDATAMA v0.1.0 &copy; {new Date().getFullYear()} - Kementerian Agama RI
+        </p>
       </div>
     </div>
   );
