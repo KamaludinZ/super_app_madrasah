@@ -267,7 +267,7 @@ export default function LoginPage() {
       {/* Version info at bottom */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
         <p className="text-xs text-slate-500">
-          Super Apps MATSANDATAMA v0.1.0 &copy; {new Date().getFullYear()} - Kementerian Agama RI
+          Super Apps MATSANDATAMA v1.1.0 &copy; {new Date().getFullYear()} - Kementerian Agama RI
         </p>
       </div>
     </div>
