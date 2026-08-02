@@ -1,0 +1,77 @@
+# Test files and development artifacts - DO NOT include in production
+*test*.py
+backend_test*.py
+iterasi*_test.py
+generate_test*.py
+test_*.py
+poc_*.py
+check_*.py
+
+# Environment files - use platform environment variables in production
+.env
+.env.*
+*.env
+.env.local
+.env.development
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Documentation and notes
+README*.md
+CHANGELOG.md
+SECURITY_AUDIT_REPORT.md
+*.md
+
+# Seed data scripts - seed manually in production
+seed_*.py
+*_seeder.py
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Development tools
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# Large unnecessary files
+*.zip
+*.tar.gz
+*.tar
+*.tgz

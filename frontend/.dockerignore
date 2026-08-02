@@ -1,0 +1,70 @@
+# Development files and node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Testing
+/coverage
+.nyc_output
+
+# Environment files - use build args in Dockerfile
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.vs/
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Build artifacts
+build/
+dist/
+.next/
+out/
+
+# Documentation
+README.md
+CHANGELOG.md
+*.md
+
+# Test files
+**/*.test.js
+**/*.spec.js
+**/__tests__/
+**/__mocks__/
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Misc
+.DS_Store
+Thumbs.db
+*.tgz
+*.zip
+*.tar.gz
