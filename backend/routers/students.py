@@ -20,9 +20,11 @@ from core import (
 from excel_io import (
     parse_nism_update_rows,
     parse_student_initial_rows,
+    parse_student_combined_rows,
     parse_student_rows,
     nism_update_template,
     student_initial_template,
+    student_combined_template,
     student_template,
 )
 from journal_core import current_day_id, now_wib
@@ -36,7 +38,11 @@ router = APIRouter()
 # STUDENTS LIST
 # ============================================================
 @router.get("/students")
-async def list_students(class_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_students(
+    class_id: Optional[str] = None,
+    exclude_mutation: bool = False,
+    user: Dict = Depends(get_current_user)
+):
     """Get list of students. Admin sees all; wali kelas sees own class; siswa sees self only."""
     if 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1:
         me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
@@ -52,6 +58,9 @@ async def list_students(class_id: Optional[str] = None, user: Dict = Depends(get
             q['student_class_id'] = cls['id']
         else:
             return []
+    if exclude_mutation:
+        # Exclude students with mutation_type 'keluar'
+        q['mutation_type'] = {'$ne': 'keluar'}
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
     enriched = []
     for s in items:
@@ -533,6 +542,100 @@ async def students_initial_import(file: UploadFile = File(...), request: Request
     await log_audit(
         user,
         'import_initial_excel',
+        'student',
+        None,
+        details={'success': success, 'errors': len(errors)},
+        request=request
+    )
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
+@router.get("/students/combined-template")
+async def students_combined_template_dl(user: Dict = Depends(require_role('admin'))):
+    """Download template for combined student import (data + account)."""
+    return StreamingResponse(
+        io.BytesIO(student_combined_template()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_siswa_lengkap_matsandatama.xlsx"'},
+    )
+
+
+@router.post("/students/import-combined")
+async def students_combined_import(file: UploadFile = File(...), request: Request = None,
+                                   user: Dict = Depends(require_role('admin'))):
+    """Import students with both data and account (username/password) in one go."""
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya .xlsx")
+    contents = await file.read()
+    try:
+        rows = parse_student_combined_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Error parsing Excel: {e}")
+
+    classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
+    success = 0
+    errors = []
+    new_docs = []
+
+    for r in rows:
+        try:
+            # Validate required fields
+            if not all([r['full_name'], r['nisn'], r['kelas']]):
+                errors.append(f"Baris {r['_row']}: nama_lengkap/nisn/kelas wajib")
+                continue
+
+            if not r.get('username') or not r.get('password'):
+                errors.append(f"Baris {r['_row']}: username dan password wajib")
+                continue
+
+            # Get class ID
+            cls_id = classes_map.get(r['kelas'])
+            if not cls_id:
+                errors.append(f"Baris {r['_row']}: kelas '{r['kelas']}' tidak ditemukan")
+                continue
+
+            # Check NISN conflict
+            existing_nisn = await db.users.find_one({'nisn': r['nisn'], 'roles': 'siswa'})
+            if existing_nisn:
+                errors.append(f"Baris {r['_row']}: NISN '{r['nisn']}' sudah terdaftar")
+                continue
+
+            # Check username conflict
+            username = r.get('username').strip()
+            username_conflict = await db.users.find_one({'username': username})
+            if username_conflict:
+                errors.append(f"Baris {r['_row']}: Username '{username}' sudah digunakan")
+                continue
+
+            # Create new student with account
+            u = UserModel(
+                username=username,
+                password_hash=hash_password(r.get('password')),
+                full_name=r['full_name'],
+                roles=['siswa'],
+                nisn=r['nisn'],
+                gender=r.get('gender'),
+                student_class_id=cls_id,
+                birth_place=r.get('birth_place'),
+                birth_date=r.get('birth_date'),
+                address=r.get('address'),
+                email=r.get('email'),
+                phone=r.get('phone'),
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            doc['account_source'] = 'combined_student'
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append(f"Baris {r.get('_row', '?')}: {e}")
+
+    if new_docs:
+        await db.users.insert_many(new_docs)
+
+    await log_audit(
+        user,
+        'import_combined_student',
         'student',
         None,
         details={'success': success, 'errors': len(errors)},

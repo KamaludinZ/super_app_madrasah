@@ -173,3 +173,118 @@ async def public_achievements(
         'app_name': settings.get('app_name'),
         'logo_url': settings.get('logo_url'),
     }
+
+
+@router.get("/public/agenda")
+async def public_agenda(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    date: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 10
+):
+    """Endpoint publik: agenda kegiatan madrasah dan pegawai."""
+    from datetime import datetime as dt
+    import calendar
+
+    # Determine date range
+    if date:
+        # Specific date for staff events
+        from_date = date
+        to_date = date
+    elif year and month:
+        # Specific month
+        from_date = f"{year}-{month:02d}-01"
+        last_day = calendar.monthrange(year, month)[1]
+        to_date = f"{year}-{month:02d}-{last_day}"
+    elif year:
+        # Whole year
+        from_date = f"{year}-01-01"
+        to_date = f"{year}-12-31"
+    else:
+        # Default: current month
+        now = dt.now()
+        from_date = f"{now.year}-{now.month:02d}-01"
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        to_date = f"{now.year}-{now.month:02d}-{last_day}"
+
+    # Get madrasah events
+    events_q = {
+        'is_active': True,
+        'date': {'$gte': from_date, '$lte': to_date}
+    }
+
+    total_events = await db.madrasah_events.count_documents(events_q)
+    skip = (page - 1) * per_page
+
+    madrasah_events = await db.madrasah_events.find(
+        events_q, {'_id': 0}
+    ).sort('date', 1).sort('start_time', 1).skip(skip).limit(per_page).to_list(per_page)
+
+    # Get staff events for specific date or date range - ONLY PUBLIC
+    staff_events_q = {
+        'is_active': True,
+        'is_public': True,  # Only show public events
+        'date': {'$gte': from_date, '$lte': to_date}
+    }
+
+    staff_events = await db.staff_events.find(
+        staff_events_q, {'_id': 0}
+    ).sort('date', 1).sort('start_time', 1).to_list(1000)
+
+    # Enrich staff events with user info
+    now_wib_dt = now_wib()
+    for se in staff_events:
+        if se.get('user_id'):
+            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'roles': 1})
+            if user:
+                se['user_name'] = user.get('full_name')
+                se['nip'] = user.get('nip')
+                # Get jabatan from roles
+                roles = user.get('roles', [])
+                # Find first jabatan role
+                from models import ROLE_LABELS
+                jabatan = None
+                for role in roles:
+                    if role != 'admin' and role != 'siswa':
+                        jabatan = ROLE_LABELS.get(role, role)
+                        break
+                se['jabatan'] = jabatan or '-'
+
+        # Determine status based on date and time
+        event_date = se.get('date', '')
+        start_time = se.get('start_time', '00:00')
+        end_time = se.get('end_time', '23:59')
+
+        try:
+            event_dt_start = dt.fromisoformat(f"{event_date}T{start_time}:00")
+            event_dt_end = dt.fromisoformat(f"{event_date}T{end_time}:00")
+
+            if now_wib_dt < event_dt_start:
+                se['computed_status'] = 'upcoming'
+            elif event_dt_start <= now_wib_dt <= event_dt_end:
+                se['computed_status'] = 'ongoing'
+            else:
+                se['computed_status'] = 'completed'
+        except Exception:
+            se['computed_status'] = 'upcoming'
+
+    settings = await get_settings()
+
+    return {
+        'madrasah_events': madrasah_events,
+        'staff_events': staff_events,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total_events,
+            'total_pages': (total_events + per_page - 1) // per_page
+        },
+        'date_range': {
+            'from': from_date,
+            'to': to_date
+        },
+        'school_name': settings.get('school_name'),
+        'app_name': settings.get('app_name'),
+        'logo_url': settings.get('logo_url'),
+    }

@@ -43,3 +43,9 @@ async def public_settings():
         'maintenance_message': s.get('maintenance_message'),
         'maintenance_ends_at': s.get('maintenance_ends_at'),
     }
+
+
+@router.get("/public/settings")
+async def public_settings_alias():
+    """Alias untuk /settings - untuk compatibility dengan frontend"""
+    return await public_settings()

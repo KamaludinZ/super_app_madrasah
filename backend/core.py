@@ -25,7 +25,11 @@ from models import AuditLogModel, SecurityLogModel, SettingsModel
 from auth_utils import decode_token
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+
+# CRITICAL FIX: Force override environment variables from .env
+# This is needed because system may have MONGO_URL set to docker mongodb:27017
+# We need to override it with MongoDB Atlas URL from .env file
+load_dotenv(ROOT_DIR / '.env', override=True)
 
 # ============================================================
 # LOGGING (Initialize first so it can be used everywhere)
@@ -37,13 +41,14 @@ logger = logging.getLogger("matsandatama")
 # ============================================================
 # DNS RESOLVER FIX FOR MONGODB ATLAS
 # ============================================================
-# Fix DNS resolution issues by using Google DNS
-try:
-    import dns.resolver
-    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
-    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
-except Exception as e:
-    logger.warning(f"DNS resolver config warning: {e}")
+# DISABLED: Custom DNS resolver causes timeout issues
+# Let system use default DNS resolver instead
+# try:
+#     import dns.resolver
+#     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+#     dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
+# except Exception as e:
+#     logger.warning(f"DNS resolver config warning: {e}")
 
 # ============================================================
 # DATABASE
@@ -55,6 +60,11 @@ if not mongo_url:
         "Please set it in Coolify or your .env file. "
         "Example: mongodb://user:pass@host:27017 or mongodb+srv://..."
     )
+
+# Log the MongoDB URL (hide password for security)
+mongo_url_log = mongo_url.replace(mongo_url.split('@')[0].split('://')[1], '****') if '@' in mongo_url else mongo_url[:50]
+logger.info(f"MongoDB URL: {mongo_url_log}")
+logger.info(f"Is MongoDB Atlas (mongodb+srv): {'mongodb+srv' in mongo_url}")
 
 db_name = os.getenv('DB_NAME', 'super_app_madrasah')
 if not db_name:
@@ -85,12 +95,30 @@ if 'tlsCAFile=' in mongo_url:
             logger.info("Using MongoDB URL with fallback TLS settings")
 
 try:
-    client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=10000)
+    # Increase timeout for DNS resolution issues
+    client = AsyncIOMotorClient(
+        mongo_url,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=20000,
+        socketTimeoutMS=20000
+    )
     db = client[db_name]
     logger.info(f"MongoDB client initialized for database: {db_name}")
+    logger.info("Note: Actual connection will be tested on first query")
 except Exception as e:
     logger.error(f"Failed to initialize MongoDB client: {e}")
-    raise
+    logger.warning("Server will start but database operations will fail until MongoDB is accessible")
+    # Don't raise - allow server to start even if MongoDB is not accessible yet
+    # This allows health checks and debugging
+    client = None
+    db = None
+
+# ============================================================
+# DATABASE DEPENDENCY
+# ============================================================
+async def get_db():
+    """FastAPI dependency to get database instance"""
+    return db
 
 # ============================================================
 # SECURITY
@@ -219,6 +247,34 @@ async def get_settings():
         await db.settings.insert_one(default)
         return default
     return serialize_doc(s)
+
+
+def get_teaching_slots_for_day(settings: Dict[str, Any], day: str) -> List[Dict[str, Any]]:
+    """
+    Get teaching slots for a specific day from settings.
+    Supports both legacy (global list) and new (per-day dict) formats.
+
+    Args:
+        settings: Settings document
+        day: Day name (e.g., 'senin', 'selasa')
+
+    Returns:
+        List of teaching slot dicts
+    """
+    from models import DEFAULT_TEACHING_SLOTS
+
+    slots = settings.get('teaching_slots', {})
+
+    # If slots is a dict (per-day configuration)
+    if isinstance(slots, dict):
+        return slots.get(day, DEFAULT_TEACHING_SLOTS)
+
+    # If slots is a list (legacy/global configuration)
+    elif isinstance(slots, list):
+        return slots if slots else DEFAULT_TEACHING_SLOTS
+
+    # Fallback to default
+    return DEFAULT_TEACHING_SLOTS
 
 
 async def get_active_context(user: Optional[Dict[str, Any]] = None):

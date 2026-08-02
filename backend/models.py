@@ -669,7 +669,12 @@ class SettingsModel(BaseModel):
     grace_minutes: int = 15
     # NEW: Work-day & schedule template config
     active_days: List[str] = Field(default_factory=lambda: list(DEFAULT_ACTIVE_DAYS))
-    teaching_slots: List[Dict[str, Any]] = Field(default_factory=lambda: list(DEFAULT_TEACHING_SLOTS))
+    # UPDATED: teaching_slots can be either:
+    # 1. List (legacy/global) - applies to all days
+    # 2. Dict[day_name, List] - per-day configuration
+    teaching_slots: Dict[str, List[Dict[str, Any]]] | List[Dict[str, Any]] = Field(
+        default_factory=lambda: {day: list(DEFAULT_TEACHING_SLOTS) for day in DEFAULT_ACTIVE_DAYS}
+    )
     # NEW: Session management
     session_max_hours: int = 12  # max session length (work-day)
     idle_timeout_minutes: int = 30  # auto-logout after inactivity
@@ -767,6 +772,7 @@ class UserCreateRequest(BaseModel):
 
 
 class UserUpdateRequest(BaseModel):
+    username: Optional[str] = None
     full_name: Optional[str] = None
     nip_nuptk: Optional[str] = None
     nisn: Optional[str] = None
@@ -1213,3 +1219,102 @@ class VervalRequestModel(BaseModel):
     reviewed_by: Optional[str] = None  # reviewer user_id (admin/wali_kelas)
     reviewed_by_name: Optional[str] = None  # reviewer nama lengkap
     reviewed_by_role: Optional[str] = None  # 'admin' | 'wali_kelas'
+
+
+class MadrasahEventModel(BaseModel):
+    """Model untuk kegiatan/acara madrasah."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # Nama kegiatan
+    description: Optional[str] = None
+    date: str  # Format: YYYY-MM-DD
+    start_time: str  # Format: HH:MM
+    end_time: str  # Format: HH:MM
+    location: str  # Tempat kegiatan
+    participants_count: int = 0  # Jumlah peserta
+    academic_year_id: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+
+
+class StaffEventModel(BaseModel):
+    """Model untuk kegiatan/agenda pegawai."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str  # ID pegawai
+    event_name: str  # Nama kegiatan
+    description: Optional[str] = None
+    date: str  # Format: YYYY-MM-DD
+    start_time: str  # Format: HH:MM
+    end_time: str  # Format: HH:MM
+    location: Optional[str] = None
+    category: Optional[str] = None  # For internal categorization (rapat, pelatihan, etc)
+    priority: Optional[str] = None  # For tendik: low, normal, high, urgent
+    status: str = 'pending'  # 'pending' | 'in_progress' | 'completed' | 'cancelled'
+    is_public: bool = True  # True: tampil di public page, False: hanya admin & pegawai ybs
+    academic_year_id: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+
+
+class RKAMBudgetItemModel(BaseModel):
+    """Model untuk item anggaran RKAM (Rencana Kegiatan dan Anggaran Madrasah)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Identifikasi
+    code: Optional[str] = None  # Kode anggaran (e.g., "1.2.3")
+    name: str  # Nama item anggaran
+    category: Optional[str] = None  # Kategori: operasional, pembangunan, program, dll
+    bidang: Optional[str] = None  # Bidang: sarana_prasarana, humas, kesiswaan, kurikulum, tata_usaha
+    sumber_dana: Optional[str] = None  # Sumber dana: BOS, KOMITE
+    description: Optional[str] = None  # Deskripsi detail
+
+    # Anggaran
+    allocated_amount: float = 0.0  # Jumlah yang dialokasikan
+    realized_amount: float = 0.0  # Jumlah yang sudah terealisasi
+    remaining_amount: float = 0.0  # Sisa anggaran (calculated field)
+
+    # Periode
+    fiscal_year: str  # Tahun anggaran (e.g., "2024/2025")
+    quarter: Optional[str] = None  # Triwulan: Q1, Q2, Q3, Q4
+    month: Optional[int] = None  # Bulan spesifik (1-12)
+
+    # Metadata
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+
+
+class RKAMDocumentModel(BaseModel):
+    """Model untuk dokumen transparansi RKAM."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Informasi Dokumen
+    title: str  # Judul dokumen
+    description: Optional[str] = None  # Deskripsi dokumen
+    document_type: str  # Jenis: laporan, bukti, proposal, evaluasi, dll
+
+    # File
+    file_url: str  # URL file yang diupload
+    file_name: str  # Nama file asli
+    file_size: Optional[int] = None  # Ukuran file dalam bytes
+    mime_type: Optional[str] = None  # MIME type (application/pdf, etc)
+
+    # Periode
+    fiscal_year: str  # Tahun anggaran
+    quarter: Optional[str] = None  # Triwulan terkait
+    upload_date: datetime = Field(default_factory=datetime.utcnow)
+
+    # Visibilitas
+    is_public: bool = True  # True: tampil di halaman publik, False: internal only
+
+    # Metadata
+    uploaded_by: Optional[str] = None  # User ID yang upload
+    is_active: bool = True
+    tags: Optional[List[str]] = None  # Tags untuk filtering

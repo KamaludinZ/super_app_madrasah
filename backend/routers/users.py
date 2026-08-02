@@ -17,7 +17,9 @@ from core import (
 )
 from excel_io import (
     gtk_initial_template,
+    gtk_combined_template,
     parse_gtk_initial_rows,
+    parse_gtk_combined_rows,
     parse_student_account_bulk_rows,
     parse_user_rows,
     student_account_bulk_template,
@@ -195,6 +197,134 @@ async def users_gtk_initial_import(file: UploadFile = File(...), request: Reques
     return {'success': success, 'errors': errors, 'total_rows': len(rows)}
 
 
+@router.get("/users/gtk-combined-template")
+async def users_gtk_combined_template(user: Dict = Depends(require_role('admin'))):
+    """Download template for combined GTK import (data + account)."""
+    return StreamingResponse(
+        io.BytesIO(gtk_combined_template()),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="template_gtk_lengkap_matsandatama.xlsx"'},
+    )
+
+
+@router.post("/users/import-gtk-combined")
+async def users_gtk_combined_import(file: UploadFile = File(...), request: Request = None,
+                                    user: Dict = Depends(require_role('admin'))):
+    """Import GTK with both data and account (username/password) in one go."""
+    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+        raise HTTPException(400, "Hanya file .xlsx yang didukung")
+    contents = await file.read()
+    try:
+        rows = parse_gtk_combined_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Error parsing Excel: {e}")
+
+    allowed_roles = GTK_ACCOUNT_ROLES
+    success = 0
+    errors = []
+    new_docs = []
+
+    for row in rows:
+        idx = row.get('_row')
+        try:
+            # Validate required fields
+            if not row['full_name'] or not row['roles']:
+                errors.append({'row': idx, 'error': "nama_lengkap dan roles wajib diisi"})
+                continue
+
+            if not row.get('username') or not row.get('password'):
+                errors.append({'row': idx, 'error': "username dan password wajib diisi"})
+                continue
+
+            # Validate roles
+            invalid = [r for r in row['roles'] if r not in allowed_roles]
+            if invalid:
+                errors.append({'row': idx, 'error': f"Role tidak valid untuk GTK: {invalid}"})
+                continue
+
+            nip = (row.get('nip_nuptk') or '').strip()
+            full_name = (row.get('full_name') or '').strip()
+            username = (row.get('username') or '').strip()
+            password = row.get('password') or ''
+            norm_name = _norm_name(full_name)
+
+            # Check username conflict
+            username_conflict = await db.users.find_one({'username': username})
+            if username_conflict:
+                errors.append({'row': idx, 'error': f"Username '{username}' sudah digunakan"})
+                continue
+
+            # Check if GTK already exists (by NIP or name)
+            existing = None
+            if nip:
+                existing = await db.users.find_one({'nip_nuptk': nip, 'roles': {'$in': list(GTK_ACCOUNT_ROLES)}})
+
+            if not existing:
+                existing = await db.users.find_one({
+                    'roles': {'$in': list(GTK_ACCOUNT_ROLES)},
+                    'full_name': {'$regex': f'^{re.escape(full_name)}$', '$options': 'i'}
+                })
+
+            if existing:
+                # Update existing: add account credentials
+                if existing.get('username'):
+                    errors.append({'row': idx, 'error': f"GTK sudah memiliki akun ({existing.get('username')})"})
+                    continue
+
+                await db.users.update_one(
+                    {'id': existing['id']},
+                    {'$set': {
+                        'username': username,
+                        'password_hash': hash_password(password),
+                        'full_name': full_name,
+                        'nip_nuptk': nip or existing.get('nip_nuptk'),
+                        'email': row.get('email') or existing.get('email'),
+                        'phone': row.get('phone') or existing.get('phone'),
+                        'gender': row.get('gender') or existing.get('gender'),
+                        'roles': list(set((existing.get('roles') or []) + row['roles'])),
+                        'account_source': 'combined_gtk',
+                        'normalized_full_name': norm_name,
+                    }}
+                )
+                success += 1
+                continue
+
+            # Create new GTK with account
+            u = UserModel(
+                username=username,
+                password_hash=hash_password(password),
+                full_name=full_name,
+                nip_nuptk=nip or None,
+                email=row.get('email'),
+                phone=row.get('phone'),
+                roles=row['roles'],
+                gender=row.get('gender'),
+                is_active=True,
+            )
+            doc = u.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            doc['account_source'] = 'combined_gtk'
+            doc['normalized_full_name'] = norm_name
+            new_docs.append(doc)
+            success += 1
+        except Exception as e:
+            errors.append({'row': idx, 'error': str(e)})
+
+    if new_docs:
+        await db.users.insert_many(new_docs)
+
+    if request:
+        await log_audit(
+            user,
+            'import_gtk_combined',
+            'users',
+            None,
+            details={'success': success, 'errors': len(errors)},
+            request=request
+        )
+    return {'success': success, 'errors': errors, 'total_rows': len(rows)}
+
+
 @router.get("/students/bulk-account-template")
 async def students_bulk_account_template(user: Dict = Depends(require_role('admin'))):
     students = await db.users.find(
@@ -296,10 +426,21 @@ async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
 
 
 @router.get("/users")
-async def list_users(role: Optional[str] = None, user: Dict = Depends(require_role('admin'))):
+async def list_users(
+    role: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    exclude_mutation: bool = False,
+    user: Dict = Depends(require_role('admin'))
+):
     q = {}
     if role:
         q['roles'] = role
+    if is_active is not None:
+        q['is_active'] = is_active
+    if exclude_mutation:
+        # Exclude users with mutation_type 'keluar'
+        q['mutation_type'] = {'$ne': 'keluar'}
+
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).to_list(2000)
     return [serialize_doc(i) for i in items]
 
@@ -373,7 +514,23 @@ async def create_user(req: UserCreateRequest, request: Request, user: Dict = Dep
 
 @router.put("/users/{uid}")
 async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: Dict = Depends(require_role('admin'))):
-    update = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
+    # Build update dict, keeping empty strings for username (to allow clearing/setting)
+    raw_dump = req.model_dump(exclude_unset=True)
+    update = {}
+    for k, v in raw_dump.items():
+        # Special handling for username: allow empty string
+        if k == 'username':
+            if v is not None:
+                update[k] = v
+        # For other fields: skip None values, but keep everything else including empty strings
+        elif v is not None:
+            update[k] = v
+
+    # Validasi username tidak duplikat dengan user lain
+    if 'username' in update and update['username']:
+        existing = await db.users.find_one({'username': update['username'], 'id': {'$ne': uid}})
+        if existing:
+            raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
 
     # Validasi NIK & Nomor KK harus 16 digit angka
     nik = update.get('nik')
@@ -569,8 +726,21 @@ async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
     if existing:
         # Update existing user
         await db.users.update_one({'id': existing['id']}, {'$set': user_data})
-        await log_audit(request, user, 'update', 'users', existing['id'],
-                       f"Update mutasi masuk: {req.full_name}")
+        role_label = 'Siswa' if is_siswa else 'GTK/Staff'
+        await log_audit(
+            user,
+            'mutation_masuk',
+            'users',
+            existing['id'],
+            details={
+                'full_name': req.full_name,
+                'role_group': role_label,
+                'mutation_date': req.mutation_date,
+                'mutation_note': req.mutation_note,
+                'action_type': 'update_existing',
+            },
+            request=request
+        )
         result_user = await db.users.find_one({'id': existing['id']}, {'_id': 0, 'password_hash': 0})
     else:
         # Create new user
@@ -583,8 +753,22 @@ async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
             **user_data
         )
         await db.users.insert_one(new_user.model_dump())
-        await log_audit(request, user, 'create', 'users', new_user.id,
-                       f"Create mutasi masuk: {req.full_name}")
+        role_label = 'Siswa' if is_siswa else 'GTK/Staff'
+        await log_audit(
+            user,
+            'mutation_masuk',
+            'users',
+            new_user.id,
+            details={
+                'full_name': req.full_name,
+                'role_group': role_label,
+                'mutation_date': req.mutation_date,
+                'mutation_note': req.mutation_note,
+                'action_type': 'create_new',
+                'default_password': '12345678',
+            },
+            request=request
+        )
         result_user = new_user.model_dump()
         del result_user['password_hash']
 
@@ -624,11 +808,30 @@ async def process_mutation_keluar(req: MutationKeluarSubmit, request: Request,
         if req.mutation_keluar_type == 'pindah':
             if not req.mutation_destination:
                 raise HTTPException(400, "mutation_destination wajib diisi untuk mutasi pindah")
-            update_data['mutation_destination'] = req.mutation_destination
+        # Always set mutation_destination even if empty (for non-pindah types)
+        update_data['mutation_destination'] = req.mutation_destination or None
 
     await db.users.update_one({'id': req.user_id}, {'$set': update_data})
-    await log_audit(request, user, 'update', 'users', req.user_id,
-                   f"Mutasi keluar: {target_user.get('full_name')}")
+
+    # Log audit with detailed information
+    role_label = 'Siswa' if is_siswa else 'GTK/Staff'
+    mutation_type_label = update_data.get('mutation_keluar_type', 'keluar')
+    await log_audit(
+        user,
+        'mutation_keluar',
+        'users',
+        req.user_id,
+        details={
+            'full_name': target_user.get('full_name'),
+            'role_group': role_label,
+            'mutation_type': mutation_type_label,
+            'mutation_date': req.mutation_date,
+            'mutation_note': req.mutation_note,
+            'mutation_destination': update_data.get('mutation_destination'),
+            'is_active': False,
+        },
+        request=request
+    )
 
     result_user = await db.users.find_one({'id': req.user_id}, {'_id': 0, 'password_hash': 0})
     return serialize_doc(result_user)
