@@ -35,7 +35,7 @@ export default function AdminGTKPage() {
     setLoading(true);
     try {
       const [usersRes, jabatanRes] = await Promise.all([
-        api.get('/users'),
+        api.get('/users', { params: { exclude_mutation: true } }),
         api.get('/jabatan/active')
       ]);
       setUsers(usersRes.data || []);

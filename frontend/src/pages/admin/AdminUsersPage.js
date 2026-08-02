@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft, LogIn, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search, UserMinus, UserPlus, ArrowRightLeft, LogIn, Loader2, Power } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,6 +21,7 @@ const EMPTY = {
   gender: '', birth_place: '', birth_date: '',
   mutation_type: '', mutation_date: '', mutation_note: '',
   jabatan_ids: [],
+  is_active: true,
 };
 
 const ROLE_TABS = [
@@ -61,7 +63,7 @@ export default function AdminUsersPage() {
   const [hardDeleteChecked, setHardDeleteChecked] = useState(false);
 
   const refresh = async () => {
-    const { data } = await api.get('/users');
+    const { data } = await api.get('/users', { params: { exclude_mutation: true } });
     setUsers(data);
   };
 
@@ -69,7 +71,7 @@ export default function AdminUsersPage() {
     (async () => {
       try {
         const [u, r, c, j] = await Promise.all([
-          api.get('/users'),
+          api.get('/users', { params: { exclude_mutation: true } }),
           api.get('/roles'),
           api.get('/classes'),
           api.get('/jabatan/active')
@@ -104,6 +106,7 @@ export default function AdminUsersPage() {
       mutation_date: u.mutation_date || '',
       mutation_note: u.mutation_note || '',
       jabatan_ids: u.jabatan_ids || [],
+      is_active: u.is_active !== undefined ? u.is_active : true,
     });
   };
 
@@ -148,12 +151,19 @@ export default function AdminUsersPage() {
         delete payload.nism;
         delete payload.nomor_peserta_ujian;
 
-        await api.put(`/users/${editing.id}`, payload);
+        const response = await api.put(`/users/${editing.id}`, payload);
         // Always update mutation if user has siswa role (so admin can clear it too)
         if ((editing.roles || []).includes('siswa')) {
           await api.put(`/admin/users/${editing.id}/mutation`, mutationPayload);
         }
+
+        // Update state langsung dengan data dari response
+        setUsers(prevUsers => prevUsers.map(u =>
+          u.id === editing.id ? response.data : u
+        ));
+
         toast.success('User berhasil diperbarui');
+        setOpen(false);
       } else {
         if (!form.password) { toast.error('Password wajib diisi untuk user baru'); return; }
         const payload = { ...form };
@@ -169,8 +179,9 @@ export default function AdminUsersPage() {
 
         await api.post('/users', payload);
         toast.success('User berhasil dibuat');
+        setOpen(false);
+        await refresh();
       }
-      setOpen(false); refresh();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan');
     }
@@ -467,12 +478,33 @@ export default function AdminUsersPage() {
 
             <div>
               <Label>Username *</Label>
-              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} disabled={!!editing} data-testid="user-form-username" />
+              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} data-testid="user-form-username" />
+              {editing && <p className="text-xs text-amber-600 mt-1">Hati-hati mengubah username, pastikan user tidak sedang login</p>}
             </div>
             <div>
               <Label>Password {editing ? '(kosongkan jika tidak ganti)' : '*'}</Label>
               <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="user-form-password" />
             </div>
+            {editing && (
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <Switch
+                    checked={form.is_active !== false}
+                    onCheckedChange={(v) => setForm({ ...form, is_active: v })}
+                    data-testid="user-form-is-active"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Power className={`h-4 w-4 ${form.is_active !== false ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <span className="text-sm font-medium">
+                      {form.is_active !== false ? 'Akun Aktif' : 'Akun Nonaktif'}
+                    </span>
+                  </div>
+                </label>
+                <p className="text-xs text-slate-600 mt-1 ml-12">
+                  Nonaktifkan akun untuk mencegah login tanpa menghapus data pengguna
+                </p>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <Label>Nama Lengkap *</Label>
               <Input value={form.full_name} disabled readOnly data-testid="user-form-fullname" />

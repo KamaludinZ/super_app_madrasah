@@ -48,6 +48,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-guru' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
+    items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' });
     items.push({ to: '/guru/indikator-materi', label: 'Input Indikator & Materi', icon: BookOpen, testid: 'nav-guru-indikator-materi' });
     items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-guru-kebersihan' });
@@ -85,6 +86,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });
   } else if (role === 'tenaga_kependidikan') {
     items.push({ to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-tendik' });
+    items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-tendik' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
   } else if (role === 'siswa') {
@@ -96,6 +98,14 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-siswa' });
   } else if (role === 'orang_tua') {
     items.push({ to: '/dashboard', label: 'Anak Saya', icon: Users, testid: 'nav-ortu-anak' });
+  } else if (role === 'waka_humas') {
+    items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-waka-humas-kegiatan' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-waka-humas' });
+    items.push({ to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-waka-humas-announcements' });
+  } else if (role === 'bendahara') {
+    items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-bendahara-rkam' });
+    items.push({ to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-bendahara-pip-penerima' });
+    items.push({ to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-bendahara-pip-ajuan' });
   } else if (role === 'admin') {
     // Admin uses grouped menu structure
     return [
@@ -164,6 +174,8 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Aktivitas & Program',
         items: [
+          { to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-admin-kegiatan-madrasah' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-admin-dana-rkam' },
           { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-admin' },
           { to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-admin' },
           { to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-admin-kebersihan' },

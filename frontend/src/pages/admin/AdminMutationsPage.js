@@ -2,16 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   ArrowRightLeft, UserPlus, UserMinus, Users, Briefcase,
-  Calendar, Hash, FileText, ExternalLink, Loader2, GraduationCap, Plus, X,
+  Calendar, Hash, FileText, ExternalLink, Loader2, GraduationCap, Plus, X, Eye, Power,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
@@ -40,7 +41,9 @@ export default function AdminMutationsPage() {
   // Modal states
   const [masukDialogOpen, setMasukDialogOpen] = useState(false);
   const [keluarDialogOpen, setKeluarDialogOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [currentRoleGroup, setCurrentRoleGroup] = useState('siswa');
+  const [detailUser, setDetailUser] = useState(null);
 
   // Form states for mutasi masuk
   const [masukForm, setMasukForm] = useState({
@@ -227,6 +230,44 @@ export default function AdminMutationsPage() {
     }
   };
 
+  const openDetailDialog = (user) => {
+    setDetailUser(user);
+    setDetailDialogOpen(true);
+  };
+
+  const handleDetailSave = async () => {
+    if (!detailUser) return;
+
+    setSubmitting(true);
+    try {
+      // Update user is_active status and mutation info
+      await api.put(`/users/${detailUser.id}`, {
+        is_active: detailUser.is_active,
+        mutation_date: detailUser.mutation_date,
+        mutation_note: detailUser.mutation_note,
+        mutation_keluar_type: detailUser.mutation_keluar_type,
+        mutation_destination: detailUser.mutation_destination,
+        mutation_document_url: detailUser.mutation_document_url,
+      });
+
+      toast.success(detailUser.is_active ? 'User berhasil diaktifkan kembali' : 'Perubahan berhasil disimpan');
+      setDetailDialogOpen(false);
+
+      // Reload data
+      const cur = TABS.find((t) => t.value === tab);
+      if (cur) {
+        const { data: rows } = await api.get('/admin/mutations', {
+          params: { mutation_type: cur.mutation_type, role_group: cur.role_group }
+        });
+        setData((prev) => ({ ...prev, [tab]: rows }));
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Gagal menyimpan perubahan');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="admin-mutations-page">
       <div>
@@ -347,11 +388,24 @@ export default function AdminMutationsPage() {
                               </TableCell>
                             )}
                             <TableCell className="text-right">
-                              <Link to={`/admin/users?focus=${u.id}`}>
-                                <Button size="sm" variant="outline" className="gap-1" data-testid={`view-user-${u.id}`}>
-                                  <ExternalLink className="h-3 w-3" /> Lihat
-                                </Button>
-                              </Link>
+                              <div className="flex gap-2 justify-end">
+                                {t.mutation_type === 'keluar' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    onClick={() => openDetailDialog(u)}
+                                    data-testid={`detail-mutation-${u.id}`}
+                                  >
+                                    <Eye className="h-3 w-3" /> Detail
+                                  </Button>
+                                )}
+                                <Link to={`/admin/users?focus=${u.id}`}>
+                                  <Button size="sm" variant="outline" className="gap-1" data-testid={`view-user-${u.id}`}>
+                                    <ExternalLink className="h-3 w-3" /> Lihat
+                                  </Button>
+                                </Link>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -565,6 +619,136 @@ export default function AdminMutationsPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Detail Mutasi Keluar */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Detail Mutasi Keluar
+            </DialogTitle>
+          </DialogHeader>
+          {detailUser && (
+            <div className="grid gap-4">
+              {/* Identitas */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <Label className="text-xs text-slate-600">Nama Lengkap</Label>
+                  <div className="font-semibold">{detailUser.full_name}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-600">
+                    {detailUser.roles?.includes('siswa') ? 'NISN' : 'NIP/NUPTK'}
+                  </Label>
+                  <div className="font-mono text-sm">
+                    {detailUser.roles?.includes('siswa') ? (detailUser.nisn || '-') : (detailUser.nip_nuptk || '-')}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-600">Status Akun</Label>
+                  <div className="mt-1">
+                    <Badge variant={detailUser.is_active ? 'default' : 'secondary'} className={detailUser.is_active ? 'bg-emerald-600' : 'bg-slate-400'}>
+                      {detailUser.is_active ? 'Aktif' : 'Nonaktif'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Edit */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Tanggal Mutasi</Label>
+                  <Input
+                    type="date"
+                    value={detailUser.mutation_date || ''}
+                    onChange={(e) => setDetailUser({ ...detailUser, mutation_date: e.target.value })}
+                  />
+                </div>
+
+                {detailUser.roles?.some(r => !['siswa', 'alumni'].includes(r)) && (
+                  <div>
+                    <Label>Jenis Keluar</Label>
+                    <Select
+                      value={detailUser.mutation_keluar_type || ''}
+                      onValueChange={(v) => setDetailUser({ ...detailUser, mutation_keluar_type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih jenis" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {KELUAR_TYPES.map((kt) => (
+                          <SelectItem key={kt.value} value={kt.value}>{kt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {detailUser.mutation_keluar_type === 'pindah' && (
+                  <div className="col-span-2">
+                    <Label>Instansi Tujuan</Label>
+                    <Input
+                      value={detailUser.mutation_destination || ''}
+                      onChange={(e) => setDetailUser({ ...detailUser, mutation_destination: e.target.value })}
+                      placeholder="Nama sekolah/instansi tujuan"
+                    />
+                  </div>
+                )}
+
+                <div className="col-span-2">
+                  <Label>Catatan Mutasi</Label>
+                  <Textarea
+                    value={detailUser.mutation_note || ''}
+                    onChange={(e) => setDetailUser({ ...detailUser, mutation_note: e.target.value })}
+                    placeholder="Keterangan mutasi keluar"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <Label>Link Dokumen</Label>
+                  <Input
+                    value={detailUser.mutation_document_url || ''}
+                    onChange={(e) => setDetailUser({ ...detailUser, mutation_document_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                </div>
+
+                {/* Toggle Aktivasi */}
+                <div className="col-span-2 border-t pt-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Switch
+                      checked={detailUser.is_active !== false}
+                      onCheckedChange={(v) => setDetailUser({ ...detailUser, is_active: v })}
+                      data-testid="detail-is-active-toggle"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Power className={`h-4 w-4 ${detailUser.is_active !== false ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-sm font-medium">
+                        {detailUser.is_active !== false ? 'Aktifkan Kembali User' : 'User Nonaktif'}
+                      </span>
+                    </div>
+                  </label>
+                  <p className="text-xs text-slate-600 mt-2 ml-12">
+                    Aktifkan kembali user yang sudah mutasi keluar untuk memulihkan akses login mereka.
+                    Pastikan username dan password sudah diatur di menu Pengguna.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailDialogOpen(false)} disabled={submitting}>
+              Batal
+            </Button>
+            <Button onClick={handleDetailSave} disabled={submitting} className="bg-[#006837] hover:bg-[#0B7A3B]">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Simpan Perubahan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

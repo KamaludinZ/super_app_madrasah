@@ -24,6 +24,7 @@ export default function AdminSchedulesPage() {
   const [teachers, setTeachers] = useState([]);
   const [activeAY, setActiveAY] = useState(null);
   const [teachingSlots, setTeachingSlots] = useState([]);
+  const [allTeachingSlots, setAllTeachingSlots] = useState(null); // Store full settings
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filterMode, setFilterMode] = useState('class'); // class | teacher
@@ -63,14 +64,41 @@ export default function AdminSchedulesPage() {
       ]);
       setClasses(c.data); setSubjects(sub.data); setRooms(r.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(rr))));
-      // Get teaching slots from settings, filter out break times
-      const slots = settings.data?.teaching_slots || [];
-      setTeachingSlots(slots.filter(slot => !slot.is_break));
+
+      // Store full teaching slots settings
+      const slotsData = settings.data?.teaching_slots || [];
+      setAllTeachingSlots(slotsData);
+
+      // Get initial teaching slots (use first day or global)
+      let allSlots = [];
+      if (Array.isArray(slotsData)) {
+        // Legacy: global slots
+        allSlots = slotsData;
+      } else if (typeof slotsData === 'object') {
+        // New: per-day slots - use senin as default
+        allSlots = slotsData['senin'] || Object.values(slotsData)[0] || [];
+      }
+      setTeachingSlots(allSlots.filter(slot => !slot.is_break));
       await loadGrid('class', 'all');
     })();
   }, []);
 
   useEffect(() => { loadGrid(filterMode, filterValue); }, [filterMode, filterValue]);
+
+  // Update teaching slots when selected day changes
+  useEffect(() => {
+    if (!allTeachingSlots) return;
+
+    let daySlots = [];
+    if (Array.isArray(allTeachingSlots)) {
+      // Global slots - same for all days
+      daySlots = allTeachingSlots;
+    } else if (typeof allTeachingSlots === 'object') {
+      // Per-day slots - get slots for selected day
+      daySlots = allTeachingSlots[form.day] || [];
+    }
+    setTeachingSlots(daySlots.filter(slot => !slot.is_break));
+  }, [form.day, allTeachingSlots]);
 
   const openCreate = (presetDay, presetStart, presetEnd) => {
     setEditing(null);
@@ -240,15 +268,51 @@ export default function AdminSchedulesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(grid.slots || []).map((slot, idx) => (
+                  {/* Render slots based on per-day configuration */}
+                  {(() => {
+                    // Get all unique slots across all days
+                    const slotsData = grid.slots || {};
+                    const allSlots = [];
+                    const slotMap = new Map(); // key: start_time, value: slot object
+
+                    if (Array.isArray(slotsData)) {
+                      // Legacy: global slots
+                      slotsData.forEach(slot => {
+                        allSlots.push(slot);
+                        slotMap.set(slot.start_time, slot);
+                      });
+                    } else {
+                      // New: per-day slots - collect all unique time slots
+                      Object.values(slotsData).forEach(daySlots => {
+                        daySlots.forEach(slot => {
+                          if (!slotMap.has(slot.start_time)) {
+                            allSlots.push(slot);
+                            slotMap.set(slot.start_time, slot);
+                          }
+                        });
+                      });
+                      // Sort by start time
+                      allSlots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+                    }
+
+                    return allSlots.map((slot, idx) => (
                     <tr key={idx}>
                       <td className={`sticky left-0 border border-slate-200 p-2 ${slot.is_break ? 'bg-amber-50' : 'bg-slate-50'}`}>
                         <div className="font-semibold text-slate-800">{slot.name}</div>
                         <div className="font-mono text-[10px] text-slate-500">{slot.start_time}-{slot.end_time}</div>
                       </td>
                       {(grid.days || []).map((day) => {
+                        // Check if this slot exists for this specific day
+                        const daySlotsData = Array.isArray(slotsData) ? slotsData : (slotsData[day] || []);
+                        const daySlot = daySlotsData.find(s => s.start_time === slot.start_time);
+
+                        if (!daySlot) {
+                          // This slot doesn't exist for this day
+                          return <td key={day} className="border border-slate-200 p-1 bg-slate-100"></td>;
+                        }
+
                         const s = grid.grid?.[day]?.[slot.start_time];
-                        if (slot.is_break) {
+                        if (daySlot.is_break) {
                           return <td key={day} className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>;
                         }
                         // Color coding by status (Phase 6 visual cue)
@@ -278,7 +342,8 @@ export default function AdminSchedulesPage() {
                         );
                       })}
                     </tr>
-                  ))}
+                    ));
+                  })()}
                 </tbody>
               </table>
               {(grid.days || []).length === 0 && (
@@ -360,7 +425,19 @@ export default function AdminSchedulesPage() {
           <DialogHeader><DialogTitle>{editing ? 'Edit Jadwal' : 'Tambah Jadwal'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><Label>Hari</Label>
-              <Select value={form.day} onValueChange={(v) => setForm({...form, day: v})}>
+              <Select value={form.day} onValueChange={(v) => {
+                // When day changes, reset time to first available slot for that day
+                const newDaySlots = Array.isArray(allTeachingSlots)
+                  ? allTeachingSlots
+                  : (allTeachingSlots?.[v] || []);
+                const firstSlot = newDaySlots.find(slot => !slot.is_break);
+                setForm({
+                  ...form,
+                  day: v,
+                  start_time: firstSlot?.start_time || '07:00',
+                  end_time: firstSlot?.end_time || '08:00'
+                });
+              }}>
                 <SelectTrigger data-testid="schedule-form-day"><SelectValue /></SelectTrigger>
                 <SelectContent>{ALL_DAYS.map((d) => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
               </Select>

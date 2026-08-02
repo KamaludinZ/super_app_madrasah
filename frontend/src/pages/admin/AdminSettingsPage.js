@@ -19,12 +19,17 @@ const ALL_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 export default function AdminSettingsPage() {
   const { setSettings: setGlobalSettings } = useAuth();
   const [form, setForm] = useState(null);
+  const [selectedDay, setSelectedDay] = useState('senin'); // untuk tab per-hari
+  const [usePerDaySlots, setUsePerDaySlots] = useState(false);
   const fileLogoRef = useRef(null);
   const fileFaviconRef = useRef(null);
   const fileLetterheadRef = useRef(null);
 
   const refresh = async () => {
     const { data } = await api.get('/admin/settings');
+    // Check if teaching_slots is a dict (per-day) or list (global)
+    const isPerDay = data.teaching_slots && typeof data.teaching_slots === 'object' && !Array.isArray(data.teaching_slots);
+    setUsePerDaySlots(isPerDay);
     setForm(data);
   };
   useEffect(() => { refresh(); }, []);
@@ -92,34 +97,87 @@ export default function AdminSettingsPage() {
     setForm({ ...form, active_days: next });
   };
 
-  const updateSlot = (idx, field, val) => {
-    const slots = [...(form.teaching_slots || [])];
-    slots[idx] = { ...slots[idx], [field]: val };
-    setForm({ ...form, teaching_slots: slots });
+  // Helper to get current slots (works for both global and per-day)
+  const getCurrentSlots = () => {
+    if (!form?.teaching_slots) return [];
+    if (usePerDaySlots) {
+      return form.teaching_slots[selectedDay] || [];
+    }
+    return Array.isArray(form.teaching_slots) ? form.teaching_slots : [];
   };
+
+  // Helper to update slots (works for both global and per-day)
+  const setCurrentSlots = (newSlots) => {
+    if (usePerDaySlots) {
+      const updated = { ...(form.teaching_slots || {}) };
+      updated[selectedDay] = newSlots;
+      setForm({ ...form, teaching_slots: updated });
+    } else {
+      setForm({ ...form, teaching_slots: newSlots });
+    }
+  };
+
+  const updateSlot = (idx, field, val) => {
+    const slots = [...getCurrentSlots()];
+    slots[idx] = { ...slots[idx], [field]: val };
+    setCurrentSlots(slots);
+  };
+
   const addSlot = () => {
-    const slots = [...(form.teaching_slots || [])];
+    const slots = [...getCurrentSlots()];
     const last = slots[slots.length - 1];
     slots.push({
       name: `Jam ke-${slots.filter((s) => !s.is_break).length + 1}`,
       start_time: last?.end_time || '07:00',
       end_time: '08:00', is_break: false,
     });
-    setForm({ ...form, teaching_slots: slots });
+    setCurrentSlots(slots);
   };
+
   const addBreak = () => {
-    const slots = [...(form.teaching_slots || [])];
+    const slots = [...getCurrentSlots()];
     const last = slots[slots.length - 1];
     slots.push({
       name: 'Istirahat',
       start_time: last?.end_time || '09:00',
       end_time: '09:15', is_break: true,
     });
-    setForm({ ...form, teaching_slots: slots });
+    setCurrentSlots(slots);
   };
+
   const removeSlot = (idx) => {
-    const slots = [...(form.teaching_slots || [])];
-    slots.splice(idx, 1); setForm({ ...form, teaching_slots: slots });
+    const slots = [...getCurrentSlots()];
+    slots.splice(idx, 1);
+    setCurrentSlots(slots);
+  };
+
+  // Toggle between global and per-day mode
+  const togglePerDayMode = () => {
+    if (!usePerDaySlots) {
+      // Convert from global to per-day
+      const globalSlots = Array.isArray(form.teaching_slots) ? form.teaching_slots : [];
+      const perDaySlots = {};
+      (form.active_days || ALL_DAYS).forEach(day => {
+        perDaySlots[day] = JSON.parse(JSON.stringify(globalSlots)); // deep copy
+      });
+      setForm({ ...form, teaching_slots: perDaySlots });
+      setUsePerDaySlots(true);
+    } else {
+      // Convert from per-day to global (use first day's config)
+      const firstDay = (form.active_days || ALL_DAYS)[0];
+      const globalSlots = form.teaching_slots[firstDay] || [];
+      setForm({ ...form, teaching_slots: globalSlots });
+      setUsePerDaySlots(false);
+    }
+  };
+
+  // Copy slots from one day to another
+  const copyDaySlots = (fromDay, toDay) => {
+    if (!usePerDaySlots) return;
+    const updated = { ...(form.teaching_slots || {}) };
+    updated[toDay] = JSON.parse(JSON.stringify(updated[fromDay] || []));
+    setForm({ ...form, teaching_slots: updated });
+    toast.success(`Template ${DAY_LABELS[fromDay]} disalin ke ${DAY_LABELS[toDay]}`);
   };
 
   const [smtpTesting, setSmtpTesting] = useState(false);
@@ -327,14 +385,58 @@ export default function AdminSettingsPage() {
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <h2 className="text-base font-semibold flex items-center gap-2"><Clock className="h-4 w-4" /> Template Jam Mengajar</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <label className="flex items-center gap-2 text-xs font-medium">
+                    <Switch checked={usePerDaySlots} onCheckedChange={togglePerDayMode} />
+                    <span>Beda per Hari</span>
+                  </label>
                   <Button size="sm" variant="outline" onClick={addSlot} className="gap-1" data-testid="add-slot-button"><Plus className="h-3.5 w-3.5" /> Tambah Jam</Button>
                   <Button size="sm" variant="outline" onClick={addBreak} className="gap-1" data-testid="add-break-button"><Plus className="h-3.5 w-3.5" /> Tambah Istirahat</Button>
                 </div>
               </div>
-              <p className="text-xs text-slate-600">Template ini akan digunakan untuk pengisian Jadwal Pelajaran dengan tampilan grid yang lebih mudah.</p>
+              <p className="text-xs text-slate-600">
+                {usePerDaySlots
+                  ? 'Template jam mengajar per hari aktif. Setiap hari bisa memiliki jam yang berbeda.'
+                  : 'Template ini akan digunakan untuk semua hari aktif sekolah.'}
+              </p>
+
+              {/* Day selector for per-day mode */}
+              {usePerDaySlots && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(form.active_days || ALL_DAYS).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => setSelectedDay(day)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          selectedDay === day
+                            ? 'bg-[#006837] text-white'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {DAY_LABELS[day]}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs text-slate-600">Salin template ke:</span>
+                    {(form.active_days || ALL_DAYS).filter(d => d !== selectedDay).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => copyDaySlots(selectedDay, day)}
+                        className="px-2 py-1 rounded text-xs bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      >
+                        {DAY_LABELS[day]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2" data-testid="slots-editor">
-                {(form.teaching_slots || []).map((slot, idx) => (
+                {getCurrentSlots().map((slot, idx) => (
                   <div key={idx} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border ${slot.is_break ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-slate-200'}`}>
                     <Input className="col-span-4" value={slot.name} onChange={(e) => updateSlot(idx, 'name', e.target.value)} placeholder="Nama slot" />
                     <Input className="col-span-3" type="time" value={slot.start_time} onChange={(e) => updateSlot(idx, 'start_time', e.target.value)} />
@@ -345,8 +447,10 @@ export default function AdminSettingsPage() {
                     <Button size="icon" variant="ghost" onClick={() => removeSlot(idx)} className="text-rose-600 col-span-1"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
-                {(!form.teaching_slots || form.teaching_slots.length === 0) && (
-                  <div className="text-center py-6 text-sm text-slate-500">Belum ada jam mengajar. Klik "Tambah Jam" untuk mulai.</div>
+                {getCurrentSlots().length === 0 && (
+                  <div className="text-center py-6 text-sm text-slate-500">
+                    Belum ada jam mengajar{usePerDaySlots ? ` untuk ${DAY_LABELS[selectedDay]}` : ''}. Klik "Tambah Jam" untuk mulai.
+                  </div>
                 )}
               </div>
             </CardContent>

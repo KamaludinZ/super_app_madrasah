@@ -39,7 +39,7 @@ export default function AdminPenggunaSiswaPage() {
   const [hardDeleteChecked, setHardDeleteChecked] = useState(false);
 
   const refresh = async () => {
-    const { data } = await api.get('/users', { params: { role: 'siswa' } });
+    const { data } = await api.get('/users', { params: { role: 'siswa', exclude_mutation: true } });
     setStudents(data);
   };
 
@@ -47,7 +47,7 @@ export default function AdminPenggunaSiswaPage() {
     (async () => {
       try {
         const [s, c] = await Promise.all([
-          api.get('/users', { params: { role: 'siswa' } }),
+          api.get('/users', { params: { role: 'siswa', exclude_mutation: true } }),
           api.get('/classes'),
         ]);
         setStudents(s.data);

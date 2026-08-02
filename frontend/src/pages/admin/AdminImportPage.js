@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   FileSpreadsheet, Download, Upload, CheckCircle2, AlertCircle,
-  Users as UsersIcon, GraduationCap, Info, KeyRound,
+  Users as UsersIcon, GraduationCap, Info, DoorOpen, School, BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -14,44 +14,54 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const ENTITIES = [
   {
-    key: 'gtk-initial',
-    label: 'Data Awal GTK',
+    key: 'gtk-combined',
+    label: 'GTK (Data + Akun)',
     icon: UsersIcon,
-    templateName: 'template_data_awal_gtk_matsandatama.xlsx',
-    templateUrl: '/api/users/gtk-initial-template',
-    importUrl: '/api/users/import-gtk-initial',
-    description: 'Import data awal GTK tanpa username/password. Hasil data masuk ke data GTK (master pengguna non-siswa).',
-    fields: ['nama_lengkap*', 'roles* (pisah koma)', 'nip_nuptk', 'email', 'phone', 'gender (L/P)'],
+    templateName: 'template_gtk_lengkap_matsandatama.xlsx',
+    templateUrl: '/api/users/gtk-combined-template',
+    importUrl: '/api/users/import-gtk-combined',
+    description: 'Import GTK lengkap dengan data dan akun login sekaligus. Hasil data dan akun masuk ke /admin/users.',
+    fields: ['nama_lengkap*', 'roles* (pisah koma)', 'nip_nuptk', 'email', 'phone', 'gender (L/P)', 'username*', 'password*'],
   },
   {
-    key: 'students-initial',
-    label: 'Data Awal Siswa',
+    key: 'students-combined',
+    label: 'Siswa (Data + Akun)',
     icon: GraduationCap,
-    templateName: 'template_data_awal_siswa_matsandatama.xlsx',
-    templateUrl: '/api/students/initial-template',
-    importUrl: '/api/students/import-initial',
-    description: 'Import data awal siswa tanpa username/password. Hasil data masuk ke data siswa master.',
-    fields: ['nama_lengkap*', 'nisn*', 'gender (L/P)', 'kelas* (mis. 7A)', 'tempat_lahir', 'tgl_lahir (YYYY-MM-DD)', 'alamat', 'email', 'phone'],
+    templateName: 'template_siswa_lengkap_matsandatama.xlsx',
+    templateUrl: '/api/students/combined-template',
+    importUrl: '/api/students/import-combined',
+    description: 'Import siswa lengkap dengan data dan akun login sekaligus. Hasil data dan akun masuk ke /admin/pengguna-siswa.',
+    fields: ['nama_lengkap*', 'nisn*', 'gender (L/P)', 'kelas* (mis. 7A)', 'tempat_lahir', 'tgl_lahir (YYYY-MM-DD)', 'alamat', 'email', 'phone', 'username*', 'password*'],
   },
   {
-    key: 'gtk-account-bulk',
-    label: 'Akun Massal GTK',
-    icon: KeyRound,
-    templateName: 'template_pengguna_matsandatama.xlsx',
-    templateUrl: '/api/users/excel-template',
-    importUrl: '/api/users/import-excel',
-    description: 'Buat akun login massal untuk GTK (guru/tendik/wali kelas/dll). Hasil akun masuk ke /admin/users.',
-    fields: ['username*', 'password*', 'nama_lengkap*', 'roles*', 'nip_nuptk', 'email', 'phone', 'gender (L/P)'],
+    key: 'rooms',
+    label: 'Ruangan',
+    icon: DoorOpen,
+    templateName: 'template_ruangan_matsandatama.xlsx',
+    templateUrl: '/api/rooms/excel-template',
+    importUrl: '/api/rooms/import-excel',
+    description: 'Import data ruangan (kelas, lab, ruang guru, dll). Hasil data masuk ke /admin/rooms.',
+    fields: ['kode*', 'deskripsi', 'lat', 'lon', 'radius_meter', 'gps_aktif (ya/tidak)', 'qr_mode (static/dynamic)'],
   },
   {
-    key: 'students-account-bulk',
-    label: 'Akun Massal Siswa',
-    icon: KeyRound,
-    templateName: 'template_akun_siswa_belum_punya_akun.xlsx',
-    templateUrl: '/api/students/bulk-account-template',
-    importUrl: '/api/students/import-bulk-accounts',
-    description: 'Buat akun login siswa dari daftar siswa yang belum punya akun. Hasil akun masuk ke /admin/pengguna-siswa.',
-    fields: ['id*', 'nama_lengkap', 'nisn', 'username*', 'password*'],
+    key: 'classes',
+    label: 'Kelas',
+    icon: School,
+    templateName: 'template_kelas_matsandatama.xlsx',
+    templateUrl: '/api/classes/excel-template',
+    importUrl: '/api/classes/import-excel',
+    description: 'Import data kelas (7A, 7B, 8A, dll). Hasil data masuk ke /admin/classes.',
+    fields: ['nama*', 'tingkat*', 'paralel*', 'wali_kelas_username', 'ruang_kode', 'is_accelerated (ya/tidak)'],
+  },
+  {
+    key: 'subjects',
+    label: 'Mata Pelajaran',
+    icon: BookOpen,
+    templateName: 'template_mapel_matsandatama.xlsx',
+    templateUrl: '/api/subjects/excel-template',
+    importUrl: '/api/subjects/import-excel',
+    description: 'Import data mata pelajaran (Matematika, IPA, Bahasa Indonesia, dll). Hasil data masuk ke /admin/subjects.',
+    fields: ['kode*', 'nama*'],
   },
 ];
 
@@ -248,11 +258,11 @@ export default function AdminImportPage() {
         </Badge>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Import Data via Excel</h1>
         <p className="text-sm text-slate-600 mt-1">
-          Alur dipisah: data awal (tanpa akun) dan pembuatan akun massal (dengan username/password)
+          Import data lengkap dengan akun login sekaligus untuk GTK, Siswa, Ruangan, Kelas, dan Mata Pelajaran
         </p>
       </div>
 
-      <Tabs defaultValue="gtk-initial">
+      <Tabs defaultValue="gtk-combined">
         <div className="overflow-x-auto">
           <TabsList className="bg-white border border-slate-200 inline-flex w-auto min-w-full" data-testid="import-entity-tabs">
             {ENTITIES.map((e) => (

@@ -7,6 +7,8 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import PublicMonitoring from '@/pages/PublicMonitoring';
 import PublicPrestasi from '@/pages/PublicPrestasi';
+import PublicAgenda from '@/pages/PublicAgenda';
+import PublicRKAMPage from '@/pages/PublicRKAMPage';
 import AppShell from '@/components/layout/AppShell';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
@@ -50,6 +52,9 @@ import AdminGTKDetailPage from '@/pages/admin/AdminGTKDetailPage';
 import AdminLaporanAbsensiPage from '@/pages/admin/AdminLaporanAbsensiPage';
 import AdminAgendaGuruPage from '@/pages/admin/AdminAgendaGuruPage';
 import AdminAgendaTendikPage from '@/pages/admin/AdminAgendaTendikPage';
+import AdminMadrasahEventsPage from '@/pages/admin/AdminMadrasahEventsPage';
+import AdminRKAMPage from '@/pages/admin/AdminRKAMPage';
+import MyAgendaPage from '@/pages/MyAgendaPage';
 import AdminEKinerjaPage from '@/pages/admin/AdminEKinerjaPage';
 import AdminProfesionalitasGTKPage from '@/pages/admin/AdminProfesionalitasGTKPage';
 import AdminPIPReceiverPage from '@/pages/admin/AdminPIPReceiverPage';
@@ -154,6 +159,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/public/monitoring" element={<PublicMonitoring />} />
           <Route path="/public/prestasi" element={<PublicPrestasi />} />
+          <Route path="/public/agenda" element={<PublicAgenda />} />
+          <Route path="/public/rkam" element={<PublicRKAMPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
@@ -181,6 +188,8 @@ function App() {
             <Route path="/admin/gtk/laporan-absensi" element={<AdminLaporanAbsensiPage />} />
             <Route path="/admin/gtk/agenda-guru" element={<AdminAgendaGuruPage />} />
             <Route path="/admin/gtk/agenda-tendik" element={<AdminAgendaTendikPage />} />
+            <Route path="/admin/kegiatan-madrasah" element={<AdminMadrasahEventsPage />} />
+            <Route path="/admin/dana-rkam" element={<AdminRKAMPage />} />
             <Route path="/admin/gtk/e-kinerja" element={<AdminEKinerjaPage />} />
             <Route path="/admin/gtk/profesionalitas" element={<AdminProfesionalitasGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
@@ -219,6 +228,7 @@ function App() {
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
             <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
             <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
+            <Route path="/my-agenda" element={<MyAgendaPage />} />
             <Route path="/profile" element={<ProfilePageByRole />} />
             <Route path="/profile/siswa" element={<ProfilePageSiswa />} />
             <Route path="/profile/guru" element={<ProfilePageGuru />} />
