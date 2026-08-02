@@ -23,6 +23,7 @@ from routers import (
     auth,
     classes,
     dokumen_siswa,
+    events,
     health,
     holidays_tasks,
     indikator_materi,
@@ -33,6 +34,7 @@ from routers import (
     promotions,
     public,
     reports,
+    rkam,
     rooms,
     schedules,
     semesters,
@@ -84,12 +86,56 @@ api_router.include_router(verval.router)
 api_router.include_router(dokumen_siswa.router)
 api_router.include_router(indikator_materi.router)
 api_router.include_router(tatib.router)
+api_router.include_router(events.router)
+api_router.include_router(rkam.router)
 
 app.include_router(api_router)
 
 # ============================================================
 # MIDDLEWARE
 # ============================================================
+
+# Security Headers Middleware - Production Hardening
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Add security headers to all responses for production hardening"""
+    response = await call_next(request)
+
+    # Prevent clickjacking attacks
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Enable XSS protection (legacy browsers)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Referrer policy - don't leak URLs to external sites
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions policy - restrict browser features
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    # Content Security Policy - prevent XSS
+    # Note: Adjust based on your CDN and external resources
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+
+    # HSTS - Force HTTPS (only in production with HTTPS)
+    if os.environ.get('ENVIRONMENT') == 'production':
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    return response
+
+# CORS Middleware - MUST be after security headers
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -97,62 +143,34 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-# Error logging middleware - log all unhandled exceptions
-from fastapi import Request as FastAPIRequest
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-
-
-class ErrorLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: FastAPIRequest, call_next):
-        try:
-            response = await call_next(request)
-            return response
-        except Exception as exc:
-            # Log the error
-            from core import log_error
-            try:
-                # Try to get current user from request state
-                user = getattr(request.state, 'user', None)
-                await log_error(
-                    error_type=type(exc).__name__,
-                    message=str(exc),
-                    details={
-                        'path': request.url.path,
-                        'method': request.method,
-                        'include_traceback': True
-                    },
-                    user=user,
-                    request=request
-                )
-            except Exception as log_err:
-                # If logging fails, at least log to console
-                logger.error(f"Failed to log error: {log_err}")
-                logger.error(f"Original error: {exc}")
-
-            # Return JSON 500 instead of re-raise so response still passes middleware stack
-            # (including CORS middleware) and browser receives proper CORS headers.
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Internal Server Error"}
-            )
-
-
-app.add_middleware(ErrorLoggingMiddleware)
-
 
 # ============================================================
 # LIFECYCLE
 # ============================================================
 @app.on_event("startup")
 async def startup_event():
+    """
+    Startup event - seeds data only in development mode.
+    For production, data should be seeded manually using seed_all_data.py
+    """
+    import os
+    env = os.environ.get("ENVIRONMENT", "development").strip().lower()
+
+    if env == "production":
+        logger.info("Production mode - skipping automatic data seeding")
+        logger.info("Use seed_all_data.py to manually seed data if needed")
+        return
+
+    # Development mode - run seeders
     try:
         from seed_data import is_production_env, refresh_demo_schedule, seed_all
+        logger.info("Development mode - running data seeders")
         await seed_all(db)
         if not is_production_env():
             await refresh_demo_schedule(db)
+        logger.info("Data seeding completed successfully")
     except Exception as e:
-        logger.error(f"Seed error: {e}")
+        logger.error(f"Seed error (development mode): {e}")
 
 
 @app.on_event("shutdown")
