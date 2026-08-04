@@ -31,6 +31,7 @@ export default function AdminSchedulesPage() {
   const [filterValue, setFilterValue] = useState('all');
   const [viewMode, setViewMode] = useState('grid'); // grid | list
   const [form, setForm] = useState({ class_id: '', subject_id: '', teacher_id: '', room_id: '', day: 'senin', start_time: '07:00', end_time: '08:30', semester: 'ganjil', academic_year_id: '' });
+  const [selectedSlots, setSelectedSlots] = useState([]); // v1.1.1: Multi-slot selector
   const [importOpen, setImportOpen] = useState(false);
   const fileRef = useRef(null);
 
@@ -109,14 +110,51 @@ export default function AdminSchedulesPage() {
       start_time: presetStart || '07:00', end_time: presetEnd || '08:30',
       semester: activeAY?.active_semester || 'ganjil', academic_year_id: activeAY?.id,
     });
+    setSelectedSlots([]); // v1.1.1: Reset multi-slot selection
     setOpen(true);
   };
-  const openEdit = (s) => { setEditing(s); setForm({ ...s, academic_year_id: s.academic_year_id || activeAY?.id }); setOpen(true); };
+  const openEdit = (s) => {
+    setEditing(s);
+    setForm({ ...s, academic_year_id: s.academic_year_id || activeAY?.id });
+    // v1.1.1: Load existing slot_indexes if available
+    setSelectedSlots(s.slot_indexes || []);
+    setOpen(true);
+  };
+
+  // v1.1.1: Multi-slot toggle handler
+  const handleSlotToggle = (index) => {
+    if (selectedSlots.includes(index)) {
+      setSelectedSlots(selectedSlots.filter(i => i !== index));
+    } else {
+      setSelectedSlots([...selectedSlots, index].sort((a, b) => a - b));
+    }
+  };
   const handleSubmit = async () => {
-    if (!form.class_id || !form.subject_id || !form.teacher_id || !form.room_id) { toast.error('Lengkapi semua field'); return; }
+    if (!form.class_id || !form.subject_id || !form.teacher_id) { toast.error('Lengkapi semua field wajib'); return; }
+
+    // v1.1.1: Build payload with slot_indexes if multi-slot is used
+    const payload = { ...form };
+
+    if (selectedSlots.length > 0) {
+      // Multi-slot mode: use slot_indexes
+      payload.slot_indexes = selectedSlots.sort((a, b) => a - b);
+      // Calculate start_time and end_time from selected slots
+      const firstSlot = teachingSlots[selectedSlots[0]];
+      const lastSlot = teachingSlots[selectedSlots[selectedSlots.length - 1]];
+      if (firstSlot && lastSlot) {
+        payload.start_time = firstSlot.start_time;
+        payload.end_time = lastSlot.end_time;
+      }
+      // room_id will be auto-assigned from class_id by backend
+      delete payload.room_id;
+    } else {
+      // Single slot mode (legacy): ensure room_id is provided
+      if (!form.room_id) { toast.error('Pilih ruang atau gunakan multi-slot selector'); return; }
+    }
+
     try {
-      if (editing) await api.put(`/schedules/${editing.id}`, form);
-      else await api.post('/schedules', form);
+      if (editing) await api.put(`/schedules/${editing.id}`, payload);
+      else await api.post('/schedules', payload);
       toast.success('Berhasil disimpan'); setOpen(false); await loadGrid(filterMode, filterValue);
     } catch (e) {
       const detail = e?.response?.data?.detail;
@@ -442,24 +480,48 @@ export default function AdminSchedulesPage() {
                 <SelectContent>{ALL_DAYS.map((d) => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {/* v1.1.1: Multi-Slot Selector */}
             <div className="col-span-2">
-              <Label>Jam Mengajar *</Label>
-              <Select
-                value={`${form.start_time}-${form.end_time}`}
-                onValueChange={(v) => {
-                  const [start, end] = v.split('-');
-                  setForm({ ...form, start_time: start, end_time: end });
-                }}
-              >
-                <SelectTrigger data-testid="schedule-form-time-slot"><SelectValue placeholder="Pilih jam mengajar..." /></SelectTrigger>
-                <SelectContent>
-                  {teachingSlots.map((slot, idx) => (
-                    <SelectItem key={idx} value={`${slot.start_time}-${slot.end_time}`}>
-                      {slot.name} ({slot.start_time} - {slot.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Jam Mengajar * (Klik untuk pilih lebih dari 1 jam)</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2 max-h-64 overflow-y-auto p-2 border border-slate-200 rounded">
+                {teachingSlots.map((slot, index) => {
+                  const isSelected = selectedSlots.includes(index);
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      className={`p-3 rounded border text-left transition-all ${
+                        isSelected
+                          ? 'bg-[#006837] text-white border-[#006837] shadow-md'
+                          : 'bg-white border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5'
+                      }`}
+                      onClick={() => handleSlotToggle(index)}
+                      data-testid={`slot-selector-${index}`}
+                    >
+                      <div className="font-semibold text-sm">{slot.name}</div>
+                      <div className="text-xs mt-1 opacity-90">
+                        {slot.start_time} - {slot.end_time}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedSlots.length > 0 && (
+                <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm">
+                  <span className="font-semibold text-emerald-800">Terpilih:</span>{' '}
+                  <span className="text-emerald-700">
+                    Jam ke-{selectedSlots.map(i => i + 1).join(', ')}
+                  </span>
+                  {teachingSlots[selectedSlots[0]] && teachingSlots[selectedSlots[selectedSlots.length - 1]] && (
+                    <span className="text-emerald-600 ml-2">
+                      ({teachingSlots[selectedSlots[0]].start_time} - {teachingSlots[selectedSlots[selectedSlots.length - 1]].end_time})
+                    </span>
+                  )}
+                  <div className="text-xs text-emerald-600 mt-1">
+                    💡 Ruang akan otomatis mengikuti ruang kelas
+                  </div>
+                </div>
+              )}
             </div>
             <div className="col-span-2"><Label>Kelas</Label>
               <Select value={form.class_id} onValueChange={(v) => setForm({...form, class_id: v})}>
@@ -479,12 +541,15 @@ export default function AdminSchedulesPage() {
                 <SelectContent>{teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="col-span-2"><Label>Ruang</Label>
-              <Select value={form.room_id} onValueChange={(v) => setForm({...form, room_id: v})}>
-                <SelectTrigger data-testid="schedule-form-room"><SelectValue placeholder="Pilih ruang" /></SelectTrigger>
-                <SelectContent>{rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            {/* v1.1.1: Hide room selector when multi-slot is used (auto-assigned from class) */}
+            {selectedSlots.length === 0 && (
+              <div className="col-span-2"><Label>Ruang</Label>
+                <Select value={form.room_id} onValueChange={(v) => setForm({...form, room_id: v})}>
+                  <SelectTrigger data-testid="schedule-form-room"><SelectValue placeholder="Pilih ruang" /></SelectTrigger>
+                  <SelectContent>{rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Batal</Button><Button onClick={handleSubmit} className="bg-[#006837]" data-testid="schedule-form-submit">Simpan</Button></DialogFooter>
         </DialogContent>

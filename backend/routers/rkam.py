@@ -134,8 +134,23 @@ async def create_budget_item(
         )
 
         logger.info(f"[RKAM POST] Created model: id={item.id}, name={item.name}")
+        logger.info(f"[RKAM POST] Model attributes - allocated_bos={item.allocated_bos}, allocated_komite={item.allocated_komite}, realized_bos={item.realized_bos}, realized_komite={item.realized_komite}")
 
-        item_dict = item.model_dump()
+        item_dict = item.model_dump(mode='python')
+
+        # CRITICAL FIX v1.1.1: Ensure dual budget fields are in the dict
+        # (Pydantic might exclude fields with default values in some cases)
+        item_dict['allocated_bos'] = allocated_bos
+        item_dict['allocated_komite'] = allocated_komite
+        item_dict['realized_bos'] = realized_bos
+        item_dict['realized_komite'] = realized_komite
+        # Recalculate deprecated fields for backward compatibility
+        item_dict['allocated_amount'] = allocated_bos + allocated_komite
+        item_dict['realized_amount'] = realized_bos + realized_komite
+        item_dict['remaining_amount'] = (allocated_bos + allocated_komite) - (realized_bos + realized_komite)
+
+        logger.info(f"[RKAM POST] model_dump() keys: {item_dict.keys()}")
+        logger.info(f"[RKAM POST] Dual budget in dump - allocated_bos={item_dict.get('allocated_bos')}, allocated_komite={item_dict.get('allocated_komite')}")
         logger.info(f"[RKAM POST] Inserting to database: {item_dict}")
 
         result = await db.rkam_budget_items.insert_one(item_dict)
@@ -716,3 +731,4 @@ async def get_public_budget_summary(
         logger.error(f"[RKAM] ERROR in budget-summary: {str(e)}")
         logger.error(f"[RKAM] Error details:", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
