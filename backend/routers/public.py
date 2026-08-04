@@ -288,3 +288,107 @@ async def public_agenda(
         'app_name': settings.get('app_name'),
         'logo_url': settings.get('logo_url'),
     }
+
+
+@router.get("/public/rkam/budget-items")
+async def public_rkam_budget_items(
+    fiscal_year: Optional[str] = None,
+    quarter: Optional[str] = None
+):
+    """
+    Public RKAM budget items endpoint - v1.1.1 dengan dual budget (BOS & Komite).
+
+    Menampilkan kolom untuk public:
+    - nama, kategori, bidang
+    - sumber_dana_bos, sumber_dana_komite
+    - dialokasikan_bos, dialokasikan_komite
+    - realisasi_bos, realisasi_komite
+    - sisa_bos, sisa_komite
+    - triwulan, status (persentase serapan)
+
+    TIDAK menampilkan: kode, aksi (karena public)
+    """
+    query = {'is_active': True}
+    if fiscal_year:
+        query['fiscal_year'] = fiscal_year
+    if quarter:
+        query['quarter'] = quarter
+
+    items = await db.rkam_budget_items.find(query, {'_id': 0}).to_list(1000)
+
+    public_items = []
+    for item in items:
+        # Calculate totals and percentages
+        total_allocated = item.get('allocated_bos', 0) + item.get('allocated_komite', 0)
+        total_realized = item.get('realized_bos', 0) + item.get('realized_komite', 0)
+        sisa_bos = item.get('allocated_bos', 0) - item.get('realized_bos', 0)
+        sisa_komite = item.get('allocated_komite', 0) - item.get('realized_komite', 0)
+        persentase_serapan = (total_realized / total_allocated * 100) if total_allocated > 0 else 0
+
+        public_items.append({
+            'nama': item.get('name', '-'),
+            'kategori': item.get('category', '-'),
+            'bidang': item.get('bidang', '-'),
+            'sumber_dana_bos': item.get('allocated_bos', 0),
+            'sumber_dana_komite': item.get('allocated_komite', 0),
+            'dialokasikan_bos': item.get('allocated_bos', 0),
+            'dialokasikan_komite': item.get('allocated_komite', 0),
+            'realisasi_bos': item.get('realized_bos', 0),
+            'realisasi_komite': item.get('realized_komite', 0),
+            'sisa_bos': sisa_bos,
+            'sisa_komite': sisa_komite,
+            'triwulan': item.get('quarter', '-'),
+            'status': f"{persentase_serapan:.1f}%"
+        })
+
+    # Calculate summary statistics
+    total_bos = sum(i['dialokasikan_bos'] for i in public_items)
+    total_komite = sum(i['dialokasikan_komite'] for i in public_items)
+    total_realisasi_bos = sum(i['realisasi_bos'] for i in public_items)
+    total_realisasi_komite = sum(i['realisasi_komite'] for i in public_items)
+    total_allocated = total_bos + total_komite
+    total_realized = total_realisasi_bos + total_realisasi_komite
+    overall_percentage = (total_realized / total_allocated * 100) if total_allocated > 0 else 0
+
+    settings = await get_settings()
+    return {
+        'items': public_items,
+        'summary': {
+            'total_bos': total_bos,
+            'total_komite': total_komite,
+            'total_allocated': total_allocated,
+            'total_realisasi_bos': total_realisasi_bos,
+            'total_realisasi_komite': total_realisasi_komite,
+            'total_realized': total_realized,
+            'total_sisa_bos': total_bos - total_realisasi_bos,
+            'total_sisa_komite': total_komite - total_realisasi_komite,
+            'persentase_serapan': f"{overall_percentage:.1f}%"
+        },
+        'school_name': settings.get('school_name'),
+        'app_name': settings.get('app_name'),
+        'logo_url': settings.get('logo_url'),
+    }
+
+
+@router.get("/public/rkam/documents")
+async def public_rkam_documents(
+    fiscal_year: Optional[str] = None,
+    quarter: Optional[str] = None
+):
+    """
+    Public RKAM documents endpoint - dokumen arsip yang dipublikasikan.
+
+    v1.1.1: Fix untuk memastikan dokumen RKAM muncul di halaman public.
+    """
+    query = {'is_public': True, 'is_active': True}
+    if fiscal_year:
+        query['fiscal_year'] = fiscal_year
+    if quarter:
+        query['quarter'] = quarter
+
+    docs = await db.rkam_documents.find(query, {'_id': 0}).sort('upload_date', -1).to_list(100)
+
+    return {
+        'documents': [serialize_doc(d) for d in docs],
+        'total': len(docs)
+    }

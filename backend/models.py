@@ -455,7 +455,9 @@ class ScheduleModel(BaseModel):
     day: str
     start_time: str
     end_time: str
-    slot_index: Optional[int] = None  # references teaching_slots index
+    # === v1.1.1: Support for grouped time slots ===
+    slot_indexes: Optional[List[int]] = None  # NEW: Array of slot indexes for grouped schedules (e.g., [1,2,3] for jam 2-4)
+    slot_index: Optional[int] = None  # DEPRECATED: use slot_indexes for multi-slot support
     is_published: bool = True
     # === DEPRECATED fields (keep for backward compatibility) ===
     academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
@@ -501,6 +503,8 @@ class JournalModel(BaseModel):
     started_at: datetime = Field(default_factory=datetime.utcnow)
     scheduled_start: Optional[str] = None
     scheduled_end: Optional[str] = None
+    # === v1.1.1: Support for grouped time slots ===
+    slot_indexes: Optional[List[int]] = None  # Array of slot indexes for grouped journal entries
     validations: Dict[str, Any] = Field(default_factory=dict)
     qr_mode: str = 'static'
     is_locked: bool = False
@@ -1269,13 +1273,19 @@ class RKAMBudgetItemModel(BaseModel):
     name: str  # Nama item anggaran
     category: Optional[str] = None  # Kategori: operasional, pembangunan, program, dll
     bidang: Optional[str] = None  # Bidang: sarana_prasarana, humas, kesiswaan, kurikulum, tata_usaha
-    sumber_dana: Optional[str] = None  # Sumber dana: BOS, KOMITE
+    sumber_dana: Optional[str] = None  # DEPRECATED v1.1.1: use dual budget fields instead
     description: Optional[str] = None  # Deskripsi detail
 
-    # Anggaran
-    allocated_amount: float = 0.0  # Jumlah yang dialokasikan
-    realized_amount: float = 0.0  # Jumlah yang sudah terealisasi
-    remaining_amount: float = 0.0  # Sisa anggaran (calculated field)
+    # Anggaran - v1.1.1: Dual Budget System (BOS & Komite)
+    allocated_bos: float = 0.0  # Anggaran dialokasikan dari BOS
+    allocated_komite: float = 0.0  # Anggaran dialokasikan dari Komite
+    realized_bos: float = 0.0  # Realisasi dari BOS
+    realized_komite: float = 0.0  # Realisasi dari Komite
+
+    # DEPRECATED v1.1.1: kept for backward compatibility
+    allocated_amount: Optional[float] = None  # DEPRECATED: use allocated_bos + allocated_komite
+    realized_amount: Optional[float] = None  # DEPRECATED: use realized_bos + realized_komite
+    remaining_amount: Optional[float] = None  # DEPRECATED: calculated from dual budgets
 
     # Periode
     fiscal_year: str  # Tahun anggaran (e.g., "2024/2025")

@@ -46,19 +46,37 @@ async def _find_conflicts(
     room_id: Optional[str] = None,
     class_id: Optional[str] = None,
     exclude_id: Optional[str] = None,
+    slot_indexes: Optional[List[int]] = None,
 ) -> Dict[str, List[Dict]]:
     """Find conflicts grouped by type. Returns:
     { 'teacher': [...], 'room': [...], 'class': [...] }
     Each entry includes: id, day, start_time, end_time, teacher_name, subject_name,
     class_name, room_name, status (draft/submitted/locked).
+
+    v1.1.1: Support grouped time slots - checks slot_indexes overlap if available.
     """
     q = {'semester_id': semester_id, 'day': day}
     if exclude_id:
         q['id'] = {'$ne': exclude_id}
     candidates = await db.schedules.find(q, {'_id': 0}).to_list(500)
-    overlapping = [s for s in candidates if _times_overlap(start_time, end_time,
-                                                            s.get('start_time', ''),
-                                                            s.get('end_time', ''))]
+
+    # v1.1.1: Enhanced overlap detection with slot_indexes support
+    overlapping = []
+    for s in candidates:
+        has_overlap = False
+
+        # If both have slot_indexes, check slot overlap
+        their_slots = s.get('slot_indexes')
+        if slot_indexes and their_slots:
+            # Check if any slot index overlaps
+            if set(slot_indexes) & set(their_slots):
+                has_overlap = True
+        # Fallback to time-based overlap
+        elif _times_overlap(start_time, end_time, s.get('start_time', ''), s.get('end_time', '')):
+            has_overlap = True
+
+        if has_overlap:
+            overlapping.append(s)
 
     async def _enrich(s):
         out = dict(s)
@@ -379,7 +397,15 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
             raise HTTPException(400, "semester_id wajib diisi")
         payload['semester_id'] = sem_id
 
-    # Conflict detection (Phase 6: guru + ruang)
+    # v1.1.1: Auto-assign room_id from class (ruang otomatis mengikuti kelas)
+    class_id = payload.get('class_id')
+    if class_id and not payload.get('room_id'):
+        cls = await db.classes.find_one({'id': class_id}, {'_id': 0, 'room_id': 1})
+        if cls and cls.get('room_id'):
+            payload['room_id'] = cls['room_id']
+            logger.info(f"Auto-assigned room_id {cls['room_id']} from class {class_id}")
+
+    # Conflict detection (Phase 6: guru + ruang, v1.1.1: with slot_indexes support)
     force = payload.pop('force', False)
     if sem_id and payload.get('day') and payload.get('start_time') and payload.get('end_time'):
         conflicts = await _find_conflicts(
@@ -387,6 +413,7 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
             teacher_id=payload.get('teacher_id'),
             room_id=payload.get('room_id'),
             class_id=payload.get('class_id'),
+            slot_indexes=payload.get('slot_indexes'),
         )
         blocking = conflicts['teacher'] + conflicts['room']
         if blocking and not (is_admin and force):
@@ -792,6 +819,15 @@ async def update_schedule(sid: str, payload: Dict, request: Request, user: Dict 
         raise HTTPException(403, "Jadwal sudah dikirim. Hanya admin yang bisa edit.")
     if not (is_admin or (is_owner and status_val == 'draft')):
         raise HTTPException(403, "Tidak diizinkan")
+
+    # v1.1.1: Auto-assign room_id from class if updating class_id
+    class_id = payload.get('class_id')
+    if class_id and not payload.get('room_id'):
+        cls = await db.classes.find_one({'id': class_id}, {'_id': 0, 'room_id': 1})
+        if cls and cls.get('room_id'):
+            payload['room_id'] = cls['room_id']
+            logger.info(f"Auto-assigned room_id {cls['room_id']} from class {class_id} on update")
+
     payload.pop('status', None)
     payload.pop('submitted_at', None); payload.pop('submitted_by', None)
     payload.pop('locked_at', None); payload.pop('locked_by', None)
