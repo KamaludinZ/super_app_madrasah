@@ -71,26 +71,33 @@ export default function PublicRKAMPage() {
     try {
       setLoading(true);
 
-      const budgetRes = await axios.get(`${API_BASE}/public/rkam/budget-summary`, {
+      // v1.1.1: Use new endpoint with dual budget
+      const budgetRes = await axios.get(`${API_BASE}/public/rkam/budget-items`, {
         params: {
           fiscal_year: fiscalYear,
-          bidang: filterBidang || undefined
+          quarter: undefined // Add quarter filter if needed
         }
       });
-      setBudgetData(budgetRes.data);
+
+      // Response structure: { items: [...], summary: {...}, school_name, app_name, logo_url }
+      setBudgetData({
+        items: budgetRes.data.items || [],
+        summary: budgetRes.data.summary || {},
+        school_name: budgetRes.data.school_name,
+        app_name: budgetRes.data.app_name
+      });
 
       const docsRes = await axios.get(`${API_BASE}/public/rkam/documents`, {
         params: { fiscal_year: fiscalYear }
       });
-      setDocuments(docsRes.data);
+      setDocuments(docsRes.data.documents || []);
 
+      // Extract available years from items
       const years = new Set([fiscalYear]);
-      budgetRes.data.categories?.forEach(cat => {
-        cat.items?.forEach(item => {
-          if (item.fiscal_year) years.add(item.fiscal_year);
-        });
+      budgetRes.data.items?.forEach(item => {
+        // Items don't have fiscal_year in response, use current year
       });
-      setAvailableYears([...years].sort((a, b) => b.localeCompare(a)));
+      setAvailableYears([fiscalYear]);
 
       // Reset to first page when filters change
       setCurrentPage(1);
@@ -118,31 +125,48 @@ export default function PublicRKAMPage() {
     });
   };
 
-  // Get BOS and KOMITE data
-  const bosData = budgetData?.sumber_dana_groups?.find(g => g.sumber_dana === 'BOS') || {
-    allocated: 0,
-    realized: 0,
-    remaining: 0
+  // v1.1.1: Get summary data from API response
+  const summary = budgetData?.summary || {
+    total_bos: 0,
+    total_komite: 0,
+    total_allocated: 0,
+    total_realisasi_bos: 0,
+    total_realisasi_komite: 0,
+    total_realized: 0,
+    total_sisa_bos: 0,
+    total_sisa_komite: 0,
+    persentase_serapan: '0.0%'
   };
 
-  const komiteData = budgetData?.sumber_dana_groups?.find(g => g.sumber_dana === 'KOMITE') || {
-    allocated: 0,
-    realized: 0,
-    remaining: 0
+  const bosData = {
+    allocated: summary.total_bos,
+    realized: summary.total_realisasi_bos,
+    remaining: summary.total_sisa_bos
+  };
+
+  const komiteData = {
+    allocated: summary.total_komite,
+    realized: summary.total_realisasi_komite,
+    remaining: summary.total_sisa_komite
   };
 
   const bosPercentage = bosData.allocated > 0 ? (bosData.realized / bosData.allocated * 100) : 0;
   const komitePercentage = komiteData.allocated > 0 ? (komiteData.realized / komiteData.allocated * 100) : 0;
 
-  // Flatten all items from categories for table display
-  const allItems = budgetData?.categories?.flatMap(cat => cat.items || []) || [];
+  // v1.1.1: Use items directly from API response (no categories structure)
+  const allItems = budgetData?.items || [];
+
+  // Filter by bidang if selected
+  const filteredItems = filterBidang
+    ? allItems.filter(item => item.bidang === filterBidang)
+    : allItems;
 
   // Pagination calculations
-  const totalItems = allItems.length;
+  const totalItems = filteredItems.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentItems = allItems.slice(startIndex, endIndex);
+  const currentItems = filteredItems.slice(startIndex, endIndex);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -415,86 +439,83 @@ export default function PublicRKAMPage() {
                       <table className="w-full">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              No
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Kode
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Nama Item
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Kategori
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Sumber Dana
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Anggaran
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Realisasi
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              Sisa
-                            </th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                              %
-                            </th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">No</th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Nama</th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Kategori</th>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Bidang</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-blue-700 uppercase tracking-wider">Anggaran BOS</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-purple-700 uppercase tracking-wider">Anggaran Komite</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-blue-700 uppercase tracking-wider">Realisasi BOS</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-purple-700 uppercase tracking-wider">Realisasi Komite</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Sisa BOS</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">Sisa Komite</th>
+                            <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Triwulan</th>
+                            <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">Serapan</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                           {currentItems.map((item, idx) => {
-                            const percentage = item.allocated > 0 ? (item.realized / item.allocated * 100) : 0;
                             const globalIdx = startIndex + idx + 1;
-
-                            // Find category for this item
-                            const category = budgetData?.categories?.find(cat =>
-                              cat.items?.some(i => i.id === item.id)
-                            );
+                            // Parse percentage from status string (e.g., "80.0%" -> 80.0)
+                            const percentageStr = item.status || '0%';
+                            const percentage = parseFloat(percentageStr.replace('%', '')) || 0;
 
                             return (
-                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-4 py-3 text-sm text-slate-900">
+                              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                {/* No */}
+                                <td className="px-4 py-3 text-sm text-slate-900 text-center">
                                   {globalIdx}
                                 </td>
-                                <td className="px-4 py-3">
-                                  <Badge variant="outline" className="font-mono text-xs">
-                                    {item.code || '-'}
-                                  </Badge>
-                                </td>
+                                {/* Nama */}
                                 <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                                  {item.name}
+                                  {item.nama || '-'}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-slate-600">
-                                  {category?.category || '-'}
+                                {/* Kategori */}
+                                <td className="px-4 py-3 text-sm text-slate-600 capitalize">
+                                  {item.kategori || '-'}
                                 </td>
-                                <td className="px-4 py-3">
-                                  <Badge className={
-                                    item.sumber_dana === 'BOS'
-                                      ? 'bg-blue-100 text-blue-700 border-blue-200'
-                                      : 'bg-purple-100 text-purple-700 border-purple-200'
-                                  }>
-                                    {item.sumber_dana}
+                                {/* Bidang */}
+                                <td className="px-4 py-3 text-sm text-slate-600 capitalize">
+                                  {item.bidang?.replace(/_/g, ' ') || '-'}
+                                </td>
+                                {/* Anggaran BOS */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-blue-700">
+                                  {formatRupiah(item.dialokasikan_bos || 0)}
+                                </td>
+                                {/* Anggaran Komite */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-purple-700">
+                                  {formatRupiah(item.dialokasikan_komite || 0)}
+                                </td>
+                                {/* Realisasi BOS */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-blue-600">
+                                  {formatRupiah(item.realisasi_bos || 0)}
+                                </td>
+                                {/* Realisasi Komite */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-purple-600">
+                                  {formatRupiah(item.realisasi_komite || 0)}
+                                </td>
+                                {/* Sisa BOS */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-amber-600">
+                                  {formatRupiah(item.sisa_bos || 0)}
+                                </td>
+                                {/* Sisa Komite */}
+                                <td className="px-4 py-3 text-sm font-semibold text-right text-amber-600">
+                                  {formatRupiah(item.sisa_komite || 0)}
+                                </td>
+                                {/* Triwulan */}
+                                <td className="px-4 py-3 text-center">
+                                  <Badge variant="outline" className="font-semibold">
+                                    {item.triwulan || '-'}
                                   </Badge>
                                 </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-right text-slate-900">
-                                  {formatRupiah(item.allocated)}
-                                </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-right text-green-600">
-                                  {formatRupiah(item.realized)}
-                                </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-right text-amber-600">
-                                  {formatRupiah(item.remaining)}
-                                </td>
+                                {/* Serapan */}
                                 <td className="px-4 py-3 text-center">
                                   <span className={`text-xs font-bold ${
                                     percentage >= 80 ? 'text-green-600' :
                                     percentage >= 50 ? 'text-amber-600' :
                                     'text-slate-600'
                                   }`}>
-                                    {percentage.toFixed(1)}%
+                                    {item.status || '0%'}
                                   </span>
                                 </td>
                               </tr>

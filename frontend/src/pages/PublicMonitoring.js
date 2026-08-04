@@ -64,6 +64,50 @@ export default function PublicMonitoring() {
     return currentTime < item.start_time;
   };
 
+  // v1.1.1: Group consecutive schedules (same class, subject, teacher, adjacent time slots)
+  const groupSchedules = (schedules) => {
+    const groups = [];
+    const sorted = [...schedules].sort((a, b) =>
+      a.start_time.localeCompare(b.start_time)
+    );
+
+    let currentGroup = null;
+
+    for (const schedule of sorted) {
+      // Check if this schedule can be grouped with current
+      if (currentGroup &&
+          currentGroup.class_name === schedule.class_name &&
+          currentGroup.subject_name === schedule.subject_name &&
+          currentGroup.teacher_name === schedule.teacher_name &&
+          currentGroup.room_name === schedule.room_name &&
+          currentGroup.end_time === schedule.start_time) {
+        // Extend current group
+        currentGroup.end_time = schedule.end_time;
+        currentGroup.schedule_ids.push(schedule.schedule_id);
+        // Update jurnal status: if any is filled, show filled
+        if (schedule.jurnal_status === 'filled') {
+          currentGroup.jurnal_status = 'filled';
+        }
+        // Combine materi if exists
+        if (schedule.jurnal_materi && currentGroup.jurnal_materi) {
+          currentGroup.jurnal_materi = currentGroup.jurnal_materi; // Keep first materi
+        } else if (schedule.jurnal_materi) {
+          currentGroup.jurnal_materi = schedule.jurnal_materi;
+        }
+      } else {
+        // Start new group
+        if (currentGroup) groups.push(currentGroup);
+        currentGroup = {
+          ...schedule,
+          schedule_ids: [schedule.schedule_id]
+        };
+      }
+    }
+
+    if (currentGroup) groups.push(currentGroup);
+    return groups;
+  };
+
   const filteredItems = (data?.classes || []).filter((c) => {
     if (filter === 'aktif') return true; // Show all for the day
     if (filter === 'akan-datang') return isUpcoming(c);
@@ -72,6 +116,9 @@ export default function PublicMonitoring() {
     if (filter === 'belum-terisi') return c.jurnal_status === 'missing' || c.jurnal_status === 'pending';
     return true;
   });
+
+  // v1.1.1: Apply grouping to filtered items
+  const groupedItems = groupSchedules(filteredItems);
 
   const dayLabel = DAY_LABELS[data?.day] || data?.day || '';
 
@@ -250,7 +297,7 @@ export default function PublicMonitoring() {
         {/* Grid */}
         {loading ? (
           <div className="text-center py-12 text-slate-500">Memuat data...</div>
-        ) : filteredItems.length === 0 ? (
+        ) : groupedItems.length === 0 ? (
           <Card className="surface-ivory">
             <CardContent className="py-12 text-center">
               <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -260,7 +307,7 @@ export default function PublicMonitoring() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="public-monitoring-grid">
-            {filteredItems.map((c, idx) => <ScheduleCard key={`${c.schedule_id}-${idx}`} item={c} now={now} />)}
+            {groupedItems.map((c, idx) => <ScheduleCard key={`${c.schedule_ids?.join('-') || c.schedule_id}-${idx}`} item={c} now={now} />)}
           </div>
         )}
 

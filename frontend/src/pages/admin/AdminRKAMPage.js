@@ -17,15 +17,17 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
+// v1.1.1: Updated for dual budget system (BOS & Komite)
 const EMPTY_BUDGET_FORM = {
   code: '',
   name: '',
   category: '',
   bidang: '',
-  sumber_dana: '',
   description: '',
-  allocated_amount: 0,
-  realized_amount: 0,
+  allocated_bos: 0,
+  allocated_komite: 0,
+  realized_bos: 0,
+  realized_komite: 0,
   fiscal_year: '',
   quarter: '',
   month: null,
@@ -124,15 +126,17 @@ export default function AdminRKAMPage() {
 
   const openBudgetEdit = (item) => {
     setEditingBudget(item.id);
+    // v1.1.1: Load dual budget fields, with backward compatibility
     setBudgetForm({
       code: item.code || '',
       name: item.name || '',
       category: item.category || '',
       bidang: item.bidang || '',
-      sumber_dana: item.sumber_dana || '',
       description: item.description || '',
-      allocated_amount: item.allocated_amount || 0,
-      realized_amount: item.realized_amount || 0,
+      allocated_bos: item.allocated_bos ?? item.allocated_amount ?? 0,
+      allocated_komite: item.allocated_komite ?? 0,
+      realized_bos: item.realized_bos ?? item.realized_amount ?? 0,
+      realized_komite: item.realized_komite ?? 0,
       fiscal_year: item.fiscal_year || '',
       quarter: item.quarter || '',
       month: item.month || null,
@@ -329,17 +333,14 @@ export default function AdminRKAMPage() {
   // SUMMARY CALCULATIONS
   // ============================================================================
 
-  // Calculate BOS totals
-  const bosItems = budgetItems.filter(item => item.sumber_dana === 'BOS');
-  const bosAllocated = bosItems.reduce((sum, item) => sum + (item.allocated_amount || 0), 0);
-  const bosRealized = bosItems.reduce((sum, item) => sum + (item.realized_amount || 0), 0);
-  const bosRemaining = bosItems.reduce((sum, item) => sum + (item.remaining_amount || 0), 0);
+  // v1.1.1: Calculate totals using dual budget fields
+  const bosAllocated = budgetItems.reduce((sum, item) => sum + (item.allocated_bos || 0), 0);
+  const bosRealized = budgetItems.reduce((sum, item) => sum + (item.realized_bos || 0), 0);
+  const bosRemaining = bosAllocated - bosRealized;
 
-  // Calculate KOMITE totals
-  const komiteItems = budgetItems.filter(item => item.sumber_dana === 'KOMITE');
-  const komiteAllocated = komiteItems.reduce((sum, item) => sum + (item.allocated_amount || 0), 0);
-  const komiteRealized = komiteItems.reduce((sum, item) => sum + (item.realized_amount || 0), 0);
-  const komiteRemaining = komiteItems.reduce((sum, item) => sum + (item.remaining_amount || 0), 0);
+  const komiteAllocated = budgetItems.reduce((sum, item) => sum + (item.allocated_komite || 0), 0);
+  const komiteRealized = budgetItems.reduce((sum, item) => sum + (item.realized_komite || 0), 0);
+  const komiteRemaining = komiteAllocated - komiteRealized;
 
   // Calculate overall totals
   const totalAllocated = bosAllocated + komiteAllocated;
@@ -776,24 +777,7 @@ export default function AdminRKAMPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Sumber Dana</Label>
-                <Select
-                  value={budgetForm.sumber_dana}
-                  onValueChange={(v) => setBudgetForm({ ...budgetForm, sumber_dana: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih sumber..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUMBER_DANA_OPTIONS.map((sumber) => (
-                      <SelectItem key={sumber} value={sumber}>
-                        {sumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* v1.1.1: Sumber Dana field removed - now using dual budget system */}
             </div>
 
             <div>
@@ -816,30 +800,73 @@ export default function AdminRKAMPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Anggaran Dialokasikan</Label>
-                <Input
-                  type="number"
-                  value={budgetForm.allocated_amount}
-                  onChange={(e) =>
-                    setBudgetForm({ ...budgetForm, allocated_amount: parseFloat(e.target.value) || 0 })
-                  }
-                  min="0"
-                  step="1000"
-                />
+            {/* v1.1.1: Dual Budget System */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-blue-700 font-semibold">Anggaran BOS</Label>
+                  <Input
+                    type="number"
+                    value={budgetForm.allocated_bos}
+                    onChange={(e) =>
+                      setBudgetForm({ ...budgetForm, allocated_bos: parseFloat(e.target.value) || 0 })
+                    }
+                    min="0"
+                    step="1000"
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <Label className="text-purple-700 font-semibold">Anggaran Komite</Label>
+                  <Input
+                    type="number"
+                    value={budgetForm.allocated_komite}
+                    onChange={(e) =>
+                      setBudgetForm({ ...budgetForm, allocated_komite: parseFloat(e.target.value) || 0 })
+                    }
+                    min="0"
+                    step="1000"
+                    className="border-purple-200 focus:border-purple-500"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Realisasi</Label>
-                <Input
-                  type="number"
-                  value={budgetForm.realized_amount}
-                  onChange={(e) =>
-                    setBudgetForm({ ...budgetForm, realized_amount: parseFloat(e.target.value) || 0 })
-                  }
-                  min="0"
-                  step="1000"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-blue-600">Realisasi BOS</Label>
+                  <Input
+                    type="number"
+                    value={budgetForm.realized_bos}
+                    onChange={(e) =>
+                      setBudgetForm({ ...budgetForm, realized_bos: parseFloat(e.target.value) || 0 })
+                    }
+                    min="0"
+                    step="1000"
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <Label className="text-purple-600">Realisasi Komite</Label>
+                  <Input
+                    type="number"
+                    value={budgetForm.realized_komite}
+                    onChange={(e) =>
+                      setBudgetForm({ ...budgetForm, realized_komite: parseFloat(e.target.value) || 0 })
+                    }
+                    min="0"
+                    step="1000"
+                    className="border-purple-200 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-slate-50 p-3 rounded border border-slate-200 text-sm space-y-1">
+                <p className="font-semibold text-slate-700">Ringkasan:</p>
+                <p>Total Dialokasikan: <span className="font-bold">Rp {((budgetForm.allocated_bos || 0) + (budgetForm.allocated_komite || 0)).toLocaleString('id-ID')}</span></p>
+                <p>Total Realisasi: <span className="font-bold text-green-600">Rp {((budgetForm.realized_bos || 0) + (budgetForm.realized_komite || 0)).toLocaleString('id-ID')}</span></p>
+                <p>Sisa BOS: <span className="font-bold text-amber-600">Rp {((budgetForm.allocated_bos || 0) - (budgetForm.realized_bos || 0)).toLocaleString('id-ID')}</span></p>
+                <p>Sisa Komite: <span className="font-bold text-amber-600">Rp {((budgetForm.allocated_komite || 0) - (budgetForm.realized_komite || 0)).toLocaleString('id-ID')}</span></p>
               </div>
             </div>
 
