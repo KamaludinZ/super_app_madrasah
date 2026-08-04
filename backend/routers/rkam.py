@@ -105,16 +105,28 @@ async def create_budget_item(
         if not payload.get('fiscal_year'):
             raise HTTPException(status_code=400, detail="Field 'fiscal_year' is required")
 
+        # v1.1.1: Support dual budget fields (BOS & Komite)
+        allocated_bos = float(payload.get('allocated_bos', 0.0))
+        allocated_komite = float(payload.get('allocated_komite', 0.0))
+        realized_bos = float(payload.get('realized_bos', 0.0))
+        realized_komite = float(payload.get('realized_komite', 0.0))
+
         item = RKAMBudgetItemModel(
             code=payload.get('code'),
             name=payload['name'],
             category=payload.get('category'),
             bidang=payload.get('bidang'),
-            sumber_dana=payload.get('sumber_dana'),
             description=payload.get('description'),
-            allocated_amount=float(payload.get('allocated_amount', 0.0)),
-            realized_amount=float(payload.get('realized_amount', 0.0)),
-            remaining_amount=float(payload.get('allocated_amount', 0.0)) - float(payload.get('realized_amount', 0.0)),
+            # v1.1.1: Dual budget fields
+            allocated_bos=allocated_bos,
+            allocated_komite=allocated_komite,
+            realized_bos=realized_bos,
+            realized_komite=realized_komite,
+            # Deprecated fields (kept for backward compatibility)
+            allocated_amount=allocated_bos + allocated_komite,
+            realized_amount=realized_bos + realized_komite,
+            remaining_amount=(allocated_bos + allocated_komite) - (realized_bos + realized_komite),
+            sumber_dana=payload.get('sumber_dana'),
             fiscal_year=payload['fiscal_year'],
             quarter=payload.get('quarter'),
             month=payload.get('month'),
@@ -160,15 +172,28 @@ async def update_budget_item(
     if not existing:
         raise HTTPException(status_code=404, detail="Budget item not found")
 
+    # v1.1.1: Support dual budget fields (BOS & Komite)
+    allocated_bos = float(payload.get('allocated_bos', existing.get('allocated_bos', 0.0)))
+    allocated_komite = float(payload.get('allocated_komite', existing.get('allocated_komite', 0.0)))
+    realized_bos = float(payload.get('realized_bos', existing.get('realized_bos', 0.0)))
+    realized_komite = float(payload.get('realized_komite', existing.get('realized_komite', 0.0)))
+
     update_data = {
         'code': payload.get('code', existing.get('code')),
         'name': payload.get('name', existing.get('name')),
         'category': payload.get('category', existing.get('category')),
         'bidang': payload.get('bidang', existing.get('bidang')),
-        'sumber_dana': payload.get('sumber_dana', existing.get('sumber_dana')),
         'description': payload.get('description', existing.get('description')),
-        'allocated_amount': float(payload.get('allocated_amount', existing.get('allocated_amount', 0.0))),
-        'realized_amount': float(payload.get('realized_amount', existing.get('realized_amount', 0.0))),
+        # v1.1.1: Dual budget fields
+        'allocated_bos': allocated_bos,
+        'allocated_komite': allocated_komite,
+        'realized_bos': realized_bos,
+        'realized_komite': realized_komite,
+        # Deprecated fields (kept for backward compatibility)
+        'allocated_amount': allocated_bos + allocated_komite,
+        'realized_amount': realized_bos + realized_komite,
+        'remaining_amount': (allocated_bos + allocated_komite) - (realized_bos + realized_komite),
+        'sumber_dana': payload.get('sumber_dana', existing.get('sumber_dana')),
         'fiscal_year': payload.get('fiscal_year', existing.get('fiscal_year')),
         'quarter': payload.get('quarter', existing.get('quarter')),
         'month': payload.get('month', existing.get('month')),
@@ -176,9 +201,6 @@ async def update_budget_item(
         'updated_at': datetime.utcnow(),
         'updated_by': user['id']
     }
-
-    # Calculate remaining amount
-    update_data['remaining_amount'] = update_data['allocated_amount'] - update_data['realized_amount']
 
     await db.rkam_budget_items.update_one({'id': item_id}, {'$set': update_data})
 

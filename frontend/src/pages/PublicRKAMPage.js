@@ -390,26 +390,26 @@ export default function PublicRKAMPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
                     <div className="text-center">
                       <p className="text-sm text-slate-600 mb-1">Total Anggaran</p>
-                      <p className="text-2xl font-bold text-slate-900">{formatRupiah(budgetData.total_allocated)}</p>
+                      <p className="text-2xl font-bold text-slate-900">{formatRupiah(summary.total_allocated)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-slate-600 mb-1">Total Realisasi</p>
-                      <p className="text-2xl font-bold text-green-600">{formatRupiah(budgetData.total_realized)}</p>
+                      <p className="text-2xl font-bold text-green-600">{formatRupiah(summary.total_realized)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-slate-600 mb-1">Sisa Anggaran</p>
-                      <p className="text-2xl font-bold text-amber-600">{formatRupiah(budgetData.total_remaining)}</p>
+                      <p className="text-2xl font-bold text-amber-600">{formatRupiah((summary.total_sisa_bos || 0) + (summary.total_sisa_komite || 0))}</p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-semibold text-slate-700">Tingkat Serapan Anggaran</span>
-                      <span className="text-lg font-bold text-[#006837]">{budgetData.percentage_realized.toFixed(2)}%</span>
+                      <span className="text-lg font-bold text-[#006837]">{summary.persentase_serapan}</span>
                     </div>
-                    <Progress value={budgetData.percentage_realized} className="h-4 bg-slate-200" />
+                    <Progress value={parseFloat(summary.persentase_serapan) || 0} className="h-4 bg-slate-200" />
                     <p className="text-xs text-slate-500 text-right">
-                      Dari total anggaran {formatRupiah(budgetData.total_allocated)}
+                      Dari total anggaran {formatRupiah(summary.total_allocated)}
                     </p>
                   </div>
                 </CardContent>
