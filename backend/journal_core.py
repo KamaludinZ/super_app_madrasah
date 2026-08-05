@@ -387,70 +387,53 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     )
     bg.paste(qr_img, (qr_x, qr_y))
 
-    # E-JURNAL PRESISI label below QR
+    # INSTRUCTION SECTION - Consistent for all templates
+    # Main instruction title
     instruction_y = qr_y + qr_size + 252
     draw.text((W // 2, instruction_y), "E-JURNAL PRESISI",
               fill=INK_BLACK, font=font_instruction_title, anchor="mm")
+    
+    # Detailed instruction text
+    instruction_detail_y = instruction_y + 90
+    instruction_text = "Scan barcode ini untuk mengisi jurnal mengajar"
+    draw.text((W // 2, instruction_detail_y), instruction_text,
+              fill=MEDIUM_GRAY, font=font_instruction_medium, anchor="mm")
 
-    # TOKEN KELAS section - auto-fit and safer vertical spacing
-    if class_token and not use_template:
+    # TOKEN KELAS section - Consistent layout for all templates
+    if class_token:
         token_value_text = str(class_token)
-
-        # Keep token area inside bottom band, with safer font scale
-        token_label_x = W // 4
-        token_value_x = 3 * W // 4
-        token_y = H - 55
-
-        token_value_font, _ = _fit_font_size(
-            token_value_text,
-            font_paths_bold,
-            start_size=107,  # 71 * 1.5 for 300 DPI
-            min_size=78,  # 52 * 1.5 for 300 DPI
-            max_width=int(W * 0.38),
-            draw=draw,
-        )
-
-        draw.text((token_label_x, token_y), "TOKEN KELAS",
-                  fill="white", font=font_token_label, anchor="mm")
-        draw.text((token_value_x, token_y), token_value_text,
-                  fill="white", font=token_value_font, anchor="mm")
-
-    elif class_token and use_template:
-        token_value_text = str(class_token)
-        token_area_start = instruction_y + 74
-        token_area_end = content_bottom
-        token_mid = min(token_area_start + 74, token_area_end - 74)
-
-        token_value_font, _ = _fit_font_size(
-            token_value_text,
-            font_paths_bold,
-            start_size=107,  # 71 * 1.5 for 300 DPI
-            min_size=78,  # 52 * 1.5 for 300 DPI
-            max_width=int(W * 0.78),
-            draw=draw,
-        )
-
-        # Light backdrop for readability on busy templates
-        pad_x = 65
-        pad_y = 28
+        
+        # Calculate token section position
+        token_section_y = instruction_detail_y + 120
+        
+        # Use consistent layout for both default and custom templates
+        # Create a white box with gold border for token display
+        pad_x = 80
+        pad_y = 40
         label_bbox = draw.textbbox((0, 0), "TOKEN KELAS", font=font_token_label)
-        value_bbox = draw.textbbox((0, 0), token_value_text, font=token_value_font)
+        value_bbox = draw.textbbox((0, 0), token_value_text, font=font_token_value)
+        
         box_w = max(label_bbox[2] - label_bbox[0], value_bbox[2] - value_bbox[0]) + (pad_x * 2)
         box_h = (label_bbox[3] - label_bbox[1]) + (value_bbox[3] - value_bbox[1]) + (pad_y * 3)
+        
         box_x1 = (W - box_w) // 2
-        box_y1 = token_mid - (box_h // 2)
+        box_y1 = token_section_y
         box_x2 = box_x1 + box_w
         box_y2 = box_y1 + box_h
-
-        draw.rectangle([(box_x1, box_y1), (box_x2, box_y2)], fill=(255, 255, 255), outline=POLISHED_GOLD, width=4)
-
+        
+        # Draw token box
+        draw.rectangle([(box_x1, box_y1), (box_x2, box_y2)], 
+                      fill=(255, 255, 255), outline=POLISHED_GOLD, width=6)
+        
+        # Position label and value
         label_y = box_y1 + pad_y + ((label_bbox[3] - label_bbox[1]) // 2)
         value_y = label_y + (label_bbox[3] - label_bbox[1]) + pad_y + ((value_bbox[3] - value_bbox[1]) // 2)
-
+        
+        # Draw token label and value
         draw.text((W // 2, label_y), "TOKEN KELAS",
                   fill=MEDIUM_GRAY, font=font_token_label, anchor="mm")
         draw.text((W // 2, value_y), token_value_text,
-                  fill=HUNTER_GREEN, font=token_value_font, anchor="mm")
+                  fill=HUNTER_GREEN, font=font_token_value, anchor="mm")
 
     buf = io.BytesIO()
     bg.save(buf, "PNG", optimize=True, dpi=(300, 300))
