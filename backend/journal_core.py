@@ -229,13 +229,14 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     app_name: str = "Super Apps MATSANDATAMA",
                     class_token: Optional[str] = None) -> bytes:
     """
-    Generate professional B5 portrait card (1386x1969 @ 200dpi) with highly-legible design.
+    Generate professional B5 portrait card (4158x5880 @ 300dpi) with highly-legible design.
     Designed for optimal readability when printed at B5 size (176mm x 250mm).
 
     Text sizing optimized for B5 print quality with clear hierarchy and proper spacing.
     Supports custom background templates while maintaining text legibility.
+    Updated to 300 DPI for higher print quality.
     """
-    W, H = 2772, 3920
+    W, H = 4158, 5880  # B3 size at 300 DPI (was 2772x3920 at 200 DPI)
 
     # Load background - either custom template or default cream color
     use_template = False
@@ -289,20 +290,18 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                     pass
         return ImageFont.load_default()
 
-    # PROFESSIONAL B5-OPTIMIZED FONT SIZES WITH BETTER PROPORTION
-    # Rebalanced to avoid oversized typography on template and non-template backgrounds
-    # User requested: reduce typography significantly (~40%)
-    # Requested again: reduce ~70% from current visual scale
-    font_app_name_header = load_font(font_paths_bold, 85)
-    font_school_header = load_font(font_paths_regular, 52)
-    font_class_huge = load_font(font_paths_bold, 246)
-    font_room_label = load_font(font_paths_bold, 90)
-    font_instruction_title = load_font(font_paths_bold, 52)
-    font_instruction_medium = load_font(font_paths_regular, 34)
-    font_token_label = load_font(font_paths_regular, 52)
-    font_token_value = load_font(font_paths_bold, 71)
-    font_footer = load_font(font_paths_bold, 34)
-    font_body_text = load_font(font_paths_regular, 22)
+    # PROFESSIONAL B5-OPTIMIZED FONT SIZES AT 300 DPI
+    # All sizes scaled by 1.5x from 200 DPI to maintain visual proportions
+    font_app_name_header = load_font(font_paths_bold, 128)  # 85 * 1.5
+    font_school_header = load_font(font_paths_regular, 78)  # 52 * 1.5
+    font_class_huge = load_font(font_paths_bold, 369)  # 246 * 1.5
+    font_room_label = load_font(font_paths_bold, 135)  # 90 * 1.5
+    font_instruction_title = load_font(font_paths_bold, 78)  # 52 * 1.5
+    font_instruction_medium = load_font(font_paths_regular, 51)  # 34 * 1.5
+    font_token_label = load_font(font_paths_regular, 78)  # 52 * 1.5
+    font_token_value = load_font(font_paths_bold, 107)  # 71 * 1.5
+    font_footer = load_font(font_paths_bold, 51)  # 34 * 1.5
+    font_body_text = load_font(font_paths_regular, 33)  # 22 * 1.5
 
     # Professional color palette
     HUNTER_GREEN = (0, 104, 55)      # Deep hunter green for headers
@@ -341,8 +340,8 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     font_class_huge, _ = _fit_font_size(
         class_text,
         font_paths_bold,
-        start_size=246,
-        min_size=104,
+        start_size=369,  # 246 * 1.5 for 300 DPI
+        min_size=156,  # 104 * 1.5 for 300 DPI
         max_width=max_text_width,
         draw=draw,
     )
@@ -355,8 +354,8 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     font_room_label, _ = _fit_font_size(
         room_text,
         font_paths_bold,
-        start_size=90,
-        min_size=48,
+        start_size=135,  # 90 * 1.5 for 300 DPI
+        min_size=72,  # 48 * 1.5 for 300 DPI
         max_width=max_text_width,
         draw=draw,
     )
@@ -405,8 +404,8 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         token_value_font, _ = _fit_font_size(
             token_value_text,
             font_paths_bold,
-            start_size=71,
-            min_size=52,
+            start_size=107,  # 71 * 1.5 for 300 DPI
+            min_size=78,  # 52 * 1.5 for 300 DPI
             max_width=int(W * 0.38),
             draw=draw,
         )
@@ -425,8 +424,8 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
         token_value_font, _ = _fit_font_size(
             token_value_text,
             font_paths_bold,
-            start_size=71,
-            min_size=52,
+            start_size=107,  # 71 * 1.5 for 300 DPI
+            min_size=78,  # 52 * 1.5 for 300 DPI
             max_width=int(W * 0.78),
             draw=draw,
         )
@@ -454,7 +453,7 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
                   fill=HUNTER_GREEN, font=token_value_font, anchor="mm")
 
     buf = io.BytesIO()
-    bg.save(buf, "PNG", optimize=True, dpi=(200, 200))
+    bg.save(buf, "PNG", optimize=True, dpi=(300, 300))
     return buf.getvalue()
 
 

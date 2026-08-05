@@ -237,7 +237,7 @@ export default function AdminQRGeneratorPage() {
                       </div>
                     </div>
                     <Button onClick={downloadCard} className="w-full bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="qr-generator-download-button"><Download className="h-4 w-4" /> Download Kartu B3 (PNG)</Button>
-                    <div className="text-sm text-slate-500 text-center">Canvas B3 portrait • 2772x3920 px @ 200 DPI</div>
+                    <div className="text-sm text-slate-500 text-center">Canvas B3 portrait • 4158x5880 px @ 300 DPI</div>
                     <div className="text-sm text-emerald-700 font-semibold text-center bg-emerald-50 p-2 rounded-lg border border-emerald-200">✓ Token kelas ditampilkan di bawah QR code</div>
                   </div>
                 ) : qrPreview ? (
@@ -410,7 +410,7 @@ export default function AdminQRGeneratorPage() {
           <Card>
             <CardContent className="p-5">
               <h2 className="text-base font-semibold mb-3">Upload Template Latar Belakang Kartu B3</h2>
-              <p className="text-xs text-slate-600 mb-3">Ukuran ideal: <strong>2772 x 3920 px</strong> (B3 portrait @ 200 DPI). Format PNG/JPG.</p>
+              <p className="text-xs text-slate-600 mb-3">Ukuran ideal: <strong>4158 x 5880 px</strong> (B3 portrait @ 300 DPI). Format PNG/JPG.</p>
               <div className="flex gap-2 mb-3">
                 <Input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="Nama template (mis: 'TP 2025/2026')" className="flex-1" data-testid="qr-template-name-input" />
                 <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="gap-2" data-testid="qr-template-upload-button"><Upload className="h-4 w-4" /> Pilih File</Button>
