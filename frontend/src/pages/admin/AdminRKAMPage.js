@@ -533,81 +533,124 @@ export default function AdminRKAMPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Kode</TableHead>
+                      <TableHead className="w-12">No</TableHead>
                       <TableHead>Nama</TableHead>
                       <TableHead>Kategori</TableHead>
                       <TableHead>Bidang</TableHead>
-                      <TableHead>Sumber Dana</TableHead>
-                      <TableHead className="text-right">Dialokasikan</TableHead>
-                      <TableHead className="text-right">Realisasi</TableHead>
-                      <TableHead className="text-right">Sisa</TableHead>
+                      <TableHead className="text-right text-blue-700">Anggaran BOS</TableHead>
+                      <TableHead className="text-right text-purple-700">Anggaran Komite</TableHead>
+                      <TableHead className="text-right text-blue-600">Realisasi BOS</TableHead>
+                      <TableHead className="text-right text-purple-600">Realisasi Komite</TableHead>
+                      <TableHead className="text-right text-amber-600">Sisa BOS</TableHead>
+                      <TableHead className="text-right text-amber-600">Sisa Komite</TableHead>
                       <TableHead>Triwulan</TableHead>
+                      <TableHead className="text-center">Serapan</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8">
+                        <TableCell colSpan={13} className="text-center py-8">
                           Memuat data...
                         </TableCell>
                       </TableRow>
                     ) : filteredBudgetItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8 text-slate-500">
+                        <TableCell colSpan={13} className="text-center py-8 text-slate-500">
                           Belum ada data anggaran
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredBudgetItems.map((item) => {
+                      filteredBudgetItems.map((item, idx) => {
                         const bidangLabel = BIDANG_OPTIONS.find(b => b.value === item.bidang)?.label;
+                        const sisaBos = (item.allocated_bos || 0) - (item.realized_bos || 0);
+                        const sisaKomite = (item.allocated_komite || 0) - (item.realized_komite || 0);
+                        const totalAllocated = (item.allocated_bos || 0) + (item.allocated_komite || 0);
+                        const totalRealized = (item.realized_bos || 0) + (item.realized_komite || 0);
+                        const persentaseSerapan = totalAllocated > 0 ? (totalRealized / totalAllocated * 100) : 0;
+
                         return (
                           <TableRow key={item.id}>
-                            <TableCell className="font-mono text-sm">{item.code || '-'}</TableCell>
+                            {/* No */}
+                            <TableCell className="text-center">{idx + 1}</TableCell>
+
+                            {/* Nama */}
                             <TableCell className="font-medium">{item.name}</TableCell>
+
+                            {/* Kategori */}
                             <TableCell>
-                              {item.category && <Badge variant="outline">{item.category}</Badge>}
+                              {item.category && <Badge variant="outline" className="capitalize">{item.category}</Badge>}
                             </TableCell>
+
+                            {/* Bidang */}
                             <TableCell>
                               {bidangLabel ? <Badge className="bg-blue-50 text-blue-700 border-blue-200">{bidangLabel}</Badge> : '-'}
                             </TableCell>
+
+                            {/* Anggaran BOS */}
+                            <TableCell className="text-right font-semibold text-blue-700">
+                              {formatRupiah(item.allocated_bos || 0)}
+                            </TableCell>
+
+                            {/* Anggaran Komite */}
+                            <TableCell className="text-right font-semibold text-purple-700">
+                              {formatRupiah(item.allocated_komite || 0)}
+                            </TableCell>
+
+                            {/* Realisasi BOS */}
+                            <TableCell className="text-right font-semibold text-blue-600">
+                              {formatRupiah(item.realized_bos || 0)}
+                            </TableCell>
+
+                            {/* Realisasi Komite */}
+                            <TableCell className="text-right font-semibold text-purple-600">
+                              {formatRupiah(item.realized_komite || 0)}
+                            </TableCell>
+
+                            {/* Sisa BOS */}
+                            <TableCell className="text-right font-semibold text-amber-600">
+                              {formatRupiah(sisaBos)}
+                            </TableCell>
+
+                            {/* Sisa Komite */}
+                            <TableCell className="text-right font-semibold text-amber-600">
+                              {formatRupiah(sisaKomite)}
+                            </TableCell>
+
+                            {/* Triwulan */}
                             <TableCell>
-                              {item.sumber_dana ? (
-                                <Badge className={
-                                  item.sumber_dana === 'BOS'
-                                    ? 'bg-blue-100 text-blue-700 border-blue-200'
-                                    : 'bg-purple-100 text-purple-700 border-purple-200'
-                                }>
-                                  {item.sumber_dana}
-                                </Badge>
-                              ) : '-'}
+                              {item.quarter ? <Badge variant="outline">{item.quarter}</Badge> : '-'}
                             </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatRupiah(item.allocated_amount)}
+
+                            {/* Serapan */}
+                            <TableCell className="text-center">
+                              <Badge className={
+                                persentaseSerapan >= 80 ? 'bg-green-100 text-green-700' :
+                                persentaseSerapan >= 50 ? 'bg-amber-100 text-amber-700' :
+                                'bg-slate-100 text-slate-700'
+                              }>
+                                {persentaseSerapan.toFixed(1)}%
+                              </Badge>
                             </TableCell>
-                            <TableCell className="text-right text-green-600">
-                              {formatRupiah(item.realized_amount)}
+
+                            {/* Aksi */}
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="ghost" onClick={() => openBudgetEdit(item)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleBudgetDelete(item.id)}
+                                  className="text-rose-600"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-right text-amber-600">
-                              {formatRupiah(item.remaining_amount)}
-                            </TableCell>
-                            <TableCell>{item.quarter || '-'}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" onClick={() => openBudgetEdit(item)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleBudgetDelete(item.id)}
-                                className="text-rose-600"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                          </TableRow>
                         );
                       })
                     )}

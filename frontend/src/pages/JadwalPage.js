@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Loader2, LayoutGrid, List, Trash2, XCircle } from 'lucide-react';
+import { Calendar, Clock, Loader2, LayoutGrid, List, Trash2, XCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +16,10 @@ export default function JadwalPage() {
   const [weeklyGrouped, setWeeklyGrouped] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('card'); // card | list
+
+  // Sorting state for list view
+  const [sortColumn, setSortColumn] = useState('day'); // day, jam, jtm, class, subject, teacher, room
+  const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
   const loadSchedules = async () => {
     try {
@@ -99,6 +103,68 @@ export default function JadwalPage() {
     return days[new Date().getDay()];
   }
 
+  // Handle column header click for sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort weeklyGrouped items based on current sort column and direction
+  const sortedWeeklyGrouped = [...weeklyGrouped].sort((a, b) => {
+    let aVal, bVal;
+
+    switch (sortColumn) {
+      case 'day':
+        // Sort by day order
+        const dayOrder = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
+        aVal = dayOrder.indexOf(a.day?.toLowerCase() || '');
+        bVal = dayOrder.indexOf(b.day?.toLowerCase() || '');
+        break;
+      case 'jam':
+        // Sort by start_time
+        aVal = a.start_time || '';
+        bVal = b.start_time || '';
+        break;
+      case 'jtm':
+        // Sort by jtm_count
+        aVal = a.jtm_count || 1;
+        bVal = b.jtm_count || 1;
+        break;
+      case 'class':
+        // Sort by class_name
+        aVal = (a.class_name || '').toLowerCase();
+        bVal = (b.class_name || '').toLowerCase();
+        break;
+      case 'subject':
+        // Sort by subject_name
+        aVal = (a.subject_name || '').toLowerCase();
+        bVal = (b.subject_name || '').toLowerCase();
+        break;
+      case 'teacher':
+        // Sort by teacher_name
+        aVal = (a.teacher_name || '').toLowerCase();
+        bVal = (b.teacher_name || '').toLowerCase();
+        break;
+      case 'room':
+        // Sort by room_name
+        aVal = (a.room_name || '').toLowerCase();
+        bVal = (b.room_name || '').toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   // Group weekly by day
   const byDay = (weekly || []).reduce((acc, s) => {
     (acc[s.day] = acc[s.day] || []).push(s);
@@ -154,19 +220,68 @@ export default function JadwalPage() {
                   <Table data-testid="jadwal-table">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Hari</TableHead>
-                        <TableHead>Jam</TableHead>
-                        <TableHead>JTM</TableHead>
-                        <TableHead>Kelas</TableHead>
-                        <TableHead>Mapel</TableHead>
-                        <TableHead>Guru</TableHead>
-                        <TableHead>Ruang</TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('day')}>
+                          <div className="flex items-center gap-1">
+                            Hari
+                            {sortColumn === 'day' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jam')}>
+                          <div className="flex items-center gap-1">
+                            Jam
+                            {sortColumn === 'jam' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jtm')}>
+                          <div className="flex items-center gap-1">
+                            JTM
+                            {sortColumn === 'jtm' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('class')}>
+                          <div className="flex items-center gap-1">
+                            Kelas
+                            {sortColumn === 'class' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('subject')}>
+                          <div className="flex items-center gap-1">
+                            Mapel
+                            {sortColumn === 'subject' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('teacher')}>
+                          <div className="flex items-center gap-1">
+                            Guru
+                            {sortColumn === 'teacher' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('room')}>
+                          <div className="flex items-center gap-1">
+                            Ruang
+                            {sortColumn === 'room' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {weeklyGrouped.map((s) => (
+                      {sortedWeeklyGrouped.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell className="capitalize">{DAY_LABELS[s.day]}</TableCell>
                           <TableCell className="font-mono">

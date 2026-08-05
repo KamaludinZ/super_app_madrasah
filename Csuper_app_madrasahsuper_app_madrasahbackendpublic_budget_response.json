@@ -1,0 +1,163 @@
+{
+    "fiscal_year": "2025/2026",
+    "total_allocated": 244000000.0,
+    "total_realized": 184500000.0,
+    "total_remaining": 59500000.0,
+    "percentage_realized": 75.61475409836066,
+    "sumber_dana_groups": [
+        {
+            "sumber_dana": "BOS",
+            "allocated": 156000000.0,
+            "realized": 117500000.0,
+            "remaining": 38500000.0
+        },
+        {
+            "sumber_dana": "KOMITE",
+            "allocated": 88000000.0,
+            "realized": 67000000.0,
+            "remaining": 21000000.0
+        }
+    ],
+    "categories": [
+        {
+            "category": "Operasional",
+            "allocated": 114000000.0,
+            "realized": 84500000.0,
+            "remaining": 29500000.0,
+            "items": [
+                {
+                    "id": "4fc7e45a-be91-4e11-8646-7d8c3ced6489",
+                    "code": "1.1.1",
+                    "name": "Pengadaan Buku Pelajaran Kelas 7",
+                    "sumber_dana": "BOS",
+                    "allocated": 35000000.0,
+                    "realized": 28500000.0,
+                    "remaining": 6500000.0
+                },
+                {
+                    "id": "c4a2c748-d6a8-4e46-a723-cfd0d056c7ec",
+                    "code": "1.1.2",
+                    "name": "Pengadaan Buku Pelajaran Kelas 8",
+                    "sumber_dana": "BOS",
+                    "allocated": 32000000.0,
+                    "realized": 32000000.0,
+                    "remaining": 0.0
+                },
+                {
+                    "id": "f56fa8a0-a32c-436b-8c5f-50c809b94c18",
+                    "code": "1.2.1",
+                    "name": "Pemeliharaan Komputer Lab",
+                    "sumber_dana": "BOS",
+                    "allocated": 15000000.0,
+                    "realized": 8500000.0,
+                    "remaining": 6500000.0
+                },
+                {
+                    "id": "5bf99c42-79bc-4537-822d-fbf0a4a96d22",
+                    "code": "1.5.1",
+                    "name": "Kegiatan Humas dan Publikasi",
+                    "sumber_dana": "BOS",
+                    "allocated": 12000000.0,
+                    "realized": 7500000.0,
+                    "remaining": 4500000.0
+                },
+                {
+                    "id": "80c94064-ba86-416a-9248-9deccbc17b47",
+                    "code": "1.6.1",
+                    "name": "Administrasi Tata Usaha",
+                    "sumber_dana": "BOS",
+                    "allocated": 10000000.0,
+                    "realized": 8000000.0,
+                    "remaining": 2000000.0
+                },
+                {
+                    "id": "65b98acf-a647-4770-9fd9-0b0f6040c07a",
+                    "code": "TEST-001",
+                    "name": "Test Budget Item - Manual Entry",
+                    "sumber_dana": "BOS",
+                    "allocated": 5000000.0,
+                    "realized": 0.0,
+                    "remaining": 5000000.0
+                },
+                {
+                    "id": "c4362eb6-1746-48f9-9d21-2a55379d7c3a",
+                    "code": "TEST-001",
+                    "name": "Test Budget Item - Manual Entry",
+                    "sumber_dana": "BOS",
+                    "allocated": 5000000.0,
+                    "realized": 0.0,
+                    "remaining": 5000000.0
+                }
+            ]
+        },
+        {
+            "category": "Program",
+            "allocated": 38000000.0,
+            "realized": 27000000.0,
+            "remaining": 11000000.0,
+            "items": [
+                {
+                    "id": "fb94b9ca-e140-4f8f-b91d-4e85adc51130",
+                    "code": "1.3.1",
+                    "name": "Kegiatan Literasi dan Numerasi",
+                    "sumber_dana": "BOS",
+                    "allocated": 20000000.0,
+                    "realized": 15000000.0,
+                    "remaining": 5000000.0
+                },
+                {
+                    "id": "707c6cdf-d18c-4057-81b4-71a75d330ffd",
+                    "code": "2.3.1",
+                    "name": "Kegiatan Ekstrakulikuler",
+                    "sumber_dana": "KOMITE",
+                    "allocated": 18000000.0,
+                    "realized": 12000000.0,
+                    "remaining": 6000000.0
+                }
+            ]
+        },
+        {
+            "category": "Pembangunan",
+            "allocated": 70000000.0,
+            "realized": 55000000.0,
+            "remaining": 15000000.0,
+            "items": [
+                {
+                    "id": "29f736b1-b1d6-41a7-ae56-ed44a46e500b",
+                    "code": "2.1.1",
+                    "name": "Renovasi Ruang Kelas 7A dan 7B",
+                    "sumber_dana": "KOMITE",
+                    "allocated": 45000000.0,
+                    "realized": 30000000.0,
+                    "remaining": 15000000.0
+                },
+                {
+                    "id": "6a5869e4-52dd-454f-a190-5ae4e5741728",
+                    "code": "2.2.1",
+                    "name": "Pengadaan AC Ruang Guru",
+                    "sumber_dana": "KOMITE",
+                    "allocated": 25000000.0,
+                    "realized": 25000000.0,
+                    "remaining": 0.0
+                }
+            ]
+        },
+        {
+            "category": "Pendidikan",
+            "allocated": 22000000.0,
+            "realized": 18000000.0,
+            "remaining": 4000000.0,
+            "items": [
+                {
+                    "id": "0063de4c-8a1d-410f-8c14-061bff516a2e",
+                    "code": "1.4.1",
+                    "name": "Pelatihan Guru Kurikulum Merdeka",
+                    "sumber_dana": "BOS",
+                    "allocated": 22000000.0,
+                    "realized": 18000000.0,
+                    "remaining": 4000000.0
+                }
+            ]
+        }
+    ]
+}

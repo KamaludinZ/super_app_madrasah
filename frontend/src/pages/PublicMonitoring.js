@@ -20,15 +20,32 @@ export default function PublicMonitoring() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('aktif');
+  const [classLevelFilter, setClassLevelFilter] = useState('semua'); // NEW: class level filter (semua, 7, 8, 9)
+
+  // Debug: Log when filter changes
+  useEffect(() => {
+    console.log('[FILTER CHANGE] classLevelFilter changed to:', classLevelFilter);
+  }, [classLevelFilter]);
   const [now, setNow] = useState(new Date());
   const [holiday, setHoliday] = useState(null);
 
   const fetchData = async () => {
     try {
       const { data } = await api.get('/public/monitoring');
+      console.log('=================================================');
+      console.log('[PUBLIC MONITORING] Raw data from backend:', data);
+      console.log('[PUBLIC MONITORING] Total classes:', data?.classes?.length);
+
+      // Log ALL classes to see their class_level values
+      console.log('[PUBLIC MONITORING] ALL classes with class_level:');
+      data?.classes?.forEach((c, idx) => {
+        console.log(`  [${idx}] ${c.class_name} → class_level=${c.class_level} (${typeof c.class_level})`);
+      });
+
+      console.log('=================================================');
       setData(data);
     } catch (e) {
-      // ignore
+      console.error('[PUBLIC MONITORING] Error fetching data:', e);
     } finally {
       setLoading(false);
     }
@@ -64,72 +81,75 @@ export default function PublicMonitoring() {
     return currentTime < item.start_time;
   };
 
-  // v1.1.1: Group consecutive schedules (same class, subject, teacher, adjacent time slots)
-  const groupSchedules = (schedules) => {
-    const groups = [];
-    const sorted = [...schedules].sort((a, b) =>
-      a.start_time.localeCompare(b.start_time)
-    );
+  // v1.1.1: Backend already returns grouped data from _group_schedules_by_jtm
+  // No need to group in frontend anymore
+  const filteredItems = (data?.classes || []).filter((c) => {
+    // Filter by status
+    let statusMatch = false;
+    if (filter === 'aktif') statusMatch = true; // Show all for the day
+    else if (filter === 'akan-datang') statusMatch = isUpcoming(c);
+    else if (filter === 'berlangsung') statusMatch = isOngoing(c); // Show ongoing regardless of filled status
+    else if (filter === 'terisi') statusMatch = c.jurnal_status === 'filled';
+    else if (filter === 'belum-terisi') statusMatch = (c.jurnal_status === 'missing' || c.jurnal_status === 'pending');
+    else statusMatch = true;
 
-    let currentGroup = null;
+    // Filter by class level - FIX: Convert string filter to number for comparison
+    let levelMatch = false;
+    if (classLevelFilter === 'semua') {
+      levelMatch = true;
+    } else {
+      // Convert classLevelFilter to number for comparison
+      const expectedLevel = parseInt(classLevelFilter, 10);
+      levelMatch = c.class_level === expectedLevel;
 
-    for (const schedule of sorted) {
-      // Check if this schedule can be grouped with current
-      if (currentGroup &&
-          currentGroup.class_name === schedule.class_name &&
-          currentGroup.subject_name === schedule.subject_name &&
-          currentGroup.teacher_name === schedule.teacher_name &&
-          currentGroup.room_name === schedule.room_name &&
-          currentGroup.end_time === schedule.start_time) {
-        // Extend current group
-        currentGroup.end_time = schedule.end_time;
-        currentGroup.schedule_ids.push(schedule.schedule_id);
-        // Update jurnal status: if any is filled, show filled
-        if (schedule.jurnal_status === 'filled') {
-          currentGroup.jurnal_status = 'filled';
-        }
-        // Combine materi if exists
-        if (schedule.jurnal_materi && currentGroup.jurnal_materi) {
-          currentGroup.jurnal_materi = currentGroup.jurnal_materi; // Keep first materi
-        } else if (schedule.jurnal_materi) {
-          currentGroup.jurnal_materi = schedule.jurnal_materi;
-        }
-      } else {
-        // Start new group
-        if (currentGroup) groups.push(currentGroup);
-        currentGroup = {
-          ...schedule,
-          schedule_ids: [schedule.schedule_id]
-        };
+      // Debug logging
+      if (classLevelFilter !== 'semua') {
+        console.log(`[FILTER] class=${c.class_name}, class_level=${c.class_level} (${typeof c.class_level}), expected=${expectedLevel} (${typeof expectedLevel}), match=${levelMatch}`);
       }
     }
 
-    if (currentGroup) groups.push(currentGroup);
-    return groups;
-  };
+    const finalMatch = statusMatch && levelMatch;
 
-  const filteredItems = (data?.classes || []).filter((c) => {
-    if (filter === 'aktif') return true; // Show all for the day
-    if (filter === 'akan-datang') return isUpcoming(c);
-    if (filter === 'berlangsung') return isOngoing(c); // Show ongoing regardless of filled status
-    if (filter === 'terisi') return c.jurnal_status === 'filled';
-    if (filter === 'belum-terisi') return c.jurnal_status === 'missing' || c.jurnal_status === 'pending';
-    return true;
+    // Debug final result for first few items
+    if (classLevelFilter !== 'semua' && (data?.classes || []).indexOf(c) < 5) {
+      console.log(`[FILTER FINAL] class=${c.class_name}, statusMatch=${statusMatch}, levelMatch=${levelMatch}, FINAL=${finalMatch}`);
+    }
+
+    return finalMatch;
   });
 
-  // v1.1.1: Apply grouping to filtered items
-  const groupedItems = groupSchedules(filteredItems);
+  // v1.1.1: Backend already grouped data, so filteredItems is the final list
+  const groupedItems = filteredItems;
+
+  console.log('=================================================');
+  console.log('[FILTER RESULT] Total items from backend:', (data?.classes || []).length);
+  console.log('[FILTER RESULT] After filtering, items count:', filteredItems.length);
+  console.log('[FILTER RESULT] Current status filter:', filter);
+  console.log('[FILTER RESULT] Current class level filter:', classLevelFilter, 'type:', typeof classLevelFilter);
+  console.log('[FILTER RESULT] Filtered items:');
+  filteredItems.forEach((c, idx) => {
+    console.log(`  [${idx}] ${c.class_name} (level=${c.class_level}) - ${c.subject_name}`);
+  });
+  console.log('=================================================');
 
   const dayLabel = DAY_LABELS[data?.day] || data?.day || '';
 
-  // Calculate stats based on current time
+  // Calculate stats based on current time and class level filter
   const allClasses = data?.classes || [];
+
+  // Apply class level filter to stats - FIX: Convert string to number
+  const filteredClasses = allClasses.filter(c => {
+    if (classLevelFilter === 'semua') return true;
+    const expectedLevel = parseInt(classLevelFilter, 10);
+    return c.class_level === expectedLevel;
+  });
+
   const stats = {
-    total: allClasses.length,
-    filled: allClasses.filter(c => c.jurnal_status === 'filled').length,
-    berlangsung: allClasses.filter(c => isOngoing(c)).length,
-    belum_terisi: allClasses.filter(c => c.jurnal_status === 'missing' || c.jurnal_status === 'pending').length,
-    akan_datang: allClasses.filter(c => isUpcoming(c)).length,
+    total: filteredClasses.length,
+    filled: filteredClasses.filter(c => c.jurnal_status === 'filled').length,
+    berlangsung: filteredClasses.filter(c => isOngoing(c)).length,
+    belum_terisi: filteredClasses.filter(c => c.jurnal_status === 'missing' || c.jurnal_status === 'pending').length,
+    akan_datang: filteredClasses.filter(c => isUpcoming(c)).length,
   };
 
   // Find current ongoing session numbers
@@ -280,15 +300,28 @@ export default function PublicMonitoring() {
 
         {/* Filters */}
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <Tabs value={filter} onValueChange={setFilter} data-testid="public-monitoring-filter-tabs">
-            <TabsList className="bg-white border border-slate-200">
-              <TabsTrigger value="aktif" data-testid="filter-aktif">Aktif ({stats.total})</TabsTrigger>
-              <TabsTrigger value="akan-datang" data-testid="filter-akan-datang">Akan Datang ({stats.akan_datang})</TabsTrigger>
-              <TabsTrigger value="berlangsung" data-testid="filter-berlangsung">Berlangsung ({stats.berlangsung})</TabsTrigger>
-              <TabsTrigger value="terisi" data-testid="filter-terisi">Terisi ({stats.filled})</TabsTrigger>
-              <TabsTrigger value="belum-terisi" data-testid="filter-belum-terisi">Belum Terisi ({stats.belum_terisi})</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Tabs value={filter} onValueChange={setFilter} data-testid="public-monitoring-filter-tabs">
+              <TabsList className="bg-white border border-slate-200">
+                <TabsTrigger value="aktif" data-testid="filter-aktif">Aktif ({stats.total})</TabsTrigger>
+                <TabsTrigger value="akan-datang" data-testid="filter-akan-datang">Akan Datang ({stats.akan_datang})</TabsTrigger>
+                <TabsTrigger value="berlangsung" data-testid="filter-berlangsung">Berlangsung ({stats.berlangsung})</TabsTrigger>
+                <TabsTrigger value="terisi" data-testid="filter-terisi">Terisi ({stats.filled})</TabsTrigger>
+                <TabsTrigger value="belum-terisi" data-testid="filter-belum-terisi">Belum Terisi ({stats.belum_terisi})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* NEW: Class Level Filter */}
+            <Tabs value={classLevelFilter} onValueChange={setClassLevelFilter} data-testid="class-level-filter-tabs">
+              <TabsList className="bg-white border border-slate-200">
+                <TabsTrigger value="semua" data-testid="filter-level-semua">Semua Kelas</TabsTrigger>
+                <TabsTrigger value="7" data-testid="filter-level-7">Kelas 7</TabsTrigger>
+                <TabsTrigger value="8" data-testid="filter-level-8">Kelas 8</TabsTrigger>
+                <TabsTrigger value="9" data-testid="filter-level-9">Kelas 9</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           <Button variant="outline" size="sm" onClick={fetchData} className="gap-2" data-testid="refresh-monitoring">
             <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
@@ -349,6 +382,10 @@ function ScheduleCard({ item, now }) {
   // Legacy support for old 'active' status
   const isActive = item.status === 'active' || isOngoing;
 
+  // Use jtm_count from backend (calculated by _group_schedules_by_jtm)
+  // This matches exactly with /admin/schedules JTM column
+  const jtm_count = item.jtm_count || 1;
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
@@ -363,8 +400,14 @@ function ScheduleCard({ item, now }) {
         </div>
       )}
       <div className="flex items-start justify-between mb-2">
-        <div>
-          <div className="text-lg font-bold text-slate-900">{item.class_name}</div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold text-slate-900">{item.class_name}</div>
+            {/* Show JTM count from backend - same as /admin/schedules */}
+            <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+              {jtm_count} JTM
+            </Badge>
+          </div>
           <div className="text-xs text-slate-500 font-mono">{item.room_name}</div>
         </div>
         <Badge className={`text-[10px] ${statusBg}`}>

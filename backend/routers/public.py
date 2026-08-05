@@ -11,24 +11,36 @@ router = APIRouter()
 
 @router.get("/public/monitoring")
 async def public_monitoring(day: Optional[str] = None):
+    """
+    Public monitoring endpoint - uses /schedules/grouped logic for consistency.
+    v1.1.1: Use same grouping logic as admin schedules to get accurate JTM counts.
+    """
+    from routers.schedules import _group_schedules_by_jtm
+    from core import logger
+
     ay = await db.academic_years.find_one({'is_active': True}, {'_id': 0})
     if not ay:
         return {'time': now_wib().isoformat(), 'day': current_day_id(), 'classes': [], 'active_year': None,
                 'stats': {'total': 0, 'filled': 0, 'pending': 0, 'missing': 0, 'upcoming': 0}}
 
     current_day = day or current_day_id()
+
+    # Get all schedules for the day
     schedules = await db.schedules.find({
         'academic_year_id': ay['id'], 'day': current_day,
     }, {'_id': 0}).sort('start_time', 1).to_list(2000)
 
     now = now_wib()
-    items = []
+
+    # Enrich schedules with class, subject, room, teacher, journal info
+    enriched = []
     for s in schedules:
         cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
-        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
+        sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
         room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
         teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
         journal = await db.journals.find_one({'schedule_id': s['id']}, {'_id': 0, 'id': 1, 'materi': 1, 'started_at': 1})
+        # Determine status based on time
         try:
             sh, sm = map(int, s['start_time'].split(':'))
             eh, em = map(int, s['end_time'].split(':'))
@@ -36,12 +48,14 @@ async def public_monitoring(day: Optional[str] = None):
             end_dt = now.replace(hour=eh, minute=em, second=0, microsecond=0)
         except Exception:
             continue
+
         if now < start_dt:
             status_label = 'upcoming'
         elif start_dt <= now <= end_dt:
             status_label = 'active'
         else:
             status_label = 'past'
+
         if journal:
             jurnal_status = 'filled'
         elif status_label == 'past':
@@ -50,17 +64,74 @@ async def public_monitoring(day: Optional[str] = None):
             jurnal_status = 'pending'
         else:
             jurnal_status = 'not_started'
-        items.append({
-            'schedule_id': s['id'],
+
+        # Add to enriched list
+        enriched_schedule = {
+            **s,
             'class_name': cls.get('name') if cls else '-',
             'subject_name': sub.get('name') if sub else '-',
+            'subject_code': sub.get('code') if sub else '-',
             'teacher_name': teacher.get('full_name') if teacher else '-',
             'room_name': room.get('name') if room else '-',
-            'start_time': s['start_time'], 'end_time': s['end_time'],
-            'status': status_label, 'jurnal_status': jurnal_status,
+            'status': status_label,
+            'jurnal_status': jurnal_status,
             'jurnal_materi': journal.get('materi') if journal else None,
             'jurnal_filled_at': journal.get('started_at') if journal else None,
-        })
+        }
+        enriched.append(serialize_doc(enriched_schedule))
+
+    # Use same grouping logic as /schedules/grouped to get JTM counts
+    settings = await get_settings()
+    grouped = await _group_schedules_by_jtm(enriched, settings)
+
+    # Add class_level to grouped items
+    import re
+    for item in grouped:
+        class_name = item.get('class_name', '-')
+        class_level = None
+
+        if class_name and len(class_name) > 0:
+            # Try multiple patterns to extract class level
+            # Pattern 1: Arabic numerals (7, 8, 9) - word boundary
+            match = re.search(r'\b([7-9])\b', class_name)
+            if match:
+                class_level = int(match.group(1))
+                logger.info(f"[CLASS LEVEL] '{class_name}' → Pattern 1 (Arabic) → {class_level}")
+            else:
+                # Pattern 2: Arabic numerals without word boundary (7A, 8B, 9C)
+                match = re.search(r'([7-9])', class_name)
+                if match:
+                    class_level = int(match.group(1))
+                    logger.info(f"[CLASS LEVEL] '{class_name}' → Pattern 2 (Arabic no boundary) → {class_level}")
+                else:
+                    # Pattern 3: Roman numerals (VII=7, VIII=8, IX=9)
+                    class_upper = class_name.upper()
+                    if 'VIII' in class_upper:
+                        class_level = 8
+                        logger.info(f"[CLASS LEVEL] '{class_name}' → Pattern 3 (Roman VIII) → {class_level}")
+                    elif 'VII' in class_upper:
+                        class_level = 7
+                        logger.info(f"[CLASS LEVEL] '{class_name}' → Pattern 3 (Roman VII) → {class_level}")
+                    elif 'IX' in class_upper:
+                        class_level = 9
+                        logger.info(f"[CLASS LEVEL] '{class_name}' → Pattern 3 (Roman IX) → {class_level}")
+                    else:
+                        logger.warning(f"[CLASS LEVEL] '{class_name}' → NO MATCH → None")
+
+        item['class_level'] = class_level
+        # Rename schedule_ids to match what frontend expects
+        if 'schedule_ids' not in item and 'id' in item:
+            item['schedule_id'] = item['id']
+
+    logger.info(f"[PUBLIC MONITORING] Grouped {len(enriched)} schedules into {len(grouped)} JTM blocks")
+
+    # DEBUG: Log sample of final items with class_level
+    if grouped:
+        logger.info(f"[PUBLIC MONITORING] Sample grouped items with class_level:")
+        for idx, item in enumerate(grouped[:3]):
+            logger.info(f"  [{idx}] class_name={item.get('class_name')}, class_level={item.get('class_level')}, jtm_count={item.get('jtm_count')}")
+
+    items = grouped
 
     settings = await get_settings()
     return {

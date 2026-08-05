@@ -10,7 +10,8 @@ Refactor goal: maintainability — server.py used to be ~3,200 lines.
 """
 import os
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, logger
@@ -95,11 +96,74 @@ app.include_router(api_router)
 # MIDDLEWARE
 # ============================================================
 
+# ============================================================
+# EXCEPTION HANDLERS - Must be defined before middleware
+# ============================================================
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler that ensures CORS headers are always present"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+    # Get CORS origins from environment
+    origin = request.headers.get("origin", "")
+    allowed_origins = os.environ.get('CORS_ORIGINS', '*').split(',')
+
+    # Create error response
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"}
+    )
+
+    # Add CORS headers manually
+    if origin in allowed_origins or '*' in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin or allowed_origins[0]
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Vary"] = "Origin"
+
+    return response
+
+# CORS Middleware - MUST be added FIRST before other middleware
+# This ensures CORS headers are added before security headers
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Security Headers Middleware - Production Hardening
 @app.middleware("http")
 async def add_security_headers(request, call_next):
     """Add security headers to all responses for production hardening"""
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        # If an error occurs, create error response with CORS headers
+        logger.error(f"Request failed: {exc}", exc_info=True)
+
+        # Get CORS origins from environment
+        origin = request.headers.get("origin", "")
+        allowed_origins = os.environ.get('CORS_ORIGINS', '*').split(',')
+
+        # Create error response
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error"}
+        )
+
+        # Add CORS headers manually
+        if origin and (origin in allowed_origins or '*' in allowed_origins):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Vary"] = "Origin"
+
+        return response
 
     # Prevent clickjacking attacks
     response.headers["X-Frame-Options"] = "DENY"
@@ -134,14 +198,6 @@ async def add_security_headers(request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
     return response
-
-# CORS Middleware - MUST be after security headers
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"], allow_headers=["*"],
-)
 
 
 # ============================================================

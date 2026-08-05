@@ -773,6 +773,7 @@ class UserCreateRequest(BaseModel):
     birth_place: Optional[str] = None
     birth_date: Optional[str] = None
     address: Optional[str] = None
+    jabatan_ids: List[str] = Field(default_factory=list)
 
 
 class UserUpdateRequest(BaseModel):
@@ -792,6 +793,7 @@ class UserUpdateRequest(BaseModel):
     birth_place: Optional[str] = None
     birth_date: Optional[str] = None
     address: Optional[str] = None
+    jabatan_ids: Optional[List[str]] = None
 
     # Data EMIS siswa yang bisa diupdate admin langsung (tanpa verval)
     agama: Optional[str] = None

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Calendar, Download, Upload, LayoutGrid, List, FileSpreadsheet, Lock, Unlock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calendar, Download, Upload, LayoutGrid, List, FileSpreadsheet, Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,6 +34,10 @@ export default function AdminSchedulesPage() {
   const [selectedSlots, setSelectedSlots] = useState([]); // v1.1.1: Multi-slot selector
   const [importOpen, setImportOpen] = useState(false);
   const fileRef = useRef(null);
+
+  // Sorting state for list view
+  const [sortColumn, setSortColumn] = useState('day'); // day, class_name, subject_name, teacher_name, jtm_count
+  const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
   const loadGrid = async (mode, val) => {
     const params = {};
@@ -86,7 +90,70 @@ export default function AdminSchedulesPage() {
 
   useEffect(() => { loadGrid(filterMode, filterValue); }, [filterMode, filterValue]);
 
+  // Handle column header click for sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort items based on current sort column and direction
+  const sortedItems = [...items].sort((a, b) => {
+    let aVal, bVal;
+
+    switch (sortColumn) {
+      case 'day':
+        // Sort by day order
+        const dayOrder = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
+        aVal = dayOrder.indexOf(a.day?.toLowerCase() || '');
+        bVal = dayOrder.indexOf(b.day?.toLowerCase() || '');
+        break;
+      case 'jam':
+        // Sort by start_time
+        aVal = a.start_time || '';
+        bVal = b.start_time || '';
+        break;
+      case 'jtm':
+        // Sort by jtm_count
+        aVal = a.jtm_count || 1;
+        bVal = b.jtm_count || 1;
+        break;
+      case 'class':
+        // Sort by class_name
+        aVal = (a.class_name || '').toLowerCase();
+        bVal = (b.class_name || '').toLowerCase();
+        break;
+      case 'subject':
+        // Sort by subject_name
+        aVal = (a.subject_name || '').toLowerCase();
+        bVal = (b.subject_name || '').toLowerCase();
+        break;
+      case 'teacher':
+        // Sort by teacher_name
+        aVal = (a.teacher_name || '').toLowerCase();
+        bVal = (b.teacher_name || '').toLowerCase();
+        break;
+      case 'room':
+        // Sort by room_name
+        aVal = (a.room_name || '').toLowerCase();
+        bVal = (b.room_name || '').toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   // Update teaching slots when selected day changes
+  // v1.1.1 FIX: Keep original index to correctly map to backend slot_indexes
   useEffect(() => {
     if (!allTeachingSlots) return;
 
@@ -98,7 +165,13 @@ export default function AdminSchedulesPage() {
       // Per-day slots - get slots for selected day
       daySlots = allTeachingSlots[form.day] || [];
     }
-    setTeachingSlots(daySlots.filter(slot => !slot.is_break));
+
+    // v1.1.1 UPDATE: Include BREAKS in the UI for better visibility
+    // Store original index from full slots array (including breaks)
+    const slotsWithOriginalIndex = daySlots
+      .map((slot, originalIndex) => ({ ...slot, originalIndex }));
+
+    setTeachingSlots(slotsWithOriginalIndex);
   }, [form.day, allTeachingSlots]);
 
   const openCreate = (presetDay, presetStart, presetEnd) => {
@@ -122,11 +195,18 @@ export default function AdminSchedulesPage() {
   };
 
   // v1.1.1: Multi-slot toggle handler
-  const handleSlotToggle = (index) => {
-    if (selectedSlots.includes(index)) {
-      setSelectedSlots(selectedSlots.filter(i => i !== index));
+  // Parameter 'slotIndex' is the UI index (from filtered teachingSlots array)
+  // We need to convert it to originalIndex (from full slots array including breaks)
+  const handleSlotToggle = (slotIndex) => {
+    const slot = teachingSlots[slotIndex];
+    if (!slot) return;
+
+    const originalIndex = slot.originalIndex; // Get the original index from full array
+
+    if (selectedSlots.includes(originalIndex)) {
+      setSelectedSlots(selectedSlots.filter(i => i !== originalIndex));
     } else {
-      setSelectedSlots([...selectedSlots, index].sort((a, b) => a - b));
+      setSelectedSlots([...selectedSlots, originalIndex].sort((a, b) => a - b));
     }
   };
   const handleSubmit = async () => {
@@ -136,21 +216,29 @@ export default function AdminSchedulesPage() {
     const payload = { ...form };
 
     if (selectedSlots.length > 0) {
-      // Multi-slot mode: use slot_indexes
+      // Multi-slot mode: use slot_indexes (which now contains originalIndex values)
       payload.slot_indexes = selectedSlots.sort((a, b) => a - b);
+
       // Calculate start_time and end_time from selected slots
-      const firstSlot = teachingSlots[selectedSlots[0]];
-      const lastSlot = teachingSlots[selectedSlots[selectedSlots.length - 1]];
+      // IMPORTANT: selectedSlots contains originalIndex, we need to find the corresponding slot
+      const selectedTeachingSlots = teachingSlots.filter(s => selectedSlots.includes(s.originalIndex));
+      selectedTeachingSlots.sort((a, b) => a.originalIndex - b.originalIndex);
+
+      const firstSlot = selectedTeachingSlots[0];
+      const lastSlot = selectedTeachingSlots[selectedTeachingSlots.length - 1];
+
       if (firstSlot && lastSlot) {
         payload.start_time = firstSlot.start_time;
         payload.end_time = lastSlot.end_time;
       }
-      // room_id will be auto-assigned from class_id by backend
-      delete payload.room_id;
     } else {
-      // Single slot mode (legacy): ensure room_id is provided
-      if (!form.room_id) { toast.error('Pilih ruang atau gunakan multi-slot selector'); return; }
+      // Single slot mode: User must select at least one slot
+      toast.error('Pilih minimal 1 jam mengajar');
+      return;
     }
+
+    // v1.1.1 FIX: room_id ALWAYS auto-assigned from class_id by backend
+    delete payload.room_id;
 
     try {
       if (editing) await api.put(`/schedules/${editing.id}`, payload);
@@ -299,88 +387,109 @@ export default function AdminSchedulesPage() {
               <table className="w-full border-collapse text-xs" data-testid="schedule-grid-table">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 bg-slate-100 border border-slate-200 p-2 text-left w-32">Jam</th>
                     {(grid.days || []).map((d) => (
-                      <th key={d} className="bg-slate-100 border border-slate-200 p-2 capitalize min-w-[140px]">{DAY_LABELS[d]}</th>
+                      <React.Fragment key={d}>
+                        <th className="bg-slate-200 border border-slate-300 p-2 text-left w-28">Jam</th>
+                        <th className="bg-slate-100 border border-slate-200 p-2 capitalize min-w-[140px]">{DAY_LABELS[d]}</th>
+                      </React.Fragment>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Render slots based on per-day configuration */}
+                  {/* v1.1.1: Per-day rendering with slot column for each day */}
                   {(() => {
-                    // Get all unique slots across all days
                     const slotsData = grid.slots || {};
-                    const allSlots = [];
-                    const slotMap = new Map(); // key: start_time, value: slot object
 
+                    // Find maximum number of slots across all days
+                    let maxSlots = 0;
                     if (Array.isArray(slotsData)) {
-                      // Legacy: global slots
-                      slotsData.forEach(slot => {
-                        allSlots.push(slot);
-                        slotMap.set(slot.start_time, slot);
-                      });
+                      maxSlots = slotsData.length;
                     } else {
-                      // New: per-day slots - collect all unique time slots
                       Object.values(slotsData).forEach(daySlots => {
-                        daySlots.forEach(slot => {
-                          if (!slotMap.has(slot.start_time)) {
-                            allSlots.push(slot);
-                            slotMap.set(slot.start_time, slot);
-                          }
-                        });
+                        maxSlots = Math.max(maxSlots, daySlots.length);
                       });
-                      // Sort by start time
-                      allSlots.sort((a, b) => a.start_time.localeCompare(b.start_time));
                     }
 
-                    return allSlots.map((slot, idx) => (
-                    <tr key={idx}>
-                      <td className={`sticky left-0 border border-slate-200 p-2 ${slot.is_break ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                        <div className="font-semibold text-slate-800">{slot.name}</div>
-                        <div className="font-mono text-[10px] text-slate-500">{slot.start_time}-{slot.end_time}</div>
-                      </td>
-                      {(grid.days || []).map((day) => {
-                        // Check if this slot exists for this specific day
-                        const daySlotsData = Array.isArray(slotsData) ? slotsData : (slotsData[day] || []);
-                        const daySlot = daySlotsData.find(s => s.start_time === slot.start_time);
+                    console.log('[GRID DEBUG] maxSlots:', maxSlots, 'slotsData:', slotsData);
 
-                        if (!daySlot) {
-                          // This slot doesn't exist for this day
-                          return <td key={day} className="border border-slate-200 p-1 bg-slate-100"></td>;
-                        }
+                    const rows = [];
+                    for (let slotIdx = 0; slotIdx < maxSlots; slotIdx++) {
+                      rows.push(
+                        <tr key={`slot-${slotIdx}`}>
+                          {(grid.days || []).map((day) => {
+                            const daySlotsData = Array.isArray(slotsData) ? slotsData : (slotsData[day] || []);
+                            const slot = daySlotsData[slotIdx];
 
-                        const s = grid.grid?.[day]?.[slot.start_time];
-                        if (daySlot.is_break) {
-                          return <td key={day} className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>;
-                        }
-                        // Color coding by status (Phase 6 visual cue)
-                        const statusColors = {
-                          draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
-                          submitted: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
-                          locked: 'bg-sky-100 hover:bg-sky-200 border-sky-400 text-sky-900',
-                        };
-                        const sStatus = s?.status || 'submitted';
-                        const cellClass = statusColors[sStatus] || statusColors.submitted;
-                        return (
-                          <td key={day} className="border border-slate-200 p-1 align-top">
-                            {s ? (
-                              <button type="button" onClick={() => openEdit(s)} className={`w-full text-left p-2 rounded border ${cellClass} transition-colors`} data-testid={`grid-cell-${day}-${slot.start_time}`} title={`${s.subject_name || s.subject_code} • ${s.teacher_name || ''} • ${sStatus}`}>
-                                <div className="font-semibold truncate flex items-center gap-1">
-                                  <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
-                                  {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block opacity-70" />}
-                                  {sStatus === 'draft' && <span className="text-[9px] opacity-70">[D]</span>}
-                                </div>
-                                <div className="text-[10px] truncate opacity-90">{filterMode === 'class' ? s.teacher_name : s.class_name}</div>
-                                <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
-                              </button>
-                            ) : (
-                              <button type="button" onClick={() => openCreate(day, slot.start_time, slot.end_time)} className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs" data-testid={`grid-empty-${day}-${slot.start_time}`}>+</button>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    ));
+                            console.log(`[GRID DEBUG] slotIdx=${slotIdx}, day=${day}, slot=`, slot);
+
+                            if (!slot) {
+                              // Empty slot for this day
+                              return (
+                                <React.Fragment key={day}>
+                                  <td className="border border-slate-200 p-1 bg-slate-100"></td>
+                                  <td className="border border-slate-200 p-1 bg-slate-100"></td>
+                                </React.Fragment>
+                              );
+                            }
+
+                            const s = grid.grid?.[day]?.[slot.start_time];
+
+                            console.log(`[GRID DEBUG] slotIdx=${slotIdx}, day=${day}, start_time=${slot.start_time}, schedule found:`, !!s, s?.id?.slice(0,8));
+
+                            // Time column
+                            const timeCell = (
+                              <td className={`border border-slate-200 p-2 ${slot.is_break ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                                <div className="font-semibold text-slate-800 text-[11px]">{slot.name}</div>
+                                <div className="font-mono text-[10px] text-slate-500">{slot.start_time}-{slot.end_time}</div>
+                              </td>
+                            );
+
+                            // Schedule cell
+                            let scheduleCell;
+                            if (slot.is_break) {
+                              scheduleCell = (
+                                <td className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>
+                              );
+                            } else if (s) {
+                              const statusColors = {
+                                draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
+                                submitted: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
+                                locked: 'bg-sky-100 hover:bg-sky-200 border-sky-400 text-sky-900',
+                              };
+                              const sStatus = s?.status || 'submitted';
+                              const cellClass = statusColors[sStatus] || statusColors.submitted;
+                              scheduleCell = (
+                                <td className="border border-slate-200 p-1 align-top">
+                                  <button type="button" onClick={() => openEdit(s)} className={`w-full text-left p-2 rounded border ${cellClass} transition-colors`} data-testid={`grid-cell-${day}-${slot.start_time}`} title={`${s.subject_name || s.subject_code} • ${s.teacher_name || ''} • ${sStatus}`}>
+                                    <div className="font-semibold truncate flex items-center gap-1">
+                                      <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
+                                      {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block opacity-70" />}
+                                      {sStatus === 'draft' && <span className="text-[9px] opacity-70">[D]</span>}
+                                    </div>
+                                    <div className="text-[10px] truncate opacity-90">{filterMode === 'class' ? s.teacher_name : s.class_name}</div>
+                                    <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
+                                  </button>
+                                </td>
+                              );
+                            } else {
+                              scheduleCell = (
+                                <td className="border border-slate-200 p-1 align-top">
+                                  <button type="button" onClick={() => openCreate(day, slot.start_time, slot.end_time)} className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs" data-testid={`grid-empty-${day}-${slot.start_time}`}>+</button>
+                                </td>
+                              );
+                            }
+
+                            return (
+                              <React.Fragment key={day}>
+                                {timeCell}
+                                {scheduleCell}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }
+                    return rows;
                   })()}
                 </tbody>
               </table>
@@ -399,9 +508,68 @@ export default function AdminSchedulesPage() {
           </CardContent></Card>
           <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-schedules-table">
             <TableHeader><TableRow>
-              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('day')}>
+                <div className="flex items-center gap-1">
+                  Hari
+                  {sortColumn === 'day' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jam')}>
+                <div className="flex items-center gap-1">
+                  Jam
+                  {sortColumn === 'jam' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jtm')}>
+                <div className="flex items-center gap-1">
+                  JTM
+                  {sortColumn === 'jtm' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('class')}>
+                <div className="flex items-center gap-1">
+                  Kelas
+                  {sortColumn === 'class' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('subject')}>
+                <div className="flex items-center gap-1">
+                  Mapel
+                  {sortColumn === 'subject' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('teacher')}>
+                <div className="flex items-center gap-1">
+                  Guru
+                  {sortColumn === 'teacher' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('room')}>
+                <div className="flex items-center gap-1">
+                  Ruang
+                  {sortColumn === 'room' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
-            <TableBody>{items.map((s) => (
+            <TableBody>{sortedItems.map((s) => {
+              console.log('[LIST DEBUG] Schedule:', s.id?.slice(0,8), 'hour_range:', s.hour_range, 'jtm_count:', s.jtm_count, 'slot_indexes:', s.slot_indexes);
+              return (
               <TableRow key={s.id}>
                 <TableCell className="capitalize">{DAY_LABELS[s.day]}</TableCell>
                 <TableCell className="font-mono">
@@ -452,7 +620,8 @@ export default function AdminSchedulesPage() {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}</TableBody>
+              );
+            })}</TableBody>
           </Table></div></CardContent></Card>
         </TabsContent>
       </Tabs>
@@ -485,20 +654,29 @@ export default function AdminSchedulesPage() {
               <Label>Jam Mengajar * (Klik untuk pilih lebih dari 1 jam)</Label>
               <div className="grid grid-cols-3 gap-2 mt-2 max-h-64 overflow-y-auto p-2 border border-slate-200 rounded">
                 {teachingSlots.map((slot, index) => {
-                  const isSelected = selectedSlots.includes(index);
+                  // CRITICAL: selectedSlots contains originalIndex values, not filtered array index
+                  const isSelected = selectedSlots.includes(slot.originalIndex);
+                  const isBreak = slot.is_break;
+
                   return (
                     <button
                       key={index}
                       type="button"
                       className={`p-3 rounded border text-left transition-all ${
-                        isSelected
+                        isBreak
+                          ? 'bg-slate-100 border-slate-300 cursor-not-allowed opacity-60'
+                          : isSelected
                           ? 'bg-[#006837] text-white border-[#006837] shadow-md'
                           : 'bg-white border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5'
                       }`}
-                      onClick={() => handleSlotToggle(index)}
+                      onClick={() => !isBreak && handleSlotToggle(index)}
+                      disabled={isBreak}
                       data-testid={`slot-selector-${index}`}
                     >
-                      <div className="font-semibold text-sm">{slot.name}</div>
+                      {/* v1.1.1 FIX: Display slot name for consistency with Grid */}
+                      <div className="font-semibold text-sm">
+                        {isBreak ? '🕐 ' : ''}{slot.name || `Jam ke-${slot.originalIndex + 1}`}
+                      </div>
                       <div className="text-xs mt-1 opacity-90">
                         {slot.start_time} - {slot.end_time}
                       </div>
@@ -510,13 +688,25 @@ export default function AdminSchedulesPage() {
                 <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm">
                   <span className="font-semibold text-emerald-800">Terpilih:</span>{' '}
                   <span className="text-emerald-700">
+                    {/* selectedSlots contains originalIndex (0-based), display as 1-based */}
                     Jam ke-{selectedSlots.map(i => i + 1).join(', ')}
                   </span>
-                  {teachingSlots[selectedSlots[0]] && teachingSlots[selectedSlots[selectedSlots.length - 1]] && (
-                    <span className="text-emerald-600 ml-2">
-                      ({teachingSlots[selectedSlots[0]].start_time} - {teachingSlots[selectedSlots[selectedSlots.length - 1]].end_time})
-                    </span>
-                  )}
+                  {(() => {
+                    // Find first and last selected slots from teachingSlots
+                    const selectedTeachingSlots = teachingSlots.filter(s => selectedSlots.includes(s.originalIndex));
+                    selectedTeachingSlots.sort((a, b) => a.originalIndex - b.originalIndex);
+                    const firstSlot = selectedTeachingSlots[0];
+                    const lastSlot = selectedTeachingSlots[selectedTeachingSlots.length - 1];
+
+                    if (firstSlot && lastSlot) {
+                      return (
+                        <span className="text-emerald-600 ml-2">
+                          ({firstSlot.start_time} - {lastSlot.end_time})
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                   <div className="text-xs text-emerald-600 mt-1">
                     💡 Ruang akan otomatis mengikuti ruang kelas
                   </div>
@@ -541,15 +731,8 @@ export default function AdminSchedulesPage() {
                 <SelectContent>{teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            {/* v1.1.1: Hide room selector when multi-slot is used (auto-assigned from class) */}
-            {selectedSlots.length === 0 && (
-              <div className="col-span-2"><Label>Ruang</Label>
-                <Select value={form.room_id} onValueChange={(v) => setForm({...form, room_id: v})}>
-                  <SelectTrigger data-testid="schedule-form-room"><SelectValue placeholder="Pilih ruang" /></SelectTrigger>
-                  <SelectContent>{rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* v1.1.1: Room is ALWAYS auto-assigned from class, no need to show selector */}
+            {/* Field ruang dihilangkan karena otomatis mengikuti kelas yang dipilih */}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Batal</Button><Button onClick={handleSubmit} className="bg-[#006837]" data-testid="schedule-form-submit">Simpan</Button></DialogFooter>
         </DialogContent>

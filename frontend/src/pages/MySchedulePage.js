@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Calendar, Plus, Pencil, Trash2, Send, Lock, Info,
   CheckCircle2, AlertCircle, FileText, LayoutGrid, List,
+  ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -42,6 +43,10 @@ export default function MySchedulePage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+
+  // Sorting state for list view
+  const [sortColumn, setSortColumn] = useState('day'); // day, jam, jtm, class, subject, room
+  const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
   const loadGridData = async () => {
     // In view mode: show teacher's own schedule
@@ -173,6 +178,63 @@ export default function MySchedulePage() {
       await refresh();
     } catch (e) { toast.error('Sebagian gagal: ' + (e?.response?.data?.detail || '')); }
   };
+
+  // Handle column header click for sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort items based on current sort column and direction
+  const sortedItems = [...items].sort((a, b) => {
+    let aVal, bVal;
+
+    switch (sortColumn) {
+      case 'day':
+        // Sort by day order
+        const dayOrder = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
+        aVal = dayOrder.indexOf(a.day?.toLowerCase() || '');
+        bVal = dayOrder.indexOf(b.day?.toLowerCase() || '');
+        break;
+      case 'jam':
+        // Sort by start_time
+        aVal = a.start_time || '';
+        bVal = b.start_time || '';
+        break;
+      case 'jtm':
+        // Sort by jtm_count
+        aVal = a.jtm_count || 1;
+        bVal = b.jtm_count || 1;
+        break;
+      case 'class':
+        // Sort by class_name
+        aVal = (a.class_name || '').toLowerCase();
+        bVal = (b.class_name || '').toLowerCase();
+        break;
+      case 'subject':
+        // Sort by subject_name
+        aVal = (a.subject_name || '').toLowerCase();
+        bVal = (b.subject_name || '').toLowerCase();
+        break;
+      case 'room':
+        // Sort by room_name
+        aVal = (a.room_name || '').toLowerCase();
+        bVal = (b.room_name || '').toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   if (loading) return <div className="text-sm text-slate-500">Memuat...</div>;
 
@@ -382,12 +444,59 @@ export default function MySchedulePage() {
         <CardContent className="p-0">
           <Table data-testid="my-schedule-table">
             <TableHeader><TableRow>
-              <TableHead>Hari</TableHead><TableHead>Jam</TableHead><TableHead>JTM</TableHead><TableHead>Kelas</TableHead>
-              <TableHead>Mata Pelajaran</TableHead><TableHead>Ruang</TableHead>
-              <TableHead>Status</TableHead><TableHead className="text-right">Aksi</TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('day')}>
+                <div className="flex items-center gap-1">
+                  Hari
+                  {sortColumn === 'day' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jam')}>
+                <div className="flex items-center gap-1">
+                  Jam
+                  {sortColumn === 'jam' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('jtm')}>
+                <div className="flex items-center gap-1">
+                  JTM
+                  {sortColumn === 'jtm' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('class')}>
+                <div className="flex items-center gap-1">
+                  Kelas
+                  {sortColumn === 'class' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('subject')}>
+                <div className="flex items-center gap-1">
+                  Mata Pelajaran
+                  {sortColumn === 'subject' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('room')}>
+                <div className="flex items-center gap-1">
+                  Ruang
+                  {sortColumn === 'room' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                  ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                </div>
+              </TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {items.map((s) => (
+              {sortedItems.map((s) => (
                 <TableRow key={s.id} data-testid={`schedule-row-${s.id}`}>
                   <TableCell className="capitalize font-semibold">{DAY_LABELS[s.day]}</TableCell>
                   <TableCell className="font-mono text-sm">

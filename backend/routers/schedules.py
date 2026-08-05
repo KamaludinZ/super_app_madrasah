@@ -13,6 +13,7 @@ from core import (
     get_active_context,
     get_current_user,
     get_settings,
+    get_teaching_slots_for_day,
     log_audit,
     logger,
     require_role,
@@ -183,9 +184,13 @@ async def list_schedules_grouped(
 
     items = await db.schedules.find(q, {'_id': 0}).sort([('day', 1), ('start_time', 1)]).to_list(2000)
 
+    # DEBUG: Log how many items found
+    logger.info(f"[GROUPED ENDPOINT] Found {len(items)} schedules with query: {q}")
+
     # Enrich first
     enriched = []
     for s in items:
+        logger.info(f"[GROUPED LOOP] Processing schedule {s.get('id', 'unknown')[:8]}")
         cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
         teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
@@ -198,10 +203,20 @@ async def list_schedules_grouped(
         if s.get('locked_by'):
             lb = await db.users.find_one({'id': s['locked_by']}, {'_id': 0, 'full_name': 1})
             s['locked_by_name'] = lb.get('full_name') if lb else None
-        enriched.append(serialize_doc(s))
 
-    # Group by JTM
-    grouped = _group_schedules_by_jtm(enriched)
+        # DEBUG: Log before serialize
+        logger.info(f"[GROUPED PRE-SERIALIZE] Schedule {s.get('id', 'unknown')[:8]}: slot_indexes={s.get('slot_indexes')}, type={type(s.get('slot_indexes'))}")
+
+        serialized = serialize_doc(s)
+
+        # DEBUG: Log after serialize
+        logger.info(f"[GROUPED POST-SERIALIZE] Schedule {serialized.get('id', 'unknown')[:8]}: slot_indexes={serialized.get('slot_indexes')}, type={type(serialized.get('slot_indexes'))}")
+
+        enriched.append(serialized)
+
+    # Group by JTM - v1.1.1: pass settings to use actual slot names
+    settings = await get_settings()
+    grouped = await _group_schedules_by_jtm(enriched, settings)
 
     return grouped
 
@@ -243,7 +258,7 @@ async def list_schedules(
     return enriched
 
 
-def _group_schedules_by_jtm(schedules: List[Dict]) -> List[Dict]:
+async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List[Dict]:
     """
     Group teaching hours into JTM blocks.
     Same day, class, subject, teacher = 1 JTM entry, even if separated by break times.
@@ -256,6 +271,8 @@ def _group_schedules_by_jtm(schedules: List[Dict]) -> List[Dict]:
     - hours: list of hour numbers (e.g., [2, 3, 4, 5])
     - hour_range: string like "Jam ke-2, 3, 4, 5"
     - schedule_ids: list of original schedule IDs in this group
+
+    v1.1.1: Uses actual slot names from settings instead of hardcoded index+1
     """
     from datetime import datetime as dt
 
@@ -323,42 +340,108 @@ def _group_schedules_by_jtm(schedules: List[Dict]) -> List[Dict]:
         first = group[0]
         last = group[-1]
 
-        # Extract hour numbers from slot_index
+        # DEBUG: Log group details
+        logger.info(f"[GROUP DEBUG] Processing group with {len(group)} schedule(s)")
+        for idx, s in enumerate(group):
+            logger.info(f"[GROUP DEBUG]   Schedule {idx}: id={s.get('id')}, subject={s.get('subject_code')}, "
+                       f"slot_indexes={s.get('slot_indexes')}, slot_index={s.get('slot_index')}, "
+                       f"start_time={s.get('start_time')}")
+
+        # Extract hour numbers from slot_index using ACTUAL slot names from settings
+        # v1.1.1 FIX: Use slot names instead of hardcoded index+1
         hours = []
+        day = first.get('day')  # All schedules in group have same day
 
-        # Define standard school schedule times (07:00 start, 45 min per hour)
-        # This maps start times to hour numbers
-        time_to_hour_map = {
-            '07:00': 1, '07:45': 2, '08:30': 3, '09:15': 4,
-            '10:15': 5, '11:00': 6, '11:45': 7,  # After 1st break (09:15-10:15)
-            '13:15': 8, '14:00': 9, '14:45': 10, '15:30': 11  # After lunch (11:45-13:15)
-        }
+        # Get teaching slots for this day from settings
+        teaching_slots = get_teaching_slots_for_day(settings, day)
+        logger.info(f"[GROUP DEBUG] Day '{day}' has {len(teaching_slots)} teaching slots")
 
+        # Helper function to extract hour number from slot name
+        def extract_hour_from_slot_name(slot_name: str) -> Optional[int]:
+            """Extract hour number from slot name like 'Jam ke-3' -> 3"""
+            import re
+            if not slot_name:
+                return None
+            # Try to extract number after "ke-" or just any number
+            match = re.search(r'ke-?(\d+)', slot_name.lower())
+            if match:
+                return int(match.group(1))
+            # Fallback: try to find any number in the name
+            match = re.search(r'(\d+)', slot_name)
+            if match:
+                return int(match.group(1))
+            return None
+
+        # Collect hours from ALL schedules in group
         for s in group:
-            # First try to use slot_index if it exists and seems valid
-            if s.get('slot_index') is not None and s.get('slot_index') >= 0:
-                hour_num = s['slot_index'] + 1  # slot_index is 0-based
-                if hour_num not in hours:
-                    hours.append(hour_num)
-            # Otherwise try to derive from start_time using the map
-            elif s.get('start_time') in time_to_hour_map:
-                hour_num = time_to_hour_map[s['start_time']]
-                if hour_num not in hours:
-                    hours.append(hour_num)
+            if s.get('slot_indexes') and len(s.get('slot_indexes')) > 0:
+                # Multi-slot schedule: use slot_indexes to look up slot names
+                logger.info(f"[GROUP DEBUG] Schedule {s.get('id')} has slot_indexes: {s.get('slot_indexes')}")
+                for idx in s['slot_indexes']:
+                    # Look up actual slot name from settings
+                    if 0 <= idx < len(teaching_slots):
+                        slot = teaching_slots[idx]
+                        slot_name = slot.get('name', '')
+                        hour_num = extract_hour_from_slot_name(slot_name)
 
-        # If we still don't have valid hours or the count doesn't match, use fallback
-        if not hours or len(hours) != len(group):
+                        if hour_num is not None:
+                            logger.info(f"[GROUP DEBUG]   Slot index {idx} -> name '{slot_name}' -> hour {hour_num}")
+                            if hour_num not in hours:
+                                hours.append(hour_num)
+                        else:
+                            # Fallback: use index+1 if slot name parsing fails
+                            hour_num = idx + 1
+                            logger.warning(f"[GROUP DEBUG]   Slot index {idx} name '{slot_name}' parse failed, using fallback {hour_num}")
+                            if hour_num not in hours:
+                                hours.append(hour_num)
+                    else:
+                        logger.warning(f"[GROUP DEBUG]   Slot index {idx} out of range (max {len(teaching_slots)-1}), using fallback")
+                        hour_num = idx + 1
+                        if hour_num not in hours:
+                            hours.append(hour_num)
+
+            elif s.get('slot_index') is not None and s.get('slot_index') >= 0:
+                # Legacy single slot with slot_index field
+                idx = s['slot_index']
+                if 0 <= idx < len(teaching_slots):
+                    slot = teaching_slots[idx]
+                    slot_name = slot.get('name', '')
+                    hour_num = extract_hour_from_slot_name(slot_name)
+
+                    if hour_num is not None:
+                        logger.info(f"[GROUP DEBUG] Legacy slot_index {idx} -> name '{slot_name}' -> hour {hour_num}")
+                        if hour_num not in hours:
+                            hours.append(hour_num)
+                    else:
+                        hour_num = idx + 1
+                        logger.warning(f"[GROUP DEBUG] Legacy slot_index {idx} name '{slot_name}' parse failed, using fallback {hour_num}")
+                        if hour_num not in hours:
+                            hours.append(hour_num)
+                else:
+                    hour_num = idx + 1
+                    logger.warning(f"[GROUP DEBUG] Legacy slot_index {idx} out of range, using fallback {hour_num}")
+                    if hour_num not in hours:
+                        hours.append(hour_num)
+
+        # If no slot_indexes found, use fallback (should rarely happen for v1.1.1+)
+        if not hours:
             # Fallback: use sequential numbering
             hours = list(range(1, len(group) + 1))
-            logger.warning(f"Using fallback hour numbering for grouped schedule. Group size: {len(group)}, start_times: {[s.get('start_time') for s in group]}")
+            logger.warning(f"Using fallback hour numbering for grouped schedule. Group size: {len(group)}, start_times: {[s.get('start_time') for s in group]}, slot_indexes: {[s.get('slot_indexes') for s in group]}")
 
         # Sort hours to ensure proper order
         hours.sort()
         hour_range = "Jam ke-" + ", ".join(str(h) for h in hours)
 
+        # v1.1.1: JTM count = total number of unique hours (slots) in this group
+        jtm_count = len(hours)
+
+        # DEBUG: Log final result
+        logger.info(f"[GROUP DEBUG] Final result: hours={hours}, jtm_count={jtm_count}, hour_range={hour_range}")
+
         grouped_entry = {
             **first,  # Use first schedule as base
-            'jtm_count': len(group),
+            'jtm_count': jtm_count,
             'hours': hours,
             'hour_range': hour_range,
             'schedule_ids': group_ids,
@@ -425,7 +508,10 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
     payload.setdefault('status', 'submitted' if is_admin else 'draft')
     payload['created_by'] = user['id']
     sched = ScheduleModel(**payload)
-    doc = sched.model_dump()
+    # v1.1.1 FIX: Include all fields (including None) to preserve slot_indexes
+    doc = sched.model_dump(exclude_none=False)
+    logger.info(f"[SCHEDULE POST] payload slot_indexes: {payload.get('slot_indexes')}")
+    logger.info(f"[SCHEDULE POST] model_dump slot_indexes: {doc.get('slot_indexes')}")
     doc['created_at'] = doc['created_at'].isoformat()
     if doc.get('submitted_at'):
         doc['submitted_at'] = doc['submitted_at'].isoformat() if isinstance(doc['submitted_at'], datetime) else doc['submitted_at']
@@ -435,6 +521,7 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
         doc['submitted_by'] = user['id']
         doc['submitted_at'] = now_wib().isoformat()
     await db.schedules.insert_one(doc)
+    logger.info(f"[SCHEDULE POST] Inserted schedule {sched.id} with slot_indexes: {doc.get('slot_indexes')}")
     await log_audit(user, 'create', 'schedule', sched.id, details={'status': doc['status']}, request=request)
     return serialize_doc(doc)
 
@@ -515,11 +602,40 @@ async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[st
         s['teacher_name'] = teacher.get('full_name') if teacher else None
         s['room_name'] = room.get('name') if room else None
         enriched.append(serialize_doc(s))
+    # v1.1.1: Build grid, populate all slots for multi-slot schedules
+    logger.info(f"[GRID] Building grid from {len(enriched)} schedules")
     grid = {d: {} for d in active_days}
     for s in enriched:
         d = s['day']
-        if d in grid:
+        if d not in grid:
+            continue
+
+        # DEBUG: Log all schedules slot_indexes field
+        logger.info(f"[GRID DEBUG] Schedule {s.get('id')[:8]}: slot_indexes={s.get('slot_indexes')}, start_time={s.get('start_time')}")
+
+        # Check if this is a multi-slot schedule
+        if 'slot_indexes' in s and s['slot_indexes'] and len(s['slot_indexes']) > 0:
+            # Multi-slot: populate all slots in the group
+            logger.info(f"[GRID] Multi-slot schedule found: {s.get('id')} - slot_indexes={s['slot_indexes']}")
+            day_slots = slots_per_day.get(d, [])
+            for slot_idx in s['slot_indexes']:
+                if slot_idx < len(day_slots):
+                    slot = day_slots[slot_idx]
+                    logger.info(f"[GRID] Populating slot {slot_idx} ({slot['start_time']}) for schedule {s.get('id')}")
+                    grid[d][slot['start_time']] = s
+        else:
+            # Single slot (legacy): use start_time
             grid[d][s['start_time']] = s
+
+    # DEBUG: Log final grid structure before sending to frontend
+    logger.info(f"[GRID RESPONSE] Sending response with {len(active_days)} days")
+    for day in active_days:
+        logger.info(f"[GRID RESPONSE] {day}: {len(grid.get(day, {}))} time entries, {len(slots_per_day.get(day, []))} total slots")
+        # Log all time entries for this day
+        for time in sorted(grid.get(day, {}).keys()):
+            sched = grid[day][time]
+            logger.info(f"[GRID RESPONSE]   {time} -> {sched.get('subject_code')} (slot_indexes={sched.get('slot_indexes')})")
+
     return {'days': active_days, 'slots': slots_per_day, 'grid': grid, 'schedules': enriched}
 
 
@@ -920,4 +1036,5 @@ async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_
     await db.piket_schedules.delete_one({'id': pid})
     await log_audit(user, 'delete', 'piket_schedule', pid, request=request)
     return {'message': 'Dihapus'}
+
 
