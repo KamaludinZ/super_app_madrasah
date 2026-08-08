@@ -556,7 +556,7 @@ async def admin_jurnal_rekap(
     subject_id: Optional[str] = None,
     semester_id: Optional[str] = None,
     limit: int = 500,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
 ):
     """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id"""
     # Use user's view context semester if no semester_id provided in query
@@ -648,7 +648,7 @@ async def admin_jurnal_rekap(
 
 
 @router.get("/admin/jurnal/stats-by-teacher")
-async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))):
+async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin', 'kepala_sekolah'))):
     """Aggregate jurnal count per guru, filtered by user's view context (semester)"""
     ctx = await get_active_context(user)
     semester_id = ctx.get('semester_id')

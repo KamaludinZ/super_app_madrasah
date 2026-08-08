@@ -13,9 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
+  const { activeRole } = useAuth();
+  const canEdit = activeRole !== 'kepala_sekolah';
   const [data, setData] = useState({ items: [], total: 0, summary: {} });
   const [statsByTeacher, setStatsByTeacher] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -282,14 +285,16 @@ export default function AdminJurnalRekapPage() {
                           >
                             <Eye className="h-3 w-3" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditDialog(j)}
-                            className="h-7 px-2"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
+                          {canEdit && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(j)}
+                              className="h-7 px-2"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -555,12 +560,14 @@ export default function AdminJurnalRekapPage() {
                 <Button variant="outline" onClick={() => setDetailDialog({ open: false, journal: null })}>
                   Tutup
                 </Button>
-                <Button onClick={() => {
-                  setDetailDialog({ open: false, journal: null });
-                  openEditDialog(detailDialog.journal);
-                }} className="bg-[#006837] hover:bg-[#0B7A3B]">
-                  <Edit className="h-4 w-4 mr-1" /> Edit Jurnal
-                </Button>
+                {canEdit && (
+                  <Button onClick={() => {
+                    setDetailDialog({ open: false, journal: null });
+                    openEditDialog(detailDialog.journal);
+                  }} className="bg-[#006837] hover:bg-[#0B7A3B]">
+                    <Edit className="h-4 w-4 mr-1" /> Edit Jurnal
+                  </Button>
+                )}
               </div>
             </div>
           )}
