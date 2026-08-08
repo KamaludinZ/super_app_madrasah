@@ -238,6 +238,7 @@ export default function AdminMadrasahEventsPage() {
             <EventCard
               key={event.id}
               event={event}
+              canEdit={canEdit}
               onEdit={() => openDialog(event)}
               onDelete={() => handleDelete(event.id)}
             />
@@ -341,7 +342,7 @@ export default function AdminMadrasahEventsPage() {
   );
 }
 
-function EventCard({ event, onEdit, onDelete }) {
+function EventCard({ event, canEdit, onEdit, onDelete }) {
   const date = event.date ? new Date(event.date + 'T00:00:00') : null;
   const dayName = date ? ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()] : '';
 
