@@ -32,6 +32,7 @@ import DataSiswaPage from '@/pages/DataSiswaPage';
 import KehadiranPage from '@/pages/KehadiranPage';
 import WaliKelasAttendanceReportPage from '@/pages/WaliKelasAttendanceReportPage';
 import WaliKelasAttendancePage from '@/pages/WaliKelasAttendancePage';
+import WaliKelasJurnalKelasPage from '@/pages/WaliKelasJurnalKelasPage';
 import StudentAttendancePage from '@/pages/StudentAttendancePage';
 import KebersihanPage from '@/pages/KebersihanPage';
 import WaliKelasCleanlinessReportPage from '@/pages/WaliKelasCleanlinessReportPage';
@@ -174,6 +175,7 @@ function App() {
             <Route path="/jadwal" element={<JadwalPage />} />
             <Route path="/wali-kelas" element={<WaliKelasDashboard />} />
             <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
+            <Route path="/wali-kelas/jurnal-kelas" element={<WaliKelasJurnalKelasPage />} />
             <Route path="/wali-kelas/kehadiran" element={<WaliKelasAttendanceReportPage />} />
             <Route path="/wali-kelas/kehadiran-statistik" element={<WaliKelasAttendancePage />} />
             <Route path="/wali-kelas/kebersihan" element={<WaliKelasCleanlinessReportPage />} />

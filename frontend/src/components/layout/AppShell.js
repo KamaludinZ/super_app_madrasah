@@ -61,6 +61,7 @@ function navForRole(role, userRoles = []) {
   } else if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
+    items.push({ to: '/wali-kelas/jurnal-kelas', label: 'Jurnal Kelas', icon: ClipboardList, testid: 'nav-wk-jurnal' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
     items.push({ to: '/wali-kelas/kehadiran-statistik', label: 'Statistik Kehadiran', icon: FileSpreadsheet, testid: 'nav-wk-kehadiran-statistik' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });

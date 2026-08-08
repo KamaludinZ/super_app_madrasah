@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ClipboardList, Filter, RefreshCw, BarChart3, Loader2, Eye, Edit, User } from 'lucide-react';
+import { ClipboardList, Filter, RefreshCw, BarChart3, Loader2, Eye, Edit, User, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import * as XLSX from 'xlsx';
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
@@ -82,6 +83,52 @@ export default function AdminJurnalRekapPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `rekap-jurnal-${Date.now()}.csv`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = () => {
+    if (!data.items.length) return;
+
+    // Prepare data for Excel
+    const excelData = data.items.map((j) => ({
+      'Tanggal': new Date(j.started_at).toLocaleString('id-ID'),
+      'JTM': j.jtm_count || 1,
+      'Kelas': j.class_name || '-',
+      'Mapel': j.subject_name || '-',
+      'Guru': j.teacher_name || '-',
+      'Ruang': j.room_name || '-',
+      'Materi': j.materi || '-',
+      'Catatan': j.catatan || '-',
+      'Hadir': j.siswa_hadir || 0,
+      'Sakit': j.siswa_sakit || 0,
+      'Izin': j.siswa_izin || 0,
+      'Alpa': j.siswa_tidak_hadir || 0,
+    }));
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Jurnal');
+
+    // Set column widths
+    const colWidths = [
+      { wch: 20 }, // Tanggal
+      { wch: 5 },  // JTM
+      { wch: 15 }, // Kelas
+      { wch: 25 }, // Mapel
+      { wch: 25 }, // Guru
+      { wch: 15 }, // Ruang
+      { wch: 40 }, // Materi
+      { wch: 40 }, // Catatan
+      { wch: 8 },  // Hadir
+      { wch: 8 },  // Sakit
+      { wch: 8 },  // Izin
+      { wch: 8 },  // Alpa
+    ];
+    ws['!cols'] = colWidths;
+
+    // Generate and download
+    XLSX.writeFile(wb, `rekap-jurnal-${Date.now()}.xlsx`);
+    toast.success('File Excel berhasil diunduh');
   };
 
   const openEditDialog = async (journal) => {
@@ -197,7 +244,8 @@ export default function AdminJurnalRekapPage() {
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" size="sm" onClick={reset} data-testid="rekap-reset">Reset</Button>
             <Button onClick={load} className="bg-[#006837] hover:bg-[#0B7A3B] gap-1" size="sm" data-testid="rekap-apply"><RefreshCw className="h-3.5 w-3.5" /> Terapkan Filter</Button>
-            <Button onClick={exportCSV} variant="outline" size="sm" disabled={!data.items.length} data-testid="rekap-export">Export CSV</Button>
+            <Button onClick={exportExcel} variant="outline" size="sm" disabled={!data.items.length} className="gap-1" data-testid="rekap-export-excel"><FileSpreadsheet className="h-3.5 w-3.5" /> Excel</Button>
+            <Button onClick={exportCSV} variant="outline" size="sm" disabled={!data.items.length} data-testid="rekap-export">CSV</Button>
           </div>
         </CardContent>
       </Card>
