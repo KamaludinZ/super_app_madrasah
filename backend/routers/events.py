@@ -297,6 +297,96 @@ async def delete_staff_event(
 # ============================================================
 # EVENT STATISTICS
 # ============================================================
+@router.get("/madrasah-events/stats/duration")
+async def get_madrasah_events_duration_stats(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
+):
+    """Get duration statistics for madrasah events - average duration in days and hours."""
+    q = {}
+
+    # Filter by year/month if provided
+    if year and month:
+        import calendar
+        from_date = f"{year}-{month:02d}-01"
+        last_day = calendar.monthrange(year, month)[1]
+        to_date = f"{year}-{month:02d}-{last_day}"
+        q['date'] = {'$gte': from_date, '$lte': to_date}
+    elif year:
+        q['date'] = {'$gte': f"{year}-01-01", '$lte': f"{year}-12-31"}
+
+    # Get all events
+    events = await db.madrasah_events.find(q, {'_id': 0, 'date': 1, 'end_date': 1, 'start_time': 1, 'end_time': 1}).to_list(10000)
+
+    if not events:
+        return {
+            'total_events': 0,
+            'avg_duration_days': 0,
+            'avg_duration_hours': 0,
+            'total_duration_days': 0,
+            'multi_day_count': 0,
+            'single_day_count': 0
+        }
+
+    total_duration_days = 0
+    total_duration_hours = 0
+    multi_day_count = 0
+    single_day_count = 0
+
+    for event in events:
+        start_date_str = event.get('date')
+        end_date_str = event.get('end_date')
+        start_time_str = event.get('start_time', '00:00')
+        end_time_str = event.get('end_time', '23:59')
+
+        if not start_date_str:
+            continue
+
+        try:
+            # Parse dates
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
+
+            # Calculate day duration
+            day_duration = (end_date - start_date).days + 1  # +1 to include both start and end day
+            total_duration_days += day_duration
+
+            if day_duration > 1:
+                multi_day_count += 1
+            else:
+                single_day_count += 1
+
+            # Calculate hour duration for single-day events
+            if day_duration == 1:
+                try:
+                    start_time = datetime.strptime(start_time_str, '%H:%M').time()
+                    end_time = datetime.strptime(end_time_str, '%H:%M').time()
+
+                    start_datetime = datetime.combine(start_date, start_time)
+                    end_datetime = datetime.combine(start_date, end_time)
+
+                    hour_duration = (end_datetime - start_datetime).total_seconds() / 3600
+                    total_duration_hours += hour_duration
+                except:
+                    pass
+        except:
+            continue
+
+    total_events = len(events)
+    avg_duration_days = total_duration_days / total_events if total_events > 0 else 0
+    avg_duration_hours = total_duration_hours / single_day_count if single_day_count > 0 else 0
+
+    return {
+        'total_events': total_events,
+        'avg_duration_days': round(avg_duration_days, 1),
+        'avg_duration_hours': round(avg_duration_hours, 1),
+        'total_duration_days': total_duration_days,
+        'multi_day_count': multi_day_count,
+        'single_day_count': single_day_count
+    }
+
+
 @router.get("/staff-events/stats/duration")
 async def get_staff_events_duration_stats(
     user_id: Optional[str] = None,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, CalendarDays, Clock, MapPin, Users, Plus, Edit, Trash2, Search, Filter, X } from 'lucide-react';
+import { Calendar, CalendarDays, Clock, MapPin, Users, Plus, Edit, Trash2, Search, Filter, X, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function AdminMadrasahEventsPage() {
   const canEdit = activeRole !== 'kepala_sekolah';
 
   const [events, setEvents] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -44,6 +45,7 @@ export default function AdminMadrasahEventsPage() {
 
   useEffect(() => {
     fetchEvents();
+    fetchStats();
   }, [filterYear, filterMonth]);
 
   const fetchEvents = async () => {
@@ -58,6 +60,19 @@ export default function AdminMadrasahEventsPage() {
       toast.error('Gagal memuat data kegiatan');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const params = {};
+      if (filterYear) params.year = parseInt(filterYear);
+      if (filterMonth) params.month = parseInt(filterMonth);
+
+      const { data } = await api.get('/madrasah-events/stats/duration', { params });
+      setStats(data);
+    } catch (e) {
+      console.error('Failed to load stats', e);
     }
   };
 
@@ -108,6 +123,7 @@ export default function AdminMadrasahEventsPage() {
       }
       setDialogOpen(false);
       fetchEvents();
+      fetchStats(); // Refresh statistics
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal menyimpan kegiatan');
     } finally {
@@ -122,6 +138,7 @@ export default function AdminMadrasahEventsPage() {
       await api.delete(`/madrasah-events/${id}`);
       toast.success('Kegiatan berhasil dihapus');
       fetchEvents();
+      fetchStats(); // Refresh statistics
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal menghapus kegiatan');
     }
@@ -219,6 +236,67 @@ export default function AdminMadrasahEventsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Statistics Widget */}
+      {stats && stats.total_events > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-50">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Rata-rata Durasi</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.avg_duration_days} Hari</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Clock className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Rata-rata Jam/Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.avg_duration_hours} Jam</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-50">
+                  <Calendar className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Multi-Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.multi_day_count} Kegiatan</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-50">
+                  <Calendar className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Single-Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.single_day_count} Kegiatan</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Events List */}
       {loading ? (
