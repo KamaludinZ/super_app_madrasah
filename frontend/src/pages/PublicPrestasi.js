@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Award, Medal, Star, Calendar, User, Users, School, Target, RefreshCw, LogIn, Filter, X, LayoutDashboard } from 'lucide-react';
+import { Trophy, Award, Medal, Star, Calendar, User, Users, School, Target, RefreshCw, LogIn, Filter, X, LayoutDashboard, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import PublicFooter from '@/components/layout/PublicFooter';
@@ -40,6 +41,12 @@ export default function PublicPrestasi() {
   const [filterHolderType, setFilterHolderType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const [now, setNow] = useState(new Date());
+
+  // Sorting and pagination state
+  const [sortColumn, setSortColumn] = useState('date');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const fetchData = async () => {
     try {
@@ -76,6 +83,64 @@ export default function PublicPrestasi() {
   };
 
   const hasActiveFilters = filterYear !== 'all' || filterLevel !== 'all' || filterHolderType !== 'all';
+
+  // Handle sorting
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page when sorting changes
+  };
+
+  // Sort achievements
+  const sortedAchievements = [...achievements].sort((a, b) => {
+    let aVal, bVal;
+
+    switch (sortColumn) {
+      case 'date':
+        aVal = a.date || a.year || '';
+        bVal = b.date || b.year || '';
+        break;
+      case 'title':
+        aVal = (a.title || '').toLowerCase();
+        bVal = (b.title || '').toLowerCase();
+        break;
+      case 'level':
+        const levelOrder = ['Kabupaten/Kota', 'Provinsi', 'Nasional', 'Internasional'];
+        aVal = levelOrder.indexOf(a.level || '');
+        bVal = levelOrder.indexOf(b.level || '');
+        break;
+      case 'holder':
+        aVal = (a.student_name || a.teacher_name || '').toLowerCase();
+        bVal = (b.student_name || b.teacher_name || '').toLowerCase();
+        break;
+      case 'rank':
+        aVal = a.rank || '';
+        bVal = b.rank || '';
+        break;
+      default:
+        return 0;
+    }
+
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedAchievements.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAchievements = sortedAchievements.slice(startIndex, endIndex);
+
+  // Reset to first page when items per page changes
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1);
+  };
 
   return (
     <div className="min-h-screen bg-[var(--cream)]">
@@ -290,7 +355,7 @@ export default function PublicPrestasi() {
           </Card>
         )}
 
-        {/* Grid */}
+        {/* Table */}
         {loading ? (
           <div className="text-center py-12 text-slate-500">Memuat data...</div>
         ) : achievements.length === 0 ? (
@@ -309,11 +374,183 @@ export default function PublicPrestasi() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {achievements.map((achievement, idx) => (
-              <AchievementCard key={achievement.id || idx} achievement={achievement} />
-            ))}
-          </div>
+          <>
+            {/* Items per page selector */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-slate-600">Tampilkan:</Label>
+                <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                  <SelectTrigger className="w-20 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-slate-600">per halaman</span>
+              </div>
+              <div className="text-sm text-slate-600">
+                Menampilkan {startIndex + 1}-{Math.min(endIndex, sortedAchievements.length)} dari {sortedAchievements.length} prestasi
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('date')}>
+                          <div className="flex items-center gap-1">
+                            Tanggal
+                            {sortColumn === 'date' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('title')}>
+                          <div className="flex items-center gap-1">
+                            Prestasi
+                            {sortColumn === 'title' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('level')}>
+                          <div className="flex items-center gap-1">
+                            Tingkat
+                            {sortColumn === 'level' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('holder')}>
+                          <div className="flex items-center gap-1">
+                            Penerima
+                            {sortColumn === 'holder' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('rank')}>
+                          <div className="flex items-center gap-1">
+                            Peringkat
+                            {sortColumn === 'rank' ? (
+                              sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                            ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                          </div>
+                        </TableHead>
+                        <TableHead>Lomba</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedAchievements.map((achievement, idx) => {
+                        const levelConfig = LEVEL_ICONS[achievement.level] || { icon: Award, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' };
+                        const Icon = levelConfig.icon;
+
+                        return (
+                          <TableRow key={achievement.id || idx}>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">
+                              {achievement.date ? new Date(achievement.date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : achievement.year || '-'}
+                            </TableCell>
+                            <TableCell className="font-semibold">
+                              {achievement.title}
+                              {achievement.description && (
+                                <div className="text-xs text-slate-500 mt-1 line-clamp-1">{achievement.description}</div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`${levelConfig.bg} ${levelConfig.color} border-0 gap-1`}>
+                                <Icon className="h-3 w-3" />
+                                {achievement.level}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {achievement.student_name && (
+                                <div>
+                                  {achievement.student_name}
+                                  {achievement.student_nisn && (
+                                    <span className="text-xs text-slate-500 ml-1">({achievement.student_nisn})</span>
+                                  )}
+                                </div>
+                              )}
+                              {achievement.teacher_name && !achievement.student_name && (
+                                <div>{achievement.teacher_name}</div>
+                              )}
+                              {achievement.holder_type === 'madrasah' && (
+                                <Badge variant="outline" className="text-[#006837] border-[#006837]">Madrasah</Badge>
+                              )}
+                              {!achievement.student_name && !achievement.teacher_name && achievement.holder_type !== 'madrasah' && '-'}
+                            </TableCell>
+                            <TableCell>
+                              {achievement.rank ? (
+                                <Badge className="bg-amber-500 text-white">{achievement.rank}</Badge>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-600">
+                              {achievement.competition_name || '-'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                    // Show first page, last page, current page, and pages around current
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className="w-10"
+                        >
+                          {page}
+                        </Button>
+                      );
+                    } else if (page === currentPage - 2 || page === currentPage + 2) {
+                      return <span key={page} className="px-1">...</span>;
+                    }
+                    return null;
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </>
         )}
 
         <div className="text-center text-xs text-slate-500 mt-8">

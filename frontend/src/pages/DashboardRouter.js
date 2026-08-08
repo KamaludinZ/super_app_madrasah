@@ -4,7 +4,7 @@ import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
-import WaliKelasDashboard from './WaliKelasDashboard';
+import WaliKelasDashboard from './dashboards/WaliKelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 
 /**

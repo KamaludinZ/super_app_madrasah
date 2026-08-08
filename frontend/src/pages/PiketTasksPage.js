@@ -37,7 +37,7 @@ export default function PiketTasksPage() {
   const [taskForm, setTaskForm] = useState({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '', leave_type: '' });
   const [fillOpen, setFillOpen] = useState(false);
   const [fillTarget, setFillTarget] = useState(null);
-  const [fillForm, setFillForm] = useState({ materi: '', catatan: '', piket_note: '', ...ATTENDANCE_DEFAULT });
+  const [fillForm, setFillForm] = useState({ materi: '', catatan: '', piket_note: '', jenis_izin: '', ...ATTENDANCE_DEFAULT });
   const [fillStudents, setFillStudents] = useState([]);
   const [fillAttendance, setFillAttendance] = useState({});
 
@@ -104,6 +104,7 @@ export default function PiketTasksPage() {
       materi: task?.task_content || '',
       catatan: '',
       piket_note: task ? `Titipan dari ${sch.teacher_name || 'guru pengajar'}` : 'Diisi oleh guru piket',
+      jenis_izin: task?.leave_type || '', // Ambil dari task yang dibuat guru
       ...ATTENDANCE_DEFAULT,
     });
 
@@ -150,6 +151,7 @@ export default function PiketTasksPage() {
         materi: fillForm.materi,
         catatan: fillForm.catatan,
         piket_note: fillForm.piket_note,
+        jenis_izin: fillForm.jenis_izin, // Kirim jenis izin dari task
         ...attendanceSummary,
         attendance_records: fillAttendance, // Send individual records
       });

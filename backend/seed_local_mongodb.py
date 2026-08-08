@@ -240,7 +240,8 @@ async def seed_all_data(db: Any):
                 ['siswa'],
                 nisn=student['nisn'],
                 gender=student['gender'],
-                phone='081234567890'
+                phone='081234567890',
+                student_class_id=class_ids.get(student['class_name'])
             )
             await db.users.insert_one(siswa_user)
             siswa_ids.append(siswa_user['id'])
@@ -265,6 +266,14 @@ async def seed_all_data(db: Any):
                 'created_at': datetime.utcnow(),
             }
             await db.students.insert_one(siswa_profile)
+        else:
+            # Update existing user with student_class_id if missing
+            if not user_exists.get('student_class_id'):
+                await db.users.update_one(
+                    {'username': student['username']},
+                    {'$set': {'student_class_id': class_ids.get(student['class_name'])}}
+                )
+            siswa_ids.append(user_exists['id'])
 
     print(f"   -> {len(students_data)} students created")
 
@@ -512,10 +521,86 @@ async def seed_all_data(db: Any):
             await db.announcements.insert_one(announcement)
     print(f"   -> {len(announcements)} announcements created")
 
-    print("[12/15] Skipping Tatib...")
-    print("[13/15] Skipping Mutations...")
-    print("[14/15] Skipping Attendance samples...")
-    print("[15/15] Skipping Journals samples...")
+    print("[12/15] Class Cleanliness (Kebersihan Kelas)...")
+    # Generate cleanliness data for the last 30 days for 8A class
+    class_8a_id = class_ids.get('8A')
+    if class_8a_id:
+        # Get students from class 8A
+        students_8a = await db.users.find({
+            'roles': 'siswa',
+            'student_class_id': class_8a_id
+        }, {'_id': 0, 'id': 1}).to_list(100)
+
+        student_8a_ids = [s['id'] for s in students_8a]
+
+        # Generate cleanliness records for the last 30 days
+        notes_samples = [
+            'Kelas sangat rapi dan bersih',
+            'Lantai bersih, papan tulis bersih',
+            'Sampah sudah dibuang, meja rapi',
+            'Masih ada sampah di pojok kelas',
+            'Lantai perlu disapu lagi',
+            'Papan tulis kotor, perlu dibersihkan',
+            'Kelas cukup bersih namun ada debu di meja',
+            'Sampah belum dibuang semua',
+            'Kelas bersih dan wangi',
+            'Ventilasi dan jendela bersih',
+        ]
+
+        cleanliness_count = 0
+        for i in range(30):
+            date = (datetime.now() - timedelta(days=30-i)).strftime('%Y-%m-%d')
+
+            # Randomize rating (1-5 stars)
+            rating = random.randint(3, 5)  # Most days get good ratings
+
+            # Determine condition based on rating
+            if rating >= 4:
+                condition = 'bersih'
+            elif rating >= 3:
+                condition = 'cukup'
+            else:
+                condition = 'kotor'
+
+            # Select random piket students (2-4 students)
+            if len(student_8a_ids) >= 2:
+                num_piket = random.randint(2, min(4, len(student_8a_ids)))
+                piket_student_ids = random.sample(student_8a_ids, num_piket)
+            else:
+                piket_student_ids = student_8a_ids
+
+            # Random assessor from guru
+            assessor_id = random.choice(guru_ids) if guru_ids else None
+
+            # Check if record already exists
+            exists = await db.class_cleanliness.find_one({
+                'class_id': class_8a_id,
+                'date': date
+            })
+
+            if not exists:
+                cleanliness_record = {
+                    'id': str(uuid.uuid4()),
+                    'class_id': class_8a_id,
+                    'date': date,
+                    'rating': rating,
+                    'condition': condition,
+                    'notes': random.choice(notes_samples),
+                    'piket_student_ids': piket_student_ids,
+                    'recorded_by': assessor_id,
+                    'recorded_at': datetime.utcnow().isoformat(),
+                    'created_at': datetime.utcnow(),
+                }
+                await db.class_cleanliness.insert_one(cleanliness_record)
+                cleanliness_count += 1
+
+        print(f"   -> {cleanliness_count} cleanliness records created for class 8A (last 30 days)")
+    else:
+        print("   -> Skipping cleanliness (class 8A not found)")
+
+    print("[13/15] Skipping Tatib...")
+    print("[14/15] Skipping Mutations...")
+    print("[15/15] Skipping Attendance samples...")
 
     print("\n" + "="*60)
     print("SUCCESS! ALL DATA SEEDING COMPLETED")

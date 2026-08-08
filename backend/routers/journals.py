@@ -14,6 +14,7 @@ from core import (
     require_role,
     serialize_doc,
 )
+from journal_core import now_wib
 from fastapi.responses import StreamingResponse
 from journal_exports import (
     export_monthly_teacher_journal_excel,
@@ -148,6 +149,24 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
     if isinstance(doc.get('created_at'), datetime):
         doc['created_at'] = doc['created_at'].isoformat()
     await db.journals.insert_one(doc)
+
+    # Save individual attendance records to attendances collection
+    attendance_details = req.attendance_details or []
+    if attendance_details:
+        attendance_docs = []
+        for record in attendance_details:
+            att_id = str(uuid.uuid4())
+            attendance_docs.append({
+                'id': att_id,
+                'journal_id': journal.id,
+                'student_id': record.get('student_id'),
+                'student_name': record.get('student_name'),
+                'status': record.get('status'),
+                'created_at': now_wib().isoformat(),
+            })
+        if attendance_docs:
+            await db.attendances.insert_many(attendance_docs)
+
     await log_audit(user, 'create', 'journal', journal.id,
                     details={'class_id': sched['class_id'], 'subject_id': sched['subject_id']}, request=request)
     return serialize_doc(doc)
@@ -310,24 +329,95 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
 
 
 @router.get("/jurnal/my")
-async def my_journals(user: Dict = Depends(get_current_user)):
-    """Get my journals filtered by user's view context (semester)"""
-    ctx = await get_active_context(user)
-    semester_id = ctx.get('semester_id')
+async def my_journals(user: Dict = Depends(get_current_user), semester_filter: bool = True):
+    """Get my journals filtered by user's view context (semester)
+
+    Args:
+        semester_filter: If True, filter by active semester. If False, show all journals.
+    """
+    from core import get_teaching_slots_for_day
+    import re
 
     query = {'teacher_id': user['id']}
-    if semester_id:
-        query['semester_id'] = semester_id
+
+    if semester_filter:
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+        if semester_id:
+            query['semester_id'] = semester_id
 
     items = await db.journals.find(query, {'_id': 0}).sort('started_at', -1).to_list(500)
+    settings = await get_settings()
+
     enriched = []
     for j in items:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
         sub = await db.subjects.find_one({'id': j.get('subject_id')}, {'_id': 0, 'name': 1})
         room = await db.rooms.find_one({'id': j.get('room_id')}, {'_id': 0, 'name': 1})
+
+        # Get schedule info for jam_ke and jtm_count
+        schedule_id = j.get('schedule_id')
+        if schedule_id:
+            sched = await db.schedules.find_one({'id': schedule_id}, {'_id': 0, 'slot_indexes': 1, 'day': 1})
+            if sched:
+                slot_indexes = sched.get('slot_indexes', [])
+                day = sched.get('day', '')
+
+                if slot_indexes and len(slot_indexes) > 0:
+                    # Get teaching slots for this day
+                    teaching_slots = get_teaching_slots_for_day(settings, day)
+
+                    # Extract hour numbers from slot names
+                    hours = []
+                    for idx in slot_indexes:
+                        if 0 <= idx < len(teaching_slots):
+                            slot = teaching_slots[idx]
+                            slot_name = slot.get('name', '')
+                            # Extract hour number from slot name like "Jam ke-3" -> 3
+                            match = re.search(r'ke-?(\d+)', slot_name.lower())
+                            if match:
+                                hour_num = int(match.group(1))
+                                if hour_num not in hours:
+                                    hours.append(hour_num)
+                            else:
+                                # Fallback: use index+1
+                                hour_num = idx + 1
+                                if hour_num not in hours:
+                                    hours.append(hour_num)
+                        else:
+                            # Fallback
+                            hour_num = idx + 1
+                            if hour_num not in hours:
+                                hours.append(hour_num)
+
+                    hours.sort()
+                    j['jam_ke'] = "Jam ke-" + ", ".join(str(h) for h in hours) if hours else '-'
+                    j['jtm_count'] = len(hours)
+                else:
+                    j['jam_ke'] = '-'
+                    j['jtm_count'] = 1
+            else:
+                j['jam_ke'] = '-'
+                j['jtm_count'] = 1
+        else:
+            j['jam_ke'] = '-'
+            j['jtm_count'] = 1
+
         j['class_name'] = cls.get('name') if cls else None
         j['subject_name'] = sub.get('name') if sub else None
         j['room_name'] = room.get('name') if room else None
+
+        # Get attendance details
+        journal_id = j.get('id')
+        if journal_id:
+            attendance_records = await db.attendances.find(
+                {'journal_id': journal_id},
+                {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+            ).to_list(1000)
+            j['attendance_details'] = attendance_records
+        else:
+            j['attendance_details'] = []
+
         enriched.append(serialize_doc(j))
     return enriched
 
@@ -357,16 +447,26 @@ async def journals_by_class(class_id: str, limit: int = 50, user: Dict = Depends
 
 
 @router.get("/jurnal/piket-filled")
-async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 'admin'))):
-    """Get journals filled by piket filtered by user's view context (semester)"""
-    ctx = await get_active_context(user)
-    semester_id = ctx.get('semester_id')
+async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 'admin')), semester_filter: bool = True):
+    """Get journals filled by piket filtered by user's view context (semester)
+
+    Args:
+        semester_filter: If True, filter by active semester. If False, show all journals.
+    """
+    from core import get_teaching_slots_for_day
+    import re
 
     query = {'filled_by_user_id': user['id']}
-    if semester_id:
-        query['semester_id'] = semester_id
+
+    if semester_filter:
+        ctx = await get_active_context(user)
+        semester_id = ctx.get('semester_id')
+        if semester_id:
+            query['semester_id'] = semester_id
 
     items = await db.journals.find(query, {'_id': 0}).sort('started_at', -1).to_list(500)
+    settings = await get_settings()
+
     enriched = []
     for j in items:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
@@ -375,11 +475,71 @@ async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 
         teacher = await db.users.find_one({'id': j.get('teacher_id')}, {'_id': 0, 'full_name': 1})
         filled_by = await db.users.find_one({'id': j.get('filled_by_user_id')}, {'_id': 0, 'full_name': 1})
 
+        # Get schedule info for jam_ke and jtm_count
+        schedule_id = j.get('schedule_id')
+        if schedule_id:
+            sched = await db.schedules.find_one({'id': schedule_id}, {'_id': 0, 'slot_indexes': 1, 'day': 1})
+            if sched:
+                slot_indexes = sched.get('slot_indexes', [])
+                day = sched.get('day', '')
+
+                if slot_indexes and len(slot_indexes) > 0:
+                    # Get teaching slots for this day
+                    teaching_slots = get_teaching_slots_for_day(settings, day)
+
+                    # Extract hour numbers from slot names
+                    hours = []
+                    for idx in slot_indexes:
+                        if 0 <= idx < len(teaching_slots):
+                            slot = teaching_slots[idx]
+                            slot_name = slot.get('name', '')
+                            # Extract hour number from slot name like "Jam ke-3" -> 3
+                            match = re.search(r'ke-?(\d+)', slot_name.lower())
+                            if match:
+                                hour_num = int(match.group(1))
+                                if hour_num not in hours:
+                                    hours.append(hour_num)
+                            else:
+                                # Fallback: use index+1
+                                hour_num = idx + 1
+                                if hour_num not in hours:
+                                    hours.append(hour_num)
+                        else:
+                            # Fallback
+                            hour_num = idx + 1
+                            if hour_num not in hours:
+                                hours.append(hour_num)
+
+                    hours.sort()
+                    j['jam_ke'] = "Jam ke-" + ", ".join(str(h) for h in hours) if hours else '-'
+                    j['jtm_count'] = len(hours)
+                else:
+                    j['jam_ke'] = '-'
+                    j['jtm_count'] = 1
+            else:
+                j['jam_ke'] = '-'
+                j['jtm_count'] = 1
+        else:
+            j['jam_ke'] = '-'
+            j['jtm_count'] = 1
+
         j['class_name'] = cls.get('name') if cls else None
         j['subject_name'] = sub.get('name') if sub else None
         j['room_name'] = room.get('name') if room else None
         j['teacher_name'] = teacher.get('full_name') if teacher else None
         j['filled_by_name'] = filled_by.get('full_name') if filled_by else None
+
+        # Get attendance details
+        journal_id = j.get('id')
+        if journal_id:
+            attendance_records = await db.attendances.find(
+                {'journal_id': journal_id},
+                {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+            ).to_list(1000)
+            j['attendance_details'] = attendance_records
+        else:
+            j['attendance_details'] = []
+
         enriched.append(serialize_doc(j))
     return enriched
 
@@ -416,6 +576,12 @@ async def admin_jurnal_rekap(
         q['started_at'] = date_q
 
     items = await db.journals.find(q, {'_id': 0}).sort('started_at', -1).to_list(limit)
+
+    # Get settings for teaching slots calculation
+    import re
+    from core import get_teaching_slots_for_day
+    settings = await get_settings()
+
     enriched = []
     for j in items:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
@@ -430,6 +596,40 @@ async def admin_jurnal_rekap(
         if j.get('filled_by_user_id') and j.get('filled_by_user_id') != j.get('teacher_id'):
             fb = await db.users.find_one({'id': j['filled_by_user_id']}, {'_id': 0, 'full_name': 1})
             j['filled_by_name'] = fb.get('full_name') if fb else None
+
+        # Calculate jam_ke and jtm_count from schedule
+        schedule_id = j.get('schedule_id')
+        if schedule_id:
+            sched = await db.schedules.find_one({'id': schedule_id}, {'_id': 0, 'slot_indexes': 1, 'day': 1})
+            if sched:
+                slot_indexes = sched.get('slot_indexes', [])
+                day = sched.get('day', '')
+
+                if slot_indexes and len(slot_indexes) > 0:
+                    teaching_slots = get_teaching_slots_for_day(settings, day)
+                    hours = []
+                    for idx in slot_indexes:
+                        if 0 <= idx < len(teaching_slots):
+                            slot = teaching_slots[idx]
+                            slot_name = slot.get('name', '')
+                            match = re.search(r'ke-?(\d+)', slot_name.lower())
+                            if match:
+                                hour_num = int(match.group(1))
+                                if hour_num not in hours:
+                                    hours.append(hour_num)
+                    hours.sort()
+                    j['jam_ke'] = "Jam ke-" + ", ".join(str(h) for h in hours) if hours else '-'
+                    j['jtm_count'] = len(hours)
+                else:
+                    j['jam_ke'] = '-'
+                    j['jtm_count'] = 1
+            else:
+                j['jam_ke'] = '-'
+                j['jtm_count'] = 1
+        else:
+            j['jam_ke'] = '-'
+            j['jtm_count'] = 1
+
         enriched.append(serialize_doc(j))
 
     total_hadir = sum(j.get('siswa_hadir', 0) for j in enriched)
@@ -468,6 +668,169 @@ async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin'))
             'count': r['count'],
         })
     return enriched
+
+
+@router.put("/admin/jurnal/{journal_id}")
+async def admin_update_journal(journal_id: str, update_data: Dict, user: Dict = Depends(require_role('admin'))):
+    """Update jurnal (materi dan catatan only)"""
+    # Find the journal
+    journal = await db.journals.find_one({'id': journal_id}, {'_id': 0})
+    if not journal:
+        raise HTTPException(status_code=404, detail='Jurnal tidak ditemukan')
+
+    # Only allow updating materi, catatan, and jenis_izin
+    allowed_fields = {'materi', 'catatan', 'jenis_izin'}
+    update_payload = {k: v for k, v in update_data.items() if k in allowed_fields}
+
+    if not update_payload:
+        raise HTTPException(status_code=400, detail='Tidak ada data yang dapat diupdate')
+
+    # Update journal
+    result = await db.journals.update_one(
+        {'id': journal_id},
+        {'$set': update_payload}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='Jurnal tidak ditemukan')
+
+    return {'message': 'Jurnal berhasil diperbarui', 'updated_fields': list(update_payload.keys())}
+
+
+@router.get("/jurnal/{journal_id}")
+async def get_journal_by_id(journal_id: str, user: Dict = Depends(get_current_user)):
+    """Get single journal with full details including attendance"""
+    import re
+    from core import get_teaching_slots_for_day
+
+    journal = await db.journals.find_one({'id': journal_id}, {'_id': 0})
+    if not journal:
+        raise HTTPException(status_code=404, detail='Jurnal tidak ditemukan')
+
+    # Enrich with class, subject, teacher, and room info
+    cls = await db.classes.find_one({'id': journal.get('class_id')}, {'_id': 0, 'name': 1})
+    sub = await db.subjects.find_one({'id': journal.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
+    teacher = await db.users.find_one({'id': journal.get('teacher_id')}, {'_id': 0, 'full_name': 1})
+    room = await db.rooms.find_one({'id': journal.get('room_id')}, {'_id': 0, 'name': 1})
+
+    journal['class_name'] = cls.get('name') if cls else None
+    journal['subject_name'] = sub.get('name') if sub else None
+    journal['subject_code'] = sub.get('code') if sub else None
+    journal['teacher_name'] = teacher.get('full_name') if teacher else None
+    journal['room_name'] = room.get('name') if room else None
+
+    # If filled by someone else, get their name
+    if journal.get('filled_by_user_id') and journal.get('filled_by_user_id') != journal.get('teacher_id'):
+        fb = await db.users.find_one({'id': journal['filled_by_user_id']}, {'_id': 0, 'full_name': 1})
+        journal['filled_by_name'] = fb.get('full_name') if fb else None
+
+    # Enrich with attendance details
+    attendance_records = await db.attendances.find(
+        {'journal_id': journal_id},
+        {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+    ).to_list(1000)
+    journal['attendance_details'] = attendance_records
+
+    # Get settings
+    settings = await get_settings()
+
+    # Get schedule info for jam_ke and jtm_count
+    schedule_id = journal.get('schedule_id')
+    if schedule_id:
+        sched = await db.schedules.find_one({'id': schedule_id}, {'_id': 0, 'slot_indexes': 1, 'day': 1})
+        if sched:
+            slot_indexes = sched.get('slot_indexes', [])
+            day = sched.get('day', '')
+
+            if slot_indexes and len(slot_indexes) > 0:
+                teaching_slots = get_teaching_slots_for_day(settings, day)
+                hours = []
+                for idx in slot_indexes:
+                    if 0 <= idx < len(teaching_slots):
+                        slot = teaching_slots[idx]
+                        slot_name = slot.get('name', '')
+                        match = re.search(r'ke-?(\d+)', slot_name.lower())
+                        if match:
+                            hour_num = int(match.group(1))
+                            if hour_num not in hours:
+                                hours.append(hour_num)
+                hours.sort()
+                journal['jam_ke'] = "Jam ke-" + ", ".join(str(h) for h in hours) if hours else '-'
+                journal['jtm_count'] = len(hours)
+            else:
+                journal['jam_ke'] = '-'
+                journal['jtm_count'] = 1
+        else:
+            journal['jam_ke'] = '-'
+            journal['jtm_count'] = 1
+    else:
+        journal['jam_ke'] = '-'
+        journal['jtm_count'] = 1
+
+    return journal
+
+
+@router.put("/admin/jurnal/{journal_id}/attendances")
+async def admin_update_journal_attendances(journal_id: str, update_data: Dict, user: Dict = Depends(require_role('admin'))):
+    """Update student attendances for a journal"""
+    # Verify journal exists
+    journal = await db.journals.find_one({'id': journal_id}, {'_id': 0})
+    if not journal:
+        raise HTTPException(status_code=404, detail='Jurnal tidak ditemukan')
+
+    attendances = update_data.get('attendances', [])
+    if not isinstance(attendances, list):
+        raise HTTPException(status_code=400, detail='Format attendances tidak valid')
+
+    # Update each attendance record
+    updated_count = 0
+    for att in attendances:
+        student_id = att.get('student_id')
+        new_status = att.get('status')
+
+        if not student_id or not new_status:
+            continue
+
+        # Validate status
+        if new_status not in ['hadir', 'sakit', 'izin', 'alpa']:
+            continue
+
+        result = await db.attendances.update_one(
+            {'journal_id': journal_id, 'student_id': student_id},
+            {'$set': {'status': new_status}}
+        )
+
+        if result.matched_count > 0:
+            updated_count += 1
+
+    # Recalculate attendance counts for the journal
+    attendance_records = await db.attendances.find({'journal_id': journal_id}).to_list(None)
+    siswa_hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
+    siswa_sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
+    siswa_izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
+    siswa_tidak_hadir = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+
+    # Update journal with new counts
+    await db.journals.update_one(
+        {'id': journal_id},
+        {'$set': {
+            'siswa_hadir': siswa_hadir,
+            'siswa_sakit': siswa_sakit,
+            'siswa_izin': siswa_izin,
+            'siswa_tidak_hadir': siswa_tidak_hadir,
+        }}
+    )
+
+    return {
+        'message': 'Kehadiran berhasil diperbarui',
+        'updated_count': updated_count,
+        'summary': {
+            'hadir': siswa_hadir,
+            'sakit': siswa_sakit,
+            'izin': siswa_izin,
+            'tidak_hadir': siswa_tidak_hadir,
+        }
+    }
 
 
 async def _collect_student_names_from_journals(journals: List[Dict[str, Any]]) -> Dict[str, str]:

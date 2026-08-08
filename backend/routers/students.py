@@ -970,3 +970,153 @@ async def update_rekam_didik_period(
         'period': period,
         'data': update_value
     }
+
+
+# ============================================================
+# STUDENT ATTENDANCE ENDPOINTS
+# ============================================================
+
+@router.get("/students/my-attendance")
+async def get_my_attendance(
+    user: Dict = Depends(require_role('siswa')),
+    month: Optional[int] = None,
+    year: Optional[int] = None
+):
+    """Get attendance records for current student"""
+    from datetime import datetime
+    import calendar
+
+    student_id = user['id']
+
+    # Default to current month/year if not provided
+    now = now_wib()
+    target_month = month if month else now.month
+    target_year = year if year else now.year
+
+    # Get first and last day of the month
+    first_day = datetime(target_year, target_month, 1)
+    last_day_num = calendar.monthrange(target_year, target_month)[1]
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+
+    # Get all attendance records for this student in the month
+    attendance_records = await db.attendances.find({
+        'student_id': student_id,
+        'created_at': {
+            '$gte': first_day.isoformat(),
+            '$lte': last_day.isoformat()
+        }
+    }, {'_id': 0}).sort('created_at', -1).to_list(1000)
+
+    # Enrich with journal details
+    enriched_records = []
+    for att in attendance_records:
+        journal = await db.journals.find_one(
+            {'id': att.get('journal_id')},
+            {'_id': 0, 'started_at': 1, 'subject_id': 1, 'teacher_id': 1, 'class_id': 1}
+        )
+
+        if journal:
+            # Get subject name
+            subject = await db.subjects.find_one(
+                {'id': journal.get('subject_id')},
+                {'_id': 0, 'name': 1, 'code': 1}
+            )
+
+            # Get teacher name
+            teacher = await db.users.find_one(
+                {'id': journal.get('teacher_id')},
+                {'_id': 0, 'full_name': 1}
+            )
+
+            enriched_records.append({
+                'id': att.get('id'),
+                'date': journal.get('started_at'),
+                'status': att.get('status'),
+                'subject_name': subject.get('name') if subject else None,
+                'subject_code': subject.get('code') if subject else None,
+                'teacher_name': teacher.get('full_name') if teacher else None,
+            })
+
+    return {
+        'month': target_month,
+        'year': target_year,
+        'records': enriched_records
+    }
+
+
+@router.get("/students/my-attendance/stats")
+async def get_my_attendance_stats(
+    user: Dict = Depends(require_role('siswa')),
+    month: Optional[int] = None,
+    year: Optional[int] = None
+):
+    """Get attendance statistics for current student (daily, weekly, monthly)"""
+    from datetime import datetime, timedelta
+    import calendar
+
+    student_id = user['id']
+    now = now_wib()
+    target_month = month if month else now.month
+    target_year = year if year else now.year
+
+    # Get first and last day of the month
+    first_day = datetime(target_year, target_month, 1)
+    last_day_num = calendar.monthrange(target_year, target_month)[1]
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+
+    # Get all attendance records for this month
+    attendance_records = await db.attendances.find({
+        'student_id': student_id,
+        'created_at': {
+            '$gte': first_day.isoformat(),
+            '$lte': last_day.isoformat()
+        }
+    }, {'_id': 0}).to_list(1000)
+
+    # Calculate monthly stats
+    total = len(attendance_records)
+    hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
+    sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
+    izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
+    alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+
+    monthly_percentage = (hadir / total * 100) if total > 0 else 0
+
+    # Calculate weekly stats (last 7 days)
+    week_ago = now - timedelta(days=7)
+    weekly_records = [a for a in attendance_records if datetime.fromisoformat(a.get('created_at')) >= week_ago]
+    weekly_total = len(weekly_records)
+    weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
+    weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
+
+    # Calculate daily stats (today)
+    today_start = datetime(now.year, now.month, now.day)
+    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
+    daily_records = [a for a in attendance_records
+                     if today_start <= datetime.fromisoformat(a.get('created_at')) <= today_end]
+    daily_total = len(daily_records)
+    daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
+    daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
+
+    return {
+        'month': target_month,
+        'year': target_year,
+        'monthly': {
+            'total': total,
+            'hadir': hadir,
+            'sakit': sakit,
+            'izin': izin,
+            'alpa': alpa,
+            'percentage': round(monthly_percentage, 2)
+        },
+        'weekly': {
+            'total': weekly_total,
+            'hadir': weekly_hadir,
+            'percentage': round(weekly_percentage, 2)
+        },
+        'daily': {
+            'total': daily_total,
+            'hadir': daily_hadir,
+            'percentage': round(daily_percentage, 2)
+        }
+    }

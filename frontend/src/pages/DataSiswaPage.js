@@ -20,7 +20,9 @@ export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
   const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
   const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
-  const canEdit = isAdmin || isWaliKelas;
+  const homeroomClassId = user?.homeroom_class_id;
+  const canEdit = isAdmin; // Only admin can edit/delete students
+  const canViewAccount = isAdmin || isWaliKelas; // Admin and wali kelas can view account info
 
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('all');
@@ -35,7 +37,7 @@ export default function DataSiswaPage() {
   useEffect(() => {
     (async () => {
       try {
-        if (isAdmin || isWaliKelas) {
+        if (isAdmin) {
           // Get active academic year first
           const ayRes = await api.get('/academic-years/active');
           const activeAY = ayRes.data;
@@ -45,12 +47,16 @@ export default function DataSiswaPage() {
             params: activeAY ? { academic_year_id: activeAY.id } : {}
           });
           setClasses(c.data || []);
+          await loadStudents('all');
+        } else if (isWaliKelas && homeroomClassId) {
+          // For wali kelas, auto-load only their homeroom class students
+          setSelectedClass(homeroomClassId);
+          await loadStudents(homeroomClassId);
         }
-        await loadStudents('all');
       } finally { setLoading(false); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isWaliKelas]);
+  }, [isAdmin, isWaliKelas, homeroomClassId]);
 
   const loadStudents = async (classId) => {
     setLoading(true);
@@ -63,7 +69,12 @@ export default function DataSiswaPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { loadStudents(selectedClass); }, [selectedClass]);
+  useEffect(() => {
+    if (isAdmin) {
+      loadStudents(selectedClass);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass]);
 
   const filtered = students.filter((s) => {
     if (search && !s.full_name?.toLowerCase().includes(search.toLowerCase()) && !s.nisn?.includes(search)) return false;
@@ -72,6 +83,50 @@ export default function DataSiswaPage() {
   });
 
   const refresh = () => loadStudents(selectedClass);
+
+  // Calculate age from date of birth
+  const calculateAge = (birthDate) => {
+    if (!birthDate) return '-';
+    const birth = new Date(birthDate);
+    const today = new Date();
+
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    return `${years} tahun ${months} bulan`;
+  };
+
+  // Calculate biodata completeness percentage
+  const calculateCompleteness = (student) => {
+    // Required fields for biodata completeness
+    const requiredFields = [
+      'nisn',
+      'nik',
+      'tempat_lahir',
+      'tanggal_lahir',
+      'jenis_kelamin',
+      'alamat',
+      'nama_ayah',
+      'nama_ibu',
+      'telepon',
+      'email'
+    ];
+
+    let filledCount = 0;
+    requiredFields.forEach(field => {
+      if (student[field]) {
+        filledCount++;
+      }
+    });
+
+    const percentage = (filledCount / requiredFields.length) * 100;
+    return Math.round(percentage);
+  };
 
   const handleDelete = async (student) => {
     if (!window.confirm(`Hapus data siswa ${student.full_name} (${student.nisn || student.id})?`)) return;
@@ -108,12 +163,12 @@ export default function DataSiswaPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input placeholder="Cari nama atau NISN..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="search-siswa" />
           </div>
-          {(isAdmin || isWaliKelas) && (
+          {isAdmin && (
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger data-testid="filter-kelas"><SelectValue placeholder="Filter Kelas" /></SelectTrigger>
               <SelectContent>
@@ -149,7 +204,12 @@ export default function DataSiswaPage() {
                     <TableHead className="w-12 text-center">NO</TableHead>
                     <TableHead>NAMA</TableHead>
                     <TableHead>NISN</TableHead>
+                    <TableHead>NISM</TableHead>
                     <TableHead>L/P</TableHead>
+                    <TableHead>TEMPAT LAHIR</TableHead>
+                    <TableHead>TGL LAHIR</TableHead>
+                    <TableHead>UMUR</TableHead>
+                    <TableHead>% DATA</TableHead>
                     <TableHead>KELAS</TableHead>
                     <TableHead>STATUS</TableHead>
                     <TableHead className="text-right">AKSI</TableHead>
@@ -161,12 +221,48 @@ export default function DataSiswaPage() {
                       <TableCell className="text-center text-slate-500 font-mono">{i + 1}</TableCell>
                       <TableCell className="font-semibold">{s.full_name}</TableCell>
                       <TableCell className="font-mono text-xs">{s.nisn || '-'}</TableCell>
+                      <TableCell className="font-mono text-xs">{s.nism || '-'}</TableCell>
                       <TableCell>
                         {s.gender === 'L' ? (
                           <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">L</Badge>
                         ) : s.gender === 'P' ? (
                           <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">P</Badge>
                         ) : <span className="text-slate-400 text-xs">-</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">{s.tempat_lahir || '-'}</TableCell>
+                      <TableCell className="text-sm">
+                        {s.tanggal_lahir ? new Date(s.tanggal_lahir).toLocaleDateString('id-ID', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        }) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">{calculateAge(s.tanggal_lahir)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const percentage = calculateCompleteness(s);
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className={`font-semibold ${
+                                percentage >= 80 ? 'text-emerald-700' :
+                                percentage >= 50 ? 'text-amber-700' :
+                                'text-rose-700'
+                              }`}>
+                                {percentage}%
+                              </div>
+                              <div className="flex-1 bg-slate-200 rounded-full h-2 w-16">
+                                <div
+                                  className={`h-2 rounded-full ${
+                                    percentage >= 80 ? 'bg-emerald-500' :
+                                    percentage >= 50 ? 'bg-amber-500' :
+                                    'bg-rose-500'
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>{s.class_name || '-'}</TableCell>
                       <TableCell>
@@ -187,7 +283,7 @@ export default function DataSiswaPage() {
                             data-testid={`detail-${s.id}`}>
                             <Eye className="h-3.5 w-3.5" /> Detail
                           </Button>
-                          {canEdit && (
+                          {canViewAccount && (
                             <Button size="sm" variant="outline" onClick={() => setAccountStudent(s)}
                               className="gap-1"
                               data-testid={`info-akun-${s.id}`}>
@@ -217,7 +313,7 @@ export default function DataSiswaPage() {
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
+                    <TableRow><TableCell colSpan={12} className="text-center py-12 text-slate-500">
                       <GraduationCap className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                       <div className="font-semibold">Tidak ada data siswa</div>
                     </TableCell></TableRow>

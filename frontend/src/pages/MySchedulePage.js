@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Calendar, Plus, Pencil, Trash2, Send, Lock, Info,
   CheckCircle2, AlertCircle, FileText, LayoutGrid, List,
-  ArrowUpDown, ArrowUp, ArrowDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Clock, Coffee, MapPin,
 } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -30,7 +30,7 @@ function StatusBadge({ status }) {
 export default function MySchedulePage() {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
-  const [grid, setGrid] = useState({ days: [], slots: [], grid: {} });
+  const [grid, setGrid] = useState({ days: [], slots: {}, grid: {} });
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [gridMode, setGridMode] = useState('view'); // 'view' (own schedule) | 'input' (by class for conflict checking)
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -39,54 +39,58 @@ export default function MySchedulePage() {
   const [rooms, setRooms] = useState([]);
   const [activeAY, setActiveAY] = useState(null);
   const [teachingSlots, setTeachingSlots] = useState([]);
+  const [allTeachingSlots, setAllTeachingSlots] = useState(null); // Store full settings
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [selectedSlots, setSelectedSlots] = useState([]); // v1.1.1: Multi-slot selector
 
   // Sorting state for list view
   const [sortColumn, setSortColumn] = useState('day'); // day, jam, jtm, class, subject, room
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
+  // Check if user is wali kelas
+  const isWaliKelas = user?.roles?.includes('wali_kelas');
+  const homeroomClassId = user?.homeroom_class_id;
+
   const loadGridData = async () => {
-    // In view mode: show teacher's own schedule
+    // In view mode:
+    //   - For wali kelas: show homeroom class schedule
+    //   - For other roles: show teacher's own schedule
     // In input mode: show selected class schedule with all teachers
     const params = {};
     if (gridMode === 'view') {
-      params.teacher_id = user?.id;
+      if (isWaliKelas && homeroomClassId) {
+        // Wali kelas: show homeroom class schedule
+        params.class_id = homeroomClassId;
+      } else {
+        // Other roles: show teacher's own schedule
+        params.teacher_id = user?.id;
+      }
     } else if (gridMode === 'input' && selectedClassId) {
       params.class_id = selectedClassId;
     }
     const g = await api.get('/schedules/grid', { params });
 
     // Process grid data to ensure status field in grid items
-    const gridData = g.data || { days: [], slots: [], grid: {} };
-    console.log('Grid days:', gridData.days);
-    console.log('Grid slots:', gridData.slots);
-    console.log('Grid grid object:', gridData.grid);
+    const gridData = g.data || { days: [], slots: {}, grid: {} };
+
+    // Ensure days is array, slots can be array (legacy) or object (per-day)
+    if (!Array.isArray(gridData.days)) gridData.days = [];
+    if (!gridData.slots) gridData.slots = {};
+    if (!gridData.grid) gridData.grid = {};
 
     if (gridData.grid) {
-      console.log('=== GRID DEBUG ===');
-      console.log('Available slot times:', gridData.slots.map(s => s.start_time));
       Object.keys(gridData.grid).forEach(day => {
-        const dayTimes = Object.keys(gridData.grid[day]);
-        console.log(`Day ${day} has ${dayTimes.length} schedules at times:`, dayTimes);
         Object.keys(gridData.grid[day]).forEach(time => {
           if (gridData.grid[day][time]) {
-            const sch = gridData.grid[day][time];
-            console.log(`  - Schedule at ${time}:`, {
-              subject: sch.subject_name,
-              class: sch.class_name,
-              teacher: sch.teacher_name,
-              start: sch.start_time,
-              status: sch.status
-            });
             gridData.grid[day][time].status = gridData.grid[day][time].status || 'draft';
           }
         });
       });
-      console.log('=== END GRID DEBUG ===');
     }
+
     setGrid(gridData);
   };
 
@@ -95,30 +99,64 @@ export default function MySchedulePage() {
       const ay = await api.get('/academic-years/active');
       const activeAYData = ay.data;
 
+      // For wali kelas: load class schedule, for others: load teacher schedule
+      const scheduleParams = {};
+      if (isWaliKelas && homeroomClassId) {
+        scheduleParams.class_id = homeroomClassId;
+      } else {
+        scheduleParams.teacher_id = user?.id;
+      }
+
       const [s, c, sub, r, settings] = await Promise.all([
         // Use grouped endpoint for JTM grouping
-        api.get('/schedules/grouped', { params: { teacher_id: user?.id } }),
+        api.get('/schedules/grouped', { params: scheduleParams }),
         // Load classes for active academic year
         activeAYData ? api.get('/classes', { params: { academic_year_id: activeAYData.id } }) : api.get('/classes'),
         api.get('/subjects'),
         api.get('/rooms'),
         api.get('/settings'),
       ]);
-      console.log('MySchedulePage - grouped items:', s.data);
-
       // Ensure status field exists with default 'draft'
       const itemsWithStatus = (s.data || []).map(item => ({
         ...item,
         status: item.status || 'draft'
       }));
       setItems(itemsWithStatus);
-      setClasses(c.data || []);
+
+      // Filter classes for wali kelas - only show homeroom class
+      const allClasses = c.data || [];
+
+      if (isWaliKelas && homeroomClassId) {
+        const filteredClasses = allClasses.filter(cls => cls.id === homeroomClassId);
+        setClasses(filteredClasses);
+        // Auto-select homeroom class for wali kelas in input mode
+        if (!selectedClassId) {
+          setSelectedClassId(homeroomClassId);
+        }
+      } else {
+        setClasses(allClasses);
+      }
+
       setSubjects(sub.data || []);
       setRooms(r.data || []);
       setActiveAY(activeAYData);
-      // Get teaching slots from settings, filter out break times
-      const slots = settings.data?.teaching_slots || [];
-      setTeachingSlots(slots.filter(slot => !slot.is_break));
+
+      // Store full teaching slots settings
+      const slotsData = settings.data?.teaching_slots || [];
+      setAllTeachingSlots(slotsData);
+
+      // Get initial teaching slots (use first day or global)
+      let allSlots = [];
+      if (Array.isArray(slotsData)) {
+        // Legacy: global slots
+        allSlots = slotsData;
+      } else if (typeof slotsData === 'object') {
+        // New: per-day slots - use senin as default
+        allSlots = slotsData['senin'] || Object.values(slotsData)[0] || [];
+      }
+      // Include breaks in teachingSlots with originalIndex
+      const slotsWithIndex = allSlots.map((slot, originalIndex) => ({ ...slot, originalIndex }));
+      setTeachingSlots(slotsWithIndex);
 
       // Load initial grid data
       await loadGridData();
@@ -130,9 +168,32 @@ export default function MySchedulePage() {
   useEffect(() => { refresh(); }, [user?.id]);
   useEffect(() => { if (viewMode === 'grid') loadGridData(); }, [gridMode, selectedClassId]);
 
+  // Update teaching slots when selected day changes
+  // v1.1.1 FIX: Keep original index to correctly map to backend slot_indexes
+  useEffect(() => {
+    if (!allTeachingSlots) return;
+
+    let daySlots = [];
+    if (Array.isArray(allTeachingSlots)) {
+      // Global slots - same for all days
+      daySlots = allTeachingSlots;
+    } else if (typeof allTeachingSlots === 'object') {
+      // Per-day slots - get slots for selected day
+      daySlots = allTeachingSlots[form.day] || [];
+    }
+
+    // v1.1.1 UPDATE: Include BREAKS in the UI for better visibility
+    // Store original index from full slots array (including breaks)
+    const slotsWithOriginalIndex = daySlots
+      .map((slot, originalIndex) => ({ ...slot, originalIndex }));
+
+    setTeachingSlots(slotsWithOriginalIndex);
+  }, [form.day, allTeachingSlots]);
+
   const openCreate = () => {
     setEditing(null);
     setForm({ ...EMPTY, academic_year_id: activeAY?.id, semester: activeAY?.active_semester || 'ganjil', teacher_id: user?.id });
+    setSelectedSlots([]); // v1.1.1: Reset multi-slot selection
     setOpen(true);
   };
   const openEdit = (s) => {
@@ -140,20 +201,71 @@ export default function MySchedulePage() {
     if (s.status === 'submitted') { toast.error('Jadwal sudah dikirim ke admin, tidak bisa diedit lagi'); return; }
     setEditing(s);
     setForm({ ...s });
+    // v1.1.1: Load existing slot_indexes if available
+    setSelectedSlots(s.slot_indexes || []);
     setOpen(true);
   };
+
+  // v1.1.1: Multi-slot toggle handler
+  const handleSlotToggle = (slotIndex) => {
+    const slot = teachingSlots[slotIndex];
+    if (!slot) return;
+
+    const originalIndex = slot.originalIndex; // Get the original index from full array
+
+    if (selectedSlots.includes(originalIndex)) {
+      setSelectedSlots(selectedSlots.filter(i => i !== originalIndex));
+    } else {
+      setSelectedSlots([...selectedSlots, originalIndex].sort((a, b) => a - b));
+    }
+  };
   const handleSubmit = async () => {
-    if (!form.class_id || !form.subject_id || !form.room_id) {
-      toast.error('Kelas, Mapel, dan Ruang wajib dipilih');
+    if (!form.class_id || !form.subject_id) {
+      toast.error('Kelas dan Mapel wajib dipilih');
       return;
     }
+
+    // v1.1.1: Build payload with slot_indexes if multi-slot is used
+    const payload = { ...form, teacher_id: user.id };
+
+    if (selectedSlots.length > 0) {
+      // Multi-slot mode: use slot_indexes
+      payload.slot_indexes = selectedSlots.sort((a, b) => a - b);
+
+      // Calculate start_time and end_time from selected slots
+      const selectedTeachingSlots = teachingSlots.filter(s => selectedSlots.includes(s.originalIndex));
+      selectedTeachingSlots.sort((a, b) => a.originalIndex - b.originalIndex);
+
+      const firstSlot = selectedTeachingSlots[0];
+      const lastSlot = selectedTeachingSlots[selectedTeachingSlots.length - 1];
+
+      if (firstSlot && lastSlot) {
+        payload.start_time = firstSlot.start_time;
+        payload.end_time = lastSlot.end_time;
+      }
+    } else {
+      // No slot selected
+      toast.error('Pilih minimal 1 jam mengajar');
+      return;
+    }
+
+    // Remove room_id - will be auto-assigned by backend based on class
+    delete payload.room_id;
+
     try {
-      const payload = { ...form, teacher_id: user.id };
       if (editing) await api.put(`/schedules/${editing.id}`, payload);
       else await api.post('/schedules', payload);
       toast.success('Jadwal disimpan sebagai draft');
       setOpen(false); await refresh();
-    } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      if (e?.response?.status === 409 && typeof detail === 'object') {
+        const msg = detail.message || 'Jadwal bentrok';
+        toast.error(msg, { duration: 8000 });
+      } else {
+        toast.error(typeof detail === 'string' ? detail : 'Gagal');
+      }
+    }
   };
   const handleDelete = async (s) => {
     if (s.status === 'locked') { toast.error('Jadwal terkunci tidak bisa dihapus'); return; }
@@ -293,6 +405,16 @@ export default function MySchedulePage() {
 
       {viewMode === 'grid' ? (
         <>
+          {/* Info banner for wali kelas */}
+          {isWaliKelas && homeroomClassId && gridMode === 'input' && (
+            <Alert className="border-[#006837] bg-emerald-50">
+              <Info className="h-4 w-4 text-emerald-700" />
+              <AlertDescription className="text-emerald-900 text-sm">
+                Sebagai Wali Kelas, Anda hanya dapat melihat dan mengatur jadwal untuk kelas yang Anda pegang: <strong>{classes.find(c => c.id === homeroomClassId)?.name || 'Kelas Anda'}</strong>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Grid Mode Controls */}
           <Card>
             <CardContent className="p-4 flex flex-wrap items-center gap-3">
@@ -303,7 +425,7 @@ export default function MySchedulePage() {
                   onClick={() => setGridMode('view')}
                   className={gridMode === 'view' ? 'bg-[#006837]' : ''}
                 >
-                  Lihat Jadwal Saya
+                  {isWaliKelas ? 'Lihat Jadwal Kelas' : 'Lihat Jadwal Saya'}
                 </Button>
                 <Button
                   variant={gridMode === 'input' ? 'default' : 'outline'}
@@ -311,12 +433,16 @@ export default function MySchedulePage() {
                   onClick={() => setGridMode('input')}
                   className={gridMode === 'input' ? 'bg-[#006837]' : ''}
                 >
-                  Input Jadwal (Per Kelas)
+                  {isWaliKelas ? 'Input Jadwal Kelas' : 'Input Jadwal (Per Kelas)'}
                 </Button>
               </div>
               {gridMode === 'input' && (
                 <div className="flex-1 min-w-[200px]">
-                  <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                  <Select
+                    value={selectedClassId}
+                    onValueChange={setSelectedClassId}
+                    disabled={isWaliKelas && homeroomClassId} // Disable for wali kelas
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Pilih kelas untuk input jadwal..." />
                     </SelectTrigger>
@@ -340,91 +466,184 @@ export default function MySchedulePage() {
           )}
           <Card>
           <CardContent className="p-3">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">
+            {/* Color Legend */}
+            <div className="flex items-center gap-3 flex-wrap mb-2 px-1 text-[11px] text-slate-600">
+              <span className="font-semibold">Petunjuk Status:</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-300" /> Draft
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-blue-100 border border-blue-300" /> Terkirim
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /> Disetujui
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded bg-sky-200 border border-sky-400" /> Terkunci
+              </span>
+            </div>
+            <div className="overflow-x-auto rounded-lg border-2 border-[#006837] shadow-lg">
+              <table className="w-full border-collapse text-xs bg-white" data-testid="schedule-grid-table">
                 <thead>
-                  <tr>
-                    <th className="sticky left-0 bg-slate-100 border border-slate-200 p-2 text-left w-32">Jam</th>
+                  <tr className="bg-gradient-to-r from-[#006837] to-[#008547]">
                     {(grid.days || []).map((d) => (
-                      <th key={d} className="bg-slate-100 border border-slate-200 p-2 capitalize min-w-[140px]">{DAY_LABELS[d]}</th>
+                      <React.Fragment key={d}>
+                        <th className="bg-[#004d28] text-white border-r border-[#006837]/30 p-3 text-center font-bold min-w-[120px]">
+                          <div className="flex items-center justify-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span className="text-xs">Waktu</span>
+                          </div>
+                        </th>
+                        <th className="text-white border-r-2 border-white/20 p-3 text-center font-bold min-w-[200px]">
+                          <div className="flex items-center justify-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <span className="text-sm capitalize">{DAY_LABELS[d]}</span>
+                          </div>
+                        </th>
+                      </React.Fragment>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {(grid.slots || []).map((slot, idx) => (
-                    <tr key={idx}>
-                      <td className={`sticky left-0 border border-slate-200 p-2 ${slot.is_break ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                        <div className="font-semibold text-slate-800">{slot.name}</div>
-                        <div className="font-mono text-[10px] text-slate-500">{slot.start_time}-{slot.end_time}</div>
-                      </td>
-                      {(grid.days || []).map((day) => {
-                        const s = grid.grid?.[day]?.[slot.start_time];
-                        if (slot.is_break) {
-                          return <td key={day} className="border border-slate-200 p-1 bg-amber-50 text-center text-amber-700 italic">Istirahat</td>;
-                        }
-                        const statusColors = {
-                          draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
-                          submitted: 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-900',
-                          approved: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
-                          locked: 'bg-rose-100 hover:bg-rose-200 border-rose-400 text-rose-900',
-                        };
-                        const sStatus = s?.status || 'draft';
-                        const cellClass = statusColors[sStatus];
-                        return (
-                          <td key={day} className="border border-slate-200 p-1 align-top">
-                            {s ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  // In view mode: only edit if it's user's own schedule and draft
-                                  // In input mode: only edit if it's user's own schedule and draft
-                                  if (s.teacher_id === user?.id && s.status === 'draft') {
-                                    openEdit(s);
-                                  }
-                                }}
-                                disabled={gridMode === 'view' ? s.status !== 'draft' : s.teacher_id !== user?.id || s.status !== 'draft'}
-                                className={`w-full text-left p-2 rounded border ${cellClass} transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}
-                              >
-                                <div className="font-semibold truncate flex items-center gap-1">
-                                  <span>{s.subject_code || s.subject_name?.slice(0, 8)}</span>
-                                  {sStatus === 'locked' && <Lock className="h-2.5 w-2.5 inline-block" />}
-                                  {sStatus === 'approved' && <CheckCircle2 className="h-2.5 w-2.5 inline-block" />}
-                                  {sStatus === 'submitted' && <Send className="h-2.5 w-2.5 inline-block" />}
+                  {/* Per-day rendering with slot column for each day */}
+                  {(() => {
+                    const slotsData = grid.slots || {};
+
+                    // Find maximum number of slots across all days
+                    let maxSlots = 0;
+                    if (Array.isArray(slotsData)) {
+                      maxSlots = slotsData.length;
+                    } else {
+                      Object.values(slotsData).forEach(daySlots => {
+                        maxSlots = Math.max(maxSlots, daySlots.length);
+                      });
+                    }
+
+                    const rows = [];
+                    for (let slotIdx = 0; slotIdx < maxSlots; slotIdx++) {
+                      rows.push(
+                        <tr key={`slot-${slotIdx}`} className="border-b border-slate-200 hover:bg-slate-50/50 transition-colors">
+                          {(grid.days || []).map((day) => {
+                            const daySlotsData = Array.isArray(slotsData) ? slotsData : (slotsData[day] || []);
+                            const slot = daySlotsData[slotIdx];
+
+                            if (!slot) {
+                              return (
+                                <React.Fragment key={day}>
+                                  <td className="border-r border-slate-200 p-2 bg-slate-100/50"></td>
+                                  <td className="border-r-2 border-slate-300 p-2 bg-slate-50/30"></td>
+                                </React.Fragment>
+                              );
+                            }
+
+                            const s = grid.grid?.[day]?.[slot.start_time];
+
+                            // Time column for this day
+                            const timeCell = (
+                              <td className={`border-r border-slate-200 p-3 text-center ${slot.is_break ? 'bg-amber-100/80' : 'bg-slate-100'}`}>
+                                <div className="flex flex-col items-center gap-1">
+                                  {slot.is_break && <Coffee className="h-3.5 w-3.5 text-amber-700" />}
+                                  <div className="font-bold text-slate-900 text-[11px]">{slot.name}</div>
+                                  <div className="font-mono text-[10px] text-slate-600">{slot.start_time}</div>
+                                  <div className="font-mono text-[10px] text-slate-600">{slot.end_time}</div>
                                 </div>
-                                {gridMode === 'input' && (
-                                  <div className="text-[10px] truncate opacity-90 font-semibold text-blue-700">{s.teacher_name}</div>
-                                )}
-                                <div className="text-[10px] truncate opacity-90">{s.class_name}</div>
-                                <div className="text-[10px] font-mono opacity-70">{s.room_name}</div>
-                              </button>
-                            ) : (
-                              gridMode === 'input' && selectedClassId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setForm({
-                                      ...EMPTY,
-                                      day,
-                                      start_time: slot.start_time,
-                                      end_time: slot.end_time,
-                                      class_id: selectedClassId,
-                                      academic_year_id: activeAY?.id,
-                                      semester: activeAY?.active_semester || 'ganjil',
-                                      teacher_id: user?.id
-                                    });
-                                    setOpen(true);
-                                  }}
-                                  className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs"
-                                >
-                                  +
-                                </button>
-                              ) : null
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                              </td>
+                            );
+
+                            // Schedule cell
+                            let scheduleCell;
+                            if (slot.is_break) {
+                              scheduleCell = (
+                                <td className="border-r-2 border-slate-300 p-3 bg-amber-50/90 text-center">
+                                  <div className="flex items-center justify-center gap-2 text-amber-800 font-semibold">
+                                    <Coffee className="h-4 w-4" />
+                                    <span className="text-xs italic">Istirahat</span>
+                                  </div>
+                                </td>
+                              );
+                            } else if (s) {
+                              const statusColors = {
+                                draft: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900',
+                                submitted: 'bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-900',
+                                approved: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900',
+                                locked: 'bg-sky-100 hover:bg-sky-200 border-sky-400 text-sky-900',
+                              };
+                              const sStatus = s?.status || 'draft';
+                              const cellClass = statusColors[sStatus] || statusColors.draft;
+
+                              // Only allow edit if it's user's own schedule and still draft
+                              const canEdit = s.teacher_id === user?.id && s.status === 'draft';
+
+                              scheduleCell = (
+                                <td className="border-r-2 border-slate-300 p-2 align-top bg-white">
+                                  <button
+                                    type="button"
+                                    onClick={() => canEdit && openEdit(s)}
+                                    disabled={!canEdit}
+                                    className={`w-full text-left p-3 rounded-lg border-2 ${cellClass} transition-all duration-200 ${!canEdit ? 'cursor-not-allowed opacity-80' : 'hover:shadow-lg hover:-translate-y-0.5'}`}
+                                    data-testid={`grid-cell-${day}-${slot.start_time}`}
+                                    title={`${s.subject_name || s.subject_code} • ${s.teacher_name || ''} • ${sStatus}`}
+                                  >
+                                    <div className="font-bold truncate flex items-center gap-1.5 mb-1.5">
+                                      <span className="text-sm">{s.subject_code || s.subject_name?.slice(0, 12)}</span>
+                                      {sStatus === 'locked' && <Lock className="h-3.5 w-3.5 inline-block flex-shrink-0" />}
+                                      {sStatus === 'approved' && <CheckCircle2 className="h-3.5 w-3.5 inline-block flex-shrink-0" />}
+                                      {sStatus === 'submitted' && <Send className="h-3.5 w-3.5 inline-block flex-shrink-0" />}
+                                      {sStatus === 'draft' && <span className="text-[10px] opacity-70 font-normal">(Draft)</span>}
+                                    </div>
+                                    {gridMode === 'input' && (
+                                      <div className="text-[11px] truncate opacity-90 font-semibold mb-1">{s.teacher_name}</div>
+                                    )}
+                                    <div className="text-[11px] truncate opacity-90 mb-1.5 font-medium">{s.class_name}</div>
+                                    <div className="text-[10px] font-mono opacity-75 flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      <span>{s.room_name}</span>
+                                    </div>
+                                  </button>
+                                </td>
+                              );
+                            } else {
+                              // Empty cell
+                              scheduleCell = (
+                                <td className="border-r-2 border-slate-300 p-2 align-top bg-white">
+                                  {gridMode === 'input' && selectedClassId ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setForm({
+                                          ...EMPTY,
+                                          day,
+                                          start_time: slot.start_time,
+                                          end_time: slot.end_time,
+                                          class_id: selectedClassId,
+                                          academic_year_id: activeAY?.id,
+                                          semester: activeAY?.active_semester || 'ganjil',
+                                          teacher_id: user?.id
+                                        });
+                                        setOpen(true);
+                                      }}
+                                      className="w-full h-12 rounded border border-dashed border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5 transition-colors text-slate-300 hover:text-[#006837] text-xs"
+                                      data-testid={`grid-empty-${day}-${slot.start_time}`}
+                                    >
+                                      +
+                                    </button>
+                                  ) : null}
+                                </td>
+                              );
+                            }
+
+                            return (
+                              <React.Fragment key={day}>
+                                {timeCell}
+                                {scheduleCell}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }
+                    return rows;
+                  })()}
                 </tbody>
               </table>
               {(grid.days || []).length === 0 && (
@@ -575,24 +794,62 @@ export default function MySchedulePage() {
                 <SelectContent>{ALL_DAYS.map((d) => <SelectItem key={d} value={d}>{DAY_LABELS[d]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {/* v1.1.1: Multi-Slot Selector */}
             <div className="col-span-2">
-              <Label>Jam Mengajar *</Label>
-              <Select
-                value={`${form.start_time}-${form.end_time}`}
-                onValueChange={(v) => {
-                  const [start, end] = v.split('-');
-                  setForm({ ...form, start_time: start, end_time: end });
-                }}
-              >
-                <SelectTrigger data-testid="form-time-slot"><SelectValue placeholder="Pilih jam mengajar..." /></SelectTrigger>
-                <SelectContent>
-                  {teachingSlots.map((slot, idx) => (
-                    <SelectItem key={idx} value={`${slot.start_time}-${slot.end_time}`}>
-                      {slot.name} ({slot.start_time} - {slot.end_time})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Jam Mengajar * (Klik untuk pilih lebih dari 1 jam)</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2 max-h-64 overflow-y-auto p-2 border border-slate-200 rounded">
+                {teachingSlots.map((slot, index) => {
+                  const isSelected = selectedSlots.includes(slot.originalIndex);
+                  const isBreak = slot.is_break;
+
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      className={`p-3 rounded border text-left transition-all ${
+                        isBreak
+                          ? 'bg-slate-100 border-slate-300 cursor-not-allowed opacity-60'
+                          : isSelected
+                          ? 'bg-[#006837] text-white border-[#006837] shadow-md'
+                          : 'bg-white border-slate-300 hover:border-[#006837] hover:bg-[#006837]/5'
+                      }`}
+                      onClick={() => !isBreak && handleSlotToggle(index)}
+                      disabled={isBreak}
+                      data-testid={`slot-selector-${index}`}
+                    >
+                      <div className="font-semibold text-sm">
+                        {isBreak ? '🕐 ' : ''}{slot.name || `Jam ke-${slot.originalIndex + 1}`}
+                      </div>
+                      <div className="text-xs mt-1 opacity-90">
+                        {slot.start_time} - {slot.end_time}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedSlots.length > 0 && (
+                <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm">
+                  <span className="font-semibold text-emerald-800">Terpilih:</span>{' '}
+                  <span className="text-emerald-700">
+                    Jam ke-{selectedSlots.map(i => i + 1).join(', ')}
+                  </span>
+                  {(() => {
+                    const selectedTeachingSlots = teachingSlots.filter(s => selectedSlots.includes(s.originalIndex));
+                    selectedTeachingSlots.sort((a, b) => a.originalIndex - b.originalIndex);
+                    const firstSlot = selectedTeachingSlots[0];
+                    const lastSlot = selectedTeachingSlots[selectedTeachingSlots.length - 1];
+
+                    if (firstSlot && lastSlot) {
+                      return (
+                        <span className="text-emerald-600 ml-2">
+                          ({firstSlot.start_time} - {lastSlot.end_time})
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
             </div>
             <div className="col-span-2">
               <Label>Kelas *</Label>
@@ -609,11 +866,12 @@ export default function MySchedulePage() {
               </Select>
             </div>
             <div className="col-span-2">
-              <Label>Ruang *</Label>
-              <Select value={form.room_id} onValueChange={(v) => setForm({ ...form, room_id: v })}>
-                <SelectTrigger data-testid="form-room"><SelectValue placeholder="Pilih ruang..." /></SelectTrigger>
-                <SelectContent>{rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Alert className="border-emerald-200 bg-emerald-50">
+                <Info className="h-4 w-4 text-emerald-700" />
+                <AlertDescription className="text-emerald-900 text-xs">
+                  💡 <strong>Ruang akan otomatis mengikuti ruang kelas yang dipilih.</strong>
+                </AlertDescription>
+              </Alert>
             </div>
             <div className="col-span-2">
               <Alert className="border-amber-200 bg-amber-50">

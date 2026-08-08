@@ -11,6 +11,7 @@ from auth_utils import hash_password
 from core import (
     db,
     get_active_academic_year,
+    get_current_user,
     log_audit,
     require_role,
     serialize_doc,
@@ -416,6 +417,73 @@ async def students_import_bulk_accounts(
     return {'success': success, 'errors': errors, 'total_rows': len(rows)}
 
 
+# GET /users/me/profile - User can view their own profile (no admin required)
+@router.get("/users/me/profile")
+async def get_my_profile(user: Dict = Depends(get_current_user)):
+    """Get current user's full profile data"""
+    doc = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
+    if not doc:
+        raise HTTPException(404, "User tidak ditemukan")
+    return serialize_doc(doc)
+
+
+# PUT /users/me/profile - User can update their own profile (restricted fields)
+@router.put("/users/me/profile")
+async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Update current user's own profile. Cannot change roles, is_active, or other sensitive fields."""
+    # Build update dict
+    raw_dump = req.model_dump(exclude_unset=True)
+    update = {}
+
+    # Fields that users CANNOT change themselves (security/admin-only)
+    restricted_fields = {'roles', 'is_active', 'homeroom_class_id', 'student_class_id', 'parent_of', 'jabatan_ids'}
+
+    for k, v in raw_dump.items():
+        # Skip restricted fields
+        if k in restricted_fields:
+            continue
+        # Special handling for username: allow empty string
+        if k == 'username':
+            if v is not None:
+                update[k] = v
+        # For other fields: skip None values, but keep everything else including empty strings
+        elif v is not None:
+            update[k] = v
+
+    # Validasi username tidak duplikat dengan user lain
+    if 'username' in update and update['username']:
+        existing = await db.users.find_one({'username': update['username'], 'id': {'$ne': user['id']}})
+        if existing:
+            raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
+
+    # Validasi NIK & Nomor KK harus 16 digit angka
+    nik = update.get('nik')
+    if nik is not None:
+        nik = ''.join(ch for ch in str(nik) if ch.isdigit())
+        if len(nik) != 16:
+            raise HTTPException(400, "NIK harus 16 digit angka")
+        update['nik'] = nik
+
+    nomor_kk = update.get('nomor_kk')
+    if nomor_kk is not None:
+        nomor_kk = ''.join(ch for ch in str(nomor_kk) if ch.isdigit())
+        if len(nomor_kk) != 16:
+            raise HTTPException(400, "Nomor KK harus 16 digit angka")
+        update['nomor_kk'] = nomor_kk
+
+    if 'new_password' in update:
+        update['password_hash'] = hash_password(update.pop('new_password'))
+
+    if update:  # Only update if there are changes
+        res = await db.users.update_one({'id': user['id']}, {'$set': update})
+        if res.matched_count == 0:
+            raise HTTPException(404, "User tidak ditemukan")
+        await log_audit(user, 'update_self_profile', 'user', user['id'], details={'keys': list(update.keys())}, request=request)
+
+    doc = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
+    return serialize_doc(doc)
+
+
 # GET /users/{uid} must be BEFORE GET /users to avoid path conflicts
 @router.get("/users/{uid}")
 async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
@@ -423,6 +491,25 @@ async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
     if not doc:
         raise HTTPException(404, "User tidak ditemukan")
     return serialize_doc(doc)
+
+
+@router.get("/users/teachers")
+async def list_teachers(user: Dict = Depends(get_current_user)):
+    """Get list of all teachers (for dropdowns, accessible by all authenticated users).
+    Returns only essential fields: id, full_name, username, roles.
+    """
+    q = {
+        'roles': {'$in': list(GTK_ACCOUNT_ROLES)},
+        'is_active': True,
+    }
+    items = await db.users.find(q, {
+        '_id': 0,
+        'id': 1,
+        'full_name': 1,
+        'username': 1,
+        'roles': 1,
+    }).to_list(2000)
+    return [serialize_doc(i) for i in items]
 
 
 @router.get("/users")

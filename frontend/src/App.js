@@ -30,7 +30,11 @@ import AdminSemestersPage from '@/pages/admin/AdminSemestersPage';
 import WaliKelasDashboard from '@/pages/WaliKelasDashboard';
 import DataSiswaPage from '@/pages/DataSiswaPage';
 import KehadiranPage from '@/pages/KehadiranPage';
+import WaliKelasAttendanceReportPage from '@/pages/WaliKelasAttendanceReportPage';
+import WaliKelasAttendancePage from '@/pages/WaliKelasAttendancePage';
+import StudentAttendancePage from '@/pages/StudentAttendancePage';
 import KebersihanPage from '@/pages/KebersihanPage';
+import WaliKelasCleanlinessReportPage from '@/pages/WaliKelasCleanlinessReportPage';
 import AdminKebersihanPage from '@/pages/admin/AdminKebersihanPage';
 import JadwalPiketPage from '@/pages/admin/JadwalPiketPage';
 import AdminJurnalRekapPage from '@/pages/admin/AdminJurnalRekapPage';
@@ -170,9 +174,11 @@ function App() {
             <Route path="/jadwal" element={<JadwalPage />} />
             <Route path="/wali-kelas" element={<WaliKelasDashboard />} />
             <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
-            <Route path="/wali-kelas/kehadiran" element={<KehadiranPage />} />
-            <Route path="/wali-kelas/kebersihan" element={<KebersihanPage />} />
+            <Route path="/wali-kelas/kehadiran" element={<WaliKelasAttendanceReportPage />} />
+            <Route path="/wali-kelas/kehadiran-statistik" element={<WaliKelasAttendancePage />} />
+            <Route path="/wali-kelas/kebersihan" element={<WaliKelasCleanlinessReportPage />} />
             <Route path="/wali-kelas/laporan" element={<WaliKelasReportsPage />} />
+            <Route path="/siswa/kehadiran" element={<StudentAttendancePage />} />
             <Route path="/guru/kebersihan" element={<KebersihanPage />} />
             <Route path="/guru/laporan" element={<ReportPage />} />
             <Route path="/admin/siswa" element={<DataSiswaPage />} />

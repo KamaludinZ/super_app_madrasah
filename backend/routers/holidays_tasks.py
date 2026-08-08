@@ -1,4 +1,5 @@
 """Holidays (weekly + academic) and Teacher Tasks + Piket fill journal."""
+
 import uuid
 from typing import Dict, Optional
 
@@ -346,9 +347,28 @@ async def piket_fill_journal(payload: Dict, request: Request,
         'filled_by_role': fill_role,
         'task_id': payload.get('task_id'),
         'piket_note': payload.get('piket_note'),
+        'jenis_izin': payload.get('jenis_izin'),  # Simpan jenis izin dari task
         'created_at': now_wib().isoformat(),
     }
     await db.journals.insert_one(journal_doc)
+
+    # Save individual attendance records
+    attendance_records = payload.get('attendance_records', [])
+    if attendance_records:
+        attendance_docs = []
+        for record in attendance_records:
+            att_id = str(uuid.uuid4())
+            attendance_docs.append({
+                'id': att_id,
+                'journal_id': j_id,
+                'student_id': record.get('student_id'),
+                'student_name': record.get('student_name'),
+                'status': record.get('status'),
+                'created_at': now_wib().isoformat(),
+            })
+        if attendance_docs:
+            await db.attendances.insert_many(attendance_docs)
+
     if payload.get('task_id'):
         await db.teacher_tasks.update_one({'id': payload['task_id']}, {'$set': {
             'status': 'completed',

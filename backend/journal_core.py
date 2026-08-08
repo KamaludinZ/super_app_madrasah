@@ -270,38 +270,71 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     draw = ImageDraw.Draw(bg)
 
     # Professional font loading with fallbacks
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     font_paths_bold = [
+        # Bundled fonts (highest priority)
+        os.path.join(script_dir, 'fonts', 'DejaVuSans-Bold.ttf'),
+        os.path.join(script_dir, 'fonts', 'Arial-Bold.ttf'),
+        # Linux system fonts
         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-        'C:/Windows/Fonts/arialbd.ttf',  # Windows fallback
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+        '/System/Library/Fonts/Supplemental/Arial Bold.ttf',  # macOS
+        # Windows fallback
+        'C:/Windows/Fonts/arialbd.ttf',
+        'C:/Windows/Fonts/Arial.ttf',
     ]
     font_paths_regular = [
+        # Bundled fonts (highest priority)
+        os.path.join(script_dir, 'fonts', 'DejaVuSans.ttf'),
+        os.path.join(script_dir, 'fonts', 'Arial.ttf'),
+        # Linux system fonts
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-        'C:/Windows/Fonts/arial.ttf',  # Windows fallback
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+        '/System/Library/Fonts/Supplemental/Arial.ttf',  # macOS
+        # Windows fallback
+        'C:/Windows/Fonts/arial.ttf',
+        'C:/Windows/Fonts/Arial.ttf',
     ]
 
-    def load_font(paths, size):
-        for p in paths:
+    def load_font(paths, size, font_type="unknown"):
+        """Load font with extensive logging for debugging production issues"""
+        for i, p in enumerate(paths):
             if os.path.exists(p):
                 try:
-                    return ImageFont.truetype(p, size)
-                except Exception:
-                    pass
-        return ImageFont.load_default()
+                    font = ImageFont.truetype(p, size)
+                    logger.info(f"[FONT] Successfully loaded {font_type} font: {p} at size {size}")
+                    return font
+                except Exception as e:
+                    logger.warning(f"[FONT] Failed to load {font_type} font from {p}: {e}")
+                    continue
+
+        # If we get here, no fonts were found - this is critical!
+        logger.error(f"[FONT] CRITICAL: No {font_type} font found! Tried {len(paths)} paths. Using default font (will be small and blurry).")
+        logger.error(f"[FONT] Paths tried: {paths[:3]}...")  # Log first 3 paths
+
+        # Last resort: try to use a basic TrueType font with larger size to compensate
+        try:
+            # Try to create a simple bitmap font at larger size
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size * 2)
+        except:
+            return ImageFont.load_default()
 
     # PROFESSIONAL B5-OPTIMIZED FONT SIZES AT 300 DPI
     # All sizes scaled by 1.5x from 200 DPI to maintain visual proportions
-    font_app_name_header = load_font(font_paths_bold, 128)  # 85 * 1.5
-    font_school_header = load_font(font_paths_regular, 78)  # 52 * 1.5
-    font_class_huge = load_font(font_paths_bold, 369)  # 246 * 1.5
-    font_room_label = load_font(font_paths_bold, 135)  # 90 * 1.5
-    font_instruction_title = load_font(font_paths_bold, 78)  # 52 * 1.5
-    font_instruction_medium = load_font(font_paths_regular, 51)  # 34 * 1.5
-    font_token_label = load_font(font_paths_regular, 78)  # 52 * 1.5
-    font_token_value = load_font(font_paths_bold, 107)  # 71 * 1.5
-    font_footer = load_font(font_paths_bold, 51)  # 34 * 1.5
-    font_body_text = load_font(font_paths_regular, 33)  # 22 * 1.5
+    font_app_name_header = load_font(font_paths_bold, 128, "app_name_header")  # 85 * 1.5
+    font_school_header = load_font(font_paths_regular, 78, "school_header")  # 52 * 1.5
+    font_class_huge = load_font(font_paths_bold, 369, "class_huge")  # 246 * 1.5
+    font_room_label = load_font(font_paths_bold, 135, "room_label")  # 90 * 1.5
+    font_instruction_title = load_font(font_paths_bold, 78, "instruction_title")  # 52 * 1.5
+    font_instruction_medium = load_font(font_paths_regular, 51, "instruction_medium")  # 34 * 1.5
+    font_token_label = load_font(font_paths_regular, 78, "token_label")  # 52 * 1.5
+    font_token_value = load_font(font_paths_bold, 107, "token_value")  # 71 * 1.5
+    font_footer = load_font(font_paths_bold, 51, "footer")  # 34 * 1.5
+    font_body_text = load_font(font_paths_regular, 33, "body_text")  # 22 * 1.5
 
     # Professional color palette
     HUNTER_GREEN = (0, 104, 55)      # Deep hunter green for headers
@@ -387,55 +420,29 @@ def create_b5_card(qr_data: str, room_name: str, class_name: str,
     )
     bg.paste(qr_img, (qr_x, qr_y))
 
-    # INSTRUCTION SECTION - Consistent for all templates
-    # Main instruction title
-    instruction_y = qr_y + qr_size + 252
-    draw.text((W // 2, instruction_y), "E-JURNAL PRESISI",
-              fill=INK_BLACK, font=font_instruction_title, anchor="mm")
-    
-    # Detailed instruction text
-    instruction_detail_y = instruction_y + 90
-    instruction_text = "Scan barcode ini untuk mengisi jurnal mengajar"
-    draw.text((W // 2, instruction_detail_y), instruction_text,
-              fill=MEDIUM_GRAY, font=font_instruction_medium, anchor="mm")
+    # TOKEN KELAS section - Positioned directly below QR code
+    # Display token for the room/class
+    token_value_text = str(class_token) if class_token else "—"
 
-    # TOKEN KELAS section - Consistent layout for all templates
-    if class_token:
-        token_value_text = str(class_token)
-        
-        # Calculate token section position
-        token_section_y = instruction_detail_y + 120
-        
-        # Use consistent layout for both default and custom templates
-        # Create a white box with gold border for token display
-        pad_x = 80
-        pad_y = 40
-        label_bbox = draw.textbbox((0, 0), "TOKEN KELAS", font=font_token_label)
-        value_bbox = draw.textbbox((0, 0), token_value_text, font=font_token_value)
-        
-        box_w = max(label_bbox[2] - label_bbox[0], value_bbox[2] - value_bbox[0]) + (pad_x * 2)
-        box_h = (label_bbox[3] - label_bbox[1]) + (value_bbox[3] - value_bbox[1]) + (pad_y * 3)
-        
-        box_x1 = (W - box_w) // 2
-        box_y1 = token_section_y
-        box_x2 = box_x1 + box_w
-        box_y2 = box_y1 + box_h
-        
-        # Draw token box
-        draw.rectangle([(box_x1, box_y1), (box_x2, box_y2)], 
-                      fill=(255, 255, 255), outline=POLISHED_GOLD, width=6)
-        
-        # Position label and value
-        label_y = box_y1 + pad_y + ((label_bbox[3] - label_bbox[1]) // 2)
-        value_y = label_y + (label_bbox[3] - label_bbox[1]) + pad_y + ((value_bbox[3] - value_bbox[1]) // 2)
-        
-        # Draw token label and value
-        draw.text((W // 2, label_y), "TOKEN KELAS",
-                  fill=MEDIUM_GRAY, font=font_token_label, anchor="mm")
-        draw.text((W // 2, value_y), token_value_text,
-                  fill=HUNTER_GREEN, font=font_token_value, anchor="mm")
+    # Calculate token section position - directly below QR code with proper spacing
+    token_section_y = qr_y + qr_size + 150  # Increased from 120 to move token section down
+
+    # Token display without box - just text
+    spacing_between = 30  # Spacing between label and value
+
+    # Position label and value - centered below QR code
+    label_y = token_section_y
+    value_y = label_y + 120  # Space between "KODE KELAS" and the token value
+
+    # Draw token label and value with improved contrast
+    draw.text((W // 2, label_y), "KODE KELAS",
+              fill=MEDIUM_GRAY, font=font_token_label, anchor="mm")
+    draw.text((W // 2, value_y), token_value_text,
+              fill=HUNTER_GREEN, font=font_token_value, anchor="mm")
 
     buf = io.BytesIO()
+    # Save with explicit DPI metadata to ensure consistent print sizing
+    # The dpi parameter in Pillow automatically sets the pHYs chunk for proper scaling
     bg.save(buf, "PNG", optimize=True, dpi=(300, 300))
     return buf.getvalue()
 

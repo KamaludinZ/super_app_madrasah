@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ClipboardList, Filter, RefreshCw, BarChart3, Loader2, ChevronDown, Eye, Edit } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { ClipboardList, Filter, RefreshCw, BarChart3, Loader2, Eye, Edit, User } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
@@ -25,6 +27,9 @@ export default function AdminJurnalRekapPage() {
     start_date: '', end_date: '',
   });
   const [detailDialog, setDetailDialog] = useState({ open: false, journal: null });
+  const [editDialog, setEditDialog] = useState({ open: false, journal: null });
+  const [editForm, setEditForm] = useState({ materi: '', catatan: '', jenis_izin: '', attendances: [] });
+  const [editSaving, setEditSaving] = useState(false);
 
   const buildParams = () => {
     const p = {};
@@ -74,6 +79,67 @@ export default function AdminJurnalRekapPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `rekap-jurnal-${Date.now()}.csv`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const openEditDialog = async (journal) => {
+    try {
+      // Fetch full journal details with attendance
+      const { data: fullJournal } = await api.get(`/jurnal/${journal.id}`);
+
+      console.log('Fetched journal:', fullJournal);
+      console.log('Attendance details:', fullJournal.attendance_details);
+
+      setEditDialog({ open: true, journal: fullJournal });
+      setEditForm({
+        materi: fullJournal.materi || '',
+        catatan: fullJournal.catatan || '',
+        jenis_izin: fullJournal.jenis_izin || '',
+        attendances: fullJournal.attendance_details || [],
+      });
+    } catch (error) {
+      console.error('Error loading journal:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Gagal memuat detail jurnal';
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editDialog.journal || !editForm.materi.trim()) {
+      toast.error('Materi pembelajaran harus diisi');
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      // Update journal materi, catatan, and jenis_izin
+      await api.put(`/admin/jurnal/${editDialog.journal.id}`, {
+        materi: editForm.materi,
+        catatan: editForm.catatan,
+        jenis_izin: editForm.jenis_izin,
+      });
+
+      // Update attendances
+      await api.put(`/admin/jurnal/${editDialog.journal.id}/attendances`, {
+        attendances: editForm.attendances,
+      });
+
+      toast.success('Jurnal berhasil diperbarui');
+      setEditDialog({ open: false, journal: null });
+      load(); // Reload data
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal memperbarui jurnal');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const updateAttendanceStatus = (studentId, newStatus) => {
+    setEditForm(prev => ({
+      ...prev,
+      attendances: prev.attendances.map(att =>
+        att.student_id === studentId ? { ...att, status: newStatus } : att
+      ),
+    }));
   };
 
   return (
@@ -152,13 +218,18 @@ export default function AdminJurnalRekapPage() {
           {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
             <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-jurnal-rekap-table">
               <TableHeader><TableRow>
-                <TableHead>Tanggal</TableHead><TableHead className="text-center">JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead>Jenis Izin</TableHead><TableHead>Catatan</TableHead><TableHead className="text-center">Hadir</TableHead><TableHead className="text-center">S/I/A</TableHead><TableHead>Diisi oleh</TableHead><TableHead className="text-center">Aksi</TableHead>
+                <TableHead>Tanggal</TableHead><TableHead>Jam Ke</TableHead><TableHead className="text-center">JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead>Jenis Izin</TableHead><TableHead>Catatan</TableHead><TableHead className="text-center">Kehadiran</TableHead><TableHead>Diisi oleh</TableHead><TableHead className="text-center">Aksi</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {data.items.length === 0 ? <TableRow><TableCell colSpan={13} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
                   data.items.map((j) => (
                     <TableRow key={j.id}>
                       <TableCell className="text-xs whitespace-nowrap">{new Date(j.started_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
+                      <TableCell>
+                        <div className="text-xs font-medium text-slate-700">
+                          {j.jam_ke || '-'}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold">
                           {j.jtm_count || 1} JTM
@@ -181,9 +252,14 @@ export default function AdminJurnalRekapPage() {
                       <TableCell className="text-sm max-w-xs truncate" title={j.catatan || '-'}>
                         {j.catatan || <span className="text-slate-400">-</span>}
                       </TableCell>
-                      <TableCell className="text-center font-semibold text-emerald-700">{j.siswa_hadir}</TableCell>
-                      <TableCell className="text-center text-xs">
-                        <span className="text-amber-600">{j.siswa_sakit}</span>/<span className="text-blue-600">{j.siswa_izin}</span>/<span className="text-rose-600">{j.siswa_tidak_hadir}</span>
+                      <TableCell className="text-center text-xs font-semibold">
+                        <span className="text-emerald-700">{j.siswa_hadir || 0}</span>
+                        <span className="text-slate-400 mx-0.5">/</span>
+                        <span className="text-amber-600">{j.siswa_sakit || 0}</span>
+                        <span className="text-slate-400 mx-0.5">/</span>
+                        <span className="text-blue-600">{j.siswa_izin || 0}</span>
+                        <span className="text-slate-400 mx-0.5">/</span>
+                        <span className="text-rose-600">{j.siswa_tidak_hadir || 0}</span>
                       </TableCell>
                       <TableCell>
                         {j.fill_mode === 'piket' ? (
@@ -209,7 +285,7 @@ export default function AdminJurnalRekapPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => navigate(`/jurnal-history?edit=${j.id}`)}
+                            onClick={() => openEditDialog(j)}
                             className="h-7 px-2"
                           >
                             <Edit className="h-3 w-3" />
@@ -262,8 +338,8 @@ export default function AdminJurnalRekapPage() {
                   <div className="font-semibold">{new Date(detailDialog.journal.started_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}</div>
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-500">JTM</Label>
-                  <div className="font-semibold">{detailDialog.journal.jtm_count || 1} Jam Tugas Mengajar</div>
+                  <Label className="text-xs text-slate-500">Jam Ke</Label>
+                  <div className="font-semibold">{detailDialog.journal.jam_ke || '-'}</div>
                 </div>
               </div>
 
@@ -288,7 +364,30 @@ export default function AdminJurnalRekapPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Ruangan</Label>
-                  <div className="font-semibold font-mono">{detailDialog.journal.room_name}</div>
+                  <div className="font-semibold font-mono">{detailDialog.journal.room_name || '-'}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">JTM</Label>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold">
+                    {detailDialog.journal.jtm_count || 1} JTM
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Diisi Oleh</Label>
+                  <div>
+                    {detailDialog.journal.fill_mode === 'piket' ? (
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                        ✋ Piket{detailDialog.journal.filled_by_name ? `: ${detailDialog.journal.filled_by_name}` : ''}
+                      </Badge>
+                    ) : detailDialog.journal.fill_mode === 'admin' ? (
+                      <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -321,39 +420,136 @@ export default function AdminJurnalRekapPage() {
                 </Card>
               </div>
 
-              <div className="grid grid-cols-4 gap-3">
-                <div>
-                  <Label className="text-xs text-slate-500">Hadir</Label>
-                  <div className="text-2xl font-bold text-emerald-700">{detailDialog.journal.siswa_hadir}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-500">Sakit</Label>
-                  <div className="text-2xl font-bold text-amber-600">{detailDialog.journal.siswa_sakit}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-500">Izin</Label>
-                  <div className="text-2xl font-bold text-blue-600">{detailDialog.journal.siswa_izin}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-500">Alpa</Label>
-                  <div className="text-2xl font-bold text-rose-600">{detailDialog.journal.siswa_tidak_hadir}</div>
+              {/* Ringkasan Kehadiran */}
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Ringkasan Kehadiran Siswa</Label>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded">
+                    <div className="text-xs text-emerald-600 mb-1">Hadir</div>
+                    <div className="text-2xl font-bold text-emerald-700">{detailDialog.journal.siswa_hadir || 0}</div>
+                  </div>
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                    <div className="text-xs text-amber-600 mb-1">Sakit</div>
+                    <div className="text-2xl font-bold text-amber-700">{detailDialog.journal.siswa_sakit || 0}</div>
+                  </div>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                    <div className="text-xs text-blue-600 mb-1">Izin</div>
+                    <div className="text-2xl font-bold text-blue-700">{detailDialog.journal.siswa_izin || 0}</div>
+                  </div>
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded">
+                    <div className="text-xs text-rose-600 mb-1">Alpa</div>
+                    <div className="text-2xl font-bold text-rose-700">{detailDialog.journal.siswa_tidak_hadir || 0}</div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <Label className="text-xs text-slate-500">Diisi Oleh</Label>
-                <div className="mt-1">
-                  {detailDialog.journal.fill_mode === 'piket' ? (
-                    <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                      ✋ Piket{detailDialog.journal.filled_by_name ? `: ${detailDialog.journal.filled_by_name}` : ''}
-                    </Badge>
-                  ) : detailDialog.journal.fill_mode === 'admin' ? (
-                    <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
-                  ) : (
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
-                  )}
+              {/* Detail Kehadiran Siswa */}
+              {detailDialog.journal.attendance_details && detailDialog.journal.attendance_details.length > 0 && (
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Detail Kehadiran Siswa</Label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {/* Siswa Hadir */}
+                    {detailDialog.journal.attendance_details.filter(a => a.status === 'hadir').length > 0 && (
+                      <Card className="border-emerald-200">
+                        <CardHeader className="bg-emerald-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm font-semibold text-emerald-700">
+                              Hadir ({detailDialog.journal.attendance_details.filter(a => a.status === 'hadir').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {detailDialog.journal.attendance_details
+                              .filter(a => a.status === 'hadir')
+                              .map((att, idx) => (
+                                <Badge key={idx} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300">
+                                  {att.student_name}
+                                </Badge>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Sakit */}
+                    {detailDialog.journal.attendance_details.filter(a => a.status === 'sakit').length > 0 && (
+                      <Card className="border-amber-200">
+                        <CardHeader className="bg-amber-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                            <span className="text-sm font-semibold text-amber-700">
+                              Sakit ({detailDialog.journal.attendance_details.filter(a => a.status === 'sakit').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {detailDialog.journal.attendance_details
+                              .filter(a => a.status === 'sakit')
+                              .map((att, idx) => (
+                                <Badge key={idx} variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                                  {att.student_name}
+                                </Badge>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Izin */}
+                    {detailDialog.journal.attendance_details.filter(a => a.status === 'izin').length > 0 && (
+                      <Card className="border-blue-200">
+                        <CardHeader className="bg-blue-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span className="text-sm font-semibold text-blue-700">
+                              Izin ({detailDialog.journal.attendance_details.filter(a => a.status === 'izin').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {detailDialog.journal.attendance_details
+                              .filter(a => a.status === 'izin')
+                              .map((att, idx) => (
+                                <Badge key={idx} variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+                                  {att.student_name}
+                                </Badge>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Alpa */}
+                    {detailDialog.journal.attendance_details.filter(a => a.status === 'alpa').length > 0 && (
+                      <Card className="border-rose-200">
+                        <CardHeader className="bg-rose-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                            <span className="text-sm font-semibold text-rose-700">
+                              Alpa ({detailDialog.journal.attendance_details.filter(a => a.status === 'alpa').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {detailDialog.journal.attendance_details
+                              .filter(a => a.status === 'alpa')
+                              .map((att, idx) => (
+                                <Badge key={idx} variant="outline" className="bg-rose-50 text-rose-700 border-rose-300">
+                                  {att.student_name}
+                                </Badge>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setDetailDialog({ open: false, journal: null })}>
@@ -361,11 +557,259 @@ export default function AdminJurnalRekapPage() {
                 </Button>
                 <Button onClick={() => {
                   setDetailDialog({ open: false, journal: null });
-                  navigate(`/jurnal-history?edit=${detailDialog.journal.id}`);
+                  openEditDialog(detailDialog.journal);
                 }} className="bg-[#006837] hover:bg-[#0B7A3B]">
                   <Edit className="h-4 w-4 mr-1" /> Edit Jurnal
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialog.open} onOpenChange={(open) => !editSaving && setEditDialog({ open, journal: null })}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Jurnal Mengajar</DialogTitle>
+          </DialogHeader>
+          {editDialog.journal && (
+            <div className="space-y-4">
+              {/* Journal Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Tanggal & Waktu</Label>
+                  <div className="font-semibold">{new Date(editDialog.journal.started_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Jam Ke</Label>
+                  <div className="font-semibold">{editDialog.journal.jam_ke || '-'}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Kelas</Label>
+                  <div className="font-semibold">{editDialog.journal.class_name}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Mata Pelajaran</Label>
+                  <div className="font-semibold">
+                    <Badge variant="outline" className="mr-1">{editDialog.journal.subject_code}</Badge>
+                    {editDialog.journal.subject_name}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Guru Pengajar</Label>
+                  <div className="font-semibold">{editDialog.journal.teacher_name}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Ruangan</Label>
+                  <div className="font-semibold font-mono">{editDialog.journal.room_name || '-'}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">JTM</Label>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold">
+                    {editDialog.journal.jtm_count || 1} JTM
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Mode Pengisian</Label>
+                  <div>
+                    {editDialog.journal.fill_mode === 'piket' ? (
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                        Piket{editDialog.journal.filled_by_name ? `: ${editDialog.journal.filled_by_name}` : ''}
+                      </Badge>
+                    ) : editDialog.journal.fill_mode === 'admin' ? (
+                      <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Materi */}
+              <div>
+                <Label>Materi Pembelajaran *</Label>
+                <Textarea
+                  value={editForm.materi}
+                  onChange={(e) => setEditForm({ ...editForm, materi: e.target.value })}
+                  placeholder="Masukkan materi pembelajaran..."
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Catatan */}
+              <div>
+                <Label>Catatan</Label>
+                <Textarea
+                  value={editForm.catatan}
+                  onChange={(e) => setEditForm({ ...editForm, catatan: e.target.value })}
+                  placeholder="Catatan tambahan (opsional)..."
+                  rows={2}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Jenis Izin */}
+              <div>
+                <Label>Jenis Izin Guru</Label>
+                <Select
+                  value={editForm.jenis_izin || 'none'}
+                  onValueChange={(v) => setEditForm({ ...editForm, jenis_izin: v === 'none' ? null : v })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Pilih jenis izin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tidak ada izin</SelectItem>
+                    <SelectItem value="sakit">Izin Sakit</SelectItem>
+                    <SelectItem value="cuti">Izin Cuti</SelectItem>
+                    <SelectItem value="dinas_luar">Dinas Luar</SelectItem>
+                    <SelectItem value="lainnya">Izin Lainnya</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Student Attendance */}
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Kehadiran Siswa</Label>
+
+                {/* Ringkasan Kehadiran */}
+                {editForm.attendances.length > 0 && (
+                  <div className="grid grid-cols-4 gap-3 mb-3">
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded">
+                      <div className="text-xs text-emerald-600 mb-1">Hadir</div>
+                      <div className="text-2xl font-bold text-emerald-700">
+                        {editForm.attendances.filter(a => a.status === 'hadir').length}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                      <div className="text-xs text-amber-600 mb-1">Sakit</div>
+                      <div className="text-2xl font-bold text-amber-700">
+                        {editForm.attendances.filter(a => a.status === 'sakit').length}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                      <div className="text-xs text-blue-600 mb-1">Izin</div>
+                      <div className="text-2xl font-bold text-blue-700">
+                        {editForm.attendances.filter(a => a.status === 'izin').length}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded">
+                      <div className="text-xs text-rose-600 mb-1">Alpa</div>
+                      <div className="text-2xl font-bold text-rose-700">
+                        {editForm.attendances.filter(a => a.status === 'alpa').length}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white z-10">
+                          <TableRow>
+                            <TableHead className="w-12">#</TableHead>
+                            <TableHead>Nama Siswa</TableHead>
+                            <TableHead className="text-center">Status Kehadiran</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {editForm.attendances.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center py-4 text-slate-500">
+                                Tidak ada data kehadiran
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            editForm.attendances.map((att, idx) => (
+                              <TableRow key={att.student_id}>
+                                <TableCell className="text-center text-sm text-slate-500">{idx + 1}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-4 w-4 text-slate-400" />
+                                    <span className="font-medium">{att.student_name}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={att.status}
+                                    onValueChange={(newStatus) => updateAttendanceStatus(att.student_id, newStatus)}
+                                  >
+                                    <SelectTrigger className="w-32 mx-auto">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="hadir">
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                          Hadir
+                                        </span>
+                                      </SelectItem>
+                                      <SelectItem value="sakit">
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                          Sakit
+                                        </span>
+                                      </SelectItem>
+                                      <SelectItem value="izin">
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                          Izin
+                                        </span>
+                                      </SelectItem>
+                                      <SelectItem value="alpa">
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                                          Alpa
+                                        </span>
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDialog({ open: false, journal: null })}
+                  disabled={editSaving}
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleEditSave}
+                  className="bg-[#006837] hover:bg-[#0B7A3B]"
+                  disabled={editSaving}
+                >
+                  {editSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    'Simpan Perubahan'
+                  )}
+                </Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

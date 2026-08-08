@@ -17,12 +17,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
+import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
 
 export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButton = false }) {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const id = userIdOverride || paramId;
   const [gtk, setGtk] = useState(null);
+  const [vervalStatus, setVervalStatus] = useState({ hasDraft: false, hasPending: false, hasRejected: false });
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('info-akun');
@@ -47,7 +51,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
   const loadGTKData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/users/${id}`);
+      // Use /users/me/profile for self-profile (non-admin), /users/{id} for admin viewing others
+      const endpoint = userIdOverride ? '/users/me/profile' : `/users/${id}`;
+      const { data } = await api.get(endpoint);
 
       // Set all state in one go to prevent multiple re-renders
       setGtk(data);
@@ -109,6 +115,22 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
         tugas_utama: data.tugas_utama || '',
         tugas_tambahan: data.tugas_tambahan || '',
       });
+
+      // Load draft if exists (untuk self-profile non-admin)
+      if (userIdOverride) {
+        const draft = getVervalDraft(id);
+        if (draft?.new_data) {
+          // Apply draft data to forms
+          const draftData = draft.new_data;
+          if (draftData.full_name !== undefined) setFormDataDiri(prev => ({ ...prev, ...draftData }));
+          if (draftData.status_kepegawaian !== undefined) setFormKepegawaian(prev => ({ ...prev, ...draftData }));
+          if (draftData.phone !== undefined) setFormInformasiLain(prev => ({ ...prev, ...draftData }));
+          if (draftData.status_tempat_tinggal !== undefined) setFormTempatTinggal(prev => ({ ...prev, ...draftData }));
+          if (draftData.status_perkawinan !== undefined) setFormPerkawinan(prev => ({ ...prev, ...draftData }));
+          if (draftData.jenis_ptk !== undefined) setFormPenugasan(prev => ({ ...prev, ...draftData }));
+        }
+      }
+
       setLoading(false);
     } catch (e) {
       toast.error('Gagal memuat data GTK');
@@ -123,22 +145,48 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
   }, [loadGTKData]);
 
   const handleSave = async () => {
-    try {
-      const payload = {
-        ...formDataDiri,
-        ...formKepegawaian,
-        ...formInformasiLain,
-        ...formTempatTinggal,
-        ...formPerkawinan,
-        ...formPenugasan,
-      };
+    const payload = {
+      ...formDataDiri,
+      ...formKepegawaian,
+      ...formInformasiLain,
+      ...formTempatTinggal,
+      ...formPerkawinan,
+      ...formPenugasan,
+    };
 
-      await api.put(`/users/${id}`, payload);
-      toast.success('Data berhasil disimpan');
+    const isAdmin = currentUser?.roles?.includes('admin');
+
+    // Admin: langsung save ke database
+    if (isAdmin && !userIdOverride) {
+      try {
+        await api.put(`/users/${id}`, payload);
+        toast.success('Data berhasil disimpan');
+        setEditing(false);
+        loadGTKData();
+      } catch (e) {
+        toast.error('Gagal menyimpan data');
+      }
+      return;
+    }
+
+    // Non-admin (self-profile): save to draft verval
+    // Check if there's already a pending request
+    try {
+      const { data: requests } = await api.get('/verval-requests');
+      const hasPending = requests.some(req => req.status === 'pending' && req.user_id === id);
+
+      if (hasPending) {
+        toast.error('Masih ada ajuan verval yang pending. Batalkan atau tunggu hingga diproses terlebih dahulu.');
+        return;
+      }
+
+      // Save to draft
+      saveVervalDraft(id, payload);
+      toast.success('Perubahan data disimpan sebagai draft. Klik "Ajukan Verval" untuk mengirim ke admin.');
       setEditing(false);
-      loadGTKData();
+      loadGTKData(); // Reload to show draft alert
     } catch (e) {
-      toast.error('Gagal menyimpan data');
+      toast.error('Gagal menyimpan draft');
     }
   };
 
@@ -179,12 +227,39 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               </Button>
             </>
           ) : (
-            <Button onClick={() => setEditing(true)} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+            <Button
+              onClick={() => setEditing(true)}
+              className="bg-[#006837] hover:bg-[#0B7A3B] gap-2"
+              disabled={userIdOverride && vervalStatus.hasPending}
+              title={userIdOverride && vervalStatus.hasPending ? 'Batalkan ajuan verval terlebih dahulu untuk edit data' : ''}
+            >
               <Edit className="h-4 w-4" /> Edit Data
             </Button>
           )}
         </div>
       </div>
+
+      {/* Verval Alert - Only show for self-profile (non-admin editing their own profile) */}
+      {userIdOverride && (
+        <VervalDraftAlert
+          userId={id}
+          userType={gtk?.roles?.includes('guru') ? 'guru' : 'tenaga_kependidikan'}
+          onRefresh={loadGTKData}
+          onStatusChange={setVervalStatus}
+          onAdjustToDraft={(draft) => {
+            // Load draft data to forms when user adjusts pending to draft
+            if (draft?.new_data) {
+              const draftData = draft.new_data;
+              if (draftData.full_name !== undefined) setFormDataDiri(prev => ({ ...prev, ...draftData }));
+              if (draftData.status_kepegawaian !== undefined) setFormKepegawaian(prev => ({ ...prev, ...draftData }));
+              if (draftData.phone !== undefined) setFormInformasiLain(prev => ({ ...prev, ...draftData }));
+              if (draftData.status_tempat_tinggal !== undefined) setFormTempatTinggal(prev => ({ ...prev, ...draftData }));
+              if (draftData.status_perkawinan !== undefined) setFormPerkawinan(prev => ({ ...prev, ...draftData }));
+              if (draftData.jenis_ptk !== undefined) setFormPenugasan(prev => ({ ...prev, ...draftData }));
+            }
+          }}
+        />
+      )}
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

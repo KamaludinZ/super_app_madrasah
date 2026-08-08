@@ -1,8 +1,9 @@
 """Admin: stats, audit-logs, security-logs, backup."""
+import calendar
 import io
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -357,3 +358,369 @@ async def export_grades_excel(class_id: Optional[str] = None,
     if request:
         await log_audit(user, 'export_excel', 'grade', None, details={'count': len(enriched)}, request=request)
     return _xlsx_response(export_grades_xlsx(enriched), f"export_nilai_{_ts()}.xlsx")
+
+
+# ============================================================
+# ATTENDANCE ENDPOINTS FOR ADMIN
+# ============================================================
+@router.get("/admin/attendance/by-class")
+async def get_attendance_by_class(
+    class_id: str,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Get attendance records for a specific class.
+
+    Returns per-student summary with detailed records for the specified class.
+    """
+    # Default to current month/year if not provided
+    now = now_wib()
+    target_month = month if month else now.month
+    target_year = year if year else now.year
+
+    # Get first and last day of the month
+    first_day = datetime(target_year, target_month, 1)
+    last_day_num = calendar.monthrange(target_year, target_month)[1]
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+
+    # Get class info
+    cls = await db.classes.find_one({'id': class_id}, {'_id': 0})
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    # Get all students in this class
+    students = await db.users.find(
+        {'student_class_id': class_id, 'roles': 'siswa'},
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1}
+    ).sort('full_name', 1).to_list(200)
+    student_ids = [s['id'] for s in students]
+
+    # Get all attendance records for this class in the month
+    attendance_records = await db.attendances.find({
+        'student_id': {'$in': student_ids},
+        'created_at': {
+            '$gte': first_day.isoformat(),
+            '$lte': last_day.isoformat()
+        }
+    }, {'_id': 0}).to_list(10000)
+
+    # Build per-student summary
+    student_summaries = []
+    for student in students:
+        student_id = student['id']
+        student_records = [r for r in attendance_records if r.get('student_id') == student_id]
+
+        # Count by status
+        total = len(student_records)
+        hadir = sum(1 for r in student_records if r.get('status') == 'hadir')
+        sakit = sum(1 for r in student_records if r.get('status') == 'sakit')
+        izin = sum(1 for r in student_records if r.get('status') == 'izin')
+        alpa = sum(1 for r in student_records if r.get('status') == 'alpa')
+
+        percentage = (hadir / total * 100) if total > 0 else 0
+
+        student_summaries.append({
+            'student_id': student_id,
+            'student_name': student['full_name'],
+            'nisn': student.get('nisn'),
+            'total': total,
+            'hadir': hadir,
+            'sakit': sakit,
+            'izin': izin,
+            'alpa': alpa,
+            'percentage': round(percentage, 2)
+        })
+
+    # Calculate class-level statistics
+    total_records = len(attendance_records)
+    total_hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
+    total_sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
+    total_izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
+    total_alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+    class_percentage = (total_hadir / total_records * 100) if total_records > 0 else 0
+
+    return {
+        'class': serialize_doc(cls),
+        'month': target_month,
+        'year': target_year,
+        'class_statistics': {
+            'total': total_records,
+            'hadir': total_hadir,
+            'sakit': total_sakit,
+            'izin': total_izin,
+            'alpa': total_alpa,
+            'percentage': round(class_percentage, 2)
+        },
+        'students': student_summaries
+    }
+
+
+@router.get("/admin/attendance/by-grade")
+async def get_attendance_by_grade(
+    grade_level: str,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Get attendance statistics aggregated by grade level (jenjang).
+
+    Returns statistics for all classes in the specified grade level.
+    Grade level examples: 'VII', 'VIII', 'IX', '1', '2', etc.
+    """
+    # Default to current month/year if not provided
+    now = now_wib()
+    target_month = month if month else now.month
+    target_year = year if year else now.year
+
+    # Get first and last day of the month
+    first_day = datetime(target_year, target_month, 1)
+    last_day_num = calendar.monthrange(target_year, target_month)[1]
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+
+    # Get all classes for this grade level
+    classes = await db.classes.find(
+        {'grade_level': grade_level},
+        {'_id': 0, 'id': 1, 'name': 1, 'grade_level': 1}
+    ).sort('name', 1).to_list(100)
+
+    if not classes:
+        return {
+            'grade_level': grade_level,
+            'month': target_month,
+            'year': target_year,
+            'classes': [],
+            'grade_statistics': {
+                'total': 0,
+                'hadir': 0,
+                'sakit': 0,
+                'izin': 0,
+                'alpa': 0,
+                'percentage': 0
+            }
+        }
+
+    # Get statistics for each class
+    class_summaries = []
+    all_attendance_records = []
+
+    for cls in classes:
+        class_id = cls['id']
+
+        # Get all students in this class
+        students = await db.users.find(
+            {'student_class_id': class_id, 'roles': 'siswa'},
+            {'_id': 0, 'id': 1}
+        ).to_list(200)
+        student_ids = [s['id'] for s in students]
+
+        if not student_ids:
+            continue
+
+        # Get attendance records for this class
+        attendance_records = await db.attendances.find({
+            'student_id': {'$in': student_ids},
+            'created_at': {
+                '$gte': first_day.isoformat(),
+                '$lte': last_day.isoformat()
+            }
+        }, {'_id': 0}).to_list(10000)
+
+        all_attendance_records.extend(attendance_records)
+
+        # Calculate class statistics
+        total = len(attendance_records)
+        hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
+        sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
+        izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
+        alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+        percentage = (hadir / total * 100) if total > 0 else 0
+
+        class_summaries.append({
+            'class_id': class_id,
+            'class_name': cls['name'],
+            'student_count': len(student_ids),
+            'total': total,
+            'hadir': hadir,
+            'sakit': sakit,
+            'izin': izin,
+            'alpa': alpa,
+            'percentage': round(percentage, 2)
+        })
+
+    # Calculate grade-level statistics
+    grade_total = len(all_attendance_records)
+    grade_hadir = sum(1 for a in all_attendance_records if a.get('status') == 'hadir')
+    grade_sakit = sum(1 for a in all_attendance_records if a.get('status') == 'sakit')
+    grade_izin = sum(1 for a in all_attendance_records if a.get('status') == 'izin')
+    grade_alpa = sum(1 for a in all_attendance_records if a.get('status') == 'alpa')
+    grade_percentage = (grade_hadir / grade_total * 100) if grade_total > 0 else 0
+
+    return {
+        'grade_level': grade_level,
+        'month': target_month,
+        'year': target_year,
+        'classes': class_summaries,
+        'grade_statistics': {
+            'total': grade_total,
+            'hadir': grade_hadir,
+            'sakit': grade_sakit,
+            'izin': grade_izin,
+            'alpa': grade_alpa,
+            'percentage': round(grade_percentage, 2)
+        }
+    }
+
+
+@router.get("/admin/attendance/overall")
+async def get_attendance_overall(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    user: Dict = Depends(require_role('admin'))
+):
+    """Get overall school-wide attendance statistics.
+
+    Returns comprehensive statistics including:
+    - Overall school statistics (monthly, weekly, daily)
+    - Breakdown by grade level
+    - Breakdown by class
+    """
+    # Default to current month/year if not provided
+    now = now_wib()
+    target_month = month if month else now.month
+    target_year = year if year else now.year
+
+    # Get first and last day of the month
+    first_day = datetime(target_year, target_month, 1)
+    last_day_num = calendar.monthrange(target_year, target_month)[1]
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+
+    # Get all students
+    all_students = await db.users.find(
+        {'roles': 'siswa'},
+        {'_id': 0, 'id': 1, 'student_class_id': 1}
+    ).to_list(5000)
+    all_student_ids = [s['id'] for s in all_students]
+
+    # Get all attendance records for the month
+    attendance_records = await db.attendances.find({
+        'student_id': {'$in': all_student_ids},
+        'created_at': {
+            '$gte': first_day.isoformat(),
+            '$lte': last_day.isoformat()
+        }
+    }, {'_id': 0}).to_list(50000)
+
+    # Calculate monthly stats
+    monthly_total = len(attendance_records)
+    monthly_hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
+    monthly_sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
+    monthly_izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
+    monthly_alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+    monthly_percentage = (monthly_hadir / monthly_total * 100) if monthly_total > 0 else 0
+
+    # Calculate weekly stats (last 7 days)
+    week_ago = now - timedelta(days=7)
+    weekly_records = [a for a in attendance_records
+                     if datetime.fromisoformat(a.get('created_at')) >= week_ago]
+    weekly_total = len(weekly_records)
+    weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
+    weekly_sakit = sum(1 for a in weekly_records if a.get('status') == 'sakit')
+    weekly_izin = sum(1 for a in weekly_records if a.get('status') == 'izin')
+    weekly_alpa = sum(1 for a in weekly_records if a.get('status') == 'alpa')
+    weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
+
+    # Calculate daily stats (today)
+    today_start = datetime(now.year, now.month, now.day)
+    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
+    daily_records = [a for a in attendance_records
+                    if today_start <= datetime.fromisoformat(a.get('created_at')) <= today_end]
+    daily_total = len(daily_records)
+    daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
+    daily_sakit = sum(1 for a in daily_records if a.get('status') == 'sakit')
+    daily_izin = sum(1 for a in daily_records if a.get('status') == 'izin')
+    daily_alpa = sum(1 for a in daily_records if a.get('status') == 'alpa')
+    daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
+
+    # Get all classes and group by grade level
+    all_classes = await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1, 'grade_level': 1}).to_list(500)
+
+    # Build breakdown by grade level
+    grade_levels = {}
+    for cls in all_classes:
+        grade_level = cls.get('grade_level', 'Unknown')
+        if grade_level not in grade_levels:
+            grade_levels[grade_level] = {
+                'grade_level': grade_level,
+                'classes': [],
+                'total': 0,
+                'hadir': 0,
+                'sakit': 0,
+                'izin': 0,
+                'alpa': 0
+            }
+
+        # Get students in this class
+        class_students = [s['id'] for s in all_students if s.get('student_class_id') == cls['id']]
+        class_records = [r for r in attendance_records if r.get('student_id') in class_students]
+
+        # Count by status
+        class_total = len(class_records)
+        class_hadir = sum(1 for r in class_records if r.get('status') == 'hadir')
+        class_sakit = sum(1 for r in class_records if r.get('status') == 'sakit')
+        class_izin = sum(1 for r in class_records if r.get('status') == 'izin')
+        class_alpa = sum(1 for r in class_records if r.get('status') == 'alpa')
+        class_percentage = (class_hadir / class_total * 100) if class_total > 0 else 0
+
+        grade_levels[grade_level]['classes'].append({
+            'class_id': cls['id'],
+            'class_name': cls['name'],
+            'total': class_total,
+            'hadir': class_hadir,
+            'sakit': class_sakit,
+            'izin': class_izin,
+            'alpa': class_alpa,
+            'percentage': round(class_percentage, 2)
+        })
+
+        # Accumulate for grade level
+        grade_levels[grade_level]['total'] += class_total
+        grade_levels[grade_level]['hadir'] += class_hadir
+        grade_levels[grade_level]['sakit'] += class_sakit
+        grade_levels[grade_level]['izin'] += class_izin
+        grade_levels[grade_level]['alpa'] += class_alpa
+
+    # Calculate percentages for grade levels
+    for grade in grade_levels.values():
+        grade['percentage'] = (grade['hadir'] / grade['total'] * 100) if grade['total'] > 0 else 0
+        grade['percentage'] = round(grade['percentage'], 2)
+
+    return {
+        'month': target_month,
+        'year': target_year,
+        'monthly': {
+            'total': monthly_total,
+            'hadir': monthly_hadir,
+            'sakit': monthly_sakit,
+            'izin': monthly_izin,
+            'alpa': monthly_alpa,
+            'percentage': round(monthly_percentage, 2)
+        },
+        'weekly': {
+            'total': weekly_total,
+            'hadir': weekly_hadir,
+            'sakit': weekly_sakit,
+            'izin': weekly_izin,
+            'alpa': weekly_alpa,
+            'percentage': round(weekly_percentage, 2)
+        },
+        'daily': {
+            'total': daily_total,
+            'hadir': daily_hadir,
+            'sakit': daily_sakit,
+            'izin': daily_izin,
+            'alpa': daily_alpa,
+            'percentage': round(daily_percentage, 2)
+        },
+        'by_grade': list(grade_levels.values())
+    }

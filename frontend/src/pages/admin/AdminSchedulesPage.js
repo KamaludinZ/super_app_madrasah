@@ -11,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const ALL_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 
 export default function AdminSchedulesPage() {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [grid, setGrid] = useState({ days: [], slots: [], grid: {} });
   const [classes, setClasses] = useState([]);
@@ -39,35 +41,55 @@ export default function AdminSchedulesPage() {
   const [sortColumn, setSortColumn] = useState('day'); // day, class_name, subject_name, teacher_name, jtm_count
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
+  // Check if user is wali kelas
+  const isWaliKelas = user?.roles?.includes('wali_kelas');
+  const homeroomClassId = user?.homeroom_class_id;
+
   const loadGrid = async (mode, val) => {
     const params = {};
     if (val && val !== 'all' && val !== '') {
       if (mode === 'class') params.class_id = val;
       else params.teacher_id = val;
     }
-    console.log('Loading grid with params:', params);
     const { data } = await api.get('/schedules/grid', { params });
-    console.log('Grid data received:', data);
-    console.log('Grid.days:', data.days);
-    console.log('Grid.slots:', data.slots);
-    console.log('Grid.grid:', data.grid);
-    console.log('Grid.schedules length:', data.schedules?.length);
     setGrid(data);
 
     // For list view, fetch grouped schedules with JTM
     const { data: groupedData } = await api.get('/schedules/grouped', { params });
-    console.log('Grouped schedules with JTM:', groupedData);
     setItems(groupedData || []);
   };
 
   useEffect(() => {
+    if (!user) return; // Wait for user to be loaded
+
     (async () => {
       const ay = await api.get('/academic-years/active');
       setActiveAY(ay.data);
       const [c, sub, r, u, settings] = await Promise.all([
         api.get('/classes'), api.get('/subjects'), api.get('/rooms'), api.get('/users'), api.get('/settings'),
       ]);
-      setClasses(c.data); setSubjects(sub.data); setRooms(r.data);
+
+      // Filter classes for wali kelas - only show homeroom class
+      const allClasses = c.data;
+      const currentUserIsWaliKelas = user?.roles?.includes('wali_kelas');
+      const currentUserHomeroomClassId = user?.homeroom_class_id;
+
+      console.log('DEBUG - User roles:', user?.roles);
+      console.log('DEBUG - Is Wali Kelas:', currentUserIsWaliKelas);
+      console.log('DEBUG - Homeroom Class ID:', currentUserHomeroomClassId);
+
+      if (currentUserIsWaliKelas && currentUserHomeroomClassId) {
+        const filteredClasses = allClasses.filter(cls => cls.id === currentUserHomeroomClassId);
+        console.log('DEBUG - Filtered classes:', filteredClasses);
+        setClasses(filteredClasses);
+        // Auto-select homeroom class for wali kelas
+        setFilterValue(currentUserHomeroomClassId);
+      } else {
+        setClasses(allClasses);
+      }
+
+      setSubjects(sub.data);
+      setRooms(r.data);
       setTeachers(u.data.filter((x) => x.roles?.some((rr) => ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(rr))));
 
       // Store full teaching slots settings
@@ -84,9 +106,15 @@ export default function AdminSchedulesPage() {
         allSlots = slotsData['senin'] || Object.values(slotsData)[0] || [];
       }
       setTeachingSlots(allSlots.filter(slot => !slot.is_break));
-      await loadGrid('class', 'all');
+
+      // Load grid with appropriate filter
+      if (currentUserIsWaliKelas && currentUserHomeroomClassId) {
+        await loadGrid('class', currentUserHomeroomClassId);
+      } else {
+        await loadGrid('class', 'all');
+      }
     })();
-  }, []);
+  }, [user]); // Add user as dependency
 
   useEffect(() => { loadGrid(filterMode, filterValue); }, [filterMode, filterValue]);
 
@@ -308,7 +336,7 @@ export default function AdminSchedulesPage() {
       if (!r.ok) throw new Error(data.detail || 'Gagal');
       toast.success(`Berhasil import ${data.success} jadwal${data.errors.length ? `, ${data.errors.length} error` : ''}`);
       if (data.errors.length) {
-        console.error('Import errors:', data.errors);
+        // Import had errors
         toast.warning(`${data.errors.length} baris error - lihat console untuk detail`);
       }
       setImportOpen(false); await loadGrid(filterMode, filterValue);
@@ -333,11 +361,37 @@ export default function AdminSchedulesPage() {
         </div>
       </div>
 
+      {/* Info banner for wali kelas */}
+      {isWaliKelas && homeroomClassId && (
+        <Card className="border-[#006837] bg-emerald-50">
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 text-sm">
+              <span className="text-emerald-700 font-semibold">ℹ️ Info:</span>
+              <span className="text-emerald-800">
+                Sebagai Wali Kelas, Anda hanya dapat melihat dan mengatur jadwal untuk kelas yang Anda pegang: <strong>{classes.find(c => c.id === homeroomClassId)?.name || 'Kelas Anda'}</strong>
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs uppercase tracking-wide">Tampilkan Per</Label>
-            <Select value={filterMode} onValueChange={(v) => { setFilterMode(v); setFilterValue('all'); }}>
+            <Select
+              value={filterMode}
+              onValueChange={(v) => {
+                setFilterMode(v);
+                // For wali kelas, keep homeroom class selected when switching back to class mode
+                if (isWaliKelas && homeroomClassId && v === 'class') {
+                  setFilterValue(homeroomClassId);
+                } else {
+                  setFilterValue('all');
+                }
+              }}
+              disabled={isWaliKelas} // Wali kelas can only view by class
+            >
               <SelectTrigger data-testid="schedule-filter-mode"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="class">Per Kelas</SelectItem>
@@ -347,10 +401,17 @@ export default function AdminSchedulesPage() {
           </div>
           <div>
             <Label className="text-xs uppercase tracking-wide">{filterMode === 'class' ? 'Pilih Kelas' : 'Pilih Guru'}</Label>
-            <Select value={filterValue} onValueChange={setFilterValue}>
+            <Select
+              value={filterValue}
+              onValueChange={setFilterValue}
+              disabled={isWaliKelas && filterMode === 'class'} // Wali kelas cannot change class selection
+            >
               <SelectTrigger data-testid="schedule-filter-value"><SelectValue placeholder="Semua" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua {filterMode === 'class' ? 'Kelas' : 'Guru'}</SelectItem>
+                {/* Don't show "Semua" option for wali kelas in class mode */}
+                {!(isWaliKelas && filterMode === 'class') && (
+                  <SelectItem value="all">Semua {filterMode === 'class' ? 'Kelas' : 'Guru'}</SelectItem>
+                )}
                 {filterMode === 'class' ?
                   classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)
                   : teachers.map((t) => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)
@@ -410,8 +471,6 @@ export default function AdminSchedulesPage() {
                       });
                     }
 
-                    console.log('[GRID DEBUG] maxSlots:', maxSlots, 'slotsData:', slotsData);
-
                     const rows = [];
                     for (let slotIdx = 0; slotIdx < maxSlots; slotIdx++) {
                       rows.push(
@@ -419,8 +478,6 @@ export default function AdminSchedulesPage() {
                           {(grid.days || []).map((day) => {
                             const daySlotsData = Array.isArray(slotsData) ? slotsData : (slotsData[day] || []);
                             const slot = daySlotsData[slotIdx];
-
-                            console.log(`[GRID DEBUG] slotIdx=${slotIdx}, day=${day}, slot=`, slot);
 
                             if (!slot) {
                               // Empty slot for this day
@@ -433,8 +490,6 @@ export default function AdminSchedulesPage() {
                             }
 
                             const s = grid.grid?.[day]?.[slot.start_time];
-
-                            console.log(`[GRID DEBUG] slotIdx=${slotIdx}, day=${day}, start_time=${slot.start_time}, schedule found:`, !!s, s?.id?.slice(0,8));
 
                             // Time column
                             const timeCell = (
@@ -568,7 +623,7 @@ export default function AdminSchedulesPage() {
               <TableHead className="text-right">Aksi</TableHead>
             </TableRow></TableHeader>
             <TableBody>{sortedItems.map((s) => {
-              console.log('[LIST DEBUG] Schedule:', s.id?.slice(0,8), 'hour_range:', s.hour_range, 'jtm_count:', s.jtm_count, 'slot_indexes:', s.slot_indexes);
+              // Schedule with JTM grouping
               return (
               <TableRow key={s.id}>
                 <TableCell className="capitalize">{DAY_LABELS[s.day]}</TableCell>

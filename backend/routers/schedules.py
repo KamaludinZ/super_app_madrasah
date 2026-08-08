@@ -981,8 +981,12 @@ async def list_piket(day: Optional[str] = None, user: Dict = Depends(get_current
     items = await db.piket_schedules.find(q, {'_id': 0}).sort([('day', 1), ('start_time', 1)]).to_list(500)
     enriched = []
     for s in items:
-        teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
-        s['teacher_name'] = teacher.get('full_name') if teacher else None
+        teacher_id = s.get('teacher_id')
+        if teacher_id:
+            teacher = await db.users.find_one({'id': teacher_id}, {'_id': 0, 'full_name': 1, 'username': 1})
+            s['teacher_name'] = teacher.get('full_name') if teacher else None
+        else:
+            s['teacher_name'] = None
         enriched.append(serialize_doc(s))
     return enriched
 

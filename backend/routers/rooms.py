@@ -139,32 +139,61 @@ async def generate_qr_card(rid: str, template_id: Optional[str] = Form(None),
     template_bytes = None
 
     # Debug logging for template
-    logger.info(f"[QR-CARD] Generating card for room {rid}, template_id: {template_id}")
+    logger.info(f"[QR-CARD SINGLE] Generating card for room {rid}, template_id: {template_id}")
 
     if template_id:
         tpl = await db.qr_templates.find_one({'id': template_id}, {'_id': 0})
-        logger.info(f"[QR-CARD] Template found: {tpl is not None}")
+        logger.info(f"[QR-CARD SINGLE] Template found: {tpl is not None}")
         if tpl and tpl.get('image_b64'):
             b64 = tpl['image_b64']
             if ',' in b64:
                 b64 = b64.split(',', 1)[1]
             template_bytes = base64.b64decode(b64)
-            logger.info(f"[QR-CARD] Template bytes loaded: {len(template_bytes)} bytes")
+            logger.info(f"[QR-CARD SINGLE] Template bytes loaded: {len(template_bytes)} bytes")
+
+    # Use same logic as bulk generation to get active context
+    context = await get_active_context(user)
+    semester_id = context.get('semester_id')
+    academic_year_id = context.get('academic_year_id')
+
+    logger.info(f"[QR-CARD SINGLE] Active context: semester_id={semester_id}, academic_year_id={academic_year_id}")
 
     cls = None
     class_token_val = None
-    if not class_name:
-        cls = await db.classes.find_one({'room_id': rid}, {'_id': 0})
-        class_name = cls.get('name') if cls else room.get('name', '')
-    if cls:
-        class_token_val = cls.get('token')
-    elif class_name:
-        # Try to find class by name if room_id didn't match
-        cls = await db.classes.find_one({'name': class_name}, {'_id': 0})
-        if cls:
-            class_token_val = cls.get('token')
 
-    logger.info(f"[QR-CARD] Creating card: class={class_name}, token={class_token_val}, has_template={template_bytes is not None}")
+    # ALWAYS find class by room_id first (not by class_name) - same logic as bulk generation
+    # Build query with active academic year filter
+    query = {'room_id': rid}
+    if academic_year_id:
+        query['academic_year_id'] = academic_year_id
+
+    logger.info(f"[QR-CARD SINGLE] Searching classes with query: {query}")
+    all_classes = await db.classes.find(query, {'_id': 0}).to_list(None)
+    logger.info(f"[QR-CARD SINGLE] Found {len(all_classes)} classes for room {rid}")
+
+    if all_classes:
+        # Log all found classes for debugging
+        for idx, c in enumerate(all_classes):
+            logger.info(f"[QR-CARD SINGLE]   Class {idx}: name={c.get('name')}, token='{c.get('token')}', ay={c.get('academic_year_id')}")
+
+        # Deduplicate by taking most recent (same logic as bulk generation)
+        cls = sorted(all_classes, key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)[0]
+        class_name = cls.get('name', '')
+        logger.info(f"[QR-CARD SINGLE] Selected most recent class: name={cls.get('name')}, token='{cls.get('token')}'")
+    else:
+        class_name = room.get('name', '')
+        logger.info(f"[QR-CARD SINGLE] No class found for room_id, using room name: {class_name}")
+
+    # Get token from class - use same logic as bulk generation (line 278)
+    # Use 'or' operator to handle both None and empty string cases
+    if cls:
+        class_token_val = cls.get('token') or room.get('name', rid)
+        logger.info(f"[QR-CARD SINGLE] Token from class: '{cls.get('token')}' -> using: '{class_token_val}'")
+    else:
+        class_token_val = room.get('name', rid)
+        logger.info(f"[QR-CARD SINGLE] No class found, using room name: '{class_token_val}'")
+
+    logger.info(f"[QR-CARD SINGLE] FINAL VALUES: class={class_name}, token={class_token_val}")
 
     png_bytes = create_b5_card(
         qr_data=token, room_name=room.get('name', rid), class_name=class_name,
@@ -236,6 +265,8 @@ async def _build_card_images_from_class_docs(classes_list: List[Dict], template_
             continue
 
         token = encrypt_qr_payload(room_id)
+        # Use class token if available, otherwise use room name as fallback
+        class_token_val = cls.get('token') or room.get('name', room_id)
         png_bytes = create_b5_card(
             qr_data=token,
             room_name=room.get('name', room_id),
@@ -243,7 +274,7 @@ async def _build_card_images_from_class_docs(classes_list: List[Dict], template_
             template_bytes=template_bytes,
             school_name=settings.get('school_name', 'MTsN 2 Kota Malang'),
             app_name=settings.get('app_name', 'Super Apps MATSANDATAMA'),
-            class_token=cls.get('token'),
+            class_token=class_token_val,
         )
         card_images.append(PILImage.open(io.BytesIO(png_bytes)))
     return card_images

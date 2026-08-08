@@ -37,20 +37,36 @@ export default function JadwalPiketPage() {
   });
 
   const refresh = async () => {
-    const { data } = await api.get('/piket-schedules');
-    setItems(data);
+    try {
+      const { data } = await api.get('/piket-schedules');
+      setItems(data);
+    } catch (e) {
+      toast.error('Gagal memuat jadwal piket');
+    }
   };
 
   useEffect(() => {
     (async () => {
       try {
-        const [p, u] = await Promise.all([api.get('/piket-schedules'), api.get('/users')]);
+        // Load piket schedules first
+        const p = await api.get('/piket-schedules');
         setItems(p.data);
-        // Eligible teachers: guru_piket primary, or any teacher role
-        setTeachers(u.data.filter((x) => x.roles?.some((rr) =>
-          ['guru_piket', 'guru', 'wali_kelas', 'guru_bk', 'guru_tata_tertib', 'tenaga_kependidikan'].includes(rr)
-        )));
-      } catch (e) { /* */ }
+
+        // Try to load users (only admin can access /users endpoint)
+        // Non-admin roles can still VIEW jadwal piket, just can't add/edit
+        try {
+          const u = await api.get('/users');
+          // Filter only eligible teachers (GTK roles)
+          const eligibleTeachers = u.data.filter((x) => x.roles?.some((rr) =>
+            ['guru_piket', 'guru', 'wali_kelas', 'guru_bk', 'guru_tata_tertib', 'tenaga_kependidikan'].includes(rr)
+          ));
+          setTeachers(eligibleTeachers);
+        } catch (err) {
+          setTeachers([]);
+        }
+      } catch (e) {
+        toast.error('Gagal memuat jadwal piket');
+      }
     })();
   }, []);
 
