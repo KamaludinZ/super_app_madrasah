@@ -18,9 +18,9 @@ async def list_madrasah_events(
     year: Optional[int] = None,
     month: Optional[int] = None,
     is_active: Optional[bool] = None,
-    user: Dict = Depends(require_role('admin', 'waka_humas'))
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
 ):
-    """List madrasah events - accessible by admin and waka humas."""
+    """List madrasah events - accessible by admin, waka humas, kepala sekolah, and unit pelayanan."""
     q = {}
 
     if is_active is not None:
@@ -52,9 +52,9 @@ async def list_madrasah_events(
 async def create_madrasah_event(
     payload: Dict,
     request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_humas'))
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
 ):
-    """Create madrasah event - accessible by admin and waka humas."""
+    """Create madrasah event - accessible by admin, waka humas, kepala sekolah, and unit pelayanan."""
     if not payload.get('name') or not payload.get('date') or not payload.get('location'):
         raise HTTPException(400, "Nama, tanggal, dan tempat wajib diisi")
 
@@ -87,9 +87,9 @@ async def update_madrasah_event(
     event_id: str,
     payload: Dict,
     request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_humas'))
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
 ):
-    """Update madrasah event."""
+    """Update madrasah event - accessible by admin, waka humas, kepala sekolah, and unit pelayanan."""
     existing = await db.madrasah_events.find_one({'id': event_id})
     if not existing:
         raise HTTPException(404, "Event tidak ditemukan")
@@ -111,9 +111,9 @@ async def update_madrasah_event(
 async def delete_madrasah_event(
     event_id: str,
     request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_humas'))
+    user: Dict = Depends(require_role('admin'))
 ):
-    """Delete madrasah event."""
+    """Delete madrasah event - only admin can delete."""
     result = await db.madrasah_events.delete_one({'id': event_id})
     if result.deleted_count == 0:
         raise HTTPException(404, "Event tidak ditemukan")
@@ -138,11 +138,12 @@ async def list_staff_events(
     """List staff events - admin can see all, others see only their own."""
     q = {}
 
-    # Admin can filter by user_id, others only see their own
+    # Admin and unit_pelayanan can filter by user_id, others only see their own
     is_admin = 'admin' in user.get('roles', [])
-    if user_id and is_admin:
+    is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
+    if user_id and (is_admin or is_unit_pelayanan):
         q['user_id'] = user_id
-    elif not is_admin:
+    elif not (is_admin or is_unit_pelayanan):
         q['user_id'] = user['id']
 
     if is_active is not None:
@@ -196,7 +197,8 @@ async def create_staff_event(
 
     # Determine user_id
     is_admin = 'admin' in user.get('roles', [])
-    if is_admin and payload.get('user_id'):
+    is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
+    if (is_admin or is_unit_pelayanan) and payload.get('user_id'):
         user_id = payload['user_id']
     else:
         user_id = user['id']
@@ -249,7 +251,8 @@ async def update_staff_event(
 
     # Check permission
     is_admin = 'admin' in user.get('roles', [])
-    if not is_admin and existing.get('user_id') != user['id']:
+    is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
+    if not (is_admin or is_unit_pelayanan) and existing.get('user_id') != user['id']:
         raise HTTPException(403, "Anda hanya dapat mengubah kegiatan Anda sendiri")
 
     # Remove fields that shouldn't be updated
@@ -272,15 +275,15 @@ async def delete_staff_event(
     request: Request,
     user: Dict = Depends(get_current_user)
 ):
-    """Delete staff event - can only delete own events unless admin."""
+    """Delete staff event - only admin can delete."""
     existing = await db.staff_events.find_one({'id': event_id})
     if not existing:
         raise HTTPException(404, "Event tidak ditemukan")
 
-    # Check permission
+    # Check permission - only admin can delete
     is_admin = 'admin' in user.get('roles', [])
-    if not is_admin and existing.get('user_id') != user['id']:
-        raise HTTPException(403, "Anda hanya dapat menghapus kegiatan Anda sendiri")
+    if not is_admin:
+        raise HTTPException(403, "Hanya admin yang dapat menghapus agenda GTK")
 
     result = await db.staff_events.delete_one({'id': event_id})
     await log_audit(user, 'delete', 'staff_event', event_id, request=request)
