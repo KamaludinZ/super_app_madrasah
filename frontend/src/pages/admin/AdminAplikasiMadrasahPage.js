@@ -65,7 +65,7 @@ export default function AdminAplikasiMadrasahPage() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.url.trim()) {
+    if (!form.name?.trim() || !form.url?.trim()) {
       toast.error('Nama dan URL wajib diisi');
       return;
     }
@@ -74,9 +74,9 @@ export default function AdminAplikasiMadrasahPage() {
     try {
       const payload = {
         name: form.name.trim(),
-        description: form.description.trim(),
+        description: (form.description || '').trim(),
         url: form.url.trim(),
-        icon_url: form.icon_url.trim(),
+        icon_url: (form.icon_url || '').trim(),
         is_active: form.is_active,
         order: parseInt(form.order) || 0,
       };
