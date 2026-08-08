@@ -12,7 +12,8 @@ import axios from 'axios';
 import PublicHeader from '@/components/layout/PublicHeader';
 import PublicFooter from '@/components/layout/PublicFooter';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000/api';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_BASE = `${BACKEND_URL}/api`;
 
 const BIDANG_OPTIONS = [
   { value: 'sarana_prasarana', label: 'Sarana & Prasarana' },

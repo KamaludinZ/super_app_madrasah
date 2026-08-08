@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_BASE = BACKEND_URL || 'http://localhost:8000';
 
 const AdminStudentRecordsPage = () => {
   const token = localStorage.getItem('token');

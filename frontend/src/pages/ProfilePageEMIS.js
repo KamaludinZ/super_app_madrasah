@@ -46,7 +46,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API_BASE_URL = BACKEND_URL || 'http://localhost:8000';
 
 export default function ProfilePageEMIS() {
   // State for student data
