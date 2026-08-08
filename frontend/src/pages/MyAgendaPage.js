@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Calendar, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calendar, Search, Eye, EyeOff, Clock, TrendingUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -64,6 +64,7 @@ const STATUS_OPTIONS = [
 export default function MyAgendaPage() {
   const { user } = useAuth();
   const [agendas, setAgendas] = useState([]);
+  const [stats, setStats] = useState(null);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -79,6 +80,7 @@ export default function MyAgendaPage() {
 
   useEffect(() => {
     loadData();
+    loadStats();
     // Update waktu setiap detik untuk auto-update status
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -94,6 +96,15 @@ export default function MyAgendaPage() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const { data } = await api.get('/staff-events/stats/duration');
+      setStats(data);
+    } catch (e) {
+      console.error('Failed to load stats', e);
     }
   };
 
@@ -143,6 +154,7 @@ export default function MyAgendaPage() {
       }
       setOpen(false);
       loadData();
+      loadStats(); // Refresh statistics
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal menyimpan agenda');
     } finally {
@@ -157,6 +169,7 @@ export default function MyAgendaPage() {
       await api.delete(`/staff-events/${agenda.id}`);
       toast.success('Agenda berhasil dihapus');
       loadData();
+      loadStats(); // Refresh statistics
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal menghapus agenda');
     }
@@ -210,6 +223,67 @@ export default function MyAgendaPage() {
         </Button>
       </div>
 
+      {/* Statistics Widget */}
+      {stats && stats.total_events > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-50">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Rata-rata Durasi</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.avg_duration_days} Hari</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Clock className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Rata-rata Jam/Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.avg_duration_hours} Jam</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-50">
+                  <Calendar className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Multi-Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.multi_day_count} Agenda</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-50">
+                  <Calendar className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Single-Hari</p>
+                  <p className="text-lg font-bold text-slate-900">{stats.single_day_count} Agenda</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="p-4 border-b border-slate-100">
@@ -259,10 +333,18 @@ export default function MyAgendaPage() {
                     const categoryInfo = categoryOptions.find(c => c.value === agenda.category);
                     const priorityInfo = PRIORITY_OPTIONS.find(p => p.value === agenda.priority);
 
+                    // Format date range
+                    const startDate = agenda.date ? new Date(agenda.date + 'T00:00:00') : null;
+                    const endDate = agenda.end_date ? new Date(agenda.end_date + 'T00:00:00') : null;
+                    const isMultiDay = endDate && startDate && endDate.getTime() !== startDate.getTime();
+                    const dateDisplay = !startDate ? '-' : !isMultiDay
+                      ? startDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : `${startDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} - ${endDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
                     return (
                       <TableRow key={agenda.id}>
                         <TableCell>
-                          <div className="font-medium">{new Date(agenda.date + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                          <div className="font-medium">{dateDisplay}</div>
                           <div className="text-xs text-slate-500">{agenda.start_time} - {agenda.end_time}</div>
                         </TableCell>
                         <TableCell>

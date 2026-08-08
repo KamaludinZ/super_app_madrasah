@@ -358,8 +358,23 @@ export default function AdminMadrasahEventsPage() {
 }
 
 function EventCard({ event, canEdit, onEdit, onDelete }) {
-  const date = event.date ? new Date(event.date + 'T00:00:00') : null;
-  const dayName = date ? ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()] : '';
+  const startDate = event.date ? new Date(event.date + 'T00:00:00') : null;
+  const endDate = event.end_date ? new Date(event.end_date + 'T00:00:00') : null;
+  const displayDate = startDate;
+  const dayName = displayDate ? ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][displayDate.getDay()] : '';
+
+  // Check if it's a multi-day event
+  const isMultiDay = endDate && startDate && endDate.getTime() !== startDate.getTime();
+
+  // Format date range string
+  const getDateRangeText = () => {
+    if (!startDate) return '';
+    if (!isMultiDay) {
+      return `${dayName}, ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    }
+    // Multi-day format
+    return `${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  };
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -368,10 +383,10 @@ function EventCard({ event, canEdit, onEdit, onDelete }) {
           {/* Date Badge */}
           <div className="flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-gradient-to-br from-[#006837] to-[#0B7A3B] text-white shrink-0">
             <div className="text-2xl font-extrabold leading-none">
-              {date ? date.getDate() : '-'}
+              {displayDate ? displayDate.getDate() : '-'}
             </div>
             <div className="text-[10px] uppercase font-semibold opacity-90">
-              {date ? MONTH_LABELS[date.getMonth() + 1].substring(0, 3) : ''}
+              {displayDate ? MONTH_LABELS[displayDate.getMonth() + 1].substring(0, 3) : ''}
             </div>
           </div>
 
@@ -380,9 +395,9 @@ function EventCard({ event, canEdit, onEdit, onDelete }) {
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg leading-tight">{event.name}</h3>
-                {date && (
+                {displayDate && (
                   <Badge className="bg-slate-100 text-slate-700 text-xs mt-1">
-                    {dayName}, {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {getDateRangeText()}
                   </Badge>
                 )}
               </div>

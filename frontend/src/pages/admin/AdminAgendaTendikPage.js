@@ -258,10 +258,18 @@ export default function AdminAgendaTendikPage() {
                     const categoryInfo = CATEGORY_OPTIONS.find(c => c.value === agenda.category);
                     const priorityInfo = PRIORITY_OPTIONS.find(p => p.value === agenda.priority);
 
+                    // Format date range
+                    const startDate = agenda.date ? new Date(agenda.date + 'T00:00:00') : null;
+                    const endDate = agenda.end_date ? new Date(agenda.end_date + 'T00:00:00') : null;
+                    const isMultiDay = endDate && startDate && endDate.getTime() !== startDate.getTime();
+                    const dateDisplay = !startDate ? '-' : !isMultiDay
+                      ? startDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : `${startDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} - ${endDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
                     return (
                       <TableRow key={agenda.id}>
                         <TableCell>
-                          <div className="font-medium">{new Date(agenda.date + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                          <div className="font-medium">{dateDisplay}</div>
                           <div className="text-xs text-slate-500">{agenda.start_time} - {agenda.end_time}</div>
                         </TableCell>
                         <TableCell>

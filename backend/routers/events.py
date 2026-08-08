@@ -1,5 +1,6 @@
 """Events router - Madrasah events and staff events management."""
 from typing import Dict, Optional
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -65,6 +66,7 @@ async def create_madrasah_event(
         name=payload['name'],
         description=payload.get('description'),
         date=payload['date'],
+        end_date=payload.get('end_date'),
         start_time=payload['start_time'],
         end_time=payload['end_time'],
         location=payload['location'],
@@ -217,6 +219,7 @@ async def create_staff_event(
         event_name=payload['event_name'],
         description=payload.get('description'),
         date=payload['date'],
+        end_date=payload.get('end_date'),
         start_time=payload['start_time'],
         end_time=payload['end_time'],
         location=payload.get('location'),
@@ -289,3 +292,93 @@ async def delete_staff_event(
     await log_audit(user, 'delete', 'staff_event', event_id, request=request)
 
     return {'message': 'Event berhasil dihapus'}
+
+
+# ============================================================
+# EVENT STATISTICS
+# ============================================================
+@router.get("/staff-events/stats/duration")
+async def get_staff_events_duration_stats(
+    user_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Get duration statistics for staff events - average duration in days and hours."""
+    q = {}
+
+    # Admin and unit_pelayanan can filter by user_id, others only see their own
+    is_admin = 'admin' in user.get('roles', [])
+    is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
+    if user_id and (is_admin or is_unit_pelayanan):
+        q['user_id'] = user_id
+    elif not (is_admin or is_unit_pelayanan):
+        q['user_id'] = user['id']
+
+    # Get all events
+    events = await db.staff_events.find(q, {'_id': 0, 'date': 1, 'end_date': 1, 'start_time': 1, 'end_time': 1}).to_list(10000)
+
+    if not events:
+        return {
+            'total_events': 0,
+            'avg_duration_days': 0,
+            'avg_duration_hours': 0,
+            'total_duration_days': 0,
+            'multi_day_count': 0,
+            'single_day_count': 0
+        }
+
+    total_duration_days = 0
+    total_duration_hours = 0
+    multi_day_count = 0
+    single_day_count = 0
+
+    for event in events:
+        start_date_str = event.get('date')
+        end_date_str = event.get('end_date')
+        start_time_str = event.get('start_time', '00:00')
+        end_time_str = event.get('end_time', '23:59')
+
+        if not start_date_str:
+            continue
+
+        try:
+            # Parse dates
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
+
+            # Calculate day duration
+            day_duration = (end_date - start_date).days + 1  # +1 to include both start and end day
+            total_duration_days += day_duration
+
+            if day_duration > 1:
+                multi_day_count += 1
+            else:
+                single_day_count += 1
+
+            # Calculate hour duration for single-day events
+            if day_duration == 1:
+                try:
+                    start_time = datetime.strptime(start_time_str, '%H:%M').time()
+                    end_time = datetime.strptime(end_time_str, '%H:%M').time()
+
+                    start_datetime = datetime.combine(start_date, start_time)
+                    end_datetime = datetime.combine(start_date, end_time)
+
+                    hour_duration = (end_datetime - start_datetime).total_seconds() / 3600
+                    total_duration_hours += hour_duration
+                except:
+                    pass
+        except:
+            continue
+
+    total_events = len(events)
+    avg_duration_days = total_duration_days / total_events if total_events > 0 else 0
+    avg_duration_hours = total_duration_hours / single_day_count if single_day_count > 0 else 0
+
+    return {
+        'total_events': total_events,
+        'avg_duration_days': round(avg_duration_days, 1),
+        'avg_duration_hours': round(avg_duration_hours, 1),
+        'total_duration_days': total_duration_days,
+        'multi_day_count': multi_day_count,
+        'single_day_count': single_day_count
+    }
