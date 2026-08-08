@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   Users, BookOpen, Building2, Calendar, ClipboardCheck, ShieldCheck,
   GraduationCap, Settings, QrCode, ExternalLink, Trophy, UserMinus, UserPlus,
-  Award, Globe, Flag, MapPin, School,
+  Award, Globe, Flag, MapPin, School, Megaphone,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -15,12 +16,30 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [studStats, setStudStats] = useState(null);
   const [achStats, setAchStats] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     api.get('/admin/stats').then(({ data }) => setStats(data)).catch(() => {});
     api.get('/admin/stats/students').then(({ data }) => setStudStats(data)).catch(() => {});
     api.get('/admin/stats/achievements').then(({ data }) => setAchStats(data)).catch(() => {});
+    loadAnnouncements();
   }, []);
+
+  const loadAnnouncements = async () => {
+    try {
+      const { data } = await api.get('/announcements');
+      setAnnouncements(data.slice(0, 3)); // Show only 3 latest
+    } catch (e) {}
+  };
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'critical': return 'bg-rose-100 text-rose-800 border-rose-200';
+      case 'warning': return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'success': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      default: return 'bg-sky-100 text-sky-800 border-sky-200';
+    }
+  };
 
   return (
     <div className="space-y-6" data-testid="admin-dashboard">
@@ -29,6 +48,41 @@ export default function AdminDashboard() {
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Selamat datang, {user?.full_name?.split(' ')[0] || 'Admin'}</h1>
         <p className="text-sm text-slate-600 mt-1">Tahun Pelajaran Aktif: <span className="font-mono font-semibold">{stats?.active_academic_year || '-'}</span></p>
       </div>
+
+      {/* Pengumuman Section */}
+      {announcements.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-lg">Pengumuman</CardTitle>
+              </div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/pengumuman">Lihat Semua</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {announcements.map((ann) => (
+              <div
+                key={ann.id}
+                className={`p-3 rounded-lg border ${getSeverityColor(ann.severity)}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-sm">{ann.title}</h3>
+                    <p className="text-xs mt-1 line-clamp-2">{ann.body}</p>
+                  </div>
+                  {ann.is_pinned && (
+                    <Badge variant="outline" className="text-xs">Pinned</Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Stats - General */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="general-stats">

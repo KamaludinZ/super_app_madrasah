@@ -69,6 +69,10 @@ export default function AdminAnnouncementsPage() {
     setForm((f) => {
       let roles = [...f.target_roles];
       if (r === 'all') {
+        // Toggle 'all': if currently selected, deselect and clear, otherwise select 'all'
+        if (roles.includes('all')) {
+          return { ...f, target_roles: [] };
+        }
         return { ...f, target_roles: ['all'] };
       }
       roles = roles.filter((x) => x !== 'all');

@@ -10,6 +10,29 @@ import { Link } from 'react-router-dom';
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
+const HOLIDAY_CATEGORIES = {
+  libur_nasional: {
+    label: 'Libur Nasional',
+    color: 'bg-rose-50 border-rose-200 text-rose-700',
+    dotColor: 'bg-rose-500'
+  },
+  libur_keagamaan: {
+    label: 'Libur Keagamaan',
+    color: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    dotColor: 'bg-emerald-500'
+  },
+  libur_semester: {
+    label: 'Libur Semester',
+    color: 'bg-blue-50 border-blue-200 text-blue-700',
+    dotColor: 'bg-blue-500'
+  },
+  kegiatan_akademik: {
+    label: 'Kegiatan Akademik',
+    color: 'bg-amber-50 border-amber-200 text-amber-700',
+    dotColor: 'bg-amber-500'
+  },
+};
+
 export default function SiswaDashboard() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -65,17 +88,28 @@ export default function SiswaDashboard() {
     return days;
   };
 
-  const isHoliday = (day) => {
-    if (!day) return false;
+  const getHolidaysForDate = (day) => {
+    if (!day) return [];
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return holidays.some(h => h.date === dateStr);
+
+    return holidays.filter(h => {
+      // Check if date falls within range
+      if (h.end_date && h.end_date > h.date) {
+        return dateStr >= h.date && dateStr <= h.end_date;
+      }
+      return h.date === dateStr;
+    });
   };
 
-  const getHolidayName = (day) => {
-    if (!day) return '';
-    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const holiday = holidays.find(h => h.date === dateStr);
-    return holiday?.name || '';
+  const isHoliday = (day) => {
+    return getHolidaysForDate(day).length > 0;
+  };
+
+  const getHolidayCategory = (day) => {
+    const dayHolidays = getHolidaysForDate(day);
+    if (dayHolidays.length === 0) return null;
+    // Return first holiday's category
+    return dayHolidays[0].category || 'libur_nasional';
   };
 
   const isToday = (day) => {
@@ -264,6 +298,10 @@ export default function SiswaDashboard() {
             {days.map((day, idx) => {
               const holiday = isHoliday(day);
               const today = isToday(day);
+              const category = getHolidayCategory(day);
+              const categoryStyle = category ? HOLIDAY_CATEGORIES[category] : null;
+              const dayHolidays = getHolidaysForDate(day);
+
               return (
                 <div
                   key={idx}
@@ -272,16 +310,16 @@ export default function SiswaDashboard() {
                       ? 'bg-slate-50 border-slate-100'
                       : today
                       ? 'bg-blue-100 border-blue-300 font-bold text-blue-900'
-                      : holiday
-                      ? 'bg-red-50 border-red-200 text-red-700 font-semibold'
+                      : holiday && categoryStyle
+                      ? `${categoryStyle.color} font-semibold`
                       : 'bg-white border-slate-200 hover:bg-slate-50'
                   }`}
-                  title={holiday ? getHolidayName(day) : ''}
+                  title={dayHolidays.map(h => h.name).join(', ')}
                 >
                   {day && (
                     <>
                       <span>{day}</span>
-                      {holiday && <div className="h-1 w-1 rounded-full bg-red-500 mt-0.5"></div>}
+                      {holiday && categoryStyle && <div className={`h-1 w-1 rounded-full ${categoryStyle.dotColor} mt-0.5`}></div>}
                     </>
                   )}
                 </div>
@@ -295,24 +333,39 @@ export default function SiswaDashboard() {
               holidayDate.getFullYear() === currentMonth.getFullYear()
             );
           }).length > 0 && (
-            <div className="mt-4 pt-4 border-t space-y-2">
-              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Libur Bulan Ini:</p>
-              {holidays
-                .filter(h => {
-                  const holidayDate = new Date(h.date);
-                  return (
-                    holidayDate.getMonth() === currentMonth.getMonth() &&
-                    holidayDate.getFullYear() === currentMonth.getFullYear()
-                  );
-                })
-                .map((h) => (
-                  <div key={h.id} className="flex items-start gap-2 text-sm">
-                    <Badge variant="outline" className="text-red-600 border-red-300 shrink-0">
-                      {new Date(h.date).getDate()}
-                    </Badge>
-                    <span className="text-slate-700">{h.name}</span>
-                  </div>
-                ))}
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">Kalender Bulan Ini:</p>
+              <div className="space-y-2">
+                {holidays
+                  .filter(h => {
+                    const holidayDate = new Date(h.date);
+                    return (
+                      holidayDate.getMonth() === currentMonth.getMonth() &&
+                      holidayDate.getFullYear() === currentMonth.getFullYear()
+                    );
+                  })
+                  .map((h) => {
+                    const category = h.category || 'libur_nasional';
+                    const categoryStyle = HOLIDAY_CATEGORIES[category];
+                    const startDate = new Date(h.date);
+                    const endDate = h.end_date ? new Date(h.end_date) : null;
+                    const dateRange = endDate && endDate > startDate
+                      ? `${startDate.getDate()}-${endDate.getDate()}`
+                      : `${startDate.getDate()}`;
+
+                    return (
+                      <div key={h.id} className={`flex items-start gap-2 p-2 rounded-lg border ${categoryStyle.color}`}>
+                        <Badge variant="outline" className={`shrink-0 ${categoryStyle.color} border-0 font-bold`}>
+                          {dateRange}
+                        </Badge>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold">{h.name}</div>
+                          <div className="text-xs opacity-75">{categoryStyle.label}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
         </CardContent>
