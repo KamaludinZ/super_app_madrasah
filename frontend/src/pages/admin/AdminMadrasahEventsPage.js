@@ -35,6 +35,7 @@ export default function AdminMadrasahEventsPage() {
     name: '',
     description: '',
     date: '',
+    end_date: '',
     start_time: '',
     end_time: '',
     location: '',
@@ -67,6 +68,7 @@ export default function AdminMadrasahEventsPage() {
         name: event.name || '',
         description: event.description || '',
         date: event.date || '',
+        end_date: event.end_date || '',
         start_time: event.start_time || '',
         end_time: event.end_time || '',
         location: event.location || '',
@@ -78,6 +80,7 @@ export default function AdminMadrasahEventsPage() {
         name: '',
         description: '',
         date: '',
+        end_date: '',
         start_time: '',
         end_time: '',
         location: '',
@@ -276,9 +279,9 @@ export default function AdminMadrasahEventsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Tanggal <span className="text-red-500">*</span></Label>
+                <Label>Tanggal Mulai <span className="text-red-500">*</span></Label>
                 <Input
                   type="date"
                   value={form.date}
@@ -286,6 +289,18 @@ export default function AdminMadrasahEventsPage() {
                   required
                 />
               </div>
+              <div>
+                <Label>Tanggal Selesai</Label>
+                <Input
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                  min={form.date || undefined}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label>Jam Mulai <span className="text-red-500">*</span></Label>
                 <Input

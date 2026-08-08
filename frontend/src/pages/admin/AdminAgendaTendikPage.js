@@ -19,6 +19,7 @@ const EMPTY_FORM = {
   event_name: '',
   description: '',
   date: '',
+  end_date: '',
   start_time: '',
   end_time: '',
   location: '',
@@ -109,6 +110,7 @@ export default function AdminAgendaTendikPage() {
       event_name: agenda.event_name || '',
       description: agenda.description || '',
       date: agenda.date || '',
+      end_date: agenda.end_date || '',
       start_time: agenda.start_time || '',
       end_time: agenda.end_time || '',
       location: agenda.location || '',
@@ -401,18 +403,25 @@ export default function AdminAgendaTendikPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label>Tanggal <span className="text-red-500">*</span></Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                <Label>Tanggal Mulai <span className="text-red-500">*</span></Label>
+                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
               </div>
               <div>
+                <Label>Tanggal Selesai</Label>
+                <Input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} min={form.date || undefined} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
                 <Label>Jam Mulai <span className="text-red-500">*</span></Label>
-                <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+                <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} required />
               </div>
               <div>
                 <Label>Jam Selesai <span className="text-red-500">*</span></Label>
-                <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+                <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} required />
               </div>
             </div>
 

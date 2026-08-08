@@ -1233,7 +1233,8 @@ class MadrasahEventModel(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str  # Nama kegiatan
     description: Optional[str] = None
-    date: str  # Format: YYYY-MM-DD
+    date: str  # Format: YYYY-MM-DD (tanggal mulai, backward compatible)
+    end_date: Optional[str] = None  # Format: YYYY-MM-DD (tanggal selesai, opsional)
     start_time: str  # Format: HH:MM
     end_time: str  # Format: HH:MM
     location: str  # Tempat kegiatan
@@ -1251,7 +1252,8 @@ class StaffEventModel(BaseModel):
     user_id: str  # ID pegawai
     event_name: str  # Nama kegiatan
     description: Optional[str] = None
-    date: str  # Format: YYYY-MM-DD
+    date: str  # Format: YYYY-MM-DD (tanggal mulai, backward compatible)
+    end_date: Optional[str] = None  # Format: YYYY-MM-DD (tanggal selesai, opsional)
     start_time: str  # Format: HH:MM
     end_time: str  # Format: HH:MM
     location: Optional[str] = None
