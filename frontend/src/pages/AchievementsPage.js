@@ -136,11 +136,15 @@ export default function AchievementsPage() {
           if (isWaliKelas) {
             // Wali kelas only sees students from their class
             const myClass = user?.managed_class_id;
+            console.log('Wali Kelas - managed_class_id:', myClass);
             if (myClass) {
-              setStudents(all.filter((u) =>
+              const filteredStudents = all.filter((u) =>
                 (u.roles || []).includes('siswa') && u.class_id === myClass
-              ));
+              );
+              console.log('Filtered students for class:', filteredStudents);
+              setStudents(filteredStudents);
             } else {
+              console.warn('Wali kelas has no managed_class_id assigned');
               setStudents([]); // No class assigned
             }
           } else {
@@ -154,7 +158,7 @@ export default function AchievementsPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRole]);
+  }, [activeRole, user?.managed_class_id]);
 
   // Default holder tab can be siswa for admin, but allow switching
   const openCreate = () => {
@@ -630,13 +634,23 @@ export default function AchievementsPage() {
             {/* Holder ID/Name selector based on type */}
             {form.holder_type === 'siswa' && (isAdmin || isWaliKelas) && (
               <div className="sm:col-span-2">
-                <Label>Siswa *</Label>
+                <Label>Siswa * {isWaliKelas && students.length > 0 && `(${students.length} siswa di kelas Anda)`}</Label>
                 <Select value={form.holder_id || ''} onValueChange={(v) => setForm({ ...form, holder_id: v })}>
                   <SelectTrigger data-testid="ach-form-student"><SelectValue placeholder="Pilih siswa..." /></SelectTrigger>
                   <SelectContent>
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.full_name} {s.nisn ? `(${s.nisn})` : ''}</SelectItem>
-                    ))}
+                    {students.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        {isWaliKelas ? 'Tidak ada siswa di kelas Anda' : 'Tidak ada data siswa'}
+                      </SelectItem>
+                    ) : (
+                      students
+                        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.full_name} {s.nisn ? `(NISN: ${s.nisn})` : ''} {s.class_name ? `- ${s.class_name}` : ''}
+                          </SelectItem>
+                        ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
