@@ -50,8 +50,9 @@ export default function MySchedulePage() {
   const [sortColumn, setSortColumn] = useState('day'); // day, jam, jtm, class, subject, room
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
-  // Check if user is wali kelas
+  // Check if user is wali kelas or siswa
   const isWaliKelas = user?.roles?.includes('wali_kelas');
+  const isSiswa = user?.roles?.includes('siswa');
   const homeroomClassId = user?.homeroom_class_id;
 
   const loadGridData = async () => {
@@ -711,8 +712,8 @@ export default function MySchedulePage() {
                   ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                 </div>
               </TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Aksi</TableHead>
+              {!isSiswa && <TableHead>Status</TableHead>}
+              {!isSiswa && <TableHead className="text-right">Aksi</TableHead>}
             </TableRow></TableHeader>
             <TableBody>
               {sortedItems.map((s) => (
@@ -733,41 +734,43 @@ export default function MySchedulePage() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{s.room_name || '-'}</TableCell>
-                  <TableCell><StatusBadge status={s.status} /></TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {s.status === 'draft' && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => handleSubmitDraft(s)}
-                            className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-1"
-                            data-testid={`submit-${s.id}`}>
-                            <Send className="h-3.5 w-3.5" /> Kirim
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => openEdit(s)} data-testid={`edit-${s.id}`}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600" data-testid={`delete-${s.id}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {s.status === 'submitted' && (
-                        <Badge variant="outline" className="text-xs gap-1">
-                          <Send className="h-3 w-3 text-blue-600" /> Menunggu Persetujuan
-                        </Badge>
-                      )}
-                      {s.status === 'approved' && (
-                        <Badge variant="outline" className="text-xs gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Disetujui
-                        </Badge>
-                      )}
-                      {s.status === 'locked' && (
-                        <Badge variant="outline" className="text-xs gap-1">
-                          <Lock className="h-3 w-3 text-rose-600" /> Final
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
+                  {!isSiswa && <TableCell><StatusBadge status={s.status} /></TableCell>}
+                  {!isSiswa && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {s.status === 'draft' && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => handleSubmitDraft(s)}
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-1"
+                              data-testid={`submit-${s.id}`}>
+                              <Send className="h-3.5 w-3.5" /> Kirim
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => openEdit(s)} data-testid={`edit-${s.id}`}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleDelete(s)} className="text-rose-600" data-testid={`delete-${s.id}`}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {s.status === 'submitted' && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Send className="h-3 w-3 text-blue-600" /> Menunggu Persetujuan
+                          </Badge>
+                        )}
+                        {s.status === 'approved' && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Disetujui
+                          </Badge>
+                        )}
+                        {s.status === 'locked' && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Lock className="h-3 w-3 text-rose-600" /> Final
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {items.length === 0 && (

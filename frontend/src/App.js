@@ -51,6 +51,7 @@ import GradesInputPage from '@/pages/GradesInputPage';
 import RaporPage from '@/pages/RaporPage';
 import AnnouncementsListPage from '@/pages/AnnouncementsListPage';
 import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage';
+import AdminAplikasiMadrasahPage from '@/pages/admin/AdminAplikasiMadrasahPage';
 import AdminCurriculumsPage from '@/pages/admin/AdminCurriculumsPage';
 import AdminGTKPage from '@/pages/admin/AdminGTKPage';
 import AdminGTKDetailPage from '@/pages/admin/AdminGTKDetailPage';
@@ -215,6 +216,7 @@ function App() {
             <Route path="/admin/holidays" element={<AdminHolidaysPage />} />
             <Route path="/admin/backup" element={<AdminBackupPage />} />
             <Route path="/admin/pengumuman" element={<AdminAnnouncementsPage />} />
+            <Route path="/admin/aplikasi-madrasah" element={<AdminAplikasiMadrasahPage />} />
             <Route path="/admin/kurikulum" element={<AdminCurriculumsPage />} />
             <Route path="/admin/app-info" element={<AdminAppInfoPage />} />
             <Route path="/piket/tugas" element={<PiketTasksPage />} />
