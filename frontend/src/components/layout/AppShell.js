@@ -106,6 +106,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-waka-humas-kegiatan' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-waka-humas' });
     items.push({ to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-waka-humas-announcements' });
+    items.push({ to: '/admin/aplikasi-madrasah', label: 'Aplikasi Madrasah', icon: Globe, testid: 'nav-waka-humas-apps' });
   } else if (role === 'bendahara') {
     items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-bendahara-rkam' });
     items.push({ to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-bendahara-pip-penerima' });
@@ -200,6 +201,7 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-admin-laporan' },
           { to: '/piket/tugas', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-admin-piket-tasks' },
           { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-admin-announcements' },
+          { to: '/admin/aplikasi-madrasah', label: 'Aplikasi Madrasah', icon: Globe, testid: 'nav-admin-apps' },
         ],
       },
       {
