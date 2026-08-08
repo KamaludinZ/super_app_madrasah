@@ -12,7 +12,7 @@ import {
   ClipboardEdit, FileText,
   CalendarDays, Database, ListChecks, ArrowRightLeft,
   Megaphone, ChevronDown, Briefcase, Info, CheckCircle2, UserCircle, HelpCircle,
-  Target, Award, DollarSign, LogIn, Loader2,
+  Target, Award, DollarSign, LogIn, Loader2, Globe,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
