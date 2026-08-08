@@ -3,10 +3,9 @@ from typing import List, Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from datetime import datetime
-from database import get_db
-from auth_utils import get_current_user
+from core import db, get_current_user
 
-router = APIRouter(prefix="/api", tags=["school_apps"])
+router = APIRouter(tags=["school_apps"])
 
 class SchoolAppCreate(BaseModel):
     name: str
@@ -54,29 +53,27 @@ def serialize_app(app) -> dict:
 
 # Public endpoint - get active apps for students/users
 @router.get("/school-apps", response_model=List[SchoolAppResponse])
-async def get_active_school_apps(db=Depends(get_db)):
+async def get_active_school_apps():
     """Get all active school applications"""
-    apps = list(db.school_apps.find({"is_active": True}).sort("order", 1))
+    apps = await db.school_apps.find({"is_active": True}).sort("order", 1).to_list(100)
     return [serialize_app(app) for app in apps]
 
 # Admin endpoints
 @router.get("/admin/school-apps", response_model=List[SchoolAppResponse])
 async def get_all_school_apps(
-    current_user: dict = Depends(get_current_user),
-    db=Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Get all school applications (admin only)"""
     if "admin" not in current_user.get("roles", []) and "waka_humas" not in current_user.get("roles", []):
         raise HTTPException(status_code=403, detail="Tidak memiliki akses")
 
-    apps = list(db.school_apps.find().sort("order", 1))
+    apps = await db.school_apps.find().sort("order", 1).to_list(100)
     return [serialize_app(app) for app in apps]
 
 @router.post("/admin/school-apps", response_model=SchoolAppResponse)
 async def create_school_app(
     app_data: SchoolAppCreate,
-    current_user: dict = Depends(get_current_user),
-    db=Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Create new school application (admin only)"""
     if "admin" not in current_user.get("roles", []) and "waka_humas" not in current_user.get("roles", []):
@@ -92,10 +89,10 @@ async def create_school_app(
         "order": app_data.order,
         "created_at": now,
         "updated_at": now,
-        "created_by": str(current_user["_id"]),
+        "created_by": current_user.get("id", ""),
     }
 
-    result = db.school_apps.insert_one(app_doc)
+    result = await db.school_apps.insert_one(app_doc)
     app_doc["_id"] = result.inserted_id
 
     return serialize_app(app_doc)
@@ -104,24 +101,23 @@ async def create_school_app(
 async def update_school_app(
     app_id: str,
     app_data: SchoolAppUpdate,
-    current_user: dict = Depends(get_current_user),
-    db=Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Update school application (admin only)"""
     if "admin" not in current_user.get("roles", []) and "waka_humas" not in current_user.get("roles", []):
         raise HTTPException(status_code=403, detail="Tidak memiliki akses")
 
     try:
-        app = db.school_apps.find_one({"_id": ObjectId(app_id)})
+        app = await db.school_apps.find_one({"_id": ObjectId(app_id)})
         if not app:
             raise HTTPException(status_code=404, detail="Aplikasi tidak ditemukan")
 
         update_data = {k: v for k, v in app_data.dict(exclude_unset=True).items() if v is not None}
         if update_data:
             update_data["updated_at"] = datetime.utcnow().isoformat()
-            db.school_apps.update_one({"_id": ObjectId(app_id)}, {"$set": update_data})
+            await db.school_apps.update_one({"_id": ObjectId(app_id)}, {"$set": update_data})
 
-        updated_app = db.school_apps.find_one({"_id": ObjectId(app_id)})
+        updated_app = await db.school_apps.find_one({"_id": ObjectId(app_id)})
         return serialize_app(updated_app)
 
     except Exception as e:
@@ -132,15 +128,14 @@ async def update_school_app(
 @router.delete("/admin/school-apps/{app_id}")
 async def delete_school_app(
     app_id: str,
-    current_user: dict = Depends(get_current_user),
-    db=Depends(get_db)
+    current_user: dict = Depends(get_current_user)
 ):
     """Delete school application (admin only)"""
     if "admin" not in current_user.get("roles", []) and "waka_humas" not in current_user.get("roles", []):
         raise HTTPException(status_code=403, detail="Tidak memiliki akses")
 
     try:
-        result = db.school_apps.delete_one({"_id": ObjectId(app_id)})
+        result = await db.school_apps.delete_one({"_id": ObjectId(app_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Aplikasi tidak ditemukan")
 

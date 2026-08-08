@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog, FileText, User } from 'lucide-react';
+import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog, FileText, User, Eye, EyeOff, Globe } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -231,6 +231,7 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="jurnal" data-testid="tab-jurnal-config">Jurnal & GPS</TabsTrigger>
           <TabsTrigger value="session" data-testid="tab-session">Sesi & Keamanan</TabsTrigger>
           <TabsTrigger value="smtp" data-testid="tab-smtp">SMTP & Email</TabsTrigger>
+          <TabsTrigger value="public-pages" data-testid="tab-public-pages">Halaman Public</TabsTrigger>
           <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
         </TabsList>
 
@@ -595,6 +596,188 @@ export default function AdminSettingsPage() {
                   Isi <strong>SMTP Host</strong> terlebih dahulu, lalu klik <strong>Simpan Pengaturan</strong>, baru lakukan uji coba.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="public-pages" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                  <Globe className="h-5 w-5 text-blue-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Pengaturan Halaman Public</h2>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Atur visibilitas halaman public: akses terbuka untuk umum, disembunyikan, atau hanya tampil di dashboard untuk user yang login.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                {/* RKAM Page */}
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold">RKAM (Rencana Kerja & Anggaran Madrasah)</Label>
+                      <p className="text-xs text-slate-600 mt-0.5">Halaman /public/rkam</p>
+                    </div>
+                    <Select
+                      value={form.rkam_visibility || 'public'}
+                      onValueChange={(v) => setForm({...form, rkam_visibility: v})}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5" />
+                            <span>Public (Terbuka)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="hidden">
+                          <div className="flex items-center gap-2">
+                            <EyeOff className="h-3.5 w-3.5" />
+                            <span>Disembunyikan</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dashboard">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Dashboard Only</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Agenda Page */}
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold">Agenda Kegiatan Madrasah</Label>
+                      <p className="text-xs text-slate-600 mt-0.5">Halaman /public/agenda</p>
+                    </div>
+                    <Select
+                      value={form.agenda_visibility || 'public'}
+                      onValueChange={(v) => setForm({...form, agenda_visibility: v})}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5" />
+                            <span>Public (Terbuka)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="hidden">
+                          <div className="flex items-center gap-2">
+                            <EyeOff className="h-3.5 w-3.5" />
+                            <span>Disembunyikan</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dashboard">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Dashboard Only</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Prestasi Page */}
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold">Prestasi Siswa</Label>
+                      <p className="text-xs text-slate-600 mt-0.5">Halaman /public/prestasi</p>
+                    </div>
+                    <Select
+                      value={form.prestasi_visibility || 'public'}
+                      onValueChange={(v) => setForm({...form, prestasi_visibility: v})}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5" />
+                            <span>Public (Terbuka)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="hidden">
+                          <div className="flex items-center gap-2">
+                            <EyeOff className="h-3.5 w-3.5" />
+                            <span>Disembunyikan</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dashboard">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Dashboard Only</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Monitoring Page */}
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label className="text-sm font-semibold">Monitoring Aktivitas Guru</Label>
+                      <p className="text-xs text-slate-600 mt-0.5">Halaman /public/monitoring</p>
+                    </div>
+                    <Select
+                      value={form.monitoring_visibility || 'public'}
+                      onValueChange={(v) => setForm({...form, monitoring_visibility: v})}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-3.5 w-3.5" />
+                            <span>Public (Terbuka)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="hidden">
+                          <div className="flex items-center gap-2">
+                            <EyeOff className="h-3.5 w-3.5" />
+                            <span>Disembunyikan</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dashboard">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Dashboard Only</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                <strong>Keterangan:</strong>
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  <li><strong>Public (Terbuka):</strong> Dapat diakses siapa saja tanpa login melalui /public/*</li>
+                  <li><strong>Disembunyikan:</strong> Halaman tidak dapat diakses baik public maupun dashboard</li>
+                  <li><strong>Dashboard Only:</strong> Hanya tampil di menu dashboard untuk user yang sudah login, tidak bisa diakses public</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

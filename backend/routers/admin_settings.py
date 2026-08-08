@@ -11,6 +11,18 @@ from email_utils import send_email
 router = APIRouter()
 
 
+@router.get("/settings/public-pages")
+async def get_public_pages_visibility():
+    """Get public pages visibility settings - accessible without auth for routing decisions"""
+    settings = await get_settings()
+    return {
+        'rkam_visibility': settings.get('rkam_visibility', 'public'),
+        'agenda_visibility': settings.get('agenda_visibility', 'public'),
+        'prestasi_visibility': settings.get('prestasi_visibility', 'public'),
+        'monitoring_visibility': settings.get('monitoring_visibility', 'public'),
+    }
+
+
 @router.get("/admin/settings")
 async def get_full_settings(user: Dict = Depends(require_role('admin'))):
     return await get_settings()

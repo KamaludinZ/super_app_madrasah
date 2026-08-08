@@ -91,6 +91,7 @@ import ProfilePageTendik from '@/pages/ProfilePageTendik';
 import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
+import { PublicPageGuard } from '@/components/PublicPageGuard';
 
 import './App.css';
 
@@ -163,10 +164,10 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/public/monitoring" element={<PublicMonitoring />} />
-          <Route path="/public/prestasi" element={<PublicPrestasi />} />
-          <Route path="/public/agenda" element={<PublicAgenda />} />
-          <Route path="/public/rkam" element={<PublicRKAMPage />} />
+          <Route path="/public/monitoring" element={<PublicPageGuard pageName="monitoring"><PublicMonitoring /></PublicPageGuard>} />
+          <Route path="/public/prestasi" element={<PublicPageGuard pageName="prestasi"><PublicPrestasi /></PublicPageGuard>} />
+          <Route path="/public/agenda" element={<PublicPageGuard pageName="agenda"><PublicAgenda /></PublicPageGuard>} />
+          <Route path="/public/rkam" element={<PublicPageGuard pageName="rkam"><PublicRKAMPage /></PublicPageGuard>} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>

@@ -44,9 +44,12 @@ def _is_active(ann: Dict) -> bool:
 
 
 def _user_matches_roles(user: Dict, target_roles: List[str]) -> bool:
+    # Admin users can see all announcements
+    user_roles = set(user.get('roles', []))
+    if 'admin' in user_roles:
+        return True
     if not target_roles or 'all' in target_roles:
         return True
-    user_roles = set(user.get('roles', []))
     return bool(user_roles & set(target_roles))
 
 
@@ -118,7 +121,8 @@ async def list_my_announcements(user: Dict = Depends(get_current_user)):
     """List active announcements relevant to the current user (based on roles).
     Pinned first, then newest. Includes is_read flag.
     """
-    items = await db.announcements.find({'is_active': True}, {'_id': 0}).sort([
+    # Find announcements where is_active is True or None (default to active)
+    items = await db.announcements.find({'$or': [{'is_active': True}, {'is_active': None}, {'is_active': {'$exists': False}}]}, {'_id': 0}).sort([
         ('is_pinned', -1), ('created_at', -1)
     ]).to_list(200)
     reads = await db.announcement_reads.find({'user_id': user['id']}, {'_id': 0}).to_list(500)
@@ -149,8 +153,8 @@ async def list_notifications(user: Dict = Depends(get_current_user)):
     """
     out = []
 
-    # 1) Announcements
-    anns = await db.announcements.find({'is_active': True}, {'_id': 0}).sort([
+    # 1) Announcements (include None/missing is_active as active)
+    anns = await db.announcements.find({'$or': [{'is_active': True}, {'is_active': None}, {'is_active': {'$exists': False}}]}, {'_id': 0}).sort([
         ('is_pinned', -1), ('created_at', -1)
     ]).to_list(50)
     reads = await db.announcement_reads.find({'user_id': user['id']}, {'_id': 0}).to_list(500)
@@ -201,7 +205,8 @@ async def list_notifications(user: Dict = Depends(get_current_user)):
 @router.get("/notifications/unread-count")
 async def unread_count(user: Dict = Depends(get_current_user)):
     """Count of unread notifications for the topbar bell badge."""
-    anns = await db.announcements.find({'is_active': True}, {'_id': 0}).to_list(100)
+    # Include None/missing is_active as active
+    anns = await db.announcements.find({'$or': [{'is_active': True}, {'is_active': None}, {'is_active': {'$exists': False}}]}, {'_id': 0}).to_list(100)
     reads = await db.announcement_reads.find({'user_id': user['id']}, {'_id': 0}).to_list(500)
     read_set = {r['announcement_id'] for r in reads}
     count = 0
@@ -236,7 +241,8 @@ async def mark_notification_read(source: str, source_id: str, user: Dict = Depen
 @router.post("/notifications/mark-all-read")
 async def mark_all_read(user: Dict = Depends(get_current_user)):
     """Mark all announcements as read for this user."""
-    anns = await db.announcements.find({'is_active': True}, {'_id': 0, 'id': 1, 'target_roles': 1}).to_list(200)
+    # Include None/missing is_active as active
+    anns = await db.announcements.find({'$or': [{'is_active': True}, {'is_active': None}, {'is_active': {'$exists': False}}]}, {'_id': 0, 'id': 1, 'target_roles': 1}).to_list(200)
     relevant_ids = []
     for ann in anns:
         if _user_matches_roles(user, ann.get('target_roles') or ['all']):
