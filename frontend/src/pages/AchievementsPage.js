@@ -132,8 +132,22 @@ export default function AchievementsPage() {
         if (canVerify || isAdmin) {
           const usersResp = await api.get('/users');
           const all = usersResp.data || [];
-          setStudents(all.filter((u) => (u.roles || []).includes('siswa')));
-          setStaff(all.filter((u) => (u.roles || []).some((r) => r !== 'siswa')));
+
+          if (isWaliKelas) {
+            // Wali kelas only sees students from their class
+            const myClass = user?.managed_class_id;
+            if (myClass) {
+              setStudents(all.filter((u) =>
+                (u.roles || []).includes('siswa') && u.class_id === myClass
+              ));
+            } else {
+              setStudents([]); // No class assigned
+            }
+          } else {
+            // Admin sees all students
+            setStudents(all.filter((u) => (u.roles || []).includes('siswa')));
+            setStaff(all.filter((u) => (u.roles || []).some((r) => r !== 'siswa')));
+          }
         }
       } finally {
         setLoading(false);
@@ -148,7 +162,8 @@ export default function AchievementsPage() {
     let initialHolder = holderTab;
     let initialId = '';
     if (isSiswa) { initialHolder = 'siswa'; initialId = user?.id || ''; }
-    else if (isGuru) { initialHolder = 'guru'; initialId = user?.id || ''; }
+    else if (isWaliKelas) { initialHolder = 'siswa'; initialId = ''; } // Wali kelas always creates for siswa
+    else if (isGuru && !isWaliKelas) { initialHolder = 'guru'; initialId = user?.id || ''; }
     else if (isTendik) { initialHolder = 'tendik'; initialId = user?.id || ''; }
     setForm({ ...EMPTY, holder_type: initialHolder, holder_id: initialId });
     setOpen(true);
@@ -192,6 +207,7 @@ export default function AchievementsPage() {
         await api.post('/achievements', payload);
         toast.success('Prestasi disimpan');
       } else {
+        // Non-admin (siswa, guru, tendik, wali_kelas) - submit via verval request
         await api.post('/verval-requests', {
           user_id: user?.id,
           user_type: isSiswa ? 'siswa' : (isTendik ? 'tenaga_kependidikan' : 'guru'),
@@ -201,7 +217,7 @@ export default function AchievementsPage() {
           old_data: {},
           new_data: payload,
         });
-        toast.success('Pengajuan prestasi dikirim untuk review');
+        toast.success('Pengajuan prestasi dikirim untuk review admin');
       }
       setOpen(false);
       await refresh();
@@ -299,9 +315,10 @@ export default function AchievementsPage() {
 
   // Decide which holder tabs to show: siswa always; others if admin or pure tendik/guru
   const visibleHolderTabs = HOLDER_TABS.filter((t) => {
-    if (isAdmin || canVerify) return true;
+    if (isAdmin) return true; // Admin sees all tabs
+    if (isWaliKelas) return t.value === 'siswa'; // Wali kelas only sees siswa tab
     if (isSiswa) return t.value === 'siswa';
-    if (isGuru) return t.value === 'guru';
+    if (isGuru && !isWaliKelas) return t.value === 'guru'; // Pure guru (not wali kelas)
     if (isTendik) return t.value === 'tendik';
     return false;
   });
@@ -591,22 +608,24 @@ export default function AchievementsPage() {
             <DialogTitle>{editing ? 'Edit Prestasi' : 'Tambah Prestasi'}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            {/* Holder Type selector - locked for siswa/guru/tendik unless admin */}
-            <div className="sm:col-span-2">
-              <Label>Kategori Pemegang Prestasi *</Label>
-              <Select
-                value={form.holder_type}
-                onValueChange={(v) => setForm({ ...form, holder_type: v, holder_id: (isAdmin || (v === 'siswa' && isWaliKelas)) ? '' : user?.id })}
-                disabled={!isAdmin && editing}
-              >
-                <SelectTrigger data-testid="ach-form-holder-type"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {HOLDER_TABS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Holder Type selector - locked for siswa/guru/tendik unless admin - hidden for wali_kelas */}
+            {!isWaliKelas && (
+              <div className="sm:col-span-2">
+                <Label>Kategori Pemegang Prestasi *</Label>
+                <Select
+                  value={form.holder_type}
+                  onValueChange={(v) => setForm({ ...form, holder_type: v, holder_id: (isAdmin || (v === 'siswa' && isWaliKelas)) ? '' : user?.id })}
+                  disabled={!isAdmin && editing}
+                >
+                  <SelectTrigger data-testid="ach-form-holder-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HOLDER_TABS.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Holder ID/Name selector based on type */}
             {form.holder_type === 'siswa' && (isAdmin || isWaliKelas) && (
