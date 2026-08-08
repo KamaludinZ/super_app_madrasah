@@ -3,8 +3,8 @@ from typing import List, Optional
 from pydantic import BaseModel
 from bson import ObjectId
 from datetime import datetime
-from ..database import get_db
-from ..auth_utils import get_current_user
+from database import get_db
+from auth_utils import get_current_user
 
 router = APIRouter(prefix="/api", tags=["school_apps"])
 
