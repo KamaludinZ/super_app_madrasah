@@ -109,6 +109,19 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-bendahara-rkam' });
     items.push({ to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-bendahara-pip-penerima' });
     items.push({ to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-bendahara-pip-ajuan' });
+  } else if (role === 'kepala_sekolah') {
+    items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-kepsek-agenda' });
+    items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' });
+    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' });
+    items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' });
+    items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-kepsek-rkam' });
+  } else if (role === 'unit_pelayanan') {
+    items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-unitpel-kegiatan' });
+    items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-unitpel-agenda-guru' });
+    items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-unitpel-agenda-tendik' });
+    items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-unitpel-siswa' });
+    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-unitpel' });
   } else if (role === 'admin') {
     // Admin uses grouped menu structure
     return [

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 
 const EMPTY_FORM = {
   user_id: '',
@@ -42,6 +43,9 @@ const STATUS_OPTIONS = [
 ];
 
 export default function AdminAgendaGuruPage() {
+  const { activeRole } = useAuth();
+  const isAdmin = activeRole === 'admin';
+
   const [agendas, setAgendas] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [search, setSearch] = useState('');
@@ -272,9 +276,11 @@ export default function AdminAgendaGuruPage() {
                             <Button size="icon" variant="ghost" onClick={() => openEdit(agenda)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDelete(agenda)} className="text-rose-600">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isAdmin && (
+                              <Button size="icon" variant="ghost" onClick={() => handleDelete(agenda)} className="text-rose-600">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
