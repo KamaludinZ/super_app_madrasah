@@ -145,7 +145,7 @@ function ProfilePageByRole() {
   const roles = user?.roles || [];
 
   if (roles.includes('siswa')) return <Navigate to="/profile/siswa" replace />;
-  if (roles.includes('guru')) return <Navigate to="/profile/guru" replace />;
+  if (roles.includes('guru') || roles.includes('kepala_sekolah')) return <Navigate to="/profile/guru" replace />;
   if (roles.includes('tenaga_kependidikan')) return <Navigate to="/profile/tendik" replace />;
 
   return <Navigate to="/profile/guru" replace />;

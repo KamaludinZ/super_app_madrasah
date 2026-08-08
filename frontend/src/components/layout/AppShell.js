@@ -110,6 +110,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-bendahara-pip-penerima' });
     items.push({ to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-bendahara-pip-ajuan' });
   } else if (role === 'kepala_sekolah') {
+    items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-kepsek' });
     items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-kepsek-agenda' });
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' });
     items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' });
