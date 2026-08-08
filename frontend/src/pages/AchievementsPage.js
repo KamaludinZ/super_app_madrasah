@@ -130,25 +130,25 @@ export default function AchievementsPage() {
       try {
         await refresh();
         if (canVerify || isAdmin) {
-          const usersResp = await api.get('/users');
-          const all = usersResp.data || [];
-
           if (isWaliKelas) {
-            // Wali kelas only sees students from their class
-            const myClass = user?.managed_class_id;
-            console.log('Wali Kelas - managed_class_id:', myClass);
-            if (myClass) {
-              const filteredStudents = all.filter((u) =>
-                (u.roles || []).includes('siswa') && u.class_id === myClass
-              );
-              console.log('Filtered students for class:', filteredStudents);
-              setStudents(filteredStudents);
+            // Wali kelas uses /students endpoint with their homeroom_class_id
+            const myClassId = user?.homeroom_class_id;
+            console.log('Wali Kelas - homeroom_class_id:', myClassId);
+            if (myClassId) {
+              const studentsResp = await api.get('/students', {
+                params: { class_id: myClassId }
+              });
+              const classStudents = studentsResp.data || [];
+              console.log('Students from /students endpoint:', classStudents);
+              setStudents(classStudents);
             } else {
-              console.warn('Wali kelas has no managed_class_id assigned');
+              console.warn('Wali kelas has no homeroom_class_id assigned');
               setStudents([]); // No class assigned
             }
           } else {
-            // Admin sees all students
+            // Admin uses /users endpoint for all students and staff
+            const usersResp = await api.get('/users');
+            const all = usersResp.data || [];
             setStudents(all.filter((u) => (u.roles || []).includes('siswa')));
             setStaff(all.filter((u) => (u.roles || []).some((r) => r !== 'siswa')));
           }
@@ -158,7 +158,7 @@ export default function AchievementsPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRole, user?.managed_class_id]);
+  }, [activeRole, user?.homeroom_class_id]);
 
   // Default holder tab can be siswa for admin, but allow switching
   const openCreate = () => {
@@ -636,12 +636,17 @@ export default function AchievementsPage() {
               <div className="sm:col-span-2">
                 <Label>Siswa * {isWaliKelas && students.length > 0 && `(${students.length} siswa di kelas Anda)`}</Label>
                 <Select value={form.holder_id || ''} onValueChange={(v) => setForm({ ...form, holder_id: v })}>
-                  <SelectTrigger data-testid="ach-form-student"><SelectValue placeholder="Pilih siswa..." /></SelectTrigger>
+                  <SelectTrigger data-testid="ach-form-student">
+                    <SelectValue placeholder={students.length === 0
+                      ? (isWaliKelas ? 'Tidak ada siswa di kelas Anda' : 'Tidak ada data siswa')
+                      : 'Pilih siswa...'
+                    } />
+                  </SelectTrigger>
                   <SelectContent>
                     {students.length === 0 ? (
-                      <SelectItem value="" disabled>
+                      <div className="px-2 py-6 text-center text-sm text-slate-500">
                         {isWaliKelas ? 'Tidak ada siswa di kelas Anda' : 'Tidak ada data siswa'}
-                      </SelectItem>
+                      </div>
                     ) : (
                       students
                         .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
