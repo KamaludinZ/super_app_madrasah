@@ -556,7 +556,7 @@ async def admin_jurnal_rekap(
     subject_id: Optional[str] = None,
     semester_id: Optional[str] = None,
     limit: int = 500,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas'))
 ):
     """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id"""
     # Use user's view context semester if no semester_id provided in query
@@ -648,13 +648,21 @@ async def admin_jurnal_rekap(
 
 
 @router.get("/admin/jurnal/stats-by-teacher")
-async def admin_jurnal_stats_teacher(user: Dict = Depends(require_role('admin', 'kepala_sekolah'))):
-    """Aggregate jurnal count per guru, filtered by user's view context (semester)"""
+async def admin_jurnal_stats_teacher(
+    class_id: Optional[str] = None,
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas'))
+):
+    """Aggregate jurnal count per guru, filtered by user's view context (semester) and optionally by class_id"""
     ctx = await get_active_context(user)
     semester_id = ctx.get('semester_id')
     pipeline = []
+    match_filter = {}
     if semester_id:
-        pipeline.append({'$match': {'semester_id': semester_id}})
+        match_filter['semester_id'] = semester_id
+    if class_id:
+        match_filter['class_id'] = class_id
+    if match_filter:
+        pipeline.append({'$match': match_filter})
     pipeline.append({'$group': {'_id': '$teacher_id', 'count': {'$sum': 1}}})
     pipeline.append({'$sort': {'count': -1}})
     results = await db.journals.aggregate(pipeline).to_list(200)

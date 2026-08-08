@@ -403,9 +403,10 @@ export default function PublicPrestasi() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">No</TableHead>
                         <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('date')}>
                           <div className="flex items-center gap-1">
-                            Tanggal
+                            Tahun
                             {sortColumn === 'date' ? (
                               sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                             ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
@@ -413,24 +414,26 @@ export default function PublicPrestasi() {
                         </TableHead>
                         <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('title')}>
                           <div className="flex items-center gap-1">
-                            Prestasi
+                            Nama Lomba
                             {sortColumn === 'title' ? (
                               sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                             ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
-                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('level')}>
+                        <TableHead>Bidang Lomba</TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('holder')}>
                           <div className="flex items-center gap-1">
-                            Tingkat
-                            {sortColumn === 'level' ? (
+                            Pemegang
+                            {sortColumn === 'holder' ? (
                               sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                             ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
-                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('holder')}>
+                        <TableHead>Penyelenggara</TableHead>
+                        <TableHead className="cursor-pointer hover:bg-slate-50" onClick={() => handleSort('level')}>
                           <div className="flex items-center gap-1">
-                            Penerima
-                            {sortColumn === 'holder' ? (
+                            Tingkat Lomba
+                            {sortColumn === 'level' ? (
                               sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                             ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
@@ -443,30 +446,29 @@ export default function PublicPrestasi() {
                             ) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
-                        <TableHead>Lomba</TableHead>
+                        <TableHead>Kategori Lomba</TableHead>
+                        <TableHead>Kategori Penerima</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedAchievements.map((achievement, idx) => {
                         const levelConfig = LEVEL_ICONS[achievement.level] || { icon: Award, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' };
                         const Icon = levelConfig.icon;
+                        const rowNumber = startIndex + idx + 1;
 
                         return (
                           <TableRow key={achievement.id || idx}>
+                            <TableCell className="text-center text-sm text-slate-600">
+                              {rowNumber}
+                            </TableCell>
                             <TableCell className="font-mono text-sm whitespace-nowrap">
-                              {achievement.date ? new Date(achievement.date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : achievement.year || '-'}
+                              {achievement.year || (achievement.date ? new Date(achievement.date).getFullYear() : '-')}
                             </TableCell>
                             <TableCell className="font-semibold">
-                              {achievement.title}
-                              {achievement.description && (
-                                <div className="text-xs text-slate-500 mt-1 line-clamp-1">{achievement.description}</div>
-                              )}
+                              {achievement.title || '-'}
                             </TableCell>
-                            <TableCell>
-                              <Badge className={`${levelConfig.bg} ${levelConfig.color} border-0 gap-1`}>
-                                <Icon className="h-3 w-3" />
-                                {achievement.level}
-                              </Badge>
+                            <TableCell className="text-sm text-slate-600">
+                              {achievement.field || '-'}
                             </TableCell>
                             <TableCell>
                               {achievement.student_name && (
@@ -485,13 +487,32 @@ export default function PublicPrestasi() {
                               )}
                               {!achievement.student_name && !achievement.teacher_name && achievement.holder_type !== 'madrasah' && '-'}
                             </TableCell>
+                            <TableCell className="text-sm text-slate-600">
+                              {achievement.organizer || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`${levelConfig.bg} ${levelConfig.color} border-0 gap-1`}>
+                                <Icon className="h-3 w-3" />
+                                {achievement.level}
+                              </Badge>
+                            </TableCell>
                             <TableCell>
                               {achievement.rank ? (
                                 <Badge className="bg-amber-500 text-white">{achievement.rank}</Badge>
                               ) : '-'}
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
-                              {achievement.competition_name || '-'}
+                              {achievement.competition_category || '-'}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <Badge variant="outline" className={
+                                achievement.holder_type === 'siswa' ? 'text-blue-700 border-blue-300 bg-blue-50' :
+                                achievement.holder_type === 'guru' ? 'text-green-700 border-green-300 bg-green-50' :
+                                achievement.holder_type === 'tendik' ? 'text-purple-700 border-purple-300 bg-purple-50' :
+                                achievement.holder_type === 'madrasah' ? 'text-[#006837] border-[#006837] bg-green-50' : ''
+                              }>
+                                {HOLDER_TYPE_LABELS[achievement.holder_type] || '-'}
+                              </Badge>
                             </TableCell>
                           </TableRow>
                         );
