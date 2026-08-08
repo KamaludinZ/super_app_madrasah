@@ -38,6 +38,7 @@ from routers import (
     rkam,
     rooms,
     schedules,
+    school_apps,
     semesters,
     student_records,
     students,
@@ -89,6 +90,7 @@ api_router.include_router(indikator_materi.router)
 api_router.include_router(tatib.router)
 api_router.include_router(events.router)
 api_router.include_router(rkam.router)
+api_router.include_router(school_apps.router)
 
 app.include_router(api_router)
 
