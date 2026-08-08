@@ -302,8 +302,8 @@ export default function PublicRKAMPage() {
           </div>
         ) : (
           <>
-            {/* Sumber Dana Cards with Progress - BOS & KOMITE */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Sumber Dana Cards with Progress - BOS, KOMITE & TOTAL */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               {/* BOS Card */}
               <Card className="border-l-4 border-l-blue-600 shadow-md hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
@@ -375,46 +375,48 @@ export default function PublicRKAMPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* TOTAL Card */}
+              {budgetData && (
+                <Card className="border-l-4 border-l-[#006837] shadow-md hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <PieChart className="h-5 w-5 text-[#006837]" />
+                        Total Keseluruhan
+                      </CardTitle>
+                      <Badge className="bg-[#006837] text-white">
+                        {summary.persentase_serapan}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600">Anggaran</span>
+                        <span className="font-bold text-slate-900">{formatRupiah(summary.total_allocated)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600">Realisasi</span>
+                        <span className="font-bold text-green-600">{formatRupiah(summary.total_realized)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600">Sisa</span>
+                        <span className="font-bold text-amber-600">{formatRupiah((summary.total_sisa_bos || 0) + (summary.total_sisa_komite || 0))}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs font-medium text-slate-600">
+                        <span>Serapan Anggaran</span>
+                        <span className="text-[#006837]">{summary.persentase_serapan}</span>
+                      </div>
+                      <Progress value={parseFloat(summary.persentase_serapan) || 0} className="h-3 bg-slate-200" />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-
-            {/* Total Summary */}
-            {budgetData && (
-              <Card className="mb-6 border-[#006837] border-2 shadow-md">
-                <CardHeader className="bg-gradient-to-r from-[#006837]/5 to-[#0B7A3B]/5">
-                  <CardTitle className="text-xl font-bold text-[#006837] flex items-center gap-2">
-                    <PieChart className="h-5 w-5" />
-                    Total Keseluruhan
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
-                    <div className="text-center">
-                      <p className="text-sm text-slate-600 mb-1">Total Anggaran</p>
-                      <p className="text-2xl font-bold text-slate-900">{formatRupiah(summary.total_allocated)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-slate-600 mb-1">Total Realisasi</p>
-                      <p className="text-2xl font-bold text-green-600">{formatRupiah(summary.total_realized)}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-slate-600 mb-1">Sisa Anggaran</p>
-                      <p className="text-2xl font-bold text-amber-600">{formatRupiah((summary.total_sisa_bos || 0) + (summary.total_sisa_komite || 0))}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-slate-700">Tingkat Serapan Anggaran</span>
-                      <span className="text-lg font-bold text-[#006837]">{summary.persentase_serapan}</span>
-                    </div>
-                    <Progress value={parseFloat(summary.persentase_serapan) || 0} className="h-4 bg-slate-200" />
-                    <p className="text-xs text-slate-500 text-right">
-                      Dari total anggaran {formatRupiah(summary.total_allocated)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Rincian Anggaran Table */}
             <Card className="mb-6 shadow-md border-slate-200">
