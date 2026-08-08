@@ -465,10 +465,10 @@ export default function PublicPrestasi() {
                               {achievement.year || (achievement.date ? new Date(achievement.date).getFullYear() : '-')}
                             </TableCell>
                             <TableCell className="font-semibold">
-                              {achievement.title || '-'}
+                              {achievement.name || achievement.title || '-'}
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
-                              {achievement.field || '-'}
+                              {achievement.bidang_lomba || '-'}
                             </TableCell>
                             <TableCell>
                               {achievement.student_name && (
@@ -491,25 +491,27 @@ export default function PublicPrestasi() {
                               {achievement.organizer || '-'}
                             </TableCell>
                             <TableCell>
-                              <Badge className={`${levelConfig.bg} ${levelConfig.color} border-0 gap-1`}>
-                                <Icon className="h-3 w-3" />
-                                {achievement.level}
-                              </Badge>
+                              {achievement.level ? (
+                                <Badge className={`${levelConfig.bg} ${levelConfig.color} border ${levelConfig.border} gap-1.5 px-2.5 py-1 font-semibold`}>
+                                  <Icon className="h-3.5 w-3.5" />
+                                  {achievement.level}
+                                </Badge>
+                              ) : '-'}
                             </TableCell>
                             <TableCell>
                               {achievement.rank ? (
-                                <Badge className="bg-amber-500 text-white">{achievement.rank}</Badge>
+                                <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-2.5 py-1">{achievement.rank}</Badge>
                               ) : '-'}
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
-                              {achievement.competition_category || '-'}
+                              {achievement.category || '-'}
                             </TableCell>
                             <TableCell className="text-sm">
                               <Badge variant="outline" className={
-                                achievement.holder_type === 'siswa' ? 'text-blue-700 border-blue-300 bg-blue-50' :
-                                achievement.holder_type === 'guru' ? 'text-green-700 border-green-300 bg-green-50' :
-                                achievement.holder_type === 'tendik' ? 'text-purple-700 border-purple-300 bg-purple-50' :
-                                achievement.holder_type === 'madrasah' ? 'text-[#006837] border-[#006837] bg-green-50' : ''
+                                achievement.holder_type === 'siswa' ? 'text-blue-700 border-blue-300 bg-blue-50 font-semibold' :
+                                achievement.holder_type === 'guru' ? 'text-green-700 border-green-300 bg-green-50 font-semibold' :
+                                achievement.holder_type === 'tendik' ? 'text-purple-700 border-purple-300 bg-purple-50 font-semibold' :
+                                achievement.holder_type === 'madrasah' ? 'text-[#006837] border-[#006837] bg-green-50 font-semibold' : ''
                               }>
                                 {HOLDER_TYPE_LABELS[achievement.holder_type] || '-'}
                               </Badge>
