@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/AuthContext';
 
 const MONTH_LABELS = {
   1: 'Januari', 2: 'Februari', 3: 'Maret', 4: 'April',
@@ -18,6 +19,9 @@ const MONTH_LABELS = {
 };
 
 export default function AdminMadrasahEventsPage() {
+  const { activeRole } = useAuth();
+  const canEdit = activeRole !== 'kepala_sekolah';
+
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -150,10 +154,12 @@ export default function AdminMadrasahEventsPage() {
               Kelola kegiatan dan acara madrasah
             </p>
           </div>
-          <Button onClick={() => openDialog()} className="gap-2 bg-[#006837] hover:bg-[#0B7A3B]">
-            <Plus className="h-4 w-4" />
-            Tambah Kegiatan
-          </Button>
+          {canEdit && (
+            <Button onClick={() => openDialog()} className="gap-2 bg-[#006837] hover:bg-[#0B7A3B]">
+              <Plus className="h-4 w-4" />
+              Tambah Kegiatan
+            </Button>
+          )}
         </div>
 
         {/* Filters */}
@@ -364,14 +370,16 @@ function EventCard({ event, onEdit, onDelete }) {
                   </Badge>
                 )}
               </div>
-              <div className="flex gap-1">
-                <Button size="sm" variant="ghost" onClick={onEdit} className="h-8 w-8 p-0">
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={onDelete} className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={onEdit} className="h-8 w-8 p-0">
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={onDelete} className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
 
             {event.description && (

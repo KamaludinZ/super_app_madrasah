@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/AuthContext';
 
 // v1.1.1: Updated for dual budget system (BOS & Komite)
 const EMPTY_BUDGET_FORM = {
@@ -57,6 +58,9 @@ const DOCUMENT_TYPES = ['Laporan', 'Bukti', 'Proposal', 'Evaluasi', 'Rekapitulas
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 
 export default function AdminRKAMPage() {
+  const { activeRole } = useAuth();
+  const canEdit = activeRole !== 'kepala_sekolah';
+
   const [activeTab, setActiveTab] = useState('budget');
 
   // Budget state
@@ -466,19 +470,25 @@ export default function AdminRKAMPage() {
                     onChange={handleImport}
                     className="hidden"
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => document.getElementById('import-file').click()}
-                    className="gap-2"
-                  >
-                    <Upload className="h-4 w-4" /> Import
-                  </Button>
-                  <Button variant="outline" onClick={handleExport} className="gap-2">
-                    <Download className="h-4 w-4" /> Export
-                  </Button>
-                  <Button onClick={openBudgetCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
-                    <Plus className="h-4 w-4" /> Tambah
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      variant="outline"
+                      onClick={() => document.getElementById('import-file').click()}
+                      className="gap-2"
+                    >
+                      <Upload className="h-4 w-4" /> Import
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button variant="outline" onClick={handleExport} className="gap-2">
+                      <Download className="h-4 w-4" /> Export
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button onClick={openBudgetCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+                      <Plus className="h-4 w-4" /> Tambah
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -635,21 +645,23 @@ export default function AdminRKAMPage() {
                             </TableCell>
 
                             {/* Aksi */}
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button size="icon" variant="ghost" onClick={() => openBudgetEdit(item)}>
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => handleBudgetDelete(item.id)}
-                                  className="text-rose-600"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
+                            {canEdit && (
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button size="icon" variant="ghost" onClick={() => openBudgetEdit(item)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleBudgetDelete(item.id)}
+                                    className="text-rose-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })
@@ -667,9 +679,11 @@ export default function AdminRKAMPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Arsip Dokumen Transparansi</CardTitle>
-                <Button onClick={openDocumentCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
-                  <Plus className="h-4 w-4" /> Tambah Dokumen
-                </Button>
+                {canEdit && (
+                  <Button onClick={openDocumentCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+                    <Plus className="h-4 w-4" /> Tambah Dokumen
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -744,17 +758,21 @@ export default function AdminRKAMPage() {
                               >
                                 <Download className="h-4 w-4" />
                               </Button>
-                              <Button size="icon" variant="ghost" onClick={() => openDocumentEdit(doc)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleDocumentDelete(doc.id)}
-                                className="text-rose-600"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {canEdit && (
+                                <>
+                                  <Button size="icon" variant="ghost" onClick={() => openDocumentEdit(doc)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleDocumentDelete(doc.id)}
+                                    className="text-rose-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

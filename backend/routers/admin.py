@@ -368,7 +368,7 @@ async def get_attendance_by_class(
     class_id: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
 ):
     """Get attendance records for a specific class.
 
@@ -461,7 +461,7 @@ async def get_attendance_by_grade(
     grade_level: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
 ):
     """Get attendance statistics aggregated by grade level (jenjang).
 
@@ -576,7 +576,7 @@ async def get_attendance_by_grade(
 async def get_attendance_overall(
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
 ):
     """Get overall school-wide attendance statistics.
 
