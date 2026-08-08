@@ -192,18 +192,26 @@ async def public_achievements(
 
     # Enrich with student/teacher/extracurricular names
     for a in achievements:
-        # Handle student_id (for backward compatibility and siswa holder_type)
-        if a.get('student_id'):
+        # Handle holder_id based on holder_type
+        if a.get('holder_id'):
+            if a.get('holder_type') == 'siswa':
+                # For siswa holder_type, enrich student fields
+                student = await db.users.find_one({'id': a['holder_id']}, {'_id': 0, 'full_name': 1, 'nisn': 1})
+                if student:
+                    a['student_name'] = student.get('full_name')
+                    a['student_nisn'] = student.get('nisn')
+            elif a.get('holder_type') in ('guru', 'tendik'):
+                # For guru/tendik holder_type, enrich teacher fields
+                holder = await db.users.find_one({'id': a['holder_id']}, {'_id': 0, 'full_name': 1})
+                if holder:
+                    a['teacher_name'] = holder.get('full_name')
+
+        # Handle legacy student_id (for backward compatibility)
+        if a.get('student_id') and not a.get('student_name'):
             student = await db.users.find_one({'id': a['student_id']}, {'_id': 0, 'full_name': 1, 'nisn': 1})
             if student:
                 a['student_name'] = student.get('full_name')
                 a['student_nisn'] = student.get('nisn')
-
-        # Handle holder_id (for guru/tendik holder_type)
-        if a.get('holder_id') and a.get('holder_type') in ('guru', 'tendik'):
-            holder = await db.users.find_one({'id': a['holder_id']}, {'_id': 0, 'full_name': 1})
-            if holder:
-                a['teacher_name'] = holder.get('full_name')
 
         # Handle legacy teacher_id
         if a.get('teacher_id') and not a.get('teacher_name'):
