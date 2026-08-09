@@ -49,7 +49,7 @@
   "should_call_test_agent_after_fix": false,
   "should_main_agent_test_itself": false,
   "test_environment": {
-    "frontend_url": "https://geolocation-verify.preview.emergentagent.com",
+    "frontend_url": "https://android-ios-launch.preview.emergentagent.com",
     "test_accounts_used": [
       "admin/admin123",
       "siswa1/siswa123",

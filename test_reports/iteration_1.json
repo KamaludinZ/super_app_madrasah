@@ -97,7 +97,7 @@
   "should_call_test_agent_after_fix": false,
   "should_main_agent_test_itself": true,
   "test_environment": {
-    "backend_url": "https://geolocation-verify.preview.emergentagent.com/api",
+    "backend_url": "https://android-ios-launch.preview.emergentagent.com/api",
     "test_date": "2026-05-13",
     "test_day": "Wednesday (rabu)",
     "demo_accounts_verified": [

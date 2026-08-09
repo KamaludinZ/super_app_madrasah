@@ -91,7 +91,7 @@
     "smtp_send_email": "Returns success:false when SMTP not configured - this is expected behavior per user requirement"
   },
   "test_environment": {
-    "backend_url": "https://geolocation-verify.preview.emergentagent.com/api",
+    "backend_url": "https://android-ios-launch.preview.emergentagent.com/api",
     "test_accounts_used": [
       "admin/admin123",
       "guru1/guru123",

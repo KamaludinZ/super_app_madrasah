@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-BASE_URL = "https://geolocation-verify.preview.emergentagent.com/api"
+BASE_URL = "https://android-ios-launch.preview.emergentagent.com/api"
 
 class Colors:
     GREEN = '\033[92m'

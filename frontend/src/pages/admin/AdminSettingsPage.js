@@ -570,7 +570,7 @@ export default function AdminSettingsPage() {
                 <div className="sm:col-span-2">
                   <Label>URL Publik Aplikasi (untuk tautan reset email)</Label>
                   <Input value={form.app_public_url || ''} onChange={(e) => setForm({...form, app_public_url: e.target.value})}
-                    placeholder="https://matsa.preview.emergentagent.com" data-testid="settings-app-public-url" />
+                    placeholder="https://android-ios-launch.preview.emergentagent.com" data-testid="settings-app-public-url" />
                   <p className="text-xs text-slate-500 mt-1">Kosongkan untuk auto-detect dari request browser.</p>
                 </div>
               </div>
