@@ -42,6 +42,8 @@
 - **Updated:** `AppShell.js` - Integrasi dynamic menu untuk public pages berdasarkan visibility settings
 - **Updated:** `DashboardRouter.js` - Centralized announcements display untuk non-admin roles
 - **Updated:** Dashboard components (Guru, Siswa, Staff, WaliKelas) - Removed duplicate announcements sections
+- **Updated:** `PublicHeader.js` - Implementasi dynamic menu filtering berdasarkan visibility settings dan status login
+- **Updated:** `LoginPage.js` - Implementasi dynamic public pages links (desktop & mobile) berdasarkan visibility settings dan status login
 
 ## 📦 Files Baru
 - `frontend/src/components/PublicPageGuard.jsx`
@@ -50,6 +52,7 @@
 - `frontend/src/lib/publicPagesMenu.js`
 - `backend/verify_admin_announcements.py` (testing utility)
 - `ANNOUNCEMENTS_FIX_SUMMARY.md`
+- `VISIBILITY_IMPLEMENTATION_SUMMARY.md`
 - `CHANGELOG_v1.1.2.md`
 
 ## 📝 Files Dimodifikasi
@@ -58,6 +61,8 @@
 - `frontend/src/App.js`
 - `frontend/src/pages/admin/AdminSettingsPage.js`
 - `frontend/src/components/layout/AppShell.js`
+- `frontend/src/components/layout/PublicHeader.js`
+- `frontend/src/pages/LoginPage.js`
 - `frontend/src/pages/DashboardRouter.js`
 - `frontend/src/pages/dashboards/GuruDashboard.js`
 - `frontend/src/pages/dashboards/SiswaDashboard.js`

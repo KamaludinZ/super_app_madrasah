@@ -3,20 +3,26 @@ import { Link, useLocation } from 'react-router-dom';
 import { Activity, TrendingUp, Calendar, DollarSign, LogIn, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { usePublicPagesVisibility } from '@/hooks/usePublicPagesVisibility';
 
 export default function PublicHeader({ settings }) {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { visibility, loading } = usePublicPagesVisibility();
 
-  const navLinks = [
+  // Check if user is logged in by checking for token
+  const isLoggedIn = !!localStorage.getItem('matsa_token');
+
+  const allNavLinks = [
     {
       to: '/public/monitoring',
       icon: Activity,
       label: 'Monitoring Jurnal',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      hoverColor: 'hover:bg-blue-100'
+      hoverColor: 'hover:bg-blue-100',
+      visibilityKey: 'monitoring_visibility'
     },
     {
       to: '/public/prestasi',
@@ -24,7 +30,8 @@ export default function PublicHeader({ settings }) {
       label: 'Prestasi',
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
-      hoverColor: 'hover:bg-amber-100'
+      hoverColor: 'hover:bg-amber-100',
+      visibilityKey: 'prestasi_visibility'
     },
     {
       to: '/public/agenda',
@@ -32,7 +39,8 @@ export default function PublicHeader({ settings }) {
       label: 'Agenda',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      hoverColor: 'hover:bg-purple-100'
+      hoverColor: 'hover:bg-purple-100',
+      visibilityKey: 'agenda_visibility'
     },
     {
       to: '/public/rkam',
@@ -40,9 +48,28 @@ export default function PublicHeader({ settings }) {
       label: 'RKAM',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
-      hoverColor: 'hover:bg-emerald-100'
+      hoverColor: 'hover:bg-emerald-100',
+      visibilityKey: 'rkam_visibility'
     }
   ];
+
+  // Filter nav links based on visibility settings
+  const navLinks = useMemo(() => {
+    if (loading) return allNavLinks; // Show all while loading to prevent flash
+
+    return allNavLinks.filter(link => {
+      const visibilitySetting = visibility[link.visibilityKey];
+
+      // Hidden: never show
+      if (visibilitySetting === 'hidden') return false;
+
+      // Dashboard only: only show if logged in
+      if (visibilitySetting === 'dashboard') return isLoggedIn;
+
+      // Public: always show
+      return true;
+    });
+  }, [visibility, loading, isLoggedIn]);
 
   const isActive = (path) => location.pathname === path;
 
