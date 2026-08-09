@@ -121,8 +121,8 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.3"
-  test_sequence: 3
+  version: "1.4"
+  test_sequence: 4
   run_ui: true
 
 test_plan:
@@ -169,7 +169,7 @@ agent_communication:
 frontend:
   - task: "Fase 2/3 mobile UI: EnableNotifications banner + PushToggle in NotificationBell + 'Ingat saya' login checkbox"
     implemented: true
-    working: "NA"
+    working: true
     file: "frontend/src/lib/push.js, frontend/src/components/pwa/EnableNotifications.js, frontend/src/components/notifications/NotificationBell.js, frontend/src/components/layout/AppShell.js, frontend/src/pages/LoginPage.js"
     stuck_count: 0
     priority: "medium"
@@ -178,6 +178,9 @@ frontend:
         - working: "NA"
           agent: "main"
           comment: "Fase 2/3 UI. push.js (subscribe/unsubscribe/status/ensureSynced with VAPID). EnableNotifications global banner mounted in AppShell (auth-gated), PushToggle added to NotificationBell footer. Login page: 'Ingat saya' checkbox (default checked) -> sends remember=true -> backend issues 30-day token (verified 43200 min). Login page screenshot confirms checkbox renders + captcha loads. NOTE: push permission/subscribe flow cannot be fully verified in headless Chromium; verified on real device by user after redeploy."
+        - working: true
+          agent: "testing"
+          comment: "✓ ALL 4 MOBILE UI TESTS PASSED (A-D). TEST A (Login with 'Ingat saya'): PASS - Remember checkbox checked by default, login successful with admin/admin123, captcha solved (Berapa 19 + 14 = 33), navigated to /dashboard, welcome toast appeared. TEST B (EnableNotifications banner): PASS (ACCEPTABLE) - Banner correctly did NOT appear because Notification.permission='denied' in headless Chromium; code correctly skips banner when permission is denied (line 33 EnableNotifications.js checks 'if (perm === denied) return'). This is expected and correct behavior. TEST C (NotificationBell PushToggle): PASS - Bell icon clickable, dropdown opened, PushToggle component found displaying 'Notifikasi diblokir browser' (correct for denied permission state), 'Lihat semua pengumuman' link present. TEST D (Stability): PASS with minor note - No fatal rendering errors. 4 WebSocket connection errors to ws://localhost:443/ws detected but these do NOT break core functionality; app renders and functions correctly. Screenshots confirm: (1) login form with checked 'Ingat saya' checkbox, (2) notification dropdown with PushToggle footer and view-all link. All mobile UI features working as designed."
 
 backend:
   - task: "'Ingat saya' long-lived session (remember-me)"
@@ -191,3 +194,9 @@ backend:
         - working: true
           agent: "main"
           comment: "LoginRequest.remember bool added. POST /api/auth/login with remember=true issues 30-day JWT (verified via curl: expires_in_minutes=43200). Default (remember false) keeps 12h. Manual verification PASS."
+
+agent_communication:
+    - agent: "main"
+      message: "User approved FRONTEND testing for the mobile UI additions. Please test: (A) LOGIN with 'Ingat saya' checked (default). Creds admin/admin123. Login requires captcha shown on the page as text like 'Berapa 19 - 6 = ?' next to input placeholder 'Jawaban' (data-testid=login-math-captcha-input). Solve math, fill username (data-testid=login-username-input or the field with placeholder 'contoh: admin'), password (data-testid=login-password-input), captcha answer, ensure checkbox data-testid=login-remember is CHECKED, click data-testid=login-submit-button. Expect navigation to /dashboard and a welcome toast. (B) After login, within ~3s a top banner 'Aktifkan Notifikasi' may appear (only if Notification.permission is 'default' and PushManager supported). If it appears, confirm it has an 'Aktifkan' button and a close (X). Clicking 'Aktifkan' triggers Notification permission; in headless it may be denied/blocked -> that's acceptable, just confirm no crash. If the banner does not appear in headless (push unsupported), that's ACCEPTABLE - report it, do not fail. (C) Open the notification bell (top-right header, Bell icon). Confirm the dropdown opens and the footer contains a device-notification toggle showing text like 'Aktifkan notifikasi perangkat' OR 'Notifikasi perangkat: Aktif' OR 'Notifikasi diblokir browser' (component PushToggle). Confirm 'Lihat semua pengumuman' link still present. (D) Confirm no console errors that break the app. Report PASS/FAIL per A-D."
+    - agent: "testing"
+      message: "✓ Mobile UI testing COMPLETE. All 4 tests (A-D) PASSED. TEST A: Login with 'Ingat saya' checkbox works perfectly - checkbox checked by default, login successful, navigated to /dashboard with welcome toast. TEST B: EnableNotifications banner behavior is CORRECT - banner does not appear when permission is 'denied' (headless Chromium default), which matches the code logic. TEST C: NotificationBell PushToggle component working - bell opens dropdown, PushToggle displays 'Notifikasi diblokir browser' (correct for denied permission), 'Lihat semua pengumuman' link present. TEST D: No fatal errors - 4 WebSocket connection errors detected (ws://localhost:443/ws) but these are non-critical and do not break app functionality. All mobile UI features implemented correctly and working as designed. Ready for production."
