@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const IS_DEV = process.env.NODE_ENV === 'development';
 
 // Create a simple event emitter for refresh notifications
 const refreshListeners = new Set();
@@ -32,10 +33,15 @@ export function usePublicPagesVisibility() {
           'Expires': '0'
         }
       });
-      console.log('[Visibility] Fetched:', data); // Debug log
+      // Only log in development mode
+      if (IS_DEV) {
+        console.log('[Visibility] Fetched:', data);
+      }
       setVisibility(data);
     } catch (error) {
-      console.error('Failed to fetch public pages visibility:', error);
+      if (IS_DEV) {
+        console.error('Failed to fetch public pages visibility:', error);
+      }
       // On error, keep current state (default to hidden for safety)
     } finally {
       setLoading(false);
