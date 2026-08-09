@@ -6,9 +6,10 @@ import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 import WaliKelasDashboard from './dashboards/WaliKelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
+import PublicPagesSection from '@/components/PublicPagesSection';
 
 /**
- * Wrapper that shows AnnouncementsCard at top of dashboard for non-admin roles,
+ * Wrapper that shows common sections (announcements, public pages) at top of dashboard,
  * then delegates to the role-specific dashboard component.
  */
 export default function DashboardRouter() {
@@ -38,6 +39,7 @@ export default function DashboardRouter() {
   return (
     <div className="space-y-4">
       {!isAdmin && <AnnouncementsCard />}
+      {!isAdmin && <PublicPagesSection />}
       <DashboardComponent />
     </div>
   );

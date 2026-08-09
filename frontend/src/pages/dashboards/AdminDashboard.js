@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, BookOpen, Building2, Calendar, ClipboardCheck, ShieldCheck,
-  GraduationCap, Settings, QrCode, ExternalLink, Trophy, UserMinus, UserPlus,
+  GraduationCap, Settings, QrCode, Trophy, UserMinus, UserPlus,
   Award, Globe, Flag, MapPin, School, Megaphone,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import PublicPagesSection from '@/components/PublicPagesSection';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -240,20 +241,7 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-5">
-          <h2 className="text-base font-semibold text-slate-900 mb-3">Halaman Publik</h2>
-          <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 p-4">
-            <div>
-              <div className="font-semibold text-emerald-900">Monitoring Jurnal Realtime</div>
-              <div className="text-xs text-emerald-800/80">Halaman transparansi publik tanpa login — dapat dibagikan ke wali murid</div>
-            </div>
-            <Link to="/public/monitoring" target="_blank" rel="noopener" className="text-emerald-700 font-semibold flex items-center gap-1 hover:underline" data-testid="public-monitoring-link">
-              Lihat <ExternalLink className="h-4 w-4" />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <PublicPagesSection />
     </div>
   );
 }
