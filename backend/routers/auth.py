@@ -215,15 +215,25 @@ async def login(req: LoginRequest, request: Request):
 
     record_login_attempt(req.username, success=True)
     active_role = user['roles'][0] if user.get('roles') else 'guru'
-    token = create_access_token({'sub': user['id'], 'username': user['username'], 'active_role': active_role})
+    # "Ingat saya": issue a long-lived token (30 days) so mobile/PWA users stay logged in.
+    remember = getattr(req, 'remember', False)
+    token_minutes = (60 * 24 * 30) if remember else None
+    if token_minutes:
+        token = create_access_token(
+            {'sub': user['id'], 'username': user['username'], 'active_role': active_role},
+            expires_minutes=token_minutes,
+        )
+    else:
+        token = create_access_token({'sub': user['id'], 'username': user['username'], 'active_role': active_role})
     await db.users.update_one({'id': user['id']}, {'$set': {'last_login_at': datetime.utcnow().isoformat()}})
-    await log_security('login_success', req.username, {'role': active_role}, request)
+    await log_security('login_success', req.username, {'role': active_role, 'remember': remember}, request)
     user_clean = serialize_doc(user.copy())
     user_clean.pop('password_hash', None)
     settings = await get_settings()
+    session_minutes = token_minutes if remember else settings.get('session_max_hours', 12) * 60
     return LoginResponse(
         access_token=token, user=user_clean, active_role=active_role,
-        expires_in_minutes=settings.get('session_max_hours', 12) * 60,
+        expires_in_minutes=session_minutes,
         idle_timeout_minutes=settings.get('idle_timeout_minutes', 30),
     )
 

@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [remember, setRemember] = useState(true);
   const { visibility, loading: visibilityLoading } = usePublicPagesVisibility();
 
   // Check if user is logged in (for dashboard-only pages)
@@ -151,6 +152,7 @@ export default function LoginPage() {
         username, password,
         captcha_id: captcha.challenge_id,
         captcha_answer: parseInt(captchaAnswer, 10),
+        remember,
       });
       await login(data.access_token, data.user, data.active_role, {
         expires_in_minutes: data.expires_in_minutes,
@@ -308,6 +310,16 @@ export default function LoginPage() {
                     />
                   </div>
                 </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none" data-testid="login-remember">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-[#006837] focus:ring-[#006837]"
+                  />
+                  <span className="text-sm text-slate-600">Ingat saya (tetap masuk 30 hari)</span>
+                </label>
 
                 <Button type="submit" disabled={submitting}
                   data-testid="login-submit-button"

@@ -1,0 +1,22 @@
+{
+  "name": "matsandatama-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pembungkus native (Capacitor) untuk Super Apps MATSANDATAMA - MTsN 2 Kota Malang",
+  "scripts": {
+    "set-domain": "node set-domain.js",
+    "add:android": "cap add android",
+    "sync": "cap sync android",
+    "open:android": "cap open android",
+    "build:apk": "cd android && ./gradlew assembleDebug",
+    "build:apk:release": "cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/geolocation": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

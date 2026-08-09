@@ -736,6 +736,7 @@ class LoginRequest(BaseModel):
     password: str
     captcha_id: str
     captcha_answer: int
+    remember: bool = False
 
 
 class LoginResponse(BaseModel):

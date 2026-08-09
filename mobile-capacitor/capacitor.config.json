@@ -1,0 +1,21 @@
+{
+  "appId": "id.sch.mtsn2kotamalang.superapps",
+  "appName": "Super Apps MATSANDATAMA",
+  "webDir": "www",
+  "backgroundColor": "#006837",
+  "server": {
+    "__CATATAN__": "GANTI DOMAIN DI SINI. url = alamat aplikasi live Anda. Setelah diubah, jalankan: npx cap sync && build APK ulang.",
+    "url": "https://super.mtsn2kotamalang.sch.id",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Geolocation": {},
+    "CapacitorHttp": {
+      "enabled": false
+    }
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

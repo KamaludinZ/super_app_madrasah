@@ -163,3 +163,31 @@ agent_communication:
       message: "✓ Fase 2 Web Push backend verification COMPLETE. All 8 backend tests passed successfully (8/8). Created comprehensive backend_test.py with captcha-based authentication. All endpoints working correctly: VAPID public key retrieval, subscription management (subscribe/unsubscribe/status), upsert functionality, test push sending, announcement creation with push integration, and proper validation (400 for invalid input). No 500 errors encountered. Backend health check passed. Push send warnings in logs are expected behavior for fake test endpoints. Web Push backend is fully functional and production-ready. Ready for frontend integration testing or user acceptance testing."
 
 
+
+# NOTE (main): Fase 2 Web Push backend verified PASS 8/8 by backend testing agent. push task working=true.
+
+frontend:
+  - task: "Fase 2/3 mobile UI: EnableNotifications banner + PushToggle in NotificationBell + 'Ingat saya' login checkbox"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/lib/push.js, frontend/src/components/pwa/EnableNotifications.js, frontend/src/components/notifications/NotificationBell.js, frontend/src/components/layout/AppShell.js, frontend/src/pages/LoginPage.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Fase 2/3 UI. push.js (subscribe/unsubscribe/status/ensureSynced with VAPID). EnableNotifications global banner mounted in AppShell (auth-gated), PushToggle added to NotificationBell footer. Login page: 'Ingat saya' checkbox (default checked) -> sends remember=true -> backend issues 30-day token (verified 43200 min). Login page screenshot confirms checkbox renders + captcha loads. NOTE: push permission/subscribe flow cannot be fully verified in headless Chromium; verified on real device by user after redeploy."
+
+backend:
+  - task: "'Ingat saya' long-lived session (remember-me)"
+    implemented: true
+    working: true
+    file: "backend/models.py, backend/routers/auth.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "LoginRequest.remember bool added. POST /api/auth/login with remember=true issues 30-day JWT (verified via curl: expires_in_minutes=43200). Default (remember false) keeps 12h. Manual verification PASS."
