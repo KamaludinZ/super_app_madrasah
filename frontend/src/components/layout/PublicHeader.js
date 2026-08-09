@@ -55,7 +55,8 @@ export default function PublicHeader({ settings }) {
 
   // Filter nav links based on visibility settings
   const navLinks = useMemo(() => {
-    if (loading) return allNavLinks; // Show all while loading to prevent flash
+    // While loading, show nothing to prevent showing wrong menus
+    if (loading) return [];
 
     return allNavLinks.filter(link => {
       const visibilitySetting = visibility[link.visibilityKey];

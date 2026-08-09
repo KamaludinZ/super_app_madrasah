@@ -109,7 +109,8 @@ export default function LoginPage() {
 
   // Filter pages based on visibility settings
   const visiblePublicPages = useMemo(() => {
-    if (visibilityLoading) return allPublicPages; // Show all while loading
+    // While loading, show nothing to prevent showing wrong menus
+    if (visibilityLoading) return [];
 
     return allPublicPages.filter(page => {
       const visibilitySetting = visibility[page.visibilityKey];

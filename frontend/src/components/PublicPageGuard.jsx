@@ -7,10 +7,9 @@ import { FullPageLoader } from '@/components/ui/page-loader';
  * Guard component for public pages accessed via /public/* routes
  *
  * Visibility modes:
- * - 'public': Page is accessible to everyone, menu shows everywhere
- * - 'dashboard': Page is STILL accessible to everyone at /public/* URL,
- *                but menu only appears in dashboard (when logged in)
- * - 'hidden': Page is NOT accessible, shows 404
+ * - 'public': Page accessible to everyone (logged in or not), menu shows everywhere
+ * - 'dashboard': Page REQUIRES login to access, menu only shows when logged in
+ * - 'hidden': Page NOT accessible at all, shows 404
  */
 export function PublicPageGuard({ pageName, children }) {
   const { visibility, loading } = usePublicPagesVisibility();
@@ -20,9 +19,9 @@ export function PublicPageGuard({ pageName, children }) {
   }
 
   const visibilitySetting = visibility[`${pageName}_visibility`];
+  const isLoggedIn = !!localStorage.getItem('matsa_token');
 
-  // ONLY block if visibility is 'hidden'
-  // Note: 'dashboard' mode still allows page access, only menu visibility is restricted
+  // Hidden mode: completely blocked
   if (visibilitySetting === 'hidden') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
@@ -40,7 +39,24 @@ export function PublicPageGuard({ pageName, children }) {
     );
   }
 
-  // For 'public' and 'dashboard' modes, render the page
-  // The difference is only in menu visibility (handled by PublicHeader and LoginPage)
+  // Dashboard mode: requires login
+  if (visibilitySetting === 'dashboard' && !isLoggedIn) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="text-center space-y-4 max-w-md p-6">
+          <div className="text-6xl">🔐</div>
+          <h1 className="text-2xl font-bold text-slate-900">Login Diperlukan</h1>
+          <p className="text-slate-600">
+            Halaman ini hanya tersedia untuk pengguna yang sudah login. Silakan login terlebih dahulu untuk mengakses halaman ini.
+          </p>
+          <a href="/login" className="inline-block mt-4 px-6 py-2 bg-[#006837] text-white rounded-lg hover:bg-[#0B7A3B]">
+            Login Sekarang
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Public mode OR (dashboard mode AND logged in): render page
   return children;
 }
