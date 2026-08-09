@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from './api';
 import { useIdleTimeout } from './useIdleTimeout';
+import { isStandalone } from './pwa';
 import { toast } from 'sonner';
 
 const AuthContext = createContext(null);
@@ -129,15 +130,18 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  // Idle timeout (default 30 min, configurable from settings)
-  const idleTimeoutMinutes = user ? (settings?.idle_timeout_minutes || 30) : 0;
+  // Idle timeout (default 30 min, configurable from settings).
+  // Disabled when running as an installed PWA (standalone) so users stay logged in
+  // and can just open the app without re-authenticating.
+  const idleTimeoutMinutes = (user && !isStandalone()) ? (settings?.idle_timeout_minutes || 30) : 0;
   useIdleTimeout(idleTimeoutMinutes, () => {
     if (user) logoutFnRef.current?.('idle');
   });
 
-  // Session max age check (every minute)
+  // Session max age check (every minute). Skipped in standalone PWA so the app
+  // stays open until the backend token itself expires.
   useEffect(() => {
-    if (!user) return;
+    if (!user || isStandalone()) return;
     const interval = setInterval(() => {
       try {
         const raw = localStorage.getItem('matsa_session_info');

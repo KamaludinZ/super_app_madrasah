@@ -53,6 +53,17 @@
                 setTimeout(removeEmergentBadge, 2000);
             });
         </script>
+
+        <!-- PWA: Web App Manifest & Icons -->
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/icon-192.png" />
+
+        <!-- PWA: iOS standalone support -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="MATSANDATAMA" />
+        <meta name="mobile-web-app-capable" content="yes" />
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>

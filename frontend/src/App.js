@@ -10,6 +10,7 @@ import PublicPrestasi from '@/pages/PublicPrestasi';
 import PublicAgenda from '@/pages/PublicAgenda';
 import PublicRKAMPage from '@/pages/PublicRKAMPage';
 import AppShell from '@/components/layout/AppShell';
+import InstallPWA from '@/components/pwa/InstallPWA';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
@@ -160,6 +161,7 @@ function App() {
       <DynamicFavicon />
       <BrowserRouter>
         <Toaster richColors position="top-right" />
+        <InstallPWA />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
