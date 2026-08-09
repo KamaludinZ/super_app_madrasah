@@ -252,6 +252,11 @@ function App() {
             <Route path="/pengumuman" element={<AnnouncementsListPage />} />
             <Route path="/panduan" element={<PanduanPage />} />
             <Route path="/panduan/:slug" element={<PanduanPage />} />
+            {/* Dashboard routes for public pages when set to 'dashboard' mode */}
+            <Route path="/monitoring" element={<PublicMonitoring />} />
+            <Route path="/prestasi-siswa" element={<PublicPrestasi />} />
+            <Route path="/agenda-madrasah" element={<PublicAgenda />} />
+            <Route path="/rkam" element={<PublicRKAMPage />} />
             <Route path="/error/:code" element={<ErrorPage />} />
           </Route>
           <Route path="*" element={<ErrorPage code={404} />} />

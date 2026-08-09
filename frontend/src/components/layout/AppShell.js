@@ -17,6 +17,8 @@ import {
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
+import { usePublicPagesVisibility } from '@/hooks/usePublicPagesVisibility';
+import { getPublicPagesMenuItems } from '@/lib/publicPagesMenu';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -408,7 +410,29 @@ export default function AppShell({ children }) {
   const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const [appVersion, setAppVersion] = useState(null);
   const [stoppingImpersonate, setStoppingImpersonate] = useState(false);
-  const items = navForRole(activeRole, user?.roles || []);
+  const { visibility } = usePublicPagesVisibility();
+
+  // Get base menu items for role
+  const baseItems = navForRole(activeRole, user?.roles || []);
+
+  // Get public pages menu items if they're set to dashboard mode
+  const publicPagesItems = getPublicPagesMenuItems(visibility);
+
+  // Combine items - add public pages at the end for non-admin roles, or in appropriate group for admin
+  let items;
+  if (Array.isArray(baseItems) && baseItems.length > 0 && baseItems[0].title) {
+    // Admin role with grouped menus - add public pages as a new group
+    items = [...baseItems];
+    if (publicPagesItems.length > 0) {
+      items.push({
+        title: 'Informasi Publik',
+        items: publicPagesItems,
+      });
+    }
+  } else {
+    // Other roles with flat menus - just append
+    items = [...baseItems, ...publicPagesItems];
+  }
 
   const handleStopImpersonate = async () => {
     if (stoppingImpersonate) return;
