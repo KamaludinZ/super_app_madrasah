@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Visibility Settings</title>
+</head>
+<body>
+    <h1>Visibility Settings Test</h1>
+    <button onclick="fetchSettings()">Fetch Settings</button>
+    <button onclick="clearCacheAndFetch()">Clear Cache & Fetch</button>
+
+    <h2>Result:</h2>
+    <pre id="result"></pre>
+
+    <h2>RKAM Should Be Hidden:</h2>
+    <div id="rkam-test"></div>
+
+    <script>
+        async function fetchSettings() {
+            try {
+                // Add timestamp to bypass cache
+                const response = await fetch(`http://localhost:8000/api/settings/public-pages?_=${Date.now()}`);
+                const data = await response.json();
+
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+
+                // Test RKAM
+                const rkamTest = document.getElementById('rkam-test');
+                if (data.rkam_visibility === 'hidden') {
+                    rkamTest.innerHTML = '<span style="color: green">✅ RKAM is HIDDEN (correct)</span>';
+                } else {
+                    rkamTest.innerHTML = `<span style="color: red">❌ RKAM is ${data.rkam_visibility} (WRONG - should be hidden)</span>`;
+                }
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function clearCacheAndFetch() {
+            // Clear all caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log('All caches cleared');
+            }
+
+            // Clear localStorage
+            localStorage.clear();
+            console.log('LocalStorage cleared');
+
+            // Fetch fresh data
+            await fetchSettings();
+        }
+
+        // Auto-fetch on load
+        window.onload = fetchSettings;
+    </script>
+</body>
+</html>

@@ -12,21 +12,31 @@ export function notifyPublicPagesVisibilityChanged() {
 
 export function usePublicPagesVisibility() {
   const [visibility, setVisibility] = useState({
-    rkam_visibility: 'public',
-    agenda_visibility: 'public',
-    prestasi_visibility: 'public',
-    monitoring_visibility: 'public',
+    rkam_visibility: 'hidden',
+    agenda_visibility: 'hidden',
+    prestasi_visibility: 'hidden',
+    monitoring_visibility: 'hidden',
   });
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchVisibility = useCallback(async () => {
+    setLoading(true); // Set loading true on every fetch
     try {
-      const { data } = await axios.get(`${BACKEND_URL}/api/settings/public-pages?_=${Date.now()}`);
+      // Force cache bust with timestamp + random
+      const cacheBust = `${Date.now()}_${Math.random()}`;
+      const { data } = await axios.get(`${BACKEND_URL}/api/settings/public-pages?_=${cacheBust}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      console.log('[Visibility] Fetched:', data); // Debug log
       setVisibility(data);
     } catch (error) {
       console.error('Failed to fetch public pages visibility:', error);
-      // Use default 'public' values on error
+      // On error, keep current state (default to hidden for safety)
     } finally {
       setLoading(false);
     }
