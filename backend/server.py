@@ -34,6 +34,7 @@ from routers import (
     phase4,
     promotions,
     public,
+    push,
     reports,
     rkam,
     rooms,
@@ -79,6 +80,7 @@ api_router.include_router(public.router)
 api_router.include_router(holidays_tasks.router)
 api_router.include_router(phase4.router)
 api_router.include_router(notifications.router)
+api_router.include_router(push.router)
 api_router.include_router(reports.router)
 api_router.include_router(alumni.router)
 api_router.include_router(promotions.router)

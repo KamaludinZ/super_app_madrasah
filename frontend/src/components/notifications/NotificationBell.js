@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
+import { PushToggle } from '@/components/pwa/EnableNotifications';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -168,7 +169,8 @@ export function NotificationBell() {
             </div>
           )}
         </ScrollArea>
-        <div className="border-t border-slate-100 px-3 py-2">
+        <div className="border-t border-slate-100 px-3 py-2 space-y-1">
+          <PushToggle />
           <Button variant="ghost" size="sm" className="w-full justify-between text-xs h-8" onClick={() => { setOpen(false); nav('/pengumuman'); }} data-testid="btn-view-all-announcements">
             Lihat semua pengumuman
             <ChevronRight className="h-3.5 w-3.5" />

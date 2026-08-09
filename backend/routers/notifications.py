@@ -85,6 +85,24 @@ async def admin_create_announcement(payload: Dict, request: Request,
     await db.announcements.insert_one(doc)
     await log_audit(user, 'create', 'announcement', ann.id,
                     details={'title': ann.title, 'target_roles': ann.target_roles}, request=request)
+
+    # Fire web-push notification to targeted roles (best-effort, non-blocking failure)
+    if ann.is_active and _is_active(doc):
+        try:
+            from routers.push import send_push_to_roles
+            await send_push_to_roles(ann.target_roles, {
+                'title': ann.title,
+                'body': (ann.body or '')[:180],
+                'url': '/pengumuman',
+                'tag': f'ann-{ann.id}',
+            })
+        except Exception as e:
+            try:
+                from core import logger
+                logger.warning(f"[push] announcement push failed: {e}")
+            except Exception:
+                pass
+
     return serialize_doc(doc)
 
 

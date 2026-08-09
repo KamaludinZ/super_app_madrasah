@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { ROLE_LABELS, api } from '@/lib/api';
 import { toast } from 'sonner';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import EnableNotifications from '@/components/pwa/EnableNotifications';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
 
 /**
@@ -481,6 +482,7 @@ export default function AppShell({ children }) {
 
   return (
     <div className="min-h-screen bg-[var(--cream)] flex">
+      <EnableNotifications />
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-white border-r border-slate-200 sticky top-0 h-screen">
         <div className="px-5 py-5 border-b border-slate-100">

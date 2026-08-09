@@ -121,13 +121,13 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.2"
-  test_sequence: 2
+  version: "1.3"
+  test_sequence: 3
   run_ui: true
 
 test_plan:
   current_focus:
-    - "PWA installable (manifest, service worker, icons, offline, install banner, standalone login persistence)"
+    - "Web Push (VAPID) push notifications API"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -137,3 +137,29 @@ agent_communication:
       message: "Please verify Fase 1 PWA on the frontend (no auth required): 1) GET /manifest.json returns valid JSON with name, display=standalone, theme_color #006837, and icons array. 2) /service-worker.js registers successfully (navigator.serviceWorker registrations contains /service-worker.js). 3) index.html has <link rel=manifest> and apple-touch-icon + apple-mobile-web-app-capable meta. 4) Icons /icon-192.png, /icon-512.png, /icon-maskable-512.png, /apple-touch-icon.png load (HTTP 200, image). 5) /offline.html loads. 6) App still renders (login page shows). Do NOT attempt login (local captcha backend is failing in preview). Report PWA installability readiness."
     - agent: "testing"
       message: "✓ PWA Phase 1 verification COMPLETE. All 6 installability checks passed successfully. The app is fully PWA-ready with valid manifest, registered service worker, proper HTML meta tags, all icon assets loading correctly, offline page functional, and app rendering normally. No issues found. Ready for user testing and production deployment."
+
+# NOTE (main): Fase 1 PWA verified PASS 6/6 by frontend testing agent. working=true.
+
+backend:
+  - task: "Web Push (VAPID) push notifications API"
+    implemented: true
+    working: true
+    file: "backend/routers/push.py, backend/server.py, backend/routers/notifications.py, backend/.env"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Fase 2. New push router: GET /api/push/vapid-public-key (public), POST /api/push/subscribe, POST /api/push/unsubscribe, GET /api/push/status, POST /api/push/test (all auth). VAPID keys stored in backend/.env (VAPID_PUBLIC_KEY/PRIVATE_KEY/SUBJECT). Announcement creation (POST /api/admin/announcements) now fires send_push_to_roles best-effort. Subscriptions stored in Mongo collection push_subscriptions (UUID id, upsert by endpoint). pywebpush + et_xmlfile added to requirements. Needs testing."
+        - working: true
+          agent: "testing"
+          comment: "✓ ALL 8 WEB PUSH BACKEND TESTS PASSED. TEST 1 (VAPID public key): GET /api/push/vapid-public-key returns HTTP 200 with enabled=true and valid public_key (87 chars). TEST 2 (Subscribe): POST /api/push/subscribe with fake FCM endpoint returns HTTP 200 with success message. TEST 3 (Status check): GET /api/push/status returns HTTP 200 with subscribed=true, devices=1. TEST 4 (Upsert): POST /api/push/subscribe with SAME endpoint returns HTTP 200, devices count remains 1 (no duplicate). TEST 5 (Test push): POST /api/push/test returns HTTP 200 with result object (sent=0, failed=1 - delivery failure expected for fake endpoint, this is correct behavior). TEST 6 (Announcement with push): POST /api/admin/announcements returns HTTP 200, announcement created successfully (id=e6fe8299-d1f4-4019-abf3-d4bb9abd7ae5), push notification sent best-effort. TEST 7 (Unsubscribe): POST /api/push/unsubscribe returns HTTP 200, then GET /api/push/status shows subscribed=false. TEST 8 (Invalid subscription): POST /api/push/subscribe with invalid body (missing keys) correctly returns HTTP 400. Backend health check passed. No 500 errors encountered. Push send warnings in logs are EXPECTED (fake endpoint cannot receive actual push). Web Push backend is fully functional and production-ready."
+
+agent_communication:
+    - agent: "main"
+      message: "Please test Fase 2 Web Push backend. Login uses captcha: GET /api/auth/captcha -> {challenge_id, question like 'Berapa 18 - 14 = ?'}, solve math, POST /api/auth/login {username, password, captcha_id, captcha_answer}. Creds in /app/memory/test_credentials.md (admin/admin123). TESTS: (1) GET /api/push/vapid-public-key returns enabled=true and a non-empty public_key (no auth). (2) As admin, POST /api/push/subscribe with body {subscription:{endpoint:'https://fcm.googleapis.com/fcm/send/FAKE-TEST-ENDPOINT-123', keys:{p256dh:'BExampleFakeKeyForTestingOnly0000000000000000000000000000000000000000000000000000000000', auth:'FakeAuthSecret1234567'}}} -> expect 200 with message. (3) GET /api/push/status -> subscribed true, devices>=1. (4) POST /api/push/subscribe again with SAME endpoint -> should upsert (still 200, not duplicate; devices stays 1). (5) POST /api/push/test -> expect HTTP 200 with a 'result' object (actual delivery to the fake endpoint WILL fail so result.sent may be 0 and result.failed>=1 -- that is EXPECTED and acceptable; the endpoint must still return 200 and NOT 500). (6) POST /api/admin/announcements {title:'Tes Push', body:'Halo semua', target_roles:['all'], is_active:true} as admin -> expect 200 and announcement created (push is best-effort; request must succeed even if push send fails). (7) POST /api/push/unsubscribe {endpoint:'https://fcm.googleapis.com/fcm/send/FAKE-TEST-ENDPOINT-123'} -> 200, then GET /api/push/status subscribed=false. (8) POST /api/push/subscribe with invalid body (missing keys) -> expect 400. Confirm no 500 errors and backend stays healthy."
+    - agent: "testing"
+      message: "✓ Fase 2 Web Push backend verification COMPLETE. All 8 backend tests passed successfully (8/8). Created comprehensive backend_test.py with captcha-based authentication. All endpoints working correctly: VAPID public key retrieval, subscription management (subscribe/unsubscribe/status), upsert functionality, test push sending, announcement creation with push integration, and proper validation (400 for invalid input). No 500 errors encountered. Backend health check passed. Push send warnings in logs are expected behavior for fake test endpoints. Web Push backend is fully functional and production-ready. Ready for frontend integration testing or user acceptance testing."
+
+

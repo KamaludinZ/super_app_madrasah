@@ -31,3 +31,5 @@ qrcode==8.2
 pyotp==2.9.0
 Pillow>=10.0.0
 reportlab>=4.2.2
+pywebpush>=2.0.0
+et_xmlfile>=1.1.0
