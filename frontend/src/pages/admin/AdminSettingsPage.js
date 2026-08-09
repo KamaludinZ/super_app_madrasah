@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { notifyPublicPagesVisibilityChanged } from '@/hooks/usePublicPagesVisibility';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const ALL_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
@@ -44,6 +45,10 @@ export default function AdminSettingsPage() {
       payload.session_max_hours = parseInt(payload.session_max_hours) || 12;
       const { data } = await api.put('/admin/settings', payload);
       setForm(data); setGlobalSettings(data);
+
+      // Notify components that public pages visibility settings may have changed
+      notifyPublicPagesVisibilityChanged();
+
       toast.success('Pengaturan disimpan');
     } catch (e) { toast.error('Gagal'); }
   };

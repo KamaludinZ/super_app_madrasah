@@ -1,0 +1,18 @@
+2026-08-07 18:03:41,355 - matsandatama - INFO - MongoDB URL: mongodb://****@localhost:27017/super_app_madrasah?authSource=admin
+2026-08-07 18:03:41,355 - matsandatama - INFO - Is MongoDB Atlas (mongodb+srv): False
+2026-08-07 18:03:41,358 - matsandatama - INFO - MongoDB client initialized for database: super_app_madrasah
+2026-08-07 18:03:41,358 - matsandatama - INFO - Note: Actual connection will be tested on first query
+C:\super_app_madrasah\super_app_madrasah\backend\server.py:206: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+C:\super_app_madrasah\super_app_madrasah\backend\server.py:232: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
