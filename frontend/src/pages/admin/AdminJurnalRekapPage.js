@@ -136,9 +136,6 @@ export default function AdminJurnalRekapPage() {
       // Fetch full journal details with attendance
       const { data: fullJournal } = await api.get(`/jurnal/${journal.id}`);
 
-      console.log('Fetched journal:', fullJournal);
-      console.log('Attendance details:', fullJournal.attendance_details);
-
       setEditDialog({ open: true, journal: fullJournal });
       setEditForm({
         materi: fullJournal.materi || '',

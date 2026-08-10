@@ -74,13 +74,8 @@ export default function AdminSchedulesPage() {
       const currentUserIsWaliKelas = user?.roles?.includes('wali_kelas');
       const currentUserHomeroomClassId = user?.homeroom_class_id;
 
-      console.log('DEBUG - User roles:', user?.roles);
-      console.log('DEBUG - Is Wali Kelas:', currentUserIsWaliKelas);
-      console.log('DEBUG - Homeroom Class ID:', currentUserHomeroomClassId);
-
       if (currentUserIsWaliKelas && currentUserHomeroomClassId) {
         const filteredClasses = allClasses.filter(cls => cls.id === currentUserHomeroomClassId);
-        console.log('DEBUG - Filtered classes:', filteredClasses);
         setClasses(filteredClasses);
         // Auto-select homeroom class for wali kelas
         setFilterValue(currentUserHomeroomClassId);
