@@ -7,7 +7,7 @@ export default function PublicFooter() {
     <footer className="bg-slate-50 border-t border-slate-200 mt-12">
       <div className="container mx-auto px-4 py-6 text-center">
         <p className="text-xs text-slate-500">
-          Super Apps MATSANDATAMA v1.1.0 &copy; {currentYear} - Kementerian Agama Republik Indonesia
+          Super Apps MATSANDATAMA v1.2.1 &copy; {currentYear} - Kementerian Agama Republik Indonesia
         </p>
         <p className="text-xs text-slate-400 mt-1">
           Dikembangkan untuk meningkatkan kualitas layanan pendidikan madrasah
