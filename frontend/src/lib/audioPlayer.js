@@ -29,12 +29,15 @@ class AudioPlayer {
       this.sounds.bell.volume = this.volume;
       this.sounds.chime.volume = this.volume;
 
-      // Preload
+      // Preload with error handling
       await Promise.all([
         this.sounds.bell.load(),
         this.sounds.chime.load(),
-      ]).catch(() => {
-        // Ignore load errors (files might not exist yet)
+      ]).catch((error) => {
+        // Audio files might not exist yet - warn in console
+        console.warn('⚠️ Audio files not found in /sounds/ directory');
+        console.warn('ℹ️ Upload notification-bell.mp3 and notification-chime.mp3 to enable custom sounds');
+        console.warn('ℹ️ See frontend/public/sounds/README.md for details');
       });
 
       this.isInitialized = true;
