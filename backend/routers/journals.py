@@ -1003,3 +1003,159 @@ async def export_jurnal_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ============================================================
+# OFFLINE JOURNAL SUBMISSION with Server-Side Validation
+# ============================================================
+
+from datetime import timedelta
+
+@router.post("/journals/submit-offline")
+async def submit_offline_journal(req: JournalCreateRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """
+    Submit journal from offline queue with server-side timestamp validation
+
+    Features:
+    - Validates deadline based on SERVER TIME (not client time)
+    - Grace period of 30 minutes after deadline
+    - Tracks offline metadata for audit trail
+    - Prevents deadline manipulation
+    """
+
+    # Extract offline metadata
+    metadata = req.dict().get('_offline_metadata', {})
+    queue_id = metadata.get('queue_id')
+    created_at_client = metadata.get('created_at_client')
+    deadline_at = metadata.get('deadline_at')
+    was_offline = metadata.get('was_offline', True)
+
+    # Validate using current server time (trusted source)
+    server_now = now_wib()
+
+    # Get schedule to calculate deadline
+    validation = await _validate_qr_full(req.qr_token, req.user_lat, req.user_lon, user['id'])
+    if not validation['overall_valid']:
+        await log_security('journal_blocked', user['username'],
+                           {'reasons': [v.get('reason') for k, v in validation.items() if isinstance(v, dict) and not v.get('valid', True)]},
+                           request)
+        raise HTTPException(status_code=400, detail={'message': 'Validasi gagal', 'validation': validation})
+
+    sched = validation['context']['schedule']
+    room = validation['context']['room']
+
+    # Calculate server-side deadline (H+1 after schedule ends)
+    # Parse schedule end time
+    end_time_str = sched.get('end_time', '')  # Format: "HH:MM"
+    if ':' in end_time_str:
+        end_hour, end_minute = map(int, end_time_str.split(':'))
+
+        # Get today's date with schedule end time
+        schedule_end = server_now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+
+        # If schedule end is in the future (not yet ended), use that date
+        # If it's in the past, it means schedule was yesterday (edge case for late night schedules)
+        if schedule_end > server_now + timedelta(hours=12):
+            # Schedule is more than 12 hours in future, likely yesterday's schedule
+            schedule_end = schedule_end - timedelta(days=1)
+
+        # Deadline is H+1 after schedule end
+        deadline = schedule_end + timedelta(hours=1)
+        grace_deadline = deadline + timedelta(minutes=30)
+
+        # Check if past deadline
+        if server_now > grace_deadline:
+            late_minutes = int((server_now - grace_deadline).total_seconds() / 60)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Deadline pengisian jurnal sudah lewat lebih dari 30 menit (terlambat {late_minutes} menit). "
+                       f"Batas waktu: {grace_deadline.strftime('%Y-%m-%d %H:%M')} WIB, "
+                       f"Waktu sekarang: {server_now.strftime('%Y-%m-%d %H:%M')} WIB"
+            )
+
+        # Check if late but within grace period
+        is_late = server_now > deadline
+        late_minutes = int((server_now - deadline).total_seconds() / 60) if is_late else 0
+
+    else:
+        # Cannot calculate deadline without valid end_time
+        is_late = False
+        late_minutes = 0
+
+    # Get semester_id from schedule
+    semester_id = sched.get('semester_id')
+    if not semester_id:
+        raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
+
+    # Check for duplicate
+    existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
+    if existing:
+        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+
+    # Create journal with offline metadata
+    journal = JournalModel(
+        schedule_id=sched['id'], teacher_id=user['id'], class_id=sched['class_id'],
+        subject_id=sched['subject_id'], room_id=room['id'], semester_id=semester_id,
+        materi=req.materi, catatan=req.catatan,
+        siswa_hadir=req.siswa_hadir, siswa_tidak_hadir=req.siswa_tidak_hadir,
+        siswa_izin=req.siswa_izin, siswa_sakit=req.siswa_sakit,
+        attendance_details=req.attendance_details,
+        scheduled_start=validation['context'].get('start_time'),
+        scheduled_end=validation['context'].get('end_time'),
+        validations=validation,
+        qr_mode=validation['qr'].get('mode', 'static'),
+    )
+
+    doc = journal.model_dump()
+    if isinstance(doc.get('started_at'), datetime):
+        doc['started_at'] = doc['started_at'].isoformat()
+    if isinstance(doc.get('created_at'), datetime):
+        doc['created_at'] = doc['created_at'].isoformat()
+
+    # Add offline submission metadata
+    doc['offline_submission'] = {
+        'was_offline': was_offline,
+        'queue_id': queue_id,
+        'created_at_client': created_at_client,
+        'submitted_at_server': server_now.isoformat(),
+        'deadline_at': deadline_at,
+        'is_late': is_late,
+        'late_minutes': late_minutes,
+        'sync_attempts': metadata.get('sync_attempts', 1)
+    }
+
+    await db.journals.insert_one(doc)
+
+    # Save individual attendance records
+    attendance_details = req.attendance_details or []
+    if attendance_details:
+        attendance_docs = []
+        for record in attendance_details:
+            att_id = str(uuid.uuid4())
+            attendance_docs.append({
+                'id': att_id,
+                'journal_id': journal.id,
+                'student_id': record.get('student_id'),
+                'student_name': record.get('student_name'),
+                'status': record.get('status'),
+                'created_at': now_wib().isoformat(),
+            })
+        if attendance_docs:
+            await db.attendances.insert_many(attendance_docs)
+
+    # Log with offline metadata
+    await log_audit(user, 'create', 'journal', journal.id,
+                    details={
+                        'class_id': sched['class_id'],
+                        'subject_id': sched['subject_id'],
+                        'offline': was_offline,
+                        'late': is_late,
+                        'late_minutes': late_minutes
+                    }, request=request)
+
+    # Return with late warning if applicable
+    response_data = serialize_doc(doc)
+    if is_late:
+        response_data['warning'] = f"Jurnal disimpan terlambat {late_minutes} menit dari deadline normal"
+
+    return response_data
