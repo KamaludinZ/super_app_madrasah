@@ -93,7 +93,7 @@ export default function BootScreen({ onComplete }) {
   }, []);
 
   /**
-   * Fetch logo and app info
+   * Fetch logo and app info (optional - may fail if not logged in)
    */
   const fetchAppInfo = useCallback(async () => {
     try {
@@ -106,7 +106,9 @@ export default function BootScreen({ onComplete }) {
       }
       return true;
     } catch (err) {
-      return false;
+      // Ignore 401 errors (not logged in yet)
+      // Boot screen runs before login, so app-info is optional
+      return true;
     }
   }, []);
 
@@ -121,32 +123,34 @@ export default function BootScreen({ onComplete }) {
     checkNetwork();
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Step 2: Ping server
+    // Step 2: Ping server (critical)
     const pingSuccess = await pingServer();
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Step 3: Fetch app info
-    const appInfoSuccess = await fetchAppInfo();
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    if (pingSuccess && appInfoSuccess) {
-      setServerStatus('connected');
-
-      // Hide splash screen from index.html
-      const splashScreen = document.getElementById('splash-screen');
-      if (splashScreen) {
-        splashScreen.classList.add('hidden');
-        setTimeout(() => splashScreen.remove(), 500);
-      }
-
-      // Complete boot after short delay
-      setTimeout(() => {
-        if (onComplete) onComplete();
-      }, 500);
-    } else {
+    if (!pingSuccess) {
       setServerStatus('failed');
       setError('Gagal terhubung ke server. Periksa koneksi internet Anda.');
+      return;
     }
+
+    // Step 3: Try to fetch app info (optional, don't fail boot if 401)
+    await fetchAppInfo();
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Success
+    setServerStatus('connected');
+
+    // Hide splash screen from index.html
+    const splashScreen = document.getElementById('splash-screen');
+    if (splashScreen) {
+      splashScreen.classList.add('hidden');
+      setTimeout(() => splashScreen.remove(), 500);
+    }
+
+    // Complete boot after short delay
+    setTimeout(() => {
+      if (onComplete) onComplete();
+    }, 500);
   }, [checkNetwork, pingServer, fetchAppInfo, onComplete]);
 
   /**

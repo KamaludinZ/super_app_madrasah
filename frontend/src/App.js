@@ -12,6 +12,7 @@ import PublicAgenda from '@/pages/PublicAgenda';
 import PublicRKAMPage from '@/pages/PublicRKAMPage';
 import AppShell from '@/components/layout/AppShell';
 import InstallPWA from '@/components/pwa/InstallPWA';
+import useForegroundNotification from '@/hooks/useForegroundNotification';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
@@ -156,6 +157,12 @@ function ProfilePageByRole() {
   return <Navigate to="/profile/guru" replace />;
 }
 
+function NotificationManager() {
+  // Initialize foreground notification handler
+  useForegroundNotification();
+  return null;
+}
+
 function App() {
   const [bootComplete, setBootComplete] = useState(false);
 
@@ -167,6 +174,7 @@ function App() {
   return (
     <AuthProvider>
       <DynamicFavicon />
+      <NotificationManager />
       <BrowserRouter>
         <Toaster richColors position="top-right" />
         <InstallPWA />

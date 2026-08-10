@@ -7,6 +7,7 @@ import StaffDashboard from './dashboards/StaffDashboard';
 import WaliKelasDashboard from './dashboards/WaliKelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 import PublicPagesSection from '@/components/PublicPagesSection';
+import NotificationPermissionBanner from '@/components/NotificationPermissionBanner';
 
 /**
  * Wrapper that shows common sections (announcements, public pages) at top of dashboard,
@@ -15,6 +16,16 @@ import PublicPagesSection from '@/components/PublicPagesSection';
 export default function DashboardRouter() {
   const { activeRole } = useAuth();
   const isAdmin = activeRole === 'admin';
+
+  // Check if user is a teacher (should see notification banner)
+  const isTeacher = [
+    'guru',
+    'guru_piket',
+    'guru_bk',
+    'guru_tata_tertib',
+    'guru_ekstrakurikuler',
+    'wali_kelas'
+  ].includes(activeRole);
 
   let DashboardComponent;
   switch (activeRole) {
@@ -38,6 +49,9 @@ export default function DashboardRouter() {
 
   return (
     <div className="space-y-4">
+      {/* Notification permission banner for teachers */}
+      {isTeacher && <NotificationPermissionBanner />}
+
       {!isAdmin && <AnnouncementsCard />}
       {!isAdmin && <PublicPagesSection />}
       <DashboardComponent />

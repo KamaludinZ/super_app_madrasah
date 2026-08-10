@@ -1305,6 +1305,34 @@ class RKAMBudgetItemModel(BaseModel):
     updated_by: Optional[str] = None
 
 
+class TeachingReminderModel(BaseModel):
+    """Model untuk tracking notifikasi mengajar yang sudah dikirim (anti-dobel)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Schedule reference
+    schedule_id: str  # ID jadwal yang di-remind
+    teacher_id: str  # ID guru yang dinotifikasi
+
+    # Timing
+    date: str  # Format: YYYY-MM-DD (tanggal notifikasi dikirim)
+    day: str  # Hari (Senin, Selasa, dst)
+    start_time: str  # Jam mulai mengajar (HH:MM)
+
+    # Notification type
+    reminder_type: str  # 'before' (10 menit sebelum) atau 'start' (saat jam mulai)
+    minutes_before: Optional[int] = None  # Berapa menit sebelum (untuk type 'before')
+
+    # Status
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    is_sent: bool = True
+
+    # Additional info
+    class_name: Optional[str] = None
+    subject_name: Optional[str] = None
+    room_name: Optional[str] = None
+
+
 class RKAMDocumentModel(BaseModel):
     """Model untuk dokumen transparansi RKAM."""
     model_config = ConfigDict(extra="ignore")

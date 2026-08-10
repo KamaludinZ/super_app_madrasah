@@ -212,25 +212,41 @@ async def startup_event():
     """
     Startup event - seeds data only in development mode.
     For production, data should be seeded manually using seed_all_data.py
+    Also starts background tasks (teaching reminder scheduler, cleanup)
     """
     import os
+    import asyncio
     env = os.environ.get("ENVIRONMENT", "development").strip().lower()
 
     if env == "production":
         logger.info("Production mode - skipping automatic data seeding")
         logger.info("Use seed_all_data.py to manually seed data if needed")
-        return
+    else:
+        # Development mode - run seeders
+        try:
+            from seed_data import is_production_env, refresh_demo_schedule, seed_all
+            logger.info("Development mode - running data seeders")
+            await seed_all(db)
+            if not is_production_env():
+                await refresh_demo_schedule(db)
+            logger.info("Data seeding completed successfully")
+        except Exception as e:
+            logger.error(f"Seed error (development mode): {e}")
 
-    # Development mode - run seeders
+    # Start background tasks (both dev and production)
     try:
-        from seed_data import is_production_env, refresh_demo_schedule, seed_all
-        logger.info("Development mode - running data seeders")
-        await seed_all(db)
-        if not is_production_env():
-            await refresh_demo_schedule(db)
-        logger.info("Data seeding completed successfully")
+        from teaching_reminder_scheduler import start_reminder_scheduler, start_cleanup_task
+
+        # Start reminder scheduler (runs every minute)
+        asyncio.create_task(start_reminder_scheduler())
+        logger.info("✓ Teaching reminder scheduler started")
+
+        # Start cleanup task (runs daily at 2 AM)
+        asyncio.create_task(start_cleanup_task())
+        logger.info("✓ Cleanup task started")
+
     except Exception as e:
-        logger.error(f"Seed error (development mode): {e}")
+        logger.error(f"Failed to start background tasks: {e}")
 
 
 @app.on_event("shutdown")

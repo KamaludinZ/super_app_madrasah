@@ -83,30 +83,80 @@ self.addEventListener('push', (event) => {
   } catch (e) {
     data = { title: 'MATSANDATAMA', body: event.data ? event.data.text() : '' };
   }
+
   const title = data.title || 'MATSANDATAMA';
   const options = {
     body: data.body || '',
     icon: data.icon || '/icon-192.png',
-    badge: '/icon-192.png',
-    data: { url: data.url || '/' },
+    badge: data.badge || '/icon-192.png',
+    data: data.data || { url: data.url || '/' },
     tag: data.tag || undefined,
     renotify: !!data.tag,
+    requireInteraction: data.requireInteraction || false,
+    actions: data.actions || [],
+    vibrate: [200, 100, 200], // Vibration pattern
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+
+  event.waitUntil(
+    self.registration.showNotification(title, options).then(() => {
+      // Notify foreground clients to play sound
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          clientList.forEach(client => {
+            client.postMessage({
+              type: 'NOTIFICATION_RECEIVED',
+              action: data.data?.action,
+              payload: data
+            });
+          });
+        });
+    })
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  const notificationData = event.notification.data || {};
+  let targetUrl = notificationData.url || '/';
+
+  // Handle notification action buttons
+  if (event.action) {
+    switch (event.action) {
+      case 'scan':
+        // Open scan page with schedule_id
+        if (notificationData.schedule_id) {
+          targetUrl = `/jurnal/scan?schedule_id=${notificationData.schedule_id}`;
+        } else {
+          targetUrl = '/jurnal/scan';
+        }
+        break;
+
+      case 'journal':
+        // Open journal page
+        targetUrl = '/jurnal';
+        break;
+
+      default:
+        // Use default URL from notification
+        break;
+    }
+  }
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Try to focus existing window and navigate
       for (const client of clientList) {
         if ('focus' in client) {
           client.navigate(targetUrl).catch(() => {});
           return client.focus();
         }
       }
-      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+
+      // No existing window, open new one
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
     })
   );
 });
