@@ -13,6 +13,7 @@ import PublicRKAMPage from '@/pages/PublicRKAMPage';
 import AppShell from '@/components/layout/AppShell';
 import InstallPWA from '@/components/pwa/InstallPWA';
 import useForegroundNotification from '@/hooks/useForegroundNotification';
+import { startSyncListener } from '@/lib/syncManager';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
@@ -160,6 +161,22 @@ function ProfilePageByRole() {
 function NotificationManager() {
   // Initialize foreground notification handler
   useForegroundNotification();
+
+  // Initialize offline sync listener
+  React.useEffect(() => {
+    const cleanup = startSyncListener((results) => {
+      // Callback when sync completes
+      console.log('Sync completed:', results);
+
+      // Optional: show user notification
+      if (results.synced > 0) {
+        console.log(`✓ ${results.synced} jurnal berhasil disinkronkan`);
+      }
+    });
+
+    return cleanup;
+  }, []);
+
   return null;
 }
 
