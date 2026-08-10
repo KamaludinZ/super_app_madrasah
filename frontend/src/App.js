@@ -23,7 +23,6 @@ import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminPenggunaSiswaPage from '@/pages/admin/AdminPenggunaSiswaPage';
 import AdminClassesPage from '@/pages/admin/AdminClassesPage';
 import AdminJabatanPage from '@/pages/admin/AdminJabatanPage';
-import JabatanDiagnostic from '@/pages/JabatanDiagnostic';
 import AdminRoomsPage from '@/pages/admin/AdminRoomsPage';
 import AdminSubjectsPage from '@/pages/admin/AdminSubjectsPage';
 import AdminSchedulesPage from '@/pages/admin/AdminSchedulesPage';
@@ -241,7 +240,6 @@ function App() {
             <Route path="/admin/gtk/profesionalitas" element={<AdminProfesionalitasGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
             <Route path="/admin/jabatan" element={<AdminJabatanPage />} />
-            <Route path="/admin/jabatan-diagnostic" element={<JabatanDiagnostic />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />
             <Route path="/admin/subjects" element={<AdminSubjectsPage />} />
             <Route path="/admin/schedules" element={<AdminSchedulesPage />} />

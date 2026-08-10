@@ -360,11 +360,93 @@ export default function PublicAgenda() {
                   Menampilkan {staffStartIndex + 1}-{Math.min(staffEndIndex, totalStaffEvents)} dari {totalStaffEvents} kegiatan
                 </div>
 
-                <div className="space-y-3">
-                  {paginatedStaffEvents.map((event, idx) => (
-                    <StaffEventCard key={event.id || idx} event={event} now={now} />
-                  ))}
-                </div>
+                {/* Table View */}
+                <Card className="surface-ivory">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="text-left p-3 text-sm font-semibold text-slate-700">Waktu</th>
+                          <th className="text-left p-3 text-sm font-semibold text-slate-700">Nama Kegiatan</th>
+                          <th className="text-left p-3 text-sm font-semibold text-slate-700">Pegawai</th>
+                          <th className="text-left p-3 text-sm font-semibold text-slate-700">Jabatan</th>
+                          <th className="text-left p-3 text-sm font-semibold text-slate-700">Lokasi</th>
+                          <th className="text-center p-3 text-sm font-semibold text-slate-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedStaffEvents.map((event, idx) => {
+                          // Calculate status
+                          const eventDate = event.date;
+                          const [startHour, startMin] = event.start_time.split(':').map(Number);
+                          const [endHour, endMin] = event.end_time.split(':').map(Number);
+                          const eventStart = new Date(eventDate + 'T' + event.start_time);
+                          const eventEnd = new Date(eventDate + 'T' + event.end_time);
+
+                          let status = 'upcoming';
+                          if (now >= eventStart && now <= eventEnd) status = 'ongoing';
+                          else if (now > eventEnd) status = 'completed';
+
+                          const statusConfig = {
+                            upcoming: { label: 'Akan Datang', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                            ongoing: { label: 'Sedang Berlangsung', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+                            completed: { label: 'Selesai', bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' }
+                          }[status];
+
+                          return (
+                            <tr key={event.id || idx} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                              <td className="p-3">
+                                <div className="flex items-center gap-2 text-slate-700">
+                                  <Clock className="h-4 w-4 text-[#006837]" />
+                                  <span className="font-medium text-sm whitespace-nowrap">
+                                    {event.start_time} - {event.end_time}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div>
+                                  <div className="font-semibold text-slate-900">{event.title}</div>
+                                  {event.description && (
+                                    <div className="text-xs text-slate-600 mt-1 line-clamp-2">{event.description}</div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div>
+                                  <div className="font-medium text-slate-900">{event.user_name || '-'}</div>
+                                  {event.nip && (
+                                    <div className="text-xs text-slate-500">NIP: {event.nip}</div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2 text-slate-700">
+                                  <Briefcase className="h-4 w-4 text-[#006837]" />
+                                  <span className="text-sm">{event.jabatan || 'Belum ditentukan'}</span>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                {event.location ? (
+                                  <div className="flex items-center gap-2 text-slate-700">
+                                    <MapPin className="h-4 w-4 text-[#006837]" />
+                                    <span className="text-sm">{event.location}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400">-</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                <Badge className={`${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} text-xs whitespace-nowrap`}>
+                                  {statusConfig.label}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
 
                 {/* Pagination */}
                 {totalStaffPages > 1 && (
@@ -483,90 +565,3 @@ function MadrasahEventCard({ event }) {
   );
 }
 
-function StaffEventCard({ event, now }) {
-  // Calculate status in real-time on the client side
-  const calculateStatus = () => {
-    const eventDate = event.date;
-    const startTime = event.start_time || '00:00';
-    const endTime = event.end_time || '23:59';
-
-    try {
-      const eventStart = new Date(`${eventDate}T${startTime}:00`);
-      const eventEnd = new Date(`${eventDate}T${endTime}:00`);
-
-      if (now < eventStart) {
-        return 'upcoming';
-      } else if (now >= eventStart && now <= eventEnd) {
-        return 'ongoing';
-      } else {
-        return 'completed';
-      }
-    } catch (e) {
-      return 'upcoming';
-    }
-  };
-
-  const currentStatus = calculateStatus();
-  const statusConfig = STATUS_COLORS[currentStatus] || STATUS_COLORS.upcoming;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className="bg-white rounded-lg border border-slate-200 p-4 hover:shadow-md transition-shadow"
-    >
-      <div className="flex items-start gap-4">
-        {/* Status Badge */}
-        <div className={`flex items-center justify-center w-16 h-16 rounded-lg ${statusConfig.bg} border-2 ${statusConfig.border} shrink-0`}>
-          <Clock className={`h-8 w-8 ${statusConfig.text}`} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div>
-              <h3 className="font-bold text-slate-900 text-lg leading-tight">{event.event_name}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className={`${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} text-xs`}>
-                  {statusConfig.label}
-                </Badge>
-              </div>
-            </div>
-          </div>
-
-          {event.description && (
-            <p className="text-sm text-slate-600 mb-3">{event.description}</p>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-            <div className="flex items-center gap-2 text-slate-700">
-              <User className="h-4 w-4 text-[#006837]" />
-              <div>
-                <span className="font-semibold">{event.user_name || '-'}</span>
-                {event.nip && <span className="text-xs text-slate-500 ml-1">({event.nip})</span>}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-slate-600">
-              <Briefcase className="h-4 w-4 text-[#006837]" />
-              <span>{event.jabatan || 'Jabatan belum ditentukan'}</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-slate-600">
-              <Clock className="h-4 w-4 text-[#006837]" />
-              <span className="font-medium">{event.start_time} - {event.end_time} WIB</span>
-            </div>
-
-            {event.location && (
-              <div className="flex items-center gap-2 text-slate-600">
-                <MapPin className="h-4 w-4 text-[#006837]" />
-                <span>{event.location}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}

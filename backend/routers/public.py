@@ -328,20 +328,21 @@ async def public_agenda(
                 se['user_name'] = user.get('full_name')
                 se['nip'] = user.get('nip')
 
-                # Get jabatan names from jabatan collection based on jabatan_ids
+                # Get first jabatan only from jabatan collection
                 jabatan_ids = user.get('jabatan_ids', [])
-                jabatan_names = []
+                jabatan_name = None
 
-                if jabatan_ids:
-                    # Fetch all jabatan documents for this user
-                    jabatan_docs = await db.jabatan.find(
-                        {'id': {'$in': jabatan_ids}},
+                if jabatan_ids and len(jabatan_ids) > 0:
+                    # Get only the first jabatan
+                    first_jabatan = await db.jabatan.find_one(
+                        {'id': jabatan_ids[0]},
                         {'_id': 0, 'name': 1}
-                    ).to_list(100)
-                    jabatan_names = [j.get('name') for j in jabatan_docs if j.get('name')]
+                    )
+                    if first_jabatan:
+                        jabatan_name = first_jabatan.get('name')
 
-                # Join multiple jabatan with comma, or None if empty
-                se['jabatan'] = ', '.join(jabatan_names) if jabatan_names else None
+                # Set jabatan (single value) or None if not set
+                se['jabatan'] = jabatan_name
 
         # Determine status based on date and time
         event_date = se.get('date', '')
