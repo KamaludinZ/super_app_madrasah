@@ -407,6 +407,22 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
         j['subject_name'] = sub.get('name') if sub else None
         j['room_name'] = room.get('name') if room else None
 
+        # Get teacher name
+        teacher_id = j.get('teacher_id')
+        if teacher_id:
+            teacher = await db.users.find_one({'id': teacher_id}, {'_id': 0, 'full_name': 1})
+            j['teacher_name'] = teacher.get('full_name') if teacher else None
+        else:
+            j['teacher_name'] = None
+
+        # Get filled_by name for piket/admin filled journals
+        filled_by_id = j.get('filled_by')
+        if filled_by_id:
+            filled_by = await db.users.find_one({'id': filled_by_id}, {'_id': 0, 'full_name': 1})
+            j['filled_by_name'] = filled_by.get('full_name') if filled_by else None
+        else:
+            j['filled_by_name'] = None
+
         # Get attendance details
         journal_id = j.get('id')
         if journal_id:
