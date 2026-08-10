@@ -16,6 +16,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { addToJournalQueue, checkDeadline } from '@/lib/offlineStorage';
+import { DeadlineWarningDialog } from '@/components/offline/DeadlineWarningDialog';
 
 const STATUS_OPTIONS = [
   { value: 'hadir', label: 'Hadir', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
@@ -50,6 +52,11 @@ export default function JurnalScanPage() {
   const [selectedIndikator, setSelectedIndikator] = useState('');
   const [selectedMateri, setSelectedMateri] = useState('');
   const [materiInputMode, setMateriInputMode] = useState('select'); // 'select' or 'manual'
+
+  // Offline functionality
+  const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
+  const [deadlineInfo, setDeadlineInfo] = useState(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState(null);
 
   // Get GPS on mount
   useEffect(() => {
@@ -206,49 +213,128 @@ export default function JurnalScanPage() {
     setAttendanceRecords(newRec);
   };
 
+  const calculateDeadline = () => {
+    if (!validation?.context?.schedule) return null;
+
+    const schedule = validation.context.schedule;
+    const now = new Date();
+
+    // Calculate schedule end time
+    const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
+    const scheduleEnd = new Date();
+    scheduleEnd.setHours(endHour, endMinute, 0, 0);
+
+    // Deadline = schedule end + 1 hour
+    const deadline = new Date(scheduleEnd.getTime() + (60 * 60 * 1000));
+
+    // Grace period = deadline + 30 minutes
+    const graceDeadline = new Date(deadline.getTime() + (30 * 60 * 1000));
+
+    const deadlineCheck = checkDeadline(graceDeadline.toISOString(), 30);
+
+    // Add additional info for dialog display
+    return {
+      ...deadlineCheck,
+      scheduleEnd: scheduleEnd.toISOString(),
+      deadline: deadline.toISOString(),
+      graceDeadline: graceDeadline.toISOString(),
+    };
+  };
+
+  const handleSaveOffline = async (journalData) => {
+    try {
+      // Add deadline info to journal data
+      const dataWithDeadline = {
+        ...journalData,
+        deadline_at: deadlineInfo?.graceDeadline || new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+        schedule_info: validation?.context?.schedule || {},
+      };
+
+      await addToJournalQueue(dataWithDeadline);
+
+      setPhase('success');
+      toast.success('Jurnal disimpan offline! Akan otomatis disinkronkan saat online.', {
+        duration: 4000,
+      });
+
+      setTimeout(() => nav('/jurnal/riwayat'), 2000);
+    } catch (error) {
+      setPhase('validated');
+      toast.error('Gagal menyimpan offline: ' + error.message);
+    }
+  };
+
   const handleSubmitJurnal = async (e) => {
     e.preventDefault();
     if (!form.materi.trim()) {
       toast.error('Materi pelajaran wajib diisi');
       return;
     }
-    setPhase('submitting');
-    try {
-      const isClassToken = qrToken?.startsWith('CLASS:');
-      const endpoint = isClassToken ? '/jurnal/by-class-token' : '/jurnal';
 
-      // Use auto-calculated counts from individual attendance
-      const payload = isClassToken
-        ? {
-            class_token: qrToken.replace('CLASS:', ''),
-            user_lat: gps?.lat ?? null,
-            user_lon: gps?.lon ?? null,
-            materi: form.materi,
-            catatan: form.catatan,
-            siswa_hadir: attendanceSummary.hadir,
-            siswa_tidak_hadir: attendanceSummary.alpa,
-            siswa_izin: attendanceSummary.izin,
-            siswa_sakit: attendanceSummary.sakit,
-          }
-        : {
-            qr_token: qrToken,
-            user_lat: gps?.lat ?? null,
-            user_lon: gps?.lon ?? null,
-            materi: form.materi,
-            catatan: form.catatan,
-            siswa_hadir: attendanceSummary.hadir,
-            siswa_tidak_hadir: attendanceSummary.alpa,
-            siswa_izin: attendanceSummary.izin,
-            siswa_sakit: attendanceSummary.sakit,
-          };
+    const isClassToken = qrToken?.startsWith('CLASS:');
+    const payload = isClassToken
+      ? {
+          class_token: qrToken.replace('CLASS:', ''),
+          user_lat: gps?.lat ?? null,
+          user_lon: gps?.lon ?? null,
+          materi: form.materi,
+          catatan: form.catatan,
+          siswa_hadir: attendanceSummary.hadir,
+          siswa_tidak_hadir: attendanceSummary.alpa,
+          siswa_izin: attendanceSummary.izin,
+          siswa_sakit: attendanceSummary.sakit,
+        }
+      : {
+          qr_token: qrToken,
+          user_lat: gps?.lat ?? null,
+          user_lon: gps?.lon ?? null,
+          materi: form.materi,
+          catatan: form.catatan,
+          siswa_hadir: attendanceSummary.hadir,
+          siswa_tidak_hadir: attendanceSummary.alpa,
+          siswa_izin: attendanceSummary.izin,
+          siswa_sakit: attendanceSummary.sakit,
+        };
+
+    setPhase('submitting');
+
+    try {
+      const endpoint = isClassToken ? '/jurnal/by-class-token' : '/jurnal';
       await api.post(endpoint, payload);
       setPhase('success');
       toast.success('Jurnal berhasil disimpan!');
       setTimeout(() => nav('/jurnal/riwayat'), 1500);
     } catch (err) {
-      setPhase('validated');
-      const msg = err?.response?.data?.detail;
-      toast.error(typeof msg === 'string' ? msg : (msg?.message || 'Gagal menyimpan jurnal'));
+      // Check if it's a network error or deadline error
+      const isNetworkError = !err.response || err.code === 'ERR_NETWORK';
+      const errorDetail = err?.response?.data?.detail;
+      const isDeadlineError = typeof errorDetail === 'string' &&
+        (errorDetail.includes('deadline') || errorDetail.includes('terlambat'));
+
+      if (isNetworkError || isDeadlineError) {
+        // Try offline save as fallback
+        const deadlineCheck = calculateDeadline();
+
+        if (deadlineCheck && !deadlineCheck.isPastGrace) {
+          // Show warning dialog
+          setDeadlineInfo(deadlineCheck);
+          setPendingSubmitData(payload);
+          setDeadlineDialogOpen(true);
+          setPhase('validated'); // Reset phase
+        } else if (deadlineCheck && deadlineCheck.isPastGrace) {
+          // Past grace period - cannot save
+          setPhase('validated');
+          toast.error('Deadline sudah terlewati. Tidak bisa menyimpan jurnal.');
+        } else {
+          // No deadline info, fallback to offline without warning
+          await handleSaveOffline(payload);
+        }
+      } else {
+        // Other errors
+        setPhase('validated');
+        const msg = err?.response?.data?.detail;
+        toast.error(typeof msg === 'string' ? msg : (msg?.message || 'Gagal menyimpan jurnal'));
+      }
     }
   };
 
@@ -626,6 +712,25 @@ export default function JurnalScanPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Deadline Warning Dialog */}
+      <DeadlineWarningDialog
+        open={deadlineDialogOpen}
+        onOpenChange={setDeadlineDialogOpen}
+        deadlineInfo={deadlineInfo}
+        onConfirm={async () => {
+          setDeadlineDialogOpen(false);
+          if (pendingSubmitData) {
+            await handleSaveOffline(pendingSubmitData);
+            setPendingSubmitData(null);
+          }
+        }}
+        onCancel={() => {
+          setDeadlineDialogOpen(false);
+          setPendingSubmitData(null);
+          setPhase('validated');
+        }}
+      />
     </div>
   );
 }

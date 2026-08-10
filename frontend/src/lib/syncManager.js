@@ -14,7 +14,8 @@ import {
   getPendingJournals,
   updateQueuedJournal,
   removeFromQueue,
-  getSyncStats
+  getSyncStats,
+  getAllQueuedJournals
 } from '@/lib/offlineStorage';
 
 const MAX_RETRY_ATTEMPTS = 3;

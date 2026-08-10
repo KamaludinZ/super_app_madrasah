@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import EnableNotifications from '@/components/pwa/EnableNotifications';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
+import { OfflineQueueBadge } from '@/components/offline/OfflineQueueBadge';
 
 /**
  * Build sidebar items based ONLY on activeRole.
@@ -568,6 +569,9 @@ export default function AppShell({ children }) {
 
               {/* Notification Bell */}
               <NotificationBell />
+
+              {/* Offline Queue Badge - show for roles that can submit journals */}
+              {['guru', 'admin'].includes(activeRole) && <OfflineQueueBadge />}
 
               {/* Back to Admin button - show only when impersonating */}
               {user?.is_impersonating && (

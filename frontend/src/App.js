@@ -14,6 +14,7 @@ import AppShell from '@/components/layout/AppShell';
 import InstallPWA from '@/components/pwa/InstallPWA';
 import useForegroundNotification from '@/hooks/useForegroundNotification';
 import { startSyncListener } from '@/lib/syncManager';
+import { SyncStatusIndicator } from '@/components/offline/SyncStatusIndicator';
 import DashboardRouter from '@/pages/DashboardRouter';
 import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
@@ -177,7 +178,7 @@ function NotificationManager() {
     return cleanup;
   }, []);
 
-  return null;
+  return <SyncStatusIndicator />;
 }
 
 function App() {
