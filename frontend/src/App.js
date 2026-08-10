@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import BootScreen from '@/components/BootScreen';
 import LoginPage from '@/pages/LoginPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
@@ -156,6 +157,13 @@ function ProfilePageByRole() {
 }
 
 function App() {
+  const [bootComplete, setBootComplete] = useState(false);
+
+  // Show boot screen until connection is verified
+  if (!bootComplete) {
+    return <BootScreen onComplete={() => setBootComplete(true)} />;
+  }
+
   return (
     <AuthProvider>
       <DynamicFavicon />
