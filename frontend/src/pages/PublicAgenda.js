@@ -550,7 +550,7 @@ function StaffEventCard({ event, now }) {
 
             <div className="flex items-center gap-2 text-slate-600">
               <Briefcase className="h-4 w-4 text-[#006837]" />
-              <span>{event.jabatan || '-'}</span>
+              <span>{event.jabatan || 'Jabatan belum ditentukan'}</span>
             </div>
 
             <div className="flex items-center gap-2 text-slate-600">
