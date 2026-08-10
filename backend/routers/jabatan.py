@@ -95,3 +95,95 @@ async def toggle_jabatan_active(jid: str, request: Request, user: Dict = Depends
 
     await log_audit(user, 'update', 'jabatan', jid, details={'is_active': new_status}, request=request)
     return {'message': f"Status jabatan diubah menjadi {'aktif' if new_status else 'nonaktif'}", 'is_active': new_status}
+
+
+@router.get("/jabatan/diagnostic/check-role-names")
+async def diagnostic_check_role_names(user: Dict = Depends(require_role('admin'))):
+    """Diagnostic endpoint to check if jabatan master data contains role names."""
+
+    # Role names that should NOT appear in jabatan master data
+    ROLE_NAMES = [
+        'Administrator',
+        'Guru Mata Pelajaran',
+        'Wali Kelas',
+        'Guru BK',
+        'Tenaga Kependidikan',
+        'Kepala Sekolah',
+        'Wakil Kepala Sekolah',
+        'Siswa'
+    ]
+
+    # Get all jabatan entries
+    jabatan_list = await db.jabatan.find({}, {'_id': 0}).to_list(1000)
+
+    # Categorize jabatan
+    role_based_jabatan = []
+    proper_jabatan = []
+
+    for jab in jabatan_list:
+        name = jab.get('name', '')
+
+        # For each jabatan, get count of users assigned
+        user_count = await db.users.count_documents({'jabatan_ids': jab.get('id')})
+        jab['user_count'] = user_count
+
+        # Get sample users (max 3)
+        if user_count > 0:
+            sample_users = await db.users.find(
+                {'jabatan_ids': jab.get('id')},
+                {'_id': 0, 'full_name': 1, 'nip': 1}
+            ).limit(3).to_list(3)
+            jab['sample_users'] = sample_users
+        else:
+            jab['sample_users'] = []
+
+        if name in ROLE_NAMES:
+            role_based_jabatan.append(jab)
+        else:
+            proper_jabatan.append(jab)
+
+    # Get users without jabatan
+    users_no_jabatan_count = await db.users.count_documents({
+        '$or': [
+            {'jabatan_ids': {'$exists': False}},
+            {'jabatan_ids': []},
+            {'jabatan_ids': None}
+        ],
+        'roles': {'$nin': ['siswa', 'admin']}
+    })
+
+    sample_users_no_jabatan = []
+    if users_no_jabatan_count > 0:
+        sample_users_no_jabatan = await db.users.find(
+            {
+                '$or': [
+                    {'jabatan_ids': {'$exists': False}},
+                    {'jabatan_ids': []},
+                    {'jabatan_ids': None}
+                ],
+                'roles': {'$nin': ['siswa', 'admin']}
+            },
+            {'_id': 0, 'full_name': 1, 'nip': 1, 'roles': 1}
+        ).limit(5).to_list(5)
+
+    return {
+        'total_jabatan': len(jabatan_list),
+        'role_based_jabatan': {
+            'count': len(role_based_jabatan),
+            'items': role_based_jabatan
+        },
+        'proper_jabatan': {
+            'count': len(proper_jabatan),
+            'items': proper_jabatan
+        },
+        'users_without_jabatan': {
+            'count': users_no_jabatan_count,
+            'sample': sample_users_no_jabatan
+        },
+        'has_issues': len(role_based_jabatan) > 0 or users_no_jabatan_count > 0,
+        'recommendations': [
+            'Hapus jabatan dengan nama role (seperti "Guru Mata Pelajaran")',
+            'Buat jabatan baru dengan nama posisi yang sesuai (seperti "Wakil Kepala Kurikulum")',
+            'Edit pengguna dan pilihkan jabatan yang tepat'
+        ] if len(role_based_jabatan) > 0 else ['Data jabatan sudah baik!']
+    }
