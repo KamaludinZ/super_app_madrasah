@@ -319,14 +319,14 @@ async def public_agenda(
         staff_events_q, {'_id': 0}
     ).sort('date', 1).sort('start_time', 1).to_list(1000)
 
-    # Enrich staff events with user info
+    # Enrich staff events with user info (from database users table)
     now_wib_dt = now_wib()
     for se in staff_events:
         if se.get('user_id'):
-            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'jabatan_ids': 1})
+            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip_nuptk': 1, 'jabatan_ids': 1})
             if user:
                 se['user_name'] = user.get('full_name')
-                se['nip'] = user.get('nip')
+                se['nip'] = user.get('nip_nuptk')
 
                 # Get first jabatan only from jabatan collection
                 # This reads from jabatan_ids field in /admin/users
