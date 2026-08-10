@@ -59,6 +59,7 @@ export default function AdminAgendaTendikPage() {
 
   const [agendas, setAgendas] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [jabatanList, setJabatanList] = useState([]);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -80,6 +81,10 @@ export default function AdminAgendaTendikPage() {
       const { data: usersData } = await api.get('/users');
       const tendikList = usersData.filter(u => u.roles?.includes('tenaga_kependidikan'));
       setStaff(tendikList);
+
+      // Load jabatan master data
+      const { data: jabatanData } = await api.get('/jabatan');
+      setJabatanList(jabatanData);
 
       // Load agendas from backend
       const { data: agendasData } = await api.get('/staff-events');
@@ -228,6 +233,7 @@ export default function AdminAgendaTendikPage() {
                   <TableHead>Tanggal & Waktu</TableHead>
                   <TableHead>Kegiatan</TableHead>
                   <TableHead>Petugas</TableHead>
+                  <TableHead>Jabatan</TableHead>
                   <TableHead>Kategori</TableHead>
                   <TableHead>Prioritas</TableHead>
                   <TableHead>Tempat</TableHead>
@@ -239,19 +245,29 @@ export default function AdminAgendaTendikPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={10} className="text-center py-8 text-slate-500">
                       Memuat data...
                     </TableCell>
                   </TableRow>
                 ) : filteredAgendas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={10} className="text-center py-8 text-slate-500">
                       Belum ada agenda. Klik "Tambah Agenda" untuk membuat agenda baru.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredAgendas.map((agenda) => {
                     const staffMember = staff.find(t => t.id === agenda.user_id) || { full_name: agenda.user_name };
+
+                    // Get first jabatan name
+                    let jabatanName = 'Belum ditentukan';
+                    if (staffMember.jabatan_ids && staffMember.jabatan_ids.length > 0) {
+                      const firstJabatan = jabatanList.find(j => j.id === staffMember.jabatan_ids[0]);
+                      if (firstJabatan) {
+                        jabatanName = firstJabatan.name;
+                      }
+                    }
+
                     // Hitung status otomatis (kecuali jika cancelled)
                     const currentStatus = calculateAutoStatus(agenda);
                     const statusInfo = STATUS_OPTIONS.find(s => s.value === currentStatus);
@@ -277,6 +293,7 @@ export default function AdminAgendaTendikPage() {
                           {agenda.description && <div className="text-xs text-slate-500 line-clamp-1">{agenda.description}</div>}
                         </TableCell>
                         <TableCell>{staffMember.full_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-slate-700">{jabatanName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{categoryInfo?.label || agenda.category || '-'}</Badge>
                         </TableCell>

@@ -49,6 +49,7 @@ export default function AdminAgendaGuruPage() {
 
   const [agendas, setAgendas] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [jabatanList, setJabatanList] = useState([]);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -70,6 +71,10 @@ export default function AdminAgendaGuruPage() {
       const { data: usersData } = await api.get('/users');
       const guruList = usersData.filter(u => u.roles?.includes('guru'));
       setTeachers(guruList);
+
+      // Load jabatan master data
+      const { data: jabatanData } = await api.get('/jabatan');
+      setJabatanList(jabatanData);
 
       // Load agendas from backend
       const { data: agendasData } = await api.get('/staff-events');
@@ -216,6 +221,7 @@ export default function AdminAgendaGuruPage() {
                   <TableHead>Tanggal & Waktu</TableHead>
                   <TableHead>Kegiatan</TableHead>
                   <TableHead>Guru</TableHead>
+                  <TableHead>Jabatan</TableHead>
                   <TableHead>Kategori</TableHead>
                   <TableHead>Tempat</TableHead>
                   <TableHead>Status</TableHead>
@@ -226,19 +232,29 @@ export default function AdminAgendaGuruPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
                       Memuat data...
                     </TableCell>
                   </TableRow>
                 ) : filteredAgendas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
                       Belum ada agenda. Klik "Tambah Agenda" untuk membuat agenda baru.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredAgendas.map((agenda) => {
                     const teacher = teachers.find(t => t.id === agenda.user_id) || { full_name: agenda.user_name };
+
+                    // Get first jabatan name
+                    let jabatanName = 'Belum ditentukan';
+                    if (teacher.jabatan_ids && teacher.jabatan_ids.length > 0) {
+                      const firstJabatan = jabatanList.find(j => j.id === teacher.jabatan_ids[0]);
+                      if (firstJabatan) {
+                        jabatanName = firstJabatan.name;
+                      }
+                    }
+
                     // Hitung status otomatis (kecuali jika cancelled)
                     const currentStatus = calculateAutoStatus(agenda);
                     const statusInfo = STATUS_OPTIONS.find(s => s.value === currentStatus);
@@ -263,6 +279,7 @@ export default function AdminAgendaGuruPage() {
                           {agenda.description && <div className="text-xs text-slate-500 line-clamp-1">{agenda.description}</div>}
                         </TableCell>
                         <TableCell>{teacher.full_name || '-'}</TableCell>
+                        <TableCell className="text-sm text-slate-700">{jabatanName}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{categoryInfo?.label || agenda.category || '-'}</Badge>
                         </TableCell>
