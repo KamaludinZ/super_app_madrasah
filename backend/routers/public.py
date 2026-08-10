@@ -329,11 +329,12 @@ async def public_agenda(
                 se['nip'] = user.get('nip')
 
                 # Get first jabatan only from jabatan collection
+                # This reads from jabatan_ids field in /admin/users
                 jabatan_ids = user.get('jabatan_ids', [])
                 jabatan_name = None
 
                 if jabatan_ids and len(jabatan_ids) > 0:
-                    # Get only the first jabatan
+                    # Get only the first jabatan from jabatan master data
                     first_jabatan = await db.jabatan.find_one(
                         {'id': jabatan_ids[0]},
                         {'_id': 0, 'name': 1}
@@ -342,6 +343,8 @@ async def public_agenda(
                         jabatan_name = first_jabatan.get('name')
 
                 # Set jabatan (single value) or None if not set
+                # If user has no jabatan_ids, this will be None -> frontend shows "Belum ditentukan"
+                # If user has jabatan_ids, this shows the name from jabatan master data
                 se['jabatan'] = jabatan_name
 
         # Determine status based on date and time

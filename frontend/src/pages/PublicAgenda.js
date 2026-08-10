@@ -405,17 +405,17 @@ export default function PublicAgenda() {
                               </td>
                               <td className="p-3">
                                 <div>
-                                  <div className="font-semibold text-slate-900">{event.title}</div>
+                                  <div className="font-medium text-slate-900">{event.event_name}</div>
                                   {event.description && (
-                                    <div className="text-xs text-slate-600 mt-1 line-clamp-2">{event.description}</div>
+                                    <div className="text-xs text-slate-600 mt-1">{event.description}</div>
                                   )}
                                 </div>
                               </td>
                               <td className="p-3">
                                 <div>
-                                  <div className="font-medium text-slate-900">{event.user_name || '-'}</div>
-                                  {event.nip && (
-                                    <div className="text-xs text-slate-500">NIP: {event.nip}</div>
+                                  <div className="text-slate-900">{event.user_name || '-'}</div>
+                                  {event.nip && event.nip.trim() !== '' && (
+                                    <div className="text-xs text-slate-500 mt-0.5">NIP: {event.nip}</div>
                                   )}
                                 </div>
                               </td>
