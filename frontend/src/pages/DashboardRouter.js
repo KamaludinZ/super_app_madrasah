@@ -53,8 +53,8 @@ export default function DashboardRouter() {
       {isTeacher && <NotificationPermissionBanner />}
 
       {!isAdmin && <AnnouncementsCard />}
-      {!isAdmin && <PublicPagesSection />}
       <DashboardComponent />
+      {!isAdmin && <PublicPagesSection />}
     </div>
   );
 }
