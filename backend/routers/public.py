@@ -323,12 +323,25 @@ async def public_agenda(
     now_wib_dt = now_wib()
     for se in staff_events:
         if se.get('user_id'):
-            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'jabatan': 1})
+            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'jabatan_ids': 1})
             if user:
                 se['user_name'] = user.get('full_name')
                 se['nip'] = user.get('nip')
-                # Get jabatan directly from user document, not from roles
-                se['jabatan'] = user.get('jabatan') or None
+
+                # Get jabatan names from jabatan collection based on jabatan_ids
+                jabatan_ids = user.get('jabatan_ids', [])
+                jabatan_names = []
+
+                if jabatan_ids:
+                    # Fetch all jabatan documents for this user
+                    jabatan_docs = await db.jabatan.find(
+                        {'id': {'$in': jabatan_ids}},
+                        {'_id': 0, 'name': 1}
+                    ).to_list(100)
+                    jabatan_names = [j.get('name') for j in jabatan_docs if j.get('name')]
+
+                # Join multiple jabatan with comma, or None if empty
+                se['jabatan'] = ', '.join(jabatan_names) if jabatan_names else None
 
         # Determine status based on date and time
         event_date = se.get('date', '')
