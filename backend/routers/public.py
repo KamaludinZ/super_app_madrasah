@@ -323,20 +323,12 @@ async def public_agenda(
     now_wib_dt = now_wib()
     for se in staff_events:
         if se.get('user_id'):
-            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'roles': 1})
+            user = await db.users.find_one({'id': se['user_id']}, {'_id': 0, 'full_name': 1, 'nip': 1, 'jabatan': 1})
             if user:
                 se['user_name'] = user.get('full_name')
                 se['nip'] = user.get('nip')
-                # Get jabatan from roles
-                roles = user.get('roles', [])
-                # Find first jabatan role
-                from models import ROLE_LABELS
-                jabatan = None
-                for role in roles:
-                    if role != 'admin' and role != 'siswa':
-                        jabatan = ROLE_LABELS.get(role, role)
-                        break
-                se['jabatan'] = jabatan or '-'
+                # Get jabatan directly from user document, not from roles
+                se['jabatan'] = user.get('jabatan') or None
 
         # Determine status based on date and time
         event_date = se.get('date', '')
