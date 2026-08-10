@@ -13,9 +13,14 @@ Sistem **SUDAH BENAR** dan **OTOMATIS** mengambil jabatan dari kolom "Jabatan" d
 
 ## ✅ Sistem Sudah Otomatis
 
-**Jika jabatan diubah di `/admin/users`, maka di `/public/agenda` akan OTOMATIS berubah!**
+**Jika jabatan diubah di `/admin/users`, maka di semua halaman akan OTOMATIS berubah!**
 
-Tidak perlu refresh atau reload apapun. Begitu user di-edit dan jabatannya diganti, kegiatan pegawai akan langsung menampilkan jabatan yang baru.
+Halaman yang menampilkan jabatan:
+- `/public/agenda` (Tab: Kegiatan Pegawai)
+- `/admin/gtk/agenda-guru` (Kolom: Jabatan)
+- `/admin/gtk/agenda-tendik` (Kolom: Jabatan)
+
+Tidak perlu refresh atau reload apapun. Begitu user di-edit dan jabatannya diganti, semua halaman di atas akan langsung menampilkan jabatan yang baru.
 
 ## ⚠️ Mengapa Masih Muncul "Guru Mata Pelajaran"?
 
@@ -96,26 +101,46 @@ Jika di `/public/agenda` masih muncul **"Guru Mata Pelajaran"**, artinya:
 
 ## 🔍 Cara Cek Jabatan User
 
+### Di Halaman Admin Users:
 1. Buka `/admin/users`
-2. Klik Edit pada user
-3. Lihat dropdown **"Jabatan"** → Apa yang terpilih?
-4. Jika masih "Guru Mata Pelajaran" → Ganti ke jabatan yang benar
-5. Simpan
-6. Buka `/public/agenda` → Langsung berubah!
+2. Lihat **kolom "Jabatan"** (di sebelah kiri kolom "Email")
+3. Jika ada badge nama jabatan → User sudah punya jabatan ✅
+4. Jika kosong (-) → User belum punya jabatan ❌
+
+### Cara Menambahkan Jabatan:
+1. Buka `/admin/users`
+2. Klik Edit pada user yang belum punya jabatan
+3. Scroll ke bagian **"Jabatan (boleh lebih dari satu)"**
+4. Centang jabatan yang sesuai (misal: "Wakil Kepala Kurikulum")
+5. Klik **"Simpan"**
+6. Lihat tabel → Sekarang muncul badge jabatan di kolom "Jabatan"
+7. Buka `/public/agenda`, `/admin/gtk/agenda-guru`, atau `/admin/gtk/agenda-tendik` → Langsung berubah!
 
 ## ❓ FAQ
 
-**Q: Kenapa "Belum ditentukan" muncul?**
-A: User belum dipilihkan jabatan di `/admin/users`. Edit user dan pilih jabatan.
+**Q: Kenapa "Belum ditentukan" muncul di kolom jabatan?**
+A: User tersebut belum dipilihkan jabatan di `/admin/users`.
+   - Buka `/admin/users`
+   - Lihat kolom "Jabatan" (di sebelah kiri kolom "Email")
+   - Jika kosong (-), artinya user belum punya jabatan
+   - Edit user → Centang jabatan → Simpan
+
+**Q: Saya sudah pilih jabatan di `/admin/users`, kenapa masih "Belum ditentukan"?**
+A: Pastikan:
+   1. Jabatan sudah di-centang di form edit user
+   2. Tombol "Simpan" sudah diklik
+   3. Tidak ada error saat menyimpan (cek notifikasi toast)
+   4. Lihat kembali di tabel `/admin/users`, kolom "Jabatan" harus muncul badge nama jabatan
+   5. Jika badge sudah muncul di `/admin/users`, tapi masih "Belum ditentukan" di agenda → Refresh halaman agenda
 
 **Q: Apakah bisa user punya lebih dari 1 jabatan?**
-A: Bisa! Tapi yang ditampilkan di public agenda hanya **jabatan pertama**.
+A: Bisa! Tapi yang ditampilkan di agenda hanya **jabatan pertama**.
 
 **Q: Bagaimana cara mengganti jabatan?**
-A: Edit user di `/admin/users`, ganti jabatan, simpan. Langsung berubah di public agenda!
+A: Edit user di `/admin/users`, ganti jabatan, simpan. Langsung berubah di semua halaman!
 
 **Q: Apakah perlu restart aplikasi?**
-A: TIDAK! Perubahan langsung real-time.
+A: TIDAK! Perubahan langsung real-time (refresh halaman jika perlu).
 
 ---
 
