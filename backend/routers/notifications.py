@@ -23,20 +23,31 @@ def _now_iso() -> str:
 def _is_active(ann: Dict) -> bool:
     if not ann.get('is_active', True):
         return False
-    now = datetime.now(timezone.utc)
+    # Use local timezone (Asia/Jakarta = WIB = UTC+7) for comparison
+    try:
+        from zoneinfo import ZoneInfo
+        local_tz = ZoneInfo('Asia/Jakarta')
+    except ImportError:
+        # Fallback for Python < 3.9 or missing tzdata
+        from datetime import timedelta
+        local_tz = timezone(timedelta(hours=7))
+
+    now = datetime.now(local_tz)
     starts = ann.get('starts_at')
     ends = ann.get('ends_at')
     if starts:
         try:
             s = datetime.fromisoformat(starts.replace('Z', '+00:00'))
-            if s.tzinfo is None: s = s.replace(tzinfo=timezone.utc)
+            # If no timezone info, assume it's local time (WIB)
+            if s.tzinfo is None: s = s.replace(tzinfo=local_tz)
             if now < s: return False
         except Exception:
             pass
     if ends:
         try:
             e = datetime.fromisoformat(ends.replace('Z', '+00:00'))
-            if e.tzinfo is None: e = e.replace(tzinfo=timezone.utc)
+            # If no timezone info, assume it's local time (WIB)
+            if e.tzinfo is None: e = e.replace(tzinfo=local_tz)
             if now > e: return False
         except Exception:
             pass
