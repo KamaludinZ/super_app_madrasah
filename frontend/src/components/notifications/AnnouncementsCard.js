@@ -150,9 +150,26 @@ export default function AnnouncementsCard() {
           </CardTitle>
           <p className="text-xs text-slate-500 mt-0.5">{anns.length} pengumuman aktif</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => nav('/pengumuman')} className="h-8 text-xs" data-testid="btn-all-announcements">
-          Lihat semua <ChevronRight className="h-3.5 w-3.5 ml-1" />
-        </Button>
+        <div className="flex gap-2">
+          {/* Test button - only in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                console.log('🔔 Manual test sound trigger');
+                playNotificationSound();
+              }}
+              className="h-8 text-xs"
+              title="Test notification sound"
+            >
+              🔊 Test
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => nav('/pengumuman')} className="h-8 text-xs" data-testid="btn-all-announcements">
+            Lihat semua <ChevronRight className="h-3.5 w-3.5 ml-1" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
         {top.map((a) => (
