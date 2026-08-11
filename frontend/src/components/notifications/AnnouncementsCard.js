@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Megaphone, Pin, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,17 +29,60 @@ export default function AnnouncementsCard() {
   const [anns, setAnns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previousAnnIds, setPreviousAnnIds] = useState(new Set());
+  const audioRef = useRef(null);
+  const hasInteractedRef = useRef(false);
   const nav = useNavigate();
 
-  const playNotificationSound = () => {
+  // Initialize audio element once
+  useEffect(() => {
+    audioRef.current = new Audio('/sounds/notification-bell.mp3');
+    audioRef.current.volume = 0.7;
+    audioRef.current.preload = 'auto';
+
+    // Enable audio on first user interaction
+    const enableAudio = () => {
+      if (!hasInteractedRef.current) {
+        hasInteractedRef.current = true;
+        // Try to load audio to bypass autoplay restrictions
+        audioRef.current.load();
+        console.log('Audio enabled after user interaction');
+      }
+    };
+
+    document.addEventListener('click', enableAudio, { once: true });
+    document.addEventListener('keydown', enableAudio, { once: true });
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const playNotificationSound = async () => {
     try {
-      const audio = new Audio('/sounds/notification-bell.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(err => {
-        console.warn('Could not play notification sound:', err);
-      });
+      if (!audioRef.current) {
+        console.warn('Audio element not initialized');
+        return;
+      }
+
+      // Reset audio to start
+      audioRef.current.currentTime = 0;
+
+      await audioRef.current.play();
+      console.log('✓ Notification sound played successfully');
     } catch (err) {
-      console.warn('Audio playback failed:', err);
+      console.error('Could not play notification sound:', err.message);
+      // Try alternative approach for some browsers
+      try {
+        const altAudio = new Audio('/sounds/notification-bell.mp3');
+        altAudio.volume = 0.7;
+        await altAudio.play();
+        console.log('✓ Played via alternative method');
+      } catch (altErr) {
+        console.error('Alternative audio play also failed:', altErr.message);
+      }
     }
   };
 
@@ -47,23 +90,38 @@ export default function AnnouncementsCard() {
     api.get('/announcements')
       .then(({ data }) => {
         const newAnns = data || [];
+        const currentIds = new Set(newAnns.map(a => a.id));
+
+        console.log('[AnnouncementsCard] Poll update:', {
+          previousCount: previousAnnIds.size,
+          currentCount: currentIds.size,
+          isInitialLoad: previousAnnIds.size === 0
+        });
 
         // Check for new announcements (only after initial load)
         if (previousAnnIds.size > 0) {
-          const newAnnIds = new Set(newAnns.map(a => a.id));
-          const hasNewAnnouncement = newAnns.some(ann => !previousAnnIds.has(ann.id));
+          const newAnnouncements = newAnns.filter(ann => !previousAnnIds.has(ann.id));
 
-          if (hasNewAnnouncement) {
-            console.log('New announcement detected, playing sound...');
+          if (newAnnouncements.length > 0) {
+            console.log(`🔔 [NEW ANNOUNCEMENT] Detected ${newAnnouncements.length} new announcement(s):`,
+              newAnnouncements.map(a => ({ id: a.id, title: a.title }))
+            );
             playNotificationSound();
+          } else {
+            console.log('[AnnouncementsCard] No new announcements');
           }
+        } else {
+          console.log('[AnnouncementsCard] Initial load - sound disabled');
         }
 
         // Update state
         setAnns(newAnns);
-        setPreviousAnnIds(new Set(newAnns.map(a => a.id)));
+        setPreviousAnnIds(currentIds);
       })
-      .catch(() => setAnns([]))
+      .catch((err) => {
+        console.error('[AnnouncementsCard] Failed to load:', err);
+        setAnns([]);
+      })
       .finally(() => setLoading(false));
   };
 
