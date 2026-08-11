@@ -28,11 +28,41 @@ function relativeDate(iso) {
 export default function AnnouncementsCard() {
   const [anns, setAnns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [previousAnnIds, setPreviousAnnIds] = useState(new Set());
   const nav = useNavigate();
+
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio('/sounds/notification-bell.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(err => {
+        console.warn('Could not play notification sound:', err);
+      });
+    } catch (err) {
+      console.warn('Audio playback failed:', err);
+    }
+  };
 
   const loadAnnouncements = () => {
     api.get('/announcements')
-      .then(({ data }) => setAnns(data || []))
+      .then(({ data }) => {
+        const newAnns = data || [];
+
+        // Check for new announcements (only after initial load)
+        if (previousAnnIds.size > 0) {
+          const newAnnIds = new Set(newAnns.map(a => a.id));
+          const hasNewAnnouncement = newAnns.some(ann => !previousAnnIds.has(ann.id));
+
+          if (hasNewAnnouncement) {
+            console.log('New announcement detected, playing sound...');
+            playNotificationSound();
+          }
+        }
+
+        // Update state
+        setAnns(newAnns);
+        setPreviousAnnIds(new Set(newAnns.map(a => a.id)));
+      })
       .catch(() => setAnns([]))
       .finally(() => setLoading(false));
   };
