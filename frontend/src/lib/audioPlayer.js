@@ -61,6 +61,8 @@ class AudioPlayer {
 
     if (!sound) {
       console.warn(`Sound ${soundType} not found`);
+      // Fallback: use browser beep
+      this._playBeep();
       return false;
     }
 
@@ -72,9 +74,48 @@ class AudioPlayer {
       await sound.play();
       return true;
     } catch (error) {
-      // Playing might be blocked by browser autoplay policy
+      // Playing might be blocked by browser autoplay policy or file not found
       console.warn('Failed to play notification sound:', error.message);
+
+      // Fallback: use browser beep
+      this._playBeep();
       return false;
+    }
+  }
+
+  /**
+   * Play a simple beep sound as fallback
+   * Uses Web Audio API to generate a tone
+   */
+  _playBeep() {
+    try {
+      // Create AudioContext
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Create oscillator for beep sound
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Configure beep: 800Hz tone, 200ms duration
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+
+      // Envelope: quick fade in/out to avoid clicking
+      const now = audioContext.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.15);
+      gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+
+      oscillator.start(now);
+      oscillator.stop(now + 0.2);
+
+      console.log('🔔 Played fallback beep sound');
+    } catch (error) {
+      console.warn('Failed to play beep:', error);
     }
   }
 

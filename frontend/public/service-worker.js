@@ -95,6 +95,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: data.requireInteraction || false,
     actions: data.actions || [],
     vibrate: [200, 100, 200], // Vibration pattern
+    silent: false, // Enable system notification sound
   };
 
   event.waitUntil(

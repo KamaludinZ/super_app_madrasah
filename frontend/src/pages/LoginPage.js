@@ -158,6 +158,15 @@ export default function LoginPage() {
         expires_in_minutes: data.expires_in_minutes,
         idle_timeout_minutes: data.idle_timeout_minutes,
       });
+
+      // Unlock audio for notifications (iOS/Safari compatibility)
+      try {
+        const audioPlayer = await import('@/lib/audioPlayer');
+        await audioPlayer.default.requestPermission();
+      } catch (err) {
+        // Silent fail - audio unlock is optional
+      }
+
       toast.success(`Selamat datang, ${data.user.full_name}`);
       nav('/dashboard');
     } catch (err) {

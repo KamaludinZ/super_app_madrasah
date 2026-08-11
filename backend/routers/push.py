@@ -21,12 +21,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import db, get_current_user, logger, serialize_doc
 
-try:
-    from pywebpush import webpush, WebPushException
-    _PUSH_AVAILABLE = True
-except Exception as e:  # pragma: no cover
-    _PUSH_AVAILABLE = False
-    logger.warning(f"pywebpush not available: {e}")
+# Using custom robust web push implementation (web_push_robust.py)
+# instead of pywebpush library due to incompatibility with cryptography >= 47
+_PUSH_AVAILABLE = True
 
 router = APIRouter()
 
@@ -56,23 +53,14 @@ def _push_configured() -> bool:
 
 
 # ------------------------------------------------------------------
-# Low-level send (runs blocking webpush in a thread)
+# Low-level send (uses custom robust implementation)
 # ------------------------------------------------------------------
-def _send_one_sync(subscription_info: Dict, payload: Dict) -> Dict:
-    """Send a single web push. Returns {'ok': bool, 'gone': bool, 'error': str}."""
+async def _send_one_async(subscription_info: Dict, payload: Dict) -> Dict:
+    """Send a single web push using robust implementation. Returns {'ok': bool, 'gone': bool, 'error': str}."""
     try:
-        webpush(
-            subscription_info=subscription_info,
-            data=json.dumps(payload),
-            vapid_private_key=_get_vapid_private_key(),
-            vapid_claims=dict(_vapid_claims()),
-            ttl=86400,
-        )
-        return {"ok": True, "gone": False, "error": None}
-    except WebPushException as ex:  # type: ignore
-        status = getattr(getattr(ex, "response", None), "status_code", None)
-        gone = status in (404, 410)
-        return {"ok": False, "gone": gone, "error": f"{status}: {ex}"}
+        from web_push_robust import send_web_push
+        result = await send_web_push(subscription_info, payload, ttl=86400)
+        return result
     except Exception as ex:  # pragma: no cover
         return {"ok": False, "gone": False, "error": str(ex)}
 
@@ -87,7 +75,8 @@ async def _dispatch(subscriptions: List[Dict], payload: Dict) -> Dict:
             "endpoint": sub.get("endpoint"),
             "keys": sub.get("keys", {}),
         }
-        result = await asyncio.to_thread(_send_one_sync, info, payload)
+        # Use async implementation directly (no need for to_thread)
+        result = await _send_one_async(info, payload)
         if result["ok"]:
             sent += 1
         else:
