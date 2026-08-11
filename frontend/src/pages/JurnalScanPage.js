@@ -122,6 +122,34 @@ export default function JurnalScanPage() {
     }
   }, [gps]);
 
+  /**
+   * Auto-format class token input with dashes
+   * Expected format: XX-XXXX-XXXX (e.g., 7A-2526-X9K2)
+   */
+  const formatClassToken = (value) => {
+    // Remove all non-alphanumeric characters
+    const cleaned = value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+    // Apply format: XX-XXXX-XXXX
+    let formatted = '';
+    if (cleaned.length > 0) {
+      formatted = cleaned.substring(0, 2); // First 2 chars
+    }
+    if (cleaned.length > 2) {
+      formatted += '-' + cleaned.substring(2, 6); // Next 4 chars
+    }
+    if (cleaned.length > 6) {
+      formatted += '-' + cleaned.substring(6, 10); // Last 4 chars
+    }
+
+    return formatted;
+  };
+
+  const handleClassTokenChange = (e) => {
+    const formatted = formatClassToken(e.target.value);
+    setClassToken(formatted);
+  };
+
   const handleClassTokenSubmit = async (e) => {
     e.preventDefault();
     const t = classToken.trim().toUpperCase();
@@ -416,9 +444,9 @@ export default function JurnalScanPage() {
                   </TabsContent>
 
                   <TabsContent value="class_token" className="space-y-3 mt-0">
-                    <p className="text-sm text-slate-600">Masukkan <strong>Token Kelas</strong> (format mis. <code className="text-[11px] bg-slate-100 px-1 rounded">7A-2526-X9K2</code>). Token ini tertera di kartu QR dan bisa dilihat admin pada menu Kelas.</p>
+                    <p className="text-sm text-slate-600">Masukkan <strong>Token Kelas</strong> (format otomatis: <code className="text-[11px] bg-slate-100 px-1 rounded">XX-XXXX-XXXX</code>). Token ini tertera di kartu QR dan bisa dilihat admin pada menu Kelas.</p>
                     <form onSubmit={handleClassTokenSubmit} className="flex gap-2">
-                      <Input value={classToken} onChange={(e) => setClassToken(e.target.value.toUpperCase())} placeholder="Mis: 7A-2526-X9K2" className="flex-1 font-mono text-sm" data-testid="jurnal-class-token-input" />
+                      <Input value={classToken} onChange={handleClassTokenChange} placeholder="Ketik: 7A2526X9K2" maxLength={12} className="flex-1 font-mono text-sm" data-testid="jurnal-class-token-input" />
                       <Button type="submit" disabled={!classToken.trim()} className="bg-[#006837] hover:bg-[#005a30]" data-testid="jurnal-class-token-submit">Validasi</Button>
                     </form>
                     <Alert className="bg-emerald-50 border-emerald-200">
