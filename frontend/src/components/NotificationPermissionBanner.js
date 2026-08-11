@@ -1,13 +1,15 @@
 /**
- * Banner untuk meminta izin notifikasi "waktunya mengajar"
- * Hanya muncul untuk guru yang belum subscribe
+ * Banner untuk meminta izin notifikasi push
+ * Muncul untuk user yang belum subscribe
  */
 
 import { useState } from 'react';
-import { Bell, BellOff, X } from 'lucide-react';
+import { Bell, BellOff, X, Megaphone } from 'lucide-react';
 import useNotificationSubscription from '@/hooks/useNotificationSubscription';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function NotificationPermissionBanner() {
+  const { activeRole } = useAuth();
   const {
     isSupported,
     permission,
@@ -42,6 +44,16 @@ export default function NotificationPermissionBanner() {
     setIsDismissed(true);
   };
 
+  // Check if user is a teacher (for teaching reminders)
+  const isTeacher = [
+    'guru',
+    'guru_piket',
+    'guru_bk',
+    'guru_tata_tertib',
+    'guru_ekstrakurikuler',
+    'wali_kelas'
+  ].includes(activeRole);
+
   return (
     <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 relative">
       <div className="flex items-start">
@@ -51,11 +63,20 @@ export default function NotificationPermissionBanner() {
 
         <div className="ml-3 flex-1">
           <h3 className="text-sm font-medium text-blue-800">
-            Aktifkan Pengingat Mengajar
+            Aktifkan Notifikasi Push
           </h3>
           <p className="mt-1 text-sm text-blue-700">
-            Terima notifikasi otomatis 10 menit sebelum dan saat waktu mengajar tiba.
-            Tidak akan melewatkan jadwal lagi!
+            {isTeacher ? (
+              <>
+                <Megaphone className="inline h-4 w-4 mr-1" />
+                Terima notifikasi untuk <strong>pengumuman baru</strong> dan <strong>pengingat mengajar</strong> (10 menit sebelum + saat waktu mengajar).
+              </>
+            ) : (
+              <>
+                <Megaphone className="inline h-4 w-4 mr-1" />
+                Terima notifikasi otomatis untuk <strong>pengumuman baru</strong> dan informasi penting lainnya.
+              </>
+            )}
           </p>
 
           <div className="mt-3 flex items-center gap-3">

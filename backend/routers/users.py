@@ -456,16 +456,16 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
         if existing:
             raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
 
-    # Validasi NIK & Nomor KK harus 16 digit angka
+    # Validasi NIK & Nomor KK harus 16 digit angka (hanya jika ada dan tidak kosong)
     nik = update.get('nik')
-    if nik is not None:
+    if nik is not None and str(nik).strip():
         nik = ''.join(ch for ch in str(nik) if ch.isdigit())
         if len(nik) != 16:
             raise HTTPException(400, "NIK harus 16 digit angka")
         update['nik'] = nik
 
     nomor_kk = update.get('nomor_kk')
-    if nomor_kk is not None:
+    if nomor_kk is not None and str(nomor_kk).strip():
         nomor_kk = ''.join(ch for ch in str(nomor_kk) if ch.isdigit())
         if len(nomor_kk) != 16:
             raise HTTPException(400, "Nomor KK harus 16 digit angka")
@@ -619,16 +619,16 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
         if existing:
             raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
 
-    # Validasi NIK & Nomor KK harus 16 digit angka
+    # Validasi NIK & Nomor KK harus 16 digit angka (hanya jika ada dan tidak kosong)
     nik = update.get('nik')
-    if nik is not None:
+    if nik is not None and str(nik).strip():
         nik = ''.join(ch for ch in str(nik) if ch.isdigit())
         if len(nik) != 16:
             raise HTTPException(400, "NIK harus 16 digit angka")
         update['nik'] = nik
 
     nomor_kk = update.get('nomor_kk')
-    if nomor_kk is not None:
+    if nomor_kk is not None and str(nomor_kk).strip():
         nomor_kk = ''.join(ch for ch in str(nomor_kk) if ch.isdigit())
         if len(nomor_kk) != 16:
             raise HTTPException(400, "Nomor KK harus 16 digit angka")

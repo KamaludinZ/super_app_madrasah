@@ -38,13 +38,16 @@ export default function useForegroundNotification() {
         if (action === 'teaching_reminder') {
           // Use bell sound for teaching reminders
           await audioPlayer.play('bell');
+        } else if (action === 'new_announcement') {
+          // Use bell sound for new announcements
+          await audioPlayer.play('bell');
         } else {
           // Use chime for other notifications
           await audioPlayer.play('chime');
         }
 
         // Log for debugging
-        console.log('Foreground notification received:', {
+        console.log('🔔 Foreground notification received:', {
           action,
           title: payload.title,
           body: payload.body

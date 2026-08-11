@@ -13,7 +13,14 @@
       "Bash(git push:*)",
       "Bash(python -m json.tool:*)",
       "Bash(python:*)",
-      "Bash(del check_jabatan_in_users.py)"
+      "Bash(del check_jabatan_in_users.py)",
+      "Bash(npm audit:*)",
+      "Bash(npm install:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout 5 echo:*)",
+      "Bash(server.py)",
+      "Bash(routers/push.py)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

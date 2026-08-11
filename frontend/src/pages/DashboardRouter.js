@@ -49,8 +49,8 @@ export default function DashboardRouter() {
 
   return (
     <div className="space-y-4">
-      {/* Notification permission banner for teachers */}
-      {isTeacher && <NotificationPermissionBanner />}
+      {/* Notification permission banner for all non-admin users */}
+      {!isAdmin && <NotificationPermissionBanner />}
 
       {!isAdmin && <AnnouncementsCard />}
       <DashboardComponent />

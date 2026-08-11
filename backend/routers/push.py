@@ -197,3 +197,4 @@ async def send_test(user: Dict = Depends(get_current_user)):
         },
     )
     return {"message": "Notifikasi tes dikirim", "result": result}
+

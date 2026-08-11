@@ -43,9 +43,22 @@ export default function AnnouncementsCard() {
     const enableAudio = () => {
       if (!hasInteractedRef.current) {
         hasInteractedRef.current = true;
-        // Try to load audio to bypass autoplay restrictions
-        audioRef.current.load();
         console.log('Audio enabled after user interaction');
+
+        // Try to "unlock" audio by playing silent sound (browser autoplay workaround)
+        if (audioRef.current) {
+          audioRef.current.volume = 0;
+          audioRef.current.play()
+            .then(() => {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+              audioRef.current.volume = 0.7;
+              console.log('✓ Audio context unlocked');
+            })
+            .catch(() => {
+              console.log('Audio unlock skipped');
+            });
+        }
       }
     };
 
@@ -61,28 +74,20 @@ export default function AnnouncementsCard() {
   }, []);
 
   const playNotificationSound = async () => {
+    // Only play if user has interacted with the page (browser autoplay policy)
+    if (!hasInteractedRef.current) {
+      console.log('[Audio] Skipped - waiting for user interaction (browser autoplay policy)');
+      return;
+    }
+
     try {
-      if (!audioRef.current) {
-        console.warn('Audio element not initialized');
-        return;
-      }
-
-      // Reset audio to start
-      audioRef.current.currentTime = 0;
-
-      await audioRef.current.play();
+      // Always create fresh Audio element for reliability
+      const audio = new Audio('/sounds/notification-bell.mp3');
+      audio.volume = 0.7;
+      await audio.play();
       console.log('✓ Notification sound played successfully');
     } catch (err) {
       console.error('Could not play notification sound:', err.message);
-      // Try alternative approach for some browsers
-      try {
-        const altAudio = new Audio('/sounds/notification-bell.mp3');
-        altAudio.volume = 0.7;
-        await altAudio.play();
-        console.log('✓ Played via alternative method');
-      } catch (altErr) {
-        console.error('Alternative audio play also failed:', altErr.message);
-      }
     }
   };
 
@@ -92,31 +97,36 @@ export default function AnnouncementsCard() {
         const newAnns = data || [];
         const currentIds = new Set(newAnns.map(a => a.id));
 
-        console.log('[AnnouncementsCard] Poll update:', {
-          previousCount: previousAnnIds.size,
-          currentCount: currentIds.size,
-          isInitialLoad: previousAnnIds.size === 0
+        // Use callback form to get the actual previous state
+        setPreviousAnnIds((prevIds) => {
+          console.log('[AnnouncementsCard] Poll update:', {
+            previousCount: prevIds.size,
+            currentCount: currentIds.size,
+            isInitialLoad: prevIds.size === 0
+          });
+
+          // Check for new announcements (only after initial load)
+          if (prevIds.size > 0) {
+            const newAnnouncements = newAnns.filter(ann => !prevIds.has(ann.id));
+
+            if (newAnnouncements.length > 0) {
+              console.log(`🔔 [NEW ANNOUNCEMENT] Detected ${newAnnouncements.length} new announcement(s):`,
+                newAnnouncements.map(a => ({ id: a.id, title: a.title }))
+              );
+              playNotificationSound();
+            } else {
+              console.log('[AnnouncementsCard] No new announcements');
+            }
+          } else {
+            console.log('[AnnouncementsCard] Initial load - sound disabled');
+          }
+
+          // Return new state
+          return currentIds;
         });
 
-        // Check for new announcements (only after initial load)
-        if (previousAnnIds.size > 0) {
-          const newAnnouncements = newAnns.filter(ann => !previousAnnIds.has(ann.id));
-
-          if (newAnnouncements.length > 0) {
-            console.log(`🔔 [NEW ANNOUNCEMENT] Detected ${newAnnouncements.length} new announcement(s):`,
-              newAnnouncements.map(a => ({ id: a.id, title: a.title }))
-            );
-            playNotificationSound();
-          } else {
-            console.log('[AnnouncementsCard] No new announcements');
-          }
-        } else {
-          console.log('[AnnouncementsCard] Initial load - sound disabled');
-        }
-
-        // Update state
+        // Update announcements list
         setAnns(newAnns);
-        setPreviousAnnIds(currentIds);
       })
       .catch((err) => {
         console.error('[AnnouncementsCard] Failed to load:', err);
