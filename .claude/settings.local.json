@@ -20,7 +20,8 @@
       "Bash(timeout 5 echo:*)",
       "Bash(server.py)",
       "Bash(routers/push.py)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(timeout 15 python:*)"
     ],
     "deny": [],
     "ask": []

@@ -279,7 +279,7 @@ async def check_and_send_reminders():
         current_date, current_time, current_hour, current_minute = await get_current_time_wib()
         day = await get_current_day_indonesian()
 
-        logger.debug(f"Checking reminders for {day} {current_time}")
+        logger.info(f"⏰ Checking reminders for {day} {current_time}")
 
         # Get active semester
         from core import get_active_context
@@ -296,7 +296,7 @@ async def check_and_send_reminders():
             'day': day
         }, {'_id': 0}).to_list(1000)
 
-        logger.debug(f"Found {len(schedules)} schedules for {day}")
+        logger.info(f"📅 Found {len(schedules)} schedules for {day}")
 
         # Process each schedule
         for schedule in schedules:
@@ -325,6 +325,7 @@ async def check_and_send_reminders():
 
             # If current time matches reminder time (10 minutes before)
             if current_hour == reminder_hour and current_minute == reminder_minute:
+                logger.info(f"⏰ Matched 10-min reminder: {start_time} for schedule {schedule.get('id')}")
                 await process_schedule_notification(
                     schedule,
                     current_date,
@@ -336,6 +337,7 @@ async def check_and_send_reminders():
 
             # Check if we need to send "start time" notification
             if current_hour == start_hour and current_minute == start_minute:
+                logger.info(f"🔔 Matched start time: {start_time} for schedule {schedule.get('id')}")
                 await process_schedule_notification(
                     schedule,
                     current_date,
