@@ -13,7 +13,8 @@ public_key_bytes = v.public_key.public_bytes(
     encoding=serialization.Encoding.X962,
     format=serialization.PublicFormat.UncompressedPoint
 )
-public_key_b64 = base64.urlsafe_b64encode(public_key_bytes).decode('utf-8').rstrip('=')
+# IMPORTANT: Keep the padding for VAPID keys! Do NOT strip '='
+public_key_b64 = base64.urlsafe_b64encode(public_key_bytes).decode('utf-8')
 
 # Export private key as PEM
 private_key_pem = v.private_key.private_bytes(
