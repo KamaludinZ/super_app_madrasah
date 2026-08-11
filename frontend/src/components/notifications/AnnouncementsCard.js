@@ -30,11 +30,21 @@ export default function AnnouncementsCard() {
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
 
-  useEffect(() => {
+  const loadAnnouncements = () => {
     api.get('/announcements')
       .then(({ data }) => setAnns(data || []))
       .catch(() => setAnns([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    // Initial load
+    loadAnnouncements();
+
+    // Poll for new announcements every 30 seconds
+    const interval = setInterval(loadAnnouncements, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return null;

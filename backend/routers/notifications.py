@@ -90,16 +90,28 @@ async def admin_create_announcement(payload: Dict, request: Request,
     if ann.is_active and _is_active(doc):
         try:
             from routers.push import send_push_to_roles
-            await send_push_to_roles(ann.target_roles, {
-                'title': ann.title,
+            from core import logger
+
+            logger.info(f"📢 Sending push for announcement '{ann.title}' to roles: {ann.target_roles}")
+
+            result = await send_push_to_roles(ann.target_roles, {
+                'title': f'📢 Pengumuman Baru: {ann.title}',
                 'body': (ann.body or '')[:180],
                 'url': '/pengumuman',
                 'tag': f'ann-{ann.id}',
+                'icon': '/icon-192.png',
+                'badge': '/icon-192.png',
+                'data': {
+                    'action': 'new_announcement',
+                    'announcement_id': ann.id
+                }
             })
+
+            logger.info(f"✅ Push sent: {result.get('sent', 0)} succeeded, {result.get('failed', 0)} failed")
         except Exception as e:
             try:
                 from core import logger
-                logger.warning(f"[push] announcement push failed: {e}")
+                logger.error(f"❌ [push] announcement push failed: {e}", exc_info=True)
             except Exception:
                 pass
 
