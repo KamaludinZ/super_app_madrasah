@@ -123,30 +123,34 @@ export default function JurnalScanPage() {
   }, [gps]);
 
   /**
-   * Auto-format class token input with dashes
+   * Auto-format class token input with dashes in real-time
    * Expected format: XX-XXXX-XXXX (e.g., 7A-2526-X9K2)
+   * Dashes appear automatically as user types
    */
-  const formatClassToken = (value) => {
-    // Remove all non-alphanumeric characters
-    const cleaned = value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-
-    // Apply format: XX-XXXX-XXXX
-    let formatted = '';
-    if (cleaned.length > 0) {
-      formatted = cleaned.substring(0, 2); // First 2 chars
-    }
-    if (cleaned.length > 2) {
-      formatted += '-' + cleaned.substring(2, 6); // Next 4 chars
-    }
-    if (cleaned.length > 6) {
-      formatted += '-' + cleaned.substring(6, 10); // Last 4 chars
-    }
-
-    return formatted;
-  };
-
   const handleClassTokenChange = (e) => {
-    const formatted = formatClassToken(e.target.value);
+    const input = e.target.value.toUpperCase();
+
+    // Remove all non-alphanumeric characters except existing dashes
+    const cleaned = input.replace(/[^A-Z0-9-]/gi, '');
+
+    // Remove all dashes first to get pure alphanumeric
+    const alphanumeric = cleaned.replace(/-/g, '');
+
+    // Apply format: XX-XXXX-XXXX with auto-dash insertion
+    let formatted = '';
+
+    for (let i = 0; i < alphanumeric.length && i < 10; i++) {
+      // Add dash after 2nd character (position 2)
+      if (i === 2) {
+        formatted += '-';
+      }
+      // Add dash after 6th character (position 6)
+      if (i === 6) {
+        formatted += '-';
+      }
+      formatted += alphanumeric[i];
+    }
+
     setClassToken(formatted);
   };
 
