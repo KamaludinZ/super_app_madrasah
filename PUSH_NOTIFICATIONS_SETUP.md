@@ -22,10 +22,15 @@ The following environment variables have been added to `backend/.env`:
 
 ```env
 # Web Push Notifications (VAPID)
-VAPID_PUBLIC_KEY=BMMAR8TdquPnuTmncA-2gI4Iu8wFxmmMpa2roeVeo-SKmnaec5F02TBRnDMbjuxbsSVTazpQPxOHpP_G3EzUFnc
+VAPID_PUBLIC_KEY=BNUWIavahXmTOtitW6-pqTIiMP4-fO343S5sTb8kNu96GthTLwYj4HNxTO6f1PU_FRklShBnjAhPPWgBla8s9Yo
 VAPID_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
-VAPID_SUBJECT=mailto:admin@super-app-madrasah.example.com
+VAPID_SUBJECT=mailto:admyt.mtsn2kotamalang@gmail.com
 ```
+
+**IMPORTANT**:
+- VAPID public key must be properly base64url encoded WITHOUT stripping padding
+- Length should be 87 characters (65 bytes uncompressed point for P-256)
+- Do NOT use `.rstrip('=')` when generating keys
 
 **IMPORTANT**: The private key must be kept secret! Do NOT commit these keys to public repositories.
 
