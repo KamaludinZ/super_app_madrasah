@@ -28,7 +28,7 @@ function StatusBadge({ status }) {
 }
 
 export default function MySchedulePage() {
-  const { user } = useAuth();
+  const { user, activeRole } = useAuth();
   const [items, setItems] = useState([]);
   const [grid, setGrid] = useState({ days: [], slots: {}, grid: {} });
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
@@ -50,23 +50,23 @@ export default function MySchedulePage() {
   const [sortColumn, setSortColumn] = useState('day'); // day, jam, jtm, class, subject, room
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
 
-  // Check if user is wali kelas or siswa
-  const isWaliKelas = user?.roles?.includes('wali_kelas');
+  // Check if user is siswa or currently viewing as wali_kelas
   const isSiswa = user?.roles?.includes('siswa');
+  const isViewingAsWaliKelas = activeRole === 'wali_kelas';
   const homeroomClassId = user?.homeroom_class_id;
 
   const loadGridData = async () => {
     // In view mode:
-    //   - For wali kelas: show homeroom class schedule
-    //   - For other roles: show teacher's own schedule
+    //   - If activeRole is 'wali_kelas': show homeroom class schedule
+    //   - Otherwise (activeRole is 'guru'): show teacher's own schedule
     // In input mode: show selected class schedule with all teachers
     const params = {};
     if (gridMode === 'view') {
-      if (isWaliKelas && homeroomClassId) {
-        // Wali kelas: show homeroom class schedule
+      if (isViewingAsWaliKelas && homeroomClassId) {
+        // Viewing as wali_kelas: show homeroom class schedule
         params.class_id = homeroomClassId;
       } else {
-        // Other roles: show teacher's own schedule
+        // Viewing as guru: show teacher's own schedule
         params.teacher_id = user?.id;
       }
     } else if (gridMode === 'input' && selectedClassId) {
@@ -100,9 +100,11 @@ export default function MySchedulePage() {
       const ay = await api.get('/academic-years/active');
       const activeAYData = ay.data;
 
-      // For wali kelas: load class schedule, for others: load teacher schedule
+      // Load schedule based on current active role
+      // - wali_kelas: load homeroom class schedule
+      // - guru: load teacher's own schedule
       const scheduleParams = {};
-      if (isWaliKelas && homeroomClassId) {
+      if (isViewingAsWaliKelas && homeroomClassId) {
         scheduleParams.class_id = homeroomClassId;
       } else {
         scheduleParams.teacher_id = user?.id;
@@ -124,10 +126,12 @@ export default function MySchedulePage() {
       }));
       setItems(itemsWithStatus);
 
-      // Filter classes for wali kelas - only show homeroom class
+      // Filter classes based on active role
+      // - wali_kelas: only show homeroom class
+      // - guru: show all classes
       const allClasses = c.data || [];
 
-      if (isWaliKelas && homeroomClassId) {
+      if (isViewingAsWaliKelas && homeroomClassId) {
         const filteredClasses = allClasses.filter(cls => cls.id === homeroomClassId);
         setClasses(filteredClasses);
         // Auto-select homeroom class for wali kelas in input mode
@@ -407,7 +411,7 @@ export default function MySchedulePage() {
       {viewMode === 'grid' ? (
         <>
           {/* Info banner for wali kelas */}
-          {isWaliKelas && homeroomClassId && gridMode === 'input' && (
+          {isViewingAsWaliKelas && homeroomClassId && gridMode === 'input' && (
             <Alert className="border-[#006837] bg-emerald-50">
               <Info className="h-4 w-4 text-emerald-700" />
               <AlertDescription className="text-emerald-900 text-sm">
@@ -426,7 +430,7 @@ export default function MySchedulePage() {
                   onClick={() => setGridMode('view')}
                   className={gridMode === 'view' ? 'bg-[#006837]' : ''}
                 >
-                  {isWaliKelas ? 'Lihat Jadwal Kelas' : 'Lihat Jadwal Saya'}
+                  {isViewingAsWaliKelas ? 'Lihat Jadwal Kelas' : 'Lihat Jadwal Saya'}
                 </Button>
                 <Button
                   variant={gridMode === 'input' ? 'default' : 'outline'}
@@ -434,7 +438,7 @@ export default function MySchedulePage() {
                   onClick={() => setGridMode('input')}
                   className={gridMode === 'input' ? 'bg-[#006837]' : ''}
                 >
-                  {isWaliKelas ? 'Input Jadwal Kelas' : 'Input Jadwal (Per Kelas)'}
+                  {isViewingAsWaliKelas ? 'Input Jadwal Kelas' : 'Input Jadwal (Per Kelas)'}
                 </Button>
               </div>
               {gridMode === 'input' && (
@@ -442,7 +446,7 @@ export default function MySchedulePage() {
                   <Select
                     value={selectedClassId}
                     onValueChange={setSelectedClassId}
-                    disabled={isWaliKelas && homeroomClassId} // Disable for wali kelas
+                    disabled={isViewingAsWaliKelas && homeroomClassId} // Disable for wali kelas
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Pilih kelas untuk input jadwal..." />
