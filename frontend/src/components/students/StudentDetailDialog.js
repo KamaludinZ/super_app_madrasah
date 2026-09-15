@@ -305,6 +305,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
     if (file.size > 2 * 1024 * 1024) { toast.error('Maks 2MB'); return null; }
     const fd = new FormData();
     fd.append('file', file);
+    if (student?.id) fd.append('student_id', student.id);
     try {
       const { data } = await api.post(`/students/detail/upload/${jenis}`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },

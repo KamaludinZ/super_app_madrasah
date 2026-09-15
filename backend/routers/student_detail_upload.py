@@ -1,16 +1,19 @@
 """
 Router untuk upload file terkait Detail Data Siswa (Keahlian & Tahfidz).
-File diupload lepas (belum terikat ke student_id) karena untuk siswa, perubahan detail
+File diupload lepas (belum terikat ke student_details) karena untuk siswa, perubahan detail
 biasanya diajukan lewat alur verval-request (draft) sebelum tersimpan final ke student_details.
+Nama file disusun sebagai berkas_{jenis}_{Nama Lengkap}_{NISN}_{uuid8}.pdf agar mudah
+diidentifikasi manual di server, dengan suffix uuid pendek untuk mencegah tabrakan nama.
 """
 import os
+import re
 import uuid
-from typing import Dict
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from core import get_current_user
+from core import db, get_current_user
 
 router = APIRouter()
 
@@ -32,10 +35,17 @@ def allowed_file(filename: str, extensions=PDF_ONLY_EXTENSIONS) -> bool:
     return os.path.splitext(filename.lower())[1] in extensions
 
 
+def sanitize_for_filename(value: str) -> str:
+    """Ganti spasi dengan underscore dan buang karakter selain alfanumerik/underscore/dash."""
+    value = re.sub(r'\s+', '_', value.strip())
+    return re.sub(r'[^A-Za-z0-9_-]', '', value) or 'tanpa_nama'
+
+
 @router.post("/students/detail/upload/{jenis}")
 async def upload_student_detail_file(
     jenis: str,
     file: UploadFile = File(...),
+    student_id: Optional[str] = Form(None),
     user: Dict = Depends(get_current_user),
 ):
     """
@@ -43,6 +53,8 @@ async def upload_student_detail_file(
     atau berkas dokumen di tab Upload Berkas). Semua jenis PDF-only, maks 2MB.
     jenis: keahlian | tahfidz_syahadah | tahfidz_tahsin | berkas_kartu_keluarga | berkas_akta_kelahiran |
            berkas_ijazah_sd | berkas_kip | berkas_pkh | berkas_kks | berkas_kartu_pelajar
+    student_id: opsional, siswa target (dipakai untuk menyusun nama file yang informatif).
+                Diambil dari database, bukan dipercaya mentah dari klien.
     Return: {url} yang lalu disertakan pada payload update/verval-request detail siswa.
     """
     if jenis not in JENIS_VALID and jenis not in BERKAS_JENIS_VALID:
@@ -55,8 +67,22 @@ async def upload_student_detail_file(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Ukuran file maksimal 2MB")
 
+    # Susun label nama siswa untuk nama file: siswa target jika ada & valid, fallback ke user login.
+    label_source = user
+    if student_id:
+        student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0, 'full_name': 1, 'nisn': 1})
+        if student:
+            label_source = student
+
+    full_name = sanitize_for_filename(label_source.get('full_name') or '')
+    nisn = sanitize_for_filename(label_source.get('nisn') or 'tanpa_nisn')
+
+    # jenis untuk BERKAS_JENIS_VALID sudah diawali "berkas_" (mis. berkas_kartu_keluarga),
+    # sedangkan JENIS_VALID (keahlian/tahfidz_*) belum -> normalisasi agar prefix tidak dobel.
+    jenis_label = jenis if jenis.startswith('berkas_') else f'berkas_{jenis}'
+
     ext = os.path.splitext(file.filename)[1].lower()
-    new_filename = f"{jenis}_{uuid.uuid4().hex}{ext}"
+    new_filename = f"{jenis_label}_{full_name}_{nisn}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = os.path.join(UPLOAD_DIR, new_filename)
 
     try:
