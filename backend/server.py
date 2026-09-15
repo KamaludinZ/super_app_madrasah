@@ -17,6 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 from core import client, db, logger
 from routers import (
     academic,
+    achievement_upload,
     admin,
     admin_settings,
     alumni,
@@ -42,6 +43,7 @@ from routers import (
     schedules,
     school_apps,
     semesters,
+    student_detail_upload,
     student_records,
     students,
     subjects,
@@ -74,6 +76,7 @@ api_router.include_router(rooms.router)
 api_router.include_router(jabatan.router)
 api_router.include_router(users.router)
 api_router.include_router(students.router)
+api_router.include_router(student_detail_upload.router)
 api_router.include_router(schedules.router)
 api_router.include_router(journals.router)
 api_router.include_router(wali_parent.router)
@@ -81,6 +84,7 @@ api_router.include_router(admin.router)
 api_router.include_router(public.router)
 api_router.include_router(holidays_tasks.router)
 api_router.include_router(phase4.router)
+api_router.include_router(achievement_upload.router)
 api_router.include_router(notifications.router)
 api_router.include_router(push.router)
 api_router.include_router(reports.router)

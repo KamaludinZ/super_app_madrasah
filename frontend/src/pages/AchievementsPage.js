@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,10 +15,13 @@ import {
   Trophy, Plus, Pencil, Trash2, CheckCircle2, Clock, Search, Upload,
   Medal, Image as ImageIcon, Award, Calendar, MapPin, Building, X,
   GraduationCap, Users as UsersIcon, Briefcase, School, Target, Star, Filter,
+  XCircle, FileText, ExternalLink, UserCog,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const CATEGORIES = [
   { value: 'akademik', label: 'Akademik', color: 'bg-blue-100 text-blue-800 border-blue-200' },
@@ -56,6 +61,49 @@ const HOLDER_TABS = [
   { value: 'madrasah', label: 'Prestasi Madrasah', icon: School, color: 'text-amber-700' },
 ];
 
+const JENIS_LOMBA = [
+  { value: 'individu', label: 'Individu' },
+  { value: 'tim', label: 'Tim/Kelompok' },
+];
+
+const JENIS_PENYELENGGARA = [
+  { value: 'kementerian_lembaga', label: 'Kementerian/Lembaga' },
+  { value: 'perguruan_tinggi', label: 'Perguruan Tinggi' },
+  { value: 'lembaga_pendidikan', label: 'Lembaga Pendidikan' },
+  { value: 'swasta', label: 'Swasta' },
+];
+
+const MODE_PELAKSANAAN = [
+  { value: 'offline', label: 'Offline' },
+  { value: 'online', label: 'Online' },
+];
+
+const CARA_MENGIKUTI = [
+  { value: 'mandiri', label: 'Mandiri' },
+  { value: 'delegasi_madrasah', label: 'Delegasi Madrasah' },
+  { value: 'club', label: 'Melalui Club' },
+];
+
+const JENIS_HADIAH = [
+  { value: 'tropi', label: 'Tropi' },
+  { value: 'medali', label: 'Medali' },
+  { value: 'sertifikat', label: 'Sertifikat' },
+  { value: 'uang_pembinaan', label: 'Uang Pembinaan' },
+  { value: 'lainnya', label: 'Lainnya' },
+];
+
+function jenisLombaLabel(v) { return JENIS_LOMBA.find((x) => x.value === v)?.label || v || '-'; }
+function jenisPenyelenggaraLabel(v) { return JENIS_PENYELENGGARA.find((x) => x.value === v)?.label || v || '-'; }
+function modePelaksanaanLabel(v) { return MODE_PELAKSANAAN.find((x) => x.value === v)?.label || v || '-'; }
+function caraMengikutiLabel(v) { return CARA_MENGIKUTI.find((x) => x.value === v)?.label || v || '-'; }
+function jenisHadiahLabel(v) { return JENIS_HADIAH.find((x) => x.value === v)?.label || v; }
+
+function fileUrl(u) {
+  if (!u) return '';
+  if (u.startsWith('http') || u.startsWith('data:')) return u;
+  return `${BACKEND_URL}${u}`;
+}
+
 const EMPTY = {
   holder_type: 'siswa',
   holder_id: '',
@@ -68,8 +116,17 @@ const EMPTY = {
   organizer: '',
   date: '',
   year: '',
+  academic_year_label: '',
+  jenis_lomba: 'individu',
+  jenis_penyelenggara: '',
+  mode_pelaksanaan: 'offline',
+  tempat_pelaksanaan: '',
+  cara_mengikuti: 'mandiri',
+  jenis_hadiah: [],
+  nama_pembina: '',
   description: '',
   certificate_url: '',
+  photo_url: '',
 };
 
 function catColor(cat) {
@@ -91,12 +148,15 @@ function holderTypeOf(a) {
 
 export default function AchievementsPage() {
   const { activeRole, user } = useAuth();
+  const [academicYears, setAcademicYears] = useState([]);
+  const activeAcademicYear = useMemo(() => academicYears.find((ay) => ay.is_active), [academicYears]);
   const isAdmin = activeRole === 'admin';
   const isWaliKelas = activeRole === 'wali_kelas';
   const isSiswa = activeRole === 'siswa';
   const isGuru = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(activeRole);
   const isTendik = activeRole === 'tenaga_kependidikan';
   const canVerify = isAdmin || isWaliKelas;
+  const submitsViaVerval = !isAdmin;
 
   // Default tab based on role
   const defaultHolder = isSiswa ? 'siswa' : isGuru ? 'guru' : isTendik ? 'tendik' : 'siswa';
@@ -119,7 +179,35 @@ export default function AchievementsPage() {
   const refresh = async () => {
     try {
       const { data } = await api.get('/achievements');
-      setItems(data || []);
+      let combined = data || [];
+
+      // Non-admin/non-wali_kelas: gabungkan juga pengajuan prestasi milik sendiri yang
+      // masih pending/rejected di verval-requests, karena baru masuk ke /achievements
+      // setelah disetujui. Tanpa ini, pengajuan siswa "hilang" dari halaman ini sampai di-approve.
+      if (!isAdmin && !isWaliKelas) {
+        try {
+          const { data: vReqs } = await api.get('/verval-requests', {
+            params: { request_type: 'prestasi_create' },
+          });
+          const pendingOrRejected = (vReqs || [])
+            .filter((r) => r.status === 'pending' || r.status === 'rejected')
+            .map((r) => ({
+              ...(r.new_data || {}),
+              id: `verval-${r.id}`,
+              is_verified: false,
+              submitted_by: r.submitted_by,
+              _isPendingRequest: true,
+              _vervalRequestId: r.id,
+              _vervalStatus: r.status,
+              _adminNotes: r.admin_notes,
+            }));
+          combined = [...pendingOrRejected, ...combined];
+        } catch (e) {
+          // Non-fatal: tetap tampilkan achievements yang sudah approved.
+        }
+      }
+
+      setItems(combined);
     } catch (e) {
       toast.error('Gagal memuat data prestasi');
     }
@@ -129,6 +217,10 @@ export default function AchievementsPage() {
     (async () => {
       try {
         await refresh();
+        try {
+          const { data } = await api.get('/academic-years');
+          setAcademicYears(data || []);
+        } catch (e) { /* non-fatal */ }
         if (canVerify || isAdmin) {
           if (isWaliKelas) {
             // Wali kelas uses /students endpoint with their homeroom_class_id
@@ -169,11 +261,12 @@ export default function AchievementsPage() {
     else if (isWaliKelas) { initialHolder = 'siswa'; initialId = ''; } // Wali kelas always creates for siswa
     else if (isGuru && !isWaliKelas) { initialHolder = 'guru'; initialId = user?.id || ''; }
     else if (isTendik) { initialHolder = 'tendik'; initialId = user?.id || ''; }
-    setForm({ ...EMPTY, holder_type: initialHolder, holder_id: initialId });
+    setForm({ ...EMPTY, holder_type: initialHolder, holder_id: initialId, academic_year_label: activeAcademicYear?.name || '' });
     setOpen(true);
   };
 
   const openEdit = (a) => {
+    if (a._isPendingRequest) return; // Pengajuan pending/ditolak belum bisa diedit, hanya dibatalkan.
     setEditing(a);
     const ht = holderTypeOf(a);
     setForm({
@@ -184,13 +277,36 @@ export default function AchievementsPage() {
       holder_name: a.holder_name || '',
       year: a.year || (a.date ? parseInt(String(a.date).split('-')[0]) : ''),
       date: a.date || '',
+      jenis_hadiah: a.jenis_hadiah || [],
     });
     setOpen(true);
   };
 
+  const REQUIRED_FIELDS = [
+    { key: 'name', label: 'Nama Lomba' },
+    { key: 'bidang_lomba', label: 'Bidang Lomba' },
+    { key: 'category', label: 'Kategori Lomba' },
+    { key: 'level', label: 'Tingkat Lomba' },
+    { key: 'rank', label: 'Peringkat' },
+    { key: 'date', label: 'Tanggal Lomba' },
+    { key: 'academic_year_label', label: 'Tahun Pelajaran' },
+    { key: 'jenis_lomba', label: 'Jenis Lomba' },
+    { key: 'jenis_penyelenggara', label: 'Jenis Penyelenggara' },
+    { key: 'organizer', label: 'Nama Penyelenggara' },
+    { key: 'mode_pelaksanaan', label: 'Mode Pelaksanaan' },
+    { key: 'tempat_pelaksanaan', label: 'Tempat Pelaksanaan' },
+    { key: 'cara_mengikuti', label: 'Diikuti Secara' },
+    { key: 'nama_pembina', label: 'Nama Pembina' },
+    { key: 'certificate_url', label: 'Upload Sertifikat' },
+    { key: 'photo_url', label: 'Upload Foto Memegang Sertifikat/Piala' },
+  ];
+
   const handleSubmit = async () => {
-    if (!form.name) { toast.error('Nama lomba wajib diisi'); return; }
-    if (!form.date && !form.year) { toast.error('Isi tanggal atau tahun lomba'); return; }
+    for (const f of REQUIRED_FIELDS) {
+      if (!form[f.key]) { toast.error(`${f.label} wajib diisi`); return; }
+    }
+    if (!(form.jenis_hadiah || []).length) { toast.error('Pilih minimal satu Penerimaan Hadiah'); return; }
+    if (!form.year) { toast.error('Tahun wajib diisi'); return; }
     if (form.holder_type !== 'madrasah' && !form.holder_id) {
       toast.error('Pilih ' + (form.holder_type === 'siswa' ? 'siswa' : 'pemegang prestasi'));
       return;
@@ -239,6 +355,15 @@ export default function AchievementsPage() {
   };
 
   const handleDelete = async (a) => {
+    if (a._isPendingRequest) {
+      if (!window.confirm(`Batalkan pengajuan prestasi "${a.name}"?`)) return;
+      try {
+        await api.delete(`/verval-requests/${a._vervalRequestId}`);
+        toast.success('Pengajuan prestasi dibatalkan');
+        await refresh();
+      } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal membatalkan pengajuan'); }
+      return;
+    }
     if (!window.confirm(`Hapus prestasi "${a.name}"?`)) return;
     try {
       await api.delete(`/achievements/${a.id}`);
@@ -247,16 +372,30 @@ export default function AchievementsPage() {
     } catch (e) { toast.error('Gagal hapus'); }
   };
 
-  const handleFile = async (e) => {
+  const [uploadingFile, setUploadingFile] = useState(null); // 'certificate' | 'photo' | null
+
+  const handleFile = async (e, jenis) => {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > 2 * 1024 * 1024) {
-      toast.error('Maks 2MB. Sertifikat sebaiknya gambar.');
+      toast.error('Maks 2MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setForm({ ...form, certificate_url: reader.result });
-    reader.readAsDataURL(f);
+    const fd = new FormData();
+    fd.append('file', f);
+    setUploadingFile(jenis);
+    try {
+      const { data } = await api.post(`/achievements/upload/${jenis}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const field = jenis === 'certificate' ? 'certificate_url' : 'photo_url';
+      setForm((prev) => ({ ...prev, [field]: data.url }));
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Gagal upload file');
+    } finally {
+      setUploadingFile(null);
+      e.target.value = '';
+    }
   };
 
   const filteredByHolder = useMemo(() => {
@@ -347,12 +486,30 @@ export default function AchievementsPage() {
             Catatan prestasi siswa, guru, tenaga kependidikan, dan madrasah
           </p>
         </div>
-        {canAddInTab() && (
-          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-achievement-button">
-            <Plus className="h-4 w-4" /> Tambah Prestasi
-          </Button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {submitsViaVerval && (
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/verval/ajuan-saya">
+                <FileText className="h-4 w-4" /> Lihat Ajuan Saya <ExternalLink className="h-3 w-3" />
+              </Link>
+            </Button>
+          )}
+          {canAddInTab() && (
+            <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2" data-testid="add-achievement-button">
+              <Plus className="h-4 w-4" /> Tambah Prestasi
+            </Button>
+          )}
+        </div>
       </div>
+
+      {submitsViaVerval && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-3 flex items-start gap-2 text-sm text-blue-900">
+            <FileText className="h-4 w-4 mt-0.5 shrink-0" />
+            <p>Prestasi yang Anda tambahkan akan direview terlebih dahulu oleh Admin/Wali Kelas sebelum berstatus &quot;Terverifikasi&quot;. Pengajuan yang masih menunggu atau ditolak tetap tampil di daftar di bawah ini.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Holder Type Tabs */}
       <Tabs value={holderTab} onValueChange={setHolderTab}>
@@ -552,7 +709,11 @@ export default function AchievementsPage() {
                                 )}
                               </TableCell>
                               <TableCell className="text-center">
-                                {a.is_verified ? (
+                                {a._isPendingRequest && a._vervalStatus === 'rejected' ? (
+                                  <Badge className="bg-rose-100 text-rose-800 border-rose-200 gap-1 text-xs">
+                                    <XCircle className="h-3 w-3" /> Ditolak
+                                  </Badge>
+                                ) : a.is_verified ? (
                                   <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1 text-xs">
                                     <CheckCircle2 className="h-3 w-3" /> Verified
                                   </Badge>
@@ -564,18 +725,18 @@ export default function AchievementsPage() {
                               </TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex justify-end gap-1">
-                                  {canVerify && !a.is_verified && (
+                                  {canVerify && !a.is_verified && !a._isPendingRequest && (
                                     <Button size="icon" variant="ghost" onClick={() => handleVerify(a)} className="text-emerald-600 hover:text-emerald-700" title="Verifikasi" data-testid={`verify-achievement-${a.id}`}>
                                       <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {(isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
+                                  {!a._isPendingRequest && (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
                                     <Button size="icon" variant="ghost" onClick={() => openEdit(a)} title="Edit" data-testid={`edit-achievement-${a.id}`}>
                                       <Pencil className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {(isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
-                                    <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title="Hapus" data-testid={`delete-achievement-${a.id}`}>
+                                  {(a._isPendingRequest ? a._vervalStatus === 'pending' : (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified))) && (
+                                    <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title={a._isPendingRequest ? 'Batalkan Pengajuan' : 'Hapus'} data-testid={`delete-achievement-${a.id}`}>
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   )}
@@ -696,13 +857,13 @@ export default function AchievementsPage() {
                 data-testid="ach-form-name" />
             </div>
             <div className="sm:col-span-2">
-              <Label>Bidang Lomba</Label>
+              <Label>Bidang Lomba *</Label>
               <Input value={form.bidang_lomba || ''} onChange={(e) => setForm({ ...form, bidang_lomba: e.target.value })}
                 placeholder="Mis. Matematika, Fisika, Lari 100m, Pidato Bahasa Arab..."
                 data-testid="ach-form-bidang" />
             </div>
             <div>
-              <Label>Kategori Lomba</Label>
+              <Label>Kategori Lomba *</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger data-testid="ach-form-category"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -711,7 +872,7 @@ export default function AchievementsPage() {
               </Select>
             </div>
             <div>
-              <Label>Tingkat Lomba</Label>
+              <Label>Tingkat Lomba *</Label>
               <Select value={form.level} onValueChange={(v) => setForm({ ...form, level: v })}>
                 <SelectTrigger data-testid="ach-form-level"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -720,7 +881,7 @@ export default function AchievementsPage() {
               </Select>
             </div>
             <div>
-              <Label>Peringkat</Label>
+              <Label>Peringkat *</Label>
               <Select value={form.rank} onValueChange={(v) => setForm({ ...form, rank: v })}>
                 <SelectTrigger data-testid="ach-form-rank"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -729,7 +890,7 @@ export default function AchievementsPage() {
               </Select>
             </div>
             <div>
-              <Label>Tanggal Lomba</Label>
+              <Label>Tanggal Lomba *</Label>
               <Input type="date" value={form.date || ''}
                 onChange={(e) => {
                   const d = e.target.value;
@@ -744,11 +905,101 @@ export default function AchievementsPage() {
                 placeholder="2025"
                 data-testid="ach-form-year" />
             </div>
+            <div>
+              <Label>Tahun Pelajaran *</Label>
+              <Select value={form.academic_year_label || ''} onValueChange={(v) => setForm({ ...form, academic_year_label: v })}>
+                <SelectTrigger data-testid="ach-form-academic-year"><SelectValue placeholder="Pilih tahun pelajaran..." /></SelectTrigger>
+                <SelectContent>
+                  {academicYears.length === 0 ? (
+                    <div className="px-2 py-6 text-center text-sm text-slate-500">Belum ada data tahun pelajaran</div>
+                  ) : (
+                    academicYears.map((ay) => (
+                      <SelectItem key={ay.id} value={ay.name}>
+                        {ay.name}{ay.is_active ? ' (Aktif)' : ''}
+                      </SelectItem>
+                    ))
+                  )}
+                  {form.academic_year_label && !academicYears.some((ay) => ay.name === form.academic_year_label) && (
+                    <SelectItem value={form.academic_year_label}>{form.academic_year_label}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Jenis Lomba *</Label>
+              <Select value={form.jenis_lomba} onValueChange={(v) => setForm({ ...form, jenis_lomba: v })}>
+                <SelectTrigger data-testid="ach-form-jenis-lomba"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {JENIS_LOMBA.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Jenis Penyelenggara *</Label>
+              <Select value={form.jenis_penyelenggara || ''} onValueChange={(v) => setForm({ ...form, jenis_penyelenggara: v })}>
+                <SelectTrigger data-testid="ach-form-jenis-penyelenggara"><SelectValue placeholder="Pilih jenis..." /></SelectTrigger>
+                <SelectContent>
+                  {JENIS_PENYELENGGARA.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="sm:col-span-2">
-              <Label>Nama Penyelenggara</Label>
+              <Label>Nama Penyelenggara *</Label>
               <Input value={form.organizer || ''} onChange={(e) => setForm({ ...form, organizer: e.target.value })}
                 placeholder="Mis. Kanwil Kemenag Provinsi Jawa Timur"
                 data-testid="ach-form-organizer" />
+            </div>
+            <div>
+              <Label>Mode Pelaksanaan *</Label>
+              <Select value={form.mode_pelaksanaan} onValueChange={(v) => setForm({ ...form, mode_pelaksanaan: v })}>
+                <SelectTrigger data-testid="ach-form-mode"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODE_PELAKSANAAN.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tempat Pelaksanaan *</Label>
+              <Input value={form.tempat_pelaksanaan || ''} onChange={(e) => setForm({ ...form, tempat_pelaksanaan: e.target.value })}
+                placeholder="Mis. Aula Kanwil Kemenag / Zoom Meeting"
+                data-testid="ach-form-tempat" />
+            </div>
+            <div>
+              <Label>Diikuti Secara *</Label>
+              <Select value={form.cara_mengikuti} onValueChange={(v) => setForm({ ...form, cara_mengikuti: v })}>
+                <SelectTrigger data-testid="ach-form-cara-mengikuti"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CARA_MENGIKUTI.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nama Pembina *</Label>
+              <Input value={form.nama_pembina || ''} onChange={(e) => setForm({ ...form, nama_pembina: e.target.value })}
+                placeholder="Nama guru/pembina pendamping"
+                data-testid="ach-form-pembina" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Penerimaan Hadiah *</Label>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {JENIS_HADIAH.map((o) => {
+                  const checked = (form.jenis_hadiah || []).includes(o.value);
+                  return (
+                    <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          const cur = form.jenis_hadiah || [];
+                          const next = v ? [...cur, o.value] : cur.filter((x) => x !== o.value);
+                          setForm({ ...form, jenis_hadiah: next });
+                        }}
+                        data-testid={`ach-form-hadiah-${o.value}`}
+                      />
+                      {o.label}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className="sm:col-span-2">
               <Label>Deskripsi</Label>
@@ -757,28 +1008,25 @@ export default function AchievementsPage() {
                 rows={3}
                 data-testid="ach-form-description" />
             </div>
-            <div className="sm:col-span-2">
-              <Label>Sertifikat / Foto (opsional, maks 2MB)</Label>
-              <div className="mt-2 flex items-start gap-3">
-                {form.certificate_url ? (
-                  <div className="relative">
-                    <img src={form.certificate_url} alt="Sertifikat" className="h-32 w-32 object-cover rounded-lg border border-slate-200" />
-                    <button type="button" onClick={() => setForm({ ...form, certificate_url: '' })}
-                      className="absolute -top-2 -right-2 h-6 w-6 bg-rose-600 text-white rounded-full flex items-center justify-center hover:bg-rose-700">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="h-32 w-32 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#006837] hover:bg-[#006837]/5">
-                    <Upload className="h-6 w-6 text-slate-400 mb-1" />
-                    <span className="text-xs text-slate-500">Upload</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleFile} data-testid="ach-form-file" />
-                  </label>
-                )}
-                <div className="text-xs text-slate-500 max-w-[280px]">
-                  Foto sertifikat / piala / dokumentasi (JPG/PNG/WebP).
-                </div>
-              </div>
+            <div>
+              <Label>Upload Sertifikat * (maks 2MB)</Label>
+              <FileSlot
+                url={fileUrl(form.certificate_url)}
+                uploading={uploadingFile === 'certificate'}
+                onUpload={(e) => handleFile(e, 'certificate')}
+                onClear={() => setForm({ ...form, certificate_url: '' })}
+                testId="ach-form-certificate"
+              />
+            </div>
+            <div>
+              <Label>Upload Foto Memegang Sertifikat/Piala * (maks 2MB)</Label>
+              <FileSlot
+                url={fileUrl(form.photo_url)}
+                uploading={uploadingFile === 'photo'}
+                onUpload={(e) => handleFile(e, 'photo')}
+                onClear={() => setForm({ ...form, photo_url: '' })}
+                testId="ach-form-photo"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -798,16 +1046,43 @@ export default function AchievementsPage() {
           </DialogHeader>
           {detail && (
             <div className="space-y-4">
-              {detail.certificate_url && (
-                <img src={detail.certificate_url} alt="Sertifikat" className="w-full max-h-96 object-contain rounded-lg border border-slate-200 bg-slate-50" />
+              {(detail.certificate_url || detail.photo_url) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {detail.certificate_url && (
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Sertifikat</div>
+                      <AuthedImage path={detail.certificate_url} alt="Sertifikat" className="w-full max-h-72 object-contain rounded-lg border border-slate-200 bg-slate-50" />
+                    </div>
+                  )}
+                  {detail.photo_url && (
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Foto Pemegang Sertifikat/Piala</div>
+                      <AuthedImage path={detail.photo_url} alt="Foto" className="w-full max-h-72 object-contain rounded-lg border border-slate-200 bg-slate-50" />
+                    </div>
+                  )}
+                </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <DetailItem icon={Calendar} label="Tahun" value={detail.year || (detail.date ? String(detail.date).split('-')[0] : '-')} />
+                <DetailItem icon={Calendar} label="Tahun Pelajaran" value={detail.academic_year_label} />
                 <DetailItem icon={Award} label="Peringkat" value={detail.rank} />
                 <DetailItem icon={MapPin} label="Tingkat Lomba" value={levelLabel(detail.level)} />
                 <DetailItem icon={Calendar} label="Tanggal" value={detail.date} />
+                <DetailItem icon={UsersIcon} label="Jenis Lomba" value={jenisLombaLabel(detail.jenis_lomba)} />
                 <DetailItem icon={Building} label="Penyelenggara" value={detail.organizer} />
+                <DetailItem icon={Building} label="Jenis Penyelenggara" value={jenisPenyelenggaraLabel(detail.jenis_penyelenggara)} />
                 <DetailItem icon={Trophy} label="Bidang Lomba" value={detail.bidang_lomba} />
+                <DetailItem icon={MapPin} label="Mode Pelaksanaan" value={modePelaksanaanLabel(detail.mode_pelaksanaan)} />
+                <DetailItem icon={MapPin} label="Tempat Pelaksanaan" value={detail.tempat_pelaksanaan} />
+                <DetailItem icon={UsersIcon} label="Diikuti Secara" value={caraMengikutiLabel(detail.cara_mengikuti)} />
+                <DetailItem icon={UserCog} label="Nama Pembina" value={detail.nama_pembina} />
+                {(detail.jenis_hadiah || []).length > 0 && (
+                  <div className="col-span-2 flex flex-wrap gap-1.5">
+                    {detail.jenis_hadiah.map((h) => (
+                      <Badge key={h} variant="secondary" className="text-xs">{jenisHadiahLabel(h)}</Badge>
+                    ))}
+                  </div>
+                )}
                 <div className="col-span-2"><Badge variant="outline" className={catColor(detail.category)}>{catLabel(detail.category)}</Badge></div>
                 {(detail.holder_full_name || detail.holder_name) && (
                   <div className="col-span-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -828,8 +1103,18 @@ export default function AchievementsPage() {
                   </div>
                 )}
               </div>
+              {detail._isPendingRequest && detail._vervalStatus === 'rejected' && detail._adminNotes && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                  <div className="text-xs text-rose-700 uppercase tracking-wide mb-1">Catatan Penolakan</div>
+                  <div className="text-sm text-rose-900">{detail._adminNotes}</div>
+                </div>
+              )}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                {detail.is_verified ? (
+                {detail._isPendingRequest && detail._vervalStatus === 'rejected' ? (
+                  <Badge className="bg-rose-100 text-rose-800 border-rose-200 gap-1">
+                    <XCircle className="h-3 w-3" /> Pengajuan Ditolak
+                  </Badge>
+                ) : detail.is_verified ? (
                   <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1">
                     <CheckCircle2 className="h-3 w-3" /> Sudah Diverifikasi
                     {detail.verifier_name && <span className="ml-1 font-normal">oleh {detail.verifier_name}</span>}
@@ -837,7 +1122,7 @@ export default function AchievementsPage() {
                 ) : (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-200">Menunggu Verifikasi</Badge>
                 )}
-                {canVerify && !detail.is_verified && (
+                {canVerify && !detail.is_verified && !detail._isPendingRequest && (
                   <Button onClick={() => { handleVerify(detail); setDetail(null); }} className="bg-emerald-600 hover:bg-emerald-700 gap-2" data-testid="verify-from-detail">
                     <CheckCircle2 className="h-4 w-4" /> Verifikasi Sekarang
                   </Button>
@@ -847,6 +1132,86 @@ export default function AchievementsPage() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function AuthedImage({ path, alt, className }) {
+  const [imgSrc, setImgSrc] = useState(null);
+
+  useEffect(() => {
+    let revoke = null;
+    if (path) {
+      api.get(path, { responseType: 'blob' }).then(({ data }) => {
+        const blobUrl = URL.createObjectURL(data);
+        revoke = blobUrl;
+        setImgSrc(blobUrl);
+      }).catch(() => setImgSrc(null));
+    } else {
+      setImgSrc(null);
+    }
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+  }, [path]);
+
+  if (!imgSrc) return <div className={`${className} bg-slate-100 animate-pulse`} />;
+  return <img src={imgSrc} alt={alt} className={className} />;
+}
+
+function FileSlot({ url, uploading, onUpload, onClear, testId }) {
+  const isImage = url && !url.toLowerCase().endsWith('.pdf');
+  const [imgSrc, setImgSrc] = useState(null);
+
+  useEffect(() => {
+    let revoke = null;
+    if (isImage && url) {
+      const path = url.replace(/^https?:\/\/[^/]+/, '');
+      api.get(path, { responseType: 'blob' }).then(({ data }) => {
+        const blobUrl = URL.createObjectURL(data);
+        revoke = blobUrl;
+        setImgSrc(blobUrl);
+      }).catch(() => setImgSrc(null));
+    } else {
+      setImgSrc(null);
+    }
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, isImage]);
+
+  return (
+    <div className="mt-2 flex items-start gap-3">
+      {url ? (
+        <div className="relative">
+          {isImage ? (
+            imgSrc ? (
+              <img src={imgSrc} alt="File" className="h-28 w-28 object-cover rounded-lg border border-slate-200" />
+            ) : (
+              <div className="h-28 w-28 rounded-lg border border-slate-200 bg-slate-50 animate-pulse" />
+            )
+          ) : (
+            <button type="button" onClick={() => openAuthedFile(url)}
+              className="h-28 w-28 flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+              <FileText className="h-8 w-8 mb-1" />
+              <span className="text-xs">Lihat PDF</span>
+            </button>
+          )}
+          <button type="button" onClick={onClear}
+            className="absolute -top-2 -right-2 h-6 w-6 bg-rose-600 text-white rounded-full flex items-center justify-center hover:bg-rose-700">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : (
+        <label className="h-28 w-28 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#006837] hover:bg-[#006837]/5">
+          {uploading ? (
+            <span className="text-xs text-slate-500">Mengunggah...</span>
+          ) : (
+            <>
+              <Upload className="h-6 w-6 text-slate-400 mb-1" />
+              <span className="text-xs text-slate-500">Upload</span>
+            </>
+          )}
+          <input type="file" accept="image/*,.pdf" className="hidden" onChange={onUpload} disabled={uploading} data-testid={testId} />
+        </label>
+      )}
     </div>
   );
 }
@@ -871,8 +1236,8 @@ function GalleryCard({ a, onClick }) {
       data-testid={`gallery-card-${a.id}`}
     >
       <div className="aspect-video bg-slate-100 flex items-center justify-center">
-        {a.certificate_url ? (
-          <img src={a.certificate_url} alt={a.name} className="w-full h-full object-cover" />
+        {(a.photo_url || a.certificate_url) ? (
+          <AuthedImage path={a.photo_url || a.certificate_url} alt={a.name} className="w-full h-full object-cover" />
         ) : (
           <Trophy className="h-12 w-12 text-slate-300" />
         )}

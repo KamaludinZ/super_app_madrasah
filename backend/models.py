@@ -573,6 +573,29 @@ class StudentDetailModel(BaseModel):
     alamat_ibu: Optional[Dict[str, Any]] = None
     alamat_wali: Optional[Dict[str, Any]] = None
     alamat_siswa: Optional[Dict[str, Any]] = None  # plus {status_tempat_tinggal, jarak_tempuh, transportasi, waktu_tempuh}
+    # === DATA MAJEMUK TAMBAHAN (PRD Migrasi) ===
+    keahlian: List[Dict[str, Any]] = Field(default_factory=list)
+    # tiap item: {bidang_keahlian, nama_keahlian, sertifikasi, lembaga_penyelenggara, hasil_tingkat_skor, file_bukti_sertifikat}
+    tahfidz: Optional[Dict[str, Any]] = None
+    # {juz_alquran_dihafal, file_bukti_syahadah, file_bukti_tahsin}
+    beasiswa: List[Dict[str, Any]] = Field(default_factory=list)
+    # tiap item: {tahun, kategori, nama_beasiswa, jenis_instansi_pemberi, nama_instansi_pemberi, jangka_waktu_bulan, nominal_beasiswa}
+    pendidikan_lain: List[Dict[str, Any]] = Field(default_factory=list)
+    # tiap item: {nama_lembaga, jenis_lembaga, mulai_belajar, frekuensi_belajar, lokasi_lembaga}
+    # === KEBUTUHAN KHUSUS ===
+    jenis_kebutuhan_khusus: Optional[str] = None
+    # 'Tidak ada' | 'Lamban belajar' | 'Kesulitan Belajar spesifik' | 'Gangguan komunikasi' |
+    # 'Berbakat/memiliki kemampuan dan kecerdasan luar biasa' | 'Lainnya'
+    kebutuhan_disabilitas: List[str] = Field(default_factory=list)
+    # ['Tidak ada', 'Tuna netra', 'Tuna Rungu', 'Tuna Daksa', 'Tuna Grahita', 'Tuna laras', 'Tuna wicara', 'Lainnya']
+    # === UPLOAD BERKAS (PDF, maks 2MB per file, via verval) ===
+    berkas_kartu_keluarga: Optional[str] = None
+    berkas_akta_kelahiran: Optional[str] = None
+    berkas_ijazah_sd: Optional[str] = None
+    berkas_kip: Optional[str] = None
+    berkas_pkh: Optional[str] = None
+    berkas_kks: Optional[str] = None
+    berkas_kartu_pelajar: Optional[str] = None
     # === Update tracking ===
     updated_at: Optional[datetime] = None
     updated_by: Optional[str] = None

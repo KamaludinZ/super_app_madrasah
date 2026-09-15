@@ -125,8 +125,17 @@ async def create_achievement(payload: Dict, request: Request, user: Dict = Depen
         organizer=payload.get('organizer'),
         date=payload.get('date'),
         year=year,
+        academic_year_label=payload.get('academic_year_label'),
+        jenis_lomba=payload.get('jenis_lomba'),
+        jenis_penyelenggara=payload.get('jenis_penyelenggara'),
+        mode_pelaksanaan=payload.get('mode_pelaksanaan'),
+        tempat_pelaksanaan=payload.get('tempat_pelaksanaan'),
+        cara_mengikuti=payload.get('cara_mengikuti'),
+        jenis_hadiah=payload.get('jenis_hadiah') or [],
+        nama_pembina=payload.get('nama_pembina'),
         description=payload.get('description'),
         certificate_url=payload.get('certificate_url'),
+        photo_url=payload.get('photo_url'),
         submitted_by=user['id'],
     )
     doc = a.model_dump()

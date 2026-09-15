@@ -35,6 +35,17 @@ api.interceptors.response.use(
   }
 );
 
+// Buka file yang di-protect auth (mis. /api/students/detail/upload/.../file/...) di tab baru.
+// Link <a href> biasa tidak menyertakan Authorization header, jadi harus fetch via axios lalu
+// dibuka sebagai blob URL.
+export async function openAuthedFile(pathOrUrl) {
+  const path = pathOrUrl.startsWith(BASE) ? pathOrUrl.slice(BASE.length) : pathOrUrl.replace(/^\/api/, '');
+  const { data } = await api.get(path, { responseType: 'blob' });
+  const blobUrl = URL.createObjectURL(data);
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+}
+
 export const ROLE_LABELS = {
   admin: 'Administrator',
   siswa: 'Siswa',

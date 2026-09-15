@@ -123,16 +123,25 @@ async def create_verval_request(
     if 'admin' not in user.get('roles', []) and user_id != user['id']:
         raise HTTPException(403, "Anda hanya bisa mengajukan perubahan data sendiri")
 
-    # Cek pending request per user + request_type
-    existing = await db.verval_requests.find_one({
-        'user_id': user_id,
-        'request_type': request_type,
-        'status': 'pending'
-    })
-    if existing:
-        raise HTTPException(400, "Masih ada request pending yang belum diproses untuk jenis pengajuan ini.")
+    # Cek pending request per user + request_type.
+    # Khusus prestasi_create: setiap prestasi adalah entitas independen, jadi siswa/guru/tendik
+    # boleh punya banyak pengajuan prestasi pending sekaligus. Untuk profile_update tetap dibatasi
+    # satu pending karena merepresentasikan objek user yang sama.
+    if request_type != 'prestasi_create':
+        existing = await db.verval_requests.find_one({
+            'user_id': user_id,
+            'request_type': request_type,
+            'status': 'pending'
+        })
+        if existing:
+            raise HTTPException(400, "Masih ada request pending yang belum diproses untuk jenis pengajuan ini.")
 
-    target_collection = 'users' if request_type == 'profile_update' else 'achievements'
+    if request_type == 'profile_update':
+        target_collection = payload.get('target_collection') or 'users'
+        if target_collection not in ('users', 'student_details'):
+            raise HTTPException(400, "target_collection tidak valid untuk profile_update")
+    else:
+        target_collection = 'achievements'
     old_data = payload.get('old_data', {})
     new_data = payload.get('new_data', {})
 
@@ -196,11 +205,20 @@ async def approve_verval_request(
     request_type = verval_req.get('request_type', 'profile_update')
 
     if request_type == 'profile_update':
-        # Apply perubahan ke user doc
-        await db.users.update_one(
-            {'id': verval_req['user_id']},
-            {'$set': verval_req.get('new_data', {})}
-        )
+        target_collection = verval_req.get('target_collection', 'users')
+        if target_collection == 'student_details':
+            # Apply perubahan ke sub-collection detail siswa (Data Siswa/Ortu/Alamat/Keahlian/dst)
+            await db.student_details.update_one(
+                {'student_id': verval_req['user_id']},
+                {'$set': verval_req.get('new_data', {})},
+                upsert=True,
+            )
+        else:
+            # Apply perubahan ke user doc
+            await db.users.update_one(
+                {'id': verval_req['user_id']},
+                {'$set': verval_req.get('new_data', {})}
+            )
     elif request_type == 'prestasi_create':
         # Insert achievement baru dari payload new_data
         ach = dict(verval_req.get('new_data', {}))

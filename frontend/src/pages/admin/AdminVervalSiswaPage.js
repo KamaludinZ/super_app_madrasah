@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck } from 'lucide-react';
-import { api } from '@/lib/api';
+import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck, FileText, Trophy } from 'lucide-react';
+import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function AdminVervalSiswaPage() {
@@ -24,7 +24,7 @@ export default function AdminVervalSiswaPage() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const params = { user_type: 'siswa' };
+      const params = { user_type: 'siswa', reviewer_view: true };
       if (statusFilter !== 'all') params.status = statusFilter;
       const { data } = await api.get('/verval-requests', { params });
       setRequests(data);
@@ -84,11 +84,77 @@ export default function AdminVervalSiswaPage() {
     return <Badge variant="secondary">{status}</Badge>;
   };
 
+  const requestTypeBadge = (rt) => {
+    if (rt === 'prestasi_create') {
+      return <Badge variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700"><Trophy className="h-3 w-3" /> Prestasi</Badge>;
+    }
+    return <Badge variant="outline" className="gap-1 text-xs border-slate-300 text-slate-600"><FileText className="h-3 w-3" /> Profil</Badge>;
+  };
+
+  const PRESTASI_FIELD_LABELS = {
+    name: 'Nama Lomba',
+    bidang_lomba: 'Bidang Lomba',
+    category: 'Kategori Lomba',
+    level: 'Tingkat Lomba',
+    rank: 'Peringkat',
+    organizer: 'Nama Penyelenggara',
+    date: 'Tanggal Lomba',
+    year: 'Tahun',
+    academic_year_label: 'Tahun Pelajaran',
+    jenis_lomba: 'Jenis Lomba',
+    jenis_penyelenggara: 'Jenis Penyelenggara',
+    mode_pelaksanaan: 'Mode Pelaksanaan',
+    tempat_pelaksanaan: 'Tempat Pelaksanaan',
+    cara_mengikuti: 'Diikuti Secara',
+    jenis_hadiah: 'Penerimaan Hadiah',
+    nama_pembina: 'Nama Pembina',
+    description: 'Deskripsi',
+    certificate_url: 'Sertifikat',
+    photo_url: 'Foto Pemegang Sertifikat/Piala',
+    holder_type: 'Jenis Pemegang',
+    holder_id: 'ID Pemegang',
+  };
+
+  const HIDDEN_PRESTASI_FIELDS = new Set(['holder_type', 'holder_id', 'holder_name']);
+
+  const pretty = (field, v) => {
+    if (v === null || v === undefined || v === '') return <span className="text-slate-400 italic">Tidak ada data</span>;
+    if (field === 'certificate_url' || field === 'photo_url') {
+      return <button type="button" onClick={() => openAuthedFile(String(v))} className="text-blue-600 underline text-sm">Lihat file</button>;
+    }
+    if (field === 'jenis_hadiah' && Array.isArray(v)) {
+      return v.length ? v.join(', ') : <span className="text-slate-400 italic">Tidak ada data</span>;
+    }
+    if (typeof v === 'object') {
+      return <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(v, null, 2)}</pre>;
+    }
+    return String(v);
+  };
+
   const renderComparison = () => {
     if (!selectedRequest) return null;
-    const { old_data, new_data } = selectedRequest;
+    const { old_data, new_data, request_type } = selectedRequest;
 
-    // Field labels yang user-friendly
+    if (request_type === 'prestasi_create') {
+      const fields = Object.keys(new_data || {}).filter((f) => !HIDDEN_PRESTASI_FIELDS.has(f));
+      if (fields.length === 0) {
+        return <div className="text-center py-8 text-slate-500">Tidak ada data prestasi yang diajukan</div>;
+      }
+      return (
+        <div className="space-y-3">
+          {fields.map(field => (
+            <div key={field} className="border rounded-lg p-3">
+              <Label className="text-xs text-slate-600 mb-1 block">{PRESTASI_FIELD_LABELS[field] || field}</Label>
+              <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[44px]">
+                <p className="text-sm text-slate-900 font-medium break-words">{pretty(field, (new_data || {})[field])}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Field labels yang user-friendly (profile_update)
     const fieldLabels = {
       full_name: 'Nama Lengkap',
       email: 'Email',
@@ -99,12 +165,59 @@ export default function AdminVervalSiswaPage() {
       birth_place: 'Tempat Lahir',
       birth_date: 'Tanggal Lahir',
       address: 'Alamat',
-      // Add more fields as needed
+      // Field detail siswa (StudentDetailModel / student_details)
+      citizenship: 'Kewarganegaraan',
+      nik: 'NIK',
+      jumlah_saudara: 'Jumlah Saudara',
+      anak_ke: 'Anak Ke-',
+      agama: 'Agama',
+      cita_cita: 'Cita-cita',
+      hobi: 'Hobi',
+      pembiaya_sekolah: 'Yang Membiayai Sekolah',
+      pra_sekolah: 'Pra-Sekolah',
+      imunisasi: 'Imunisasi',
+      nomor_kip: 'Nomor KIP',
+      nomor_kk: 'Nomor KK',
+      nama_kepala_keluarga: 'Nama Kepala Keluarga',
+      ayah: 'Data Ayah',
+      ibu: 'Data Ibu',
+      wali: 'Data Wali',
+      alamat_ayah: 'Alamat Ayah',
+      alamat_ibu: 'Alamat Ibu',
+      alamat_wali: 'Alamat Wali',
+      alamat_siswa: 'Alamat Siswa',
+      keahlian: 'Keahlian',
+      tahfidz: 'Tahfidz',
+      beasiswa: 'Beasiswa & Bantuan',
+      pendidikan_lain: 'Pendidikan Lain',
+      jenis_kebutuhan_khusus: 'Jenis Kebutuhan Khusus',
+      kebutuhan_disabilitas: 'Kebutuhan Disabilitas',
+      berkas_kartu_keluarga: 'Berkas Kartu Keluarga',
+      berkas_akta_kelahiran: 'Berkas Akta Kelahiran',
+      berkas_ijazah_sd: 'Berkas Ijazah SD/MI',
+      berkas_kip: 'Berkas KIP',
+      berkas_pkh: 'Berkas PKH',
+      berkas_kks: 'Berkas KKS',
+      berkas_kartu_pelajar: 'Berkas Kartu Pelajar',
+    };
+
+    const prettyProfile = (v) => {
+      if (v === null || v === undefined || v === '') return <span className="text-slate-400 italic">Tidak ada data</span>;
+      if (Array.isArray(v)) {
+        return v.length ? v.join(', ') : <span className="text-slate-400 italic">Tidak ada data</span>;
+      }
+      if (typeof v === 'object') {
+        return <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(v, null, 2)}</pre>;
+      }
+      if (typeof v === 'string' && v.startsWith('/api/')) {
+        return <button type="button" onClick={() => openAuthedFile(v)} className="text-blue-600 underline text-sm">Lihat file</button>;
+      }
+      return String(v);
     };
 
     // Cari field yang berubah
     const changedFields = Object.keys(new_data).filter(key => {
-      return new_data[key] !== old_data[key];
+      return JSON.stringify(new_data[key]) !== JSON.stringify(old_data[key]);
     });
 
     if (changedFields.length === 0) {
@@ -118,13 +231,13 @@ export default function AdminVervalSiswaPage() {
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SEBELUM</Label>
               <div className="bg-rose-50 border border-rose-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 break-words">{old_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 break-words">{prettyProfile(old_data[field])}</p>
               </div>
             </div>
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SESUDAH</Label>
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 font-semibold break-words">{new_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 font-semibold break-words">{prettyProfile(new_data[field])}</p>
               </div>
             </div>
           </div>
@@ -196,6 +309,7 @@ export default function AdminVervalSiswaPage() {
                 <TableRow>
                   <TableHead>Tanggal Pengajuan</TableHead>
                   <TableHead>Nama Siswa</TableHead>
+                  <TableHead>Jenis Pengajuan</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Direview Oleh</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
@@ -204,11 +318,11 @@ export default function AdminVervalSiswaPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">Memuat...</TableCell>
+                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">Memuat...</TableCell>
                   </TableRow>
                 ) : filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada request verval</TableCell>
+                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">Belum ada request verval</TableCell>
                   </TableRow>
                 ) : filteredRequests.map(req => (
                   <TableRow key={req.id}>
@@ -222,6 +336,7 @@ export default function AdminVervalSiswaPage() {
                       })}
                     </TableCell>
                     <TableCell className="font-semibold">{req.submitted_by_name || req.user_id}</TableCell>
+                    <TableCell>{requestTypeBadge(req.request_type)}</TableCell>
                     <TableCell>{statusBadge(req.status)}</TableCell>
                     <TableCell className="text-sm text-slate-600">
                       {req.reviewed_by_name || '-'}
@@ -264,6 +379,7 @@ export default function AdminVervalSiswaPage() {
                 <div className="bg-slate-50 border rounded-lg p-3 text-sm">
                   <div className="grid grid-cols-2 gap-2">
                     <div><span className="text-slate-600">Diajukan oleh:</span> <strong>{selectedRequest.submitted_by_name}</strong></div>
+                    <div><span className="text-slate-600">Jenis Pengajuan:</span> {requestTypeBadge(selectedRequest.request_type)}</div>
                     <div><span className="text-slate-600">Status:</span> {statusBadge(selectedRequest.status)}</div>
                     <div><span className="text-slate-600">Tanggal:</span> {new Date(selectedRequest.created_at).toLocaleString('id-ID')}</div>
                     {selectedRequest.reviewed_by_name && (

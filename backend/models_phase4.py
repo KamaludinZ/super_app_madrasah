@@ -25,8 +25,17 @@ class StudentAchievementModel(BaseModel):
     organizer: Optional[str] = None  # Nama Penyelenggara
     date: Optional[str] = None  # Tanggal (YYYY-MM-DD)
     year: Optional[int] = None  # Tahun (auto-derive dari date saat backend create kalau kosong)
+    academic_year_label: Optional[str] = None  # Tahun Pelajaran, mis. "2025/2026"
+    jenis_lomba: Optional[str] = None  # individu | tim
+    jenis_penyelenggara: Optional[str] = None  # kementerian_lembaga | perguruan_tinggi | lembaga_pendidikan | swasta
+    mode_pelaksanaan: Optional[str] = None  # offline | online
+    tempat_pelaksanaan: Optional[str] = None  # Tempat pelaksanaan lomba
+    cara_mengikuti: Optional[str] = None  # mandiri | delegasi_madrasah | club
+    jenis_hadiah: List[str] = Field(default_factory=list)  # tropi | medali | sertifikat | uang_pembinaan | lainnya
+    nama_pembina: Optional[str] = None
     description: Optional[str] = None
-    certificate_url: Optional[str] = None  # base64
+    certificate_url: Optional[str] = None  # path/URL file upload sertifikat
+    photo_url: Optional[str] = None  # path/URL file upload foto pemegang piala/sertifikat
     is_verified: bool = False
     verified_by: Optional[str] = None
     verified_at: Optional[datetime] = None

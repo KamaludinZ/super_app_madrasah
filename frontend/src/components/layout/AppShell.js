@@ -73,6 +73,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Kelas', icon: ClipboardEdit, testid: 'nav-wk-my-schedule' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' });
+    items.push({ to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-wk-verval-siswa' });
     items.push({ to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' });
   } else if (role === 'guru_piket') {
     items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
@@ -98,11 +99,9 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
   } else if (role === 'siswa') {
     items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
-    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-siswa-data' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/siswa/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-siswa-materi' });
     items.push({ to: '/siswa/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-siswa-tugas' });
-    items.push({ to: '/wali-kelas/jurnal-kelas', label: 'Riwayat Jurnal Kelas', icon: History, testid: 'nav-siswa-jurnal' });
     items.push({ to: '/siswa/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-siswa-kehadiran' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });

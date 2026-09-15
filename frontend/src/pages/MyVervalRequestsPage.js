@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, Eye, Clock, AlertCircle, FileText, ShieldCheck } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function MyVervalRequestsPage() {
@@ -46,10 +46,43 @@ export default function MyVervalRequestsPage() {
     return 'Perubahan Profil';
   };
 
-  const pretty = (v) => {
+  const PRESTASI_FIELD_LABELS = {
+    name: 'Nama Lomba',
+    bidang_lomba: 'Bidang Lomba',
+    category: 'Kategori Lomba',
+    level: 'Tingkat Lomba',
+    rank: 'Peringkat',
+    organizer: 'Nama Penyelenggara',
+    date: 'Tanggal Lomba',
+    year: 'Tahun',
+    academic_year_label: 'Tahun Pelajaran',
+    jenis_lomba: 'Jenis Lomba',
+    jenis_penyelenggara: 'Jenis Penyelenggara',
+    mode_pelaksanaan: 'Mode Pelaksanaan',
+    tempat_pelaksanaan: 'Tempat Pelaksanaan',
+    cara_mengikuti: 'Diikuti Secara',
+    jenis_hadiah: 'Penerimaan Hadiah',
+    nama_pembina: 'Nama Pembina',
+    description: 'Deskripsi',
+    certificate_url: 'Sertifikat',
+    photo_url: 'Foto Pemegang Sertifikat/Piala',
+  };
+
+  const HIDDEN_PRESTASI_FIELDS = new Set(['holder_type', 'holder_id', 'holder_name']);
+
+  const pretty = (v, field) => {
     if (v === null || v === undefined || v === '') return <span className="text-slate-400 italic">Tidak ada data</span>;
+    if (field === 'certificate_url' || field === 'photo_url') {
+      return <button type="button" onClick={() => openAuthedFile(String(v))} className="text-blue-600 underline text-sm">Lihat file</button>;
+    }
+    if (Array.isArray(v)) {
+      return v.length ? v.join(', ') : <span className="text-slate-400 italic">Tidak ada data</span>;
+    }
     if (typeof v === 'object') {
       return <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(v, null, 2)}</pre>;
+    }
+    if (typeof v === 'string' && v.startsWith('/api/')) {
+      return <button type="button" onClick={() => openAuthedFile(v)} className="text-blue-600 underline text-sm">Lihat file</button>;
     }
     return String(v);
   };
@@ -70,28 +103,54 @@ export default function MyVervalRequestsPage() {
       birth_place: 'Tempat Lahir',
       birth_date: 'Tanggal Lahir',
       address: 'Alamat',
+      // Field detail siswa (StudentDetailModel / student_details)
+      citizenship: 'Kewarganegaraan',
+      nik: 'NIK',
+      jumlah_saudara: 'Jumlah Saudara',
+      anak_ke: 'Anak Ke-',
+      agama: 'Agama',
+      cita_cita: 'Cita-cita',
+      hobi: 'Hobi',
+      pembiaya_sekolah: 'Yang Membiayai Sekolah',
+      pra_sekolah: 'Pra-Sekolah',
+      imunisasi: 'Imunisasi',
+      nomor_kip: 'Nomor KIP',
+      nomor_kk: 'Nomor KK',
+      nama_kepala_keluarga: 'Nama Kepala Keluarga',
+      ayah: 'Data Ayah',
+      ibu: 'Data Ibu',
+      wali: 'Data Wali',
+      alamat_ayah: 'Alamat Ayah',
+      alamat_ibu: 'Alamat Ibu',
+      alamat_wali: 'Alamat Wali',
+      alamat_siswa: 'Alamat Siswa',
+      keahlian: 'Keahlian',
+      tahfidz: 'Tahfidz',
+      beasiswa: 'Beasiswa & Bantuan',
+      pendidikan_lain: 'Pendidikan Lain',
+      jenis_kebutuhan_khusus: 'Jenis Kebutuhan Khusus',
+      kebutuhan_disabilitas: 'Kebutuhan Disabilitas',
+      berkas_kartu_keluarga: 'Berkas Kartu Keluarga',
+      berkas_akta_kelahiran: 'Berkas Akta Kelahiran',
+      berkas_ijazah_sd: 'Berkas Ijazah SD/MI',
+      berkas_kip: 'Berkas KIP',
+      berkas_pkh: 'Berkas PKH',
+      berkas_kks: 'Berkas KKS',
+      berkas_kartu_pelajar: 'Berkas Kartu Pelajar',
     };
 
     if (selectedRequest.request_type === 'prestasi_create') {
-      const fields = Object.keys(new_data || {});
+      const fields = Object.keys(new_data || {}).filter((f) => !HIDDEN_PRESTASI_FIELDS.has(f));
       if (fields.length === 0) {
         return <div className="text-center py-8 text-slate-500">Tidak ada data prestasi yang diajukan</div>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {fields.map(field => (
-            <div key={field} className="grid grid-cols-2 gap-4 border rounded-lg p-4">
-              <div>
-                <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SEBELUM</Label>
-                <div className="bg-slate-50 border border-slate-200 rounded p-3 min-h-[60px]">
-                  <p className="text-sm text-slate-900 break-words">{pretty((old_data || {})[field])}</p>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - PENGAJUAN BARU</Label>
-                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[60px]">
-                  <p className="text-sm text-slate-900 font-semibold break-words">{pretty((new_data || {})[field])}</p>
-                </div>
+            <div key={field} className="border rounded-lg p-3">
+              <Label className="text-xs text-slate-600 mb-1 block">{PRESTASI_FIELD_LABELS[field] || fieldLabels[field] || field}</Label>
+              <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[44px]">
+                <p className="text-sm text-slate-900 font-medium break-words">{pretty((new_data || {})[field], field)}</p>
               </div>
             </div>
           ))}
