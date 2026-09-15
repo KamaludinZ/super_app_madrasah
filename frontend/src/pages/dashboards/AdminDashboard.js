@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Users, BookOpen, Building2, Calendar, ClipboardCheck, ShieldCheck,
-  GraduationCap, Settings, QrCode, Trophy, UserMinus, UserPlus,
+  Users, BookOpen, BookMarked, Building2, Calendar, CalendarDays, ClipboardCheck, ShieldCheck,
+  GraduationCap, Settings, QrCode, Trophy, UserMinus, UserPlus, ArrowRightLeft,
   Award, Globe, Flag, MapPin, School, Megaphone,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,19 +11,106 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import PublicPagesSection from '@/components/PublicPagesSection';
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, activeRole } = useAuth();
   const [stats, setStats] = useState(null);
   const [studStats, setStudStats] = useState(null);
   const [achStats, setAchStats] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Check if user is not pure admin (has limited access)
+  const isLimitedAccess = activeRole !== 'admin';
+
+  // Get dashboard label based on role
+  const getDashboardLabel = () => {
+    const labels = {
+      'admin': 'Dashboard Admin',
+      'kepala_sekolah': 'Dashboard Kepala Sekolah',
+      'kepala_tata_usaha': 'Dashboard Kepala Tata Usaha',
+      'waka_sarana_prasarana': 'Dashboard Waka Sarana Prasarana',
+      'waka_kesiswaan': 'Dashboard Waka Kesiswaan',
+      'waka_kurikulum': 'Dashboard Waka Kurikulum',
+      'waka_humas': 'Dashboard Waka Humas'
+    };
+    return labels[activeRole] || 'Dashboard';
+  };
+
+  // Get quick actions based on role
+  const getQuickActions = () => {
+    switch (activeRole) {
+      case 'kepala_sekolah':
+        return [
+          { to: '/admin/kehadiran', icon: Users, label: 'Kehadiran Siswa', testid: 'qa-kehadiran' },
+          { to: '/admin/jurnal', icon: BookOpen, label: 'Data Jurnal', testid: 'qa-jurnal' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+          { to: '/admin/dana-rkam', icon: Calendar, label: 'DANA RKAM', testid: 'qa-rkam' },
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/my-agenda', icon: Calendar, label: 'Agenda Saya', testid: 'qa-agenda' },
+        ];
+      case 'kepala_tata_usaha':
+        return [
+          { to: '/admin/users', icon: Users, label: 'Data Pengguna', testid: 'qa-users' },
+          { to: '/admin/siswa', icon: GraduationCap, label: 'Data Siswa', testid: 'qa-siswa' },
+          { to: '/admin/gtk', icon: Users, label: 'Data GTK', testid: 'qa-gtk' },
+          { to: '/admin/dana-rkam', icon: Calendar, label: 'DANA RKAM', testid: 'qa-rkam' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+        ];
+      case 'waka_sarana_prasarana':
+        return [
+          { to: '/admin/rooms', icon: Building2, label: 'Data Ruangan', testid: 'qa-rooms' },
+          { to: '/admin/schedules', icon: Calendar, label: 'Jadwal Pelajaran', testid: 'qa-schedules' },
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+        ];
+      case 'waka_kesiswaan':
+        return [
+          { to: '/admin/siswa', icon: GraduationCap, label: 'Data Siswa', testid: 'qa-siswa' },
+          { to: '/admin/kehadiran', icon: Users, label: 'Kehadiran Siswa', testid: 'qa-kehadiran' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/admin/mutasi', icon: ArrowRightLeft, label: 'Data Mutasi', testid: 'qa-mutasi' },
+        ];
+      case 'waka_kurikulum':
+        return [
+          { to: '/admin/schedules', icon: Calendar, label: 'Jadwal Pelajaran', testid: 'qa-schedules' },
+          { to: '/admin/jurnal', icon: ClipboardCheck, label: 'Data Jurnal', testid: 'qa-jurnal' },
+          { to: '/admin/subjects', icon: BookMarked, label: 'Mata Pelajaran', testid: 'qa-subjects' },
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+        ];
+      case 'waka_humas':
+        return [
+          { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+          { to: '/admin/pengumuman', icon: Megaphone, label: 'Pengumuman', testid: 'qa-pengumuman' },
+          { to: '/admin/aplikasi-madrasah', icon: Globe, label: 'Aplikasi Madrasah', testid: 'qa-apps' },
+        ];
+      default: // admin
+        return [
+          { to: '/admin/users', icon: Users, label: 'Kelola Pengguna', testid: 'qa-users' },
+          { to: '/admin/schedules', icon: Calendar, label: 'Atur Jadwal', testid: 'qa-schedules' },
+          { to: '/admin/qr-generator', icon: QrCode, label: 'Generate QR Kelas', testid: 'qa-qr' },
+          { to: '/admin/audit-logs', icon: ShieldCheck, label: 'Log Aktivitas', testid: 'qa-audit' },
+          { to: '/admin/rooms', icon: Building2, label: 'Kelola Ruangan', testid: 'qa-rooms' },
+          { to: '/admin/classes', icon: BookOpen, label: 'Kelola Kelas', testid: 'qa-classes' },
+          { to: '/admin/academic-year', icon: GraduationCap, label: 'Tahun Pelajaran', testid: 'qa-ay' },
+          { to: '/admin/settings', icon: Settings, label: 'Pengaturan', testid: 'qa-settings' },
+        ];
+    }
+  };
 
   useEffect(() => {
-    api.get('/admin/stats').then(({ data }) => setStats(data)).catch(() => {});
-    api.get('/admin/stats/students').then(({ data }) => setStudStats(data)).catch(() => {});
-    api.get('/admin/stats/achievements').then(({ data }) => setAchStats(data)).catch(() => {});
-    loadAnnouncements();
+    Promise.all([
+      api.get('/admin/stats').then(({ data }) => setStats(data)).catch(() => {}),
+      api.get('/admin/stats/students').then(({ data }) => setStudStats(data)).catch(() => {}),
+      api.get('/admin/stats/achievements').then(({ data }) => setAchStats(data)).catch(() => {}),
+      loadAnnouncements()
+    ]).finally(() => setLoading(false));
   }, []);
 
   const loadAnnouncements = async () => {
@@ -42,10 +129,14 @@ export default function AdminDashboard() {
     }
   };
 
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
-    <div className="space-y-6" data-testid="admin-dashboard">
+    <div className="section-spacing" data-testid="admin-dashboard">
       <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">Dashboard Admin</Badge>
+        <KemenagBadge variant="default" className="mb-2" />
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Selamat datang, {user?.full_name?.split(' ')[0] || 'Admin'}</h1>
         <p className="text-sm text-slate-600 mt-1">Tahun Pelajaran Aktif: <span className="font-mono font-semibold">{stats?.active_academic_year || '-'}</span></p>
       </div>
@@ -86,7 +177,7 @@ export default function AdminDashboard() {
       )}
 
       {/* KPI Stats - General */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="general-stats">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 grid-spacing-dense" data-testid="general-stats">
         <KPI label="Total Pengguna" value={stats?.total_users || 0} icon={Users} />
         <KPI label="Total Kelas" value={stats?.total_classes || 0} icon={BookOpen} />
         <KPI label="Total Ruangan" value={stats?.total_rooms || 0} icon={Building2} />
@@ -96,7 +187,7 @@ export default function AdminDashboard() {
 
       {/* Stats Siswa */}
       <Card data-testid="students-stats-overview">
-        <CardContent className="p-5 space-y-4">
+        <CardContent className="p-5 card-spacing">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="h-9 w-9 rounded-lg bg-[#006837]/10 flex items-center justify-center">
@@ -111,7 +202,7 @@ export default function AdminDashboard() {
               Lihat semua →
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 grid-spacing-dense">
             <StatCard
               icon={Users}
               label="Total Siswa"
@@ -172,7 +263,7 @@ export default function AdminDashboard() {
               Lihat semua →
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 grid-spacing-dense">
             <StatCard
               icon={Trophy}
               label="Total Prestasi"
@@ -229,14 +320,9 @@ export default function AdminDashboard() {
         <CardContent className="p-5">
           <h2 className="text-base font-semibold text-slate-900 mb-4">Aksi Cepat</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <QuickAction to="/admin/users" icon={Users} label="Kelola Pengguna" testid="qa-users" />
-            <QuickAction to="/admin/schedules" icon={Calendar} label="Atur Jadwal" testid="qa-schedules" />
-            <QuickAction to="/admin/qr-generator" icon={QrCode} label="Generate QR Kelas" testid="qa-qr" />
-            <QuickAction to="/admin/audit-logs" icon={ShieldCheck} label="Log Aktivitas" testid="qa-audit" />
-            <QuickAction to="/admin/rooms" icon={Building2} label="Kelola Ruangan" testid="qa-rooms" />
-            <QuickAction to="/admin/classes" icon={BookOpen} label="Kelola Kelas" testid="qa-classes" />
-            <QuickAction to="/admin/academic-year" icon={GraduationCap} label="Tahun Pelajaran" testid="qa-ay" />
-            <QuickAction to="/admin/settings" icon={Settings} label="Pengaturan" testid="qa-settings" />
+            {getQuickActions().map((action, idx) => (
+              <QuickAction key={idx} {...action} />
+            ))}
           </div>
         </CardContent>
       </Card>

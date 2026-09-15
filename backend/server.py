@@ -30,6 +30,7 @@ from routers import (
     indikator_materi,
     jabatan,
     journals,
+    kelas_digital,
     notifications,
     phase4,
     promotions,
@@ -49,6 +50,7 @@ from routers import (
     users,
     verval,
     wali_parent,
+    waka_kurikulum,
 )
 
 # ============================================================
@@ -93,8 +95,48 @@ api_router.include_router(tatib.router)
 api_router.include_router(events.router)
 api_router.include_router(rkam.router)
 api_router.include_router(school_apps.router)
+api_router.include_router(waka_kurikulum.router)
+
+# Debug kelas_digital router
+logger.info(f"[DEBUG] About to include kelas_digital router")
+logger.info(f"[DEBUG] kelas_digital.router has {len(kelas_digital.router.routes)} routes")
+logger.info(f"[DEBUG] api_router has {len(api_router.routes)} routes before include")
+try:
+    api_router.include_router(kelas_digital.router)
+    logger.info(f"[DEBUG] Successfully included kelas_digital router")
+    logger.info(f"[DEBUG] api_router has {len(api_router.routes)} routes AFTER include")
+
+    # Check what routes are in api_router
+    kelas_in_api = [r.path for r in api_router.routes if hasattr(r, 'path') and '/kelas' in r.path]
+    logger.info(f"[DEBUG] Kelas routes in api_router: {len(kelas_in_api)}")
+    for kr in kelas_in_api[:5]:  # Show first 5
+        logger.info(f"[DEBUG]   - {kr}")
+
+    # Show the last added route
+    last_route = api_router.routes[-1]
+    logger.info(f"[DEBUG] Last added route type: {type(last_route)}")
+    logger.info(f"[DEBUG] Last added route: {last_route}")
+    if hasattr(last_route, 'path'):
+        logger.info(f"[DEBUG] Last route path: {last_route.path}")
+    if hasattr(last_route, 'prefix'):
+        logger.info(f"[DEBUG] Last route prefix: {last_route.prefix}")
+except Exception as e:
+    logger.error(f"[DEBUG] Failed to include kelas_digital router: {e}", exc_info=True)
 
 app.include_router(api_router)
+
+# Debug: Check routes immediately after including api_router
+logger.info("=" * 60)
+logger.info("IMMEDIATE ROUTE CHECK (after app.include_router):")
+kelas_check = []
+for route in app.routes:
+    if hasattr(route, 'path'):
+        if '/kelas' in route.path:
+            kelas_check.append(route.path)
+            logger.info(f"  [KELAS] {route.path}")
+logger.info(f"Kelas routes found: {len(kelas_check)}")
+logger.info(f"Total app routes: {len(app.routes)}")
+logger.info("=" * 60)
 
 # ============================================================
 # MIDDLEWARE
@@ -247,6 +289,26 @@ async def startup_event():
 
     except Exception as e:
         logger.error(f"Failed to start background tasks: {e}")
+
+    # Log all registered routes for debugging
+    logger.info("=" * 60)
+    logger.info("REGISTERED ROUTES:")
+    kelas_routes = []
+    all_routes = []
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            route_info = f"{list(route.methods)} {route.path}"
+            all_routes.append(route_info)
+            if '/kelas' in route.path:
+                kelas_routes.append(route_info)
+                logger.info(f"  [KELAS] {route_info}")
+    logger.info(f"Total kelas routes: {len(kelas_routes)}")
+    logger.info(f"Total all routes: {len(all_routes)}")
+
+    # Check if wali-kelas route specifically exists
+    wali_kelas_found = any('/kelas/wali-kelas' in r for r in all_routes)
+    logger.info(f"/kelas/wali-kelas route found: {wali_kelas_found}")
+    logger.info("=" * 60)
 
 
 @app.on_event("shutdown")

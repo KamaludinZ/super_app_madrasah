@@ -31,6 +31,8 @@ export default function AdminJurnalRekapPage() {
     start_date: '', end_date: '',
   });
   const [detailDialog, setDetailDialog] = useState({ open: false, journal: null });
+  const [attendanceDetail, setAttendanceDetail] = useState(null);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [editDialog, setEditDialog] = useState({ open: false, journal: null });
   const [editForm, setEditForm] = useState({ materi: '', catatan: '', jenis_izin: '', attendances: [] });
   const [editSaving, setEditSaving] = useState(false);
@@ -69,6 +71,25 @@ export default function AdminJurnalRekapPage() {
   const reset = () => {
     setFilters({ class_id: 'all', teacher_id: 'all', subject_id: 'all', start_date: '', end_date: '' });
     setTimeout(() => load(), 50);
+  };
+
+  const loadAttendanceDetail = async (journalId) => {
+    try {
+      setLoadingAttendance(true);
+      const res = await api.get(`/journals/${journalId}/attendance`);
+      setAttendanceDetail(res.data);
+      setLoadingAttendance(false);
+    } catch (err) {
+      console.error('Error loading attendance detail:', err);
+      setLoadingAttendance(false);
+      toast.error('Gagal memuat detail kehadiran');
+    }
+  };
+
+  const handleShowDetail = (journal) => {
+    setDetailDialog({ open: true, journal });
+    setAttendanceDetail(null);
+    loadAttendanceDetail(journal.id);
   };
 
   const exportCSV = () => {
@@ -325,7 +346,7 @@ export default function AdminJurnalRekapPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setDetailDialog({ open: true, journal: j })}
+                            onClick={() => handleShowDetail(j)}
                             className="h-7 px-2"
                           >
                             <Eye className="h-3 w-3" />
@@ -494,105 +515,101 @@ export default function AdminJurnalRekapPage() {
               </div>
 
               {/* Detail Kehadiran Siswa */}
-              {detailDialog.journal.attendance_details && detailDialog.journal.attendance_details.length > 0 && (
+              {loadingAttendance ? (
+                <div className="flex justify-center items-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+                </div>
+              ) : attendanceDetail && (
                 <div>
                   <Label className="text-sm font-semibold mb-2 block">Detail Kehadiran Siswa</Label>
                   <div className="grid grid-cols-1 gap-3">
                     {/* Siswa Hadir */}
-                    {detailDialog.journal.attendance_details.filter(a => a.status === 'hadir').length > 0 && (
+                    {attendanceDetail.attendance.hadir.length > 0 && (
                       <Card className="border-emerald-200">
                         <CardHeader className="bg-emerald-50 py-2 px-3">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                             <span className="text-sm font-semibold text-emerald-700">
-                              Hadir ({detailDialog.journal.attendance_details.filter(a => a.status === 'hadir').length})
+                              Hadir ({attendanceDetail.attendance.hadir.length})
                             </span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            {detailDialog.journal.attendance_details
-                              .filter(a => a.status === 'hadir')
-                              .map((att, idx) => (
-                                <Badge key={idx} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300">
-                                  {att.student_name}
-                                </Badge>
-                              ))}
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.hadir.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-emerald-50 p-2 rounded border border-emerald-200">
+                                {student.student_name}
+                              </div>
+                            ))}
                           </div>
                         </CardContent>
                       </Card>
                     )}
 
                     {/* Siswa Sakit */}
-                    {detailDialog.journal.attendance_details.filter(a => a.status === 'sakit').length > 0 && (
+                    {attendanceDetail.attendance.sakit.length > 0 && (
                       <Card className="border-amber-200">
                         <CardHeader className="bg-amber-50 py-2 px-3">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                             <span className="text-sm font-semibold text-amber-700">
-                              Sakit ({detailDialog.journal.attendance_details.filter(a => a.status === 'sakit').length})
+                              Sakit ({attendanceDetail.attendance.sakit.length})
                             </span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            {detailDialog.journal.attendance_details
-                              .filter(a => a.status === 'sakit')
-                              .map((att, idx) => (
-                                <Badge key={idx} variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
-                                  {att.student_name}
-                                </Badge>
-                              ))}
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.sakit.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-amber-50 p-2 rounded border border-amber-200">
+                                {student.student_name}
+                              </div>
+                            ))}
                           </div>
                         </CardContent>
                       </Card>
                     )}
 
                     {/* Siswa Izin */}
-                    {detailDialog.journal.attendance_details.filter(a => a.status === 'izin').length > 0 && (
+                    {attendanceDetail.attendance.izin.length > 0 && (
                       <Card className="border-blue-200">
                         <CardHeader className="bg-blue-50 py-2 px-3">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                             <span className="text-sm font-semibold text-blue-700">
-                              Izin ({detailDialog.journal.attendance_details.filter(a => a.status === 'izin').length})
+                              Izin ({attendanceDetail.attendance.izin.length})
                             </span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            {detailDialog.journal.attendance_details
-                              .filter(a => a.status === 'izin')
-                              .map((att, idx) => (
-                                <Badge key={idx} variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
-                                  {att.student_name}
-                                </Badge>
-                              ))}
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.izin.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-blue-50 p-2 rounded border border-blue-200">
+                                {student.student_name}
+                              </div>
+                            ))}
                           </div>
                         </CardContent>
                       </Card>
                     )}
 
-                    {/* Siswa Alpa */}
-                    {detailDialog.journal.attendance_details.filter(a => a.status === 'alpa').length > 0 && (
+                    {/* Siswa Alpha */}
+                    {attendanceDetail.attendance.alpha.length > 0 && (
                       <Card className="border-rose-200">
                         <CardHeader className="bg-rose-50 py-2 px-3">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-rose-500"></div>
                             <span className="text-sm font-semibold text-rose-700">
-                              Alpa ({detailDialog.journal.attendance_details.filter(a => a.status === 'alpa').length})
+                              Alpha ({attendanceDetail.attendance.alpha.length})
                             </span>
                           </div>
                         </CardHeader>
                         <CardContent className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            {detailDialog.journal.attendance_details
-                              .filter(a => a.status === 'alpa')
-                              .map((att, idx) => (
-                                <Badge key={idx} variant="outline" className="bg-rose-50 text-rose-700 border-rose-300">
-                                  {att.student_name}
-                                </Badge>
-                              ))}
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.alpha.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-rose-50 p-2 rounded border border-rose-200">
+                                {student.student_name}
+                              </div>
+                            ))}
                           </div>
                         </CardContent>
                       </Card>

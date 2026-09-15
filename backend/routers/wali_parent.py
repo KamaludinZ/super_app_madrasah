@@ -2,6 +2,7 @@
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 import calendar
+import logging
 
 from fastapi import APIRouter, Depends
 
@@ -13,6 +14,8 @@ from core import (
     serialize_doc,
 )
 from journal_core import current_day_id, now_wib
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -76,17 +79,30 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
     # 1. ATTENDANCE STATISTICS
     # Get attendance records for the current month
     today = datetime.now()
-    month_start = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_pattern = today.strftime('%Y-%m')  # e.g., "2026-09"
 
-    attendance_records = await db.attendance.find({
+    logger.info(f"[DASHBOARD-STATS] Class: {class_id}, Month pattern: {month_pattern}")
+    logger.info(f"[DASHBOARD-STATS] Student IDs count: {len(student_ids)}")
+
+    # Use 'attendances' collection (with 's') and 'created_at' field - same as attendance-report endpoint
+    attendance_records = await db.attendances.find({
         'student_id': {'$in': student_ids},
-        'date': {'$gte': month_start.isoformat()[:10]}
+        'created_at': {
+            '$regex': f'^{month_pattern}-',
+            '$options': 'i'
+        }
     }, {'_id': 0}).to_list(10000)
+
+    logger.info(f"[DASHBOARD-STATS] Total attendance records found: {len(attendance_records)}")
+    if attendance_records:
+        logger.info(f"[DASHBOARD-STATS] Sample record: {attendance_records[0]}")
 
     # Calculate attendance percentage
     total_records = len(attendance_records)
     present_records = len([r for r in attendance_records if r.get('status') == 'hadir'])
     attendance_percentage = (present_records / total_records * 100) if total_records > 0 else 0
+
+    logger.info(f"[DASHBOARD-STATS] Present: {present_records}, Total: {total_records}, Percentage: {attendance_percentage}%")
 
     # 2. STUDENT DATA COMPLETENESS
     # Check required fields for completeness
@@ -196,34 +212,37 @@ async def wali_kelas_attendance_report(
     end_date = f"{year}-{mon}-{last_day:02d}"
 
     # Get all attendance records for this month
-    attendance_records = await db.attendance.find({
-        'date': {'$gte': start_date, '$lte': end_date}
+    # Use regex to match dates starting with the month, regardless of timezone format
+    student_ids = [s['id'] for s in students]
+    attendance_records = await db.attendances.find({
+        'student_id': {'$in': student_ids},
+        'created_at': {
+            '$regex': f'^{year}-{mon}-',
+            '$options': 'i'
+        }
     }, {'_id': 0}).to_list(10000)
+
+    logger.info(f"[WALI-KELAS-ATTENDANCE] Class: {class_id}, Month: {month}")
+    logger.info(f"[WALI-KELAS-ATTENDANCE] Students count: {len(students)}, Attendance records: {len(attendance_records)}")
+    if attendance_records:
+        logger.info(f"[WALI-KELAS-ATTENDANCE] Sample attendance record: {attendance_records[0]}")
 
     # Build report for each student
     report = []
     for student in students:
         student_id = student['id']
 
-        # Count attendance status
-        hadir = 0
-        sakit = 0
-        izin = 0
-        alpa = 0
+        # Filter records for this student
+        student_records = [r for r in attendance_records if r.get('student_id') == student_id]
 
-        for record in attendance_records:
-            # Check if student is in this record
-            student_record = next((r for r in record.get('records', []) if r.get('student_id') == student_id), None)
-            if student_record:
-                status = student_record.get('status', 'hadir')
-                if status == 'hadir':
-                    hadir += 1
-                elif status == 'sakit':
-                    sakit += 1
-                elif status == 'izin':
-                    izin += 1
-                elif status == 'alpa':
-                    alpa += 1
+        # Count attendance status
+        hadir = sum(1 for r in student_records if r.get('status') == 'hadir')
+        sakit = sum(1 for r in student_records if r.get('status') == 'sakit')
+        izin = sum(1 for r in student_records if r.get('status') == 'izin')
+        alpa = sum(1 for r in student_records if r.get('status') in ['alpa', 'alpha'])
+
+        if len(student_records) > 0:
+            logger.info(f"[WALI-KELAS-ATTENDANCE] {student['full_name']}: H={hadir}, S={sakit}, I={izin}, A={alpa}, Total={len(student_records)}")
 
         report.append({
             'student_id': student_id,
@@ -270,36 +289,51 @@ async def wali_kelas_attendance_details(
     last_day = calendar.monthrange(int(year), int(mon))[1]
     end_date = f"{year}-{mon}-{last_day:02d}"
 
-    # Get all attendance records for this month
-    attendance_records = await db.attendance.find({
-        'date': {'$gte': start_date, '$lte': end_date}
-    }, {'_id': 0}).sort('date', 1).to_list(100)
+    # Get all attendance records for this student in this month
+    attendance_records = await db.attendances.find({
+        'student_id': student_id,
+        'created_at': {'$gte': f"{start_date}T00:00:00", '$lte': f"{end_date}T23:59:59"}
+    }, {'_id': 0}).sort('created_at', 1).to_list(500)
 
-    # Build daily records
+    # Get journal IDs to fetch subject and teacher info
+    journal_ids = list(set([r.get('journal_id') for r in attendance_records if r.get('journal_id')]))
+    journals = await db.journals.find({'id': {'$in': journal_ids}}, {'_id': 0, 'id': 1, 'subject_id': 1, 'teacher_id': 1}).to_list(500) if journal_ids else []
+    journal_map = {j['id']: j for j in journals}
+
+    # Get subjects and teachers
+    subject_ids = list(set([j.get('subject_id') for j in journals if j.get('subject_id')]))
+    teacher_ids = list(set([j.get('teacher_id') for j in journals if j.get('teacher_id')]))
+
+    subjects = await db.subjects.find({'id': {'$in': subject_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(200) if subject_ids else []
+    teachers = await db.users.find({'id': {'$in': teacher_ids}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(100) if teacher_ids else []
+
+    subject_map = {s['id']: s for s in subjects}
+    teacher_map = {t['id']: t for t in teachers}
+
+    # Build daily records with enriched data
     daily_records = []
     for record in attendance_records:
-        # Check if student is in this record
-        student_record = next((r for r in record.get('records', []) if r.get('student_id') == student_id), None)
-        if student_record:
-            # Get schedule info if available
-            schedule_id = record.get('schedule_id')
-            subject = None
-            teacher = None
+        journal_id = record.get('journal_id')
+        subject = None
+        teacher = None
 
-            if schedule_id:
-                sched = await db.schedules.find_one({'id': schedule_id}, {'_id': 0, 'subject_id': 1, 'teacher_id': 1})
-                if sched:
-                    subj = await db.subjects.find_one({'id': sched.get('subject_id')}, {'_id': 0, 'name': 1})
-                    teach = await db.users.find_one({'id': sched.get('teacher_id')}, {'_id': 0, 'full_name': 1})
-                    subject = subj.get('name') if subj else None
-                    teacher = teach.get('full_name') if teach else None
+        if journal_id and journal_id in journal_map:
+            journal = journal_map[journal_id]
+            subject_id = journal.get('subject_id')
+            teacher_id = journal.get('teacher_id')
 
-            daily_records.append({
-                'date': record['date'],
-                'status': student_record.get('status', 'hadir'),
-                'subject': subject,
-                'teacher': teacher,
-            })
+            if subject_id and subject_id in subject_map:
+                subject = subject_map[subject_id].get('name')
+
+            if teacher_id and teacher_id in teacher_map:
+                teacher = teacher_map[teacher_id].get('full_name')
+
+        daily_records.append({
+            'date': record.get('created_at'),
+            'status': record.get('status', 'hadir'),
+            'subject': subject,
+            'teacher': teacher,
+        })
 
     return {'daily_records': daily_records}
 
@@ -559,10 +593,12 @@ async def get_class_attendance_stats(
     target_month = month if month else now.month
     target_year = year if year else now.year
 
-    # Get first and last day of the month
-    first_day = datetime(target_year, target_month, 1)
+    # Get first and last day of the month (timezone-aware)
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo('Asia/Jakarta')
+    first_day = datetime(target_year, target_month, 1, tzinfo=tz)
     last_day_num = calendar.monthrange(target_year, target_month)[1]
-    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
+    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59, tzinfo=tz)
 
     # Get all students in this class
     students = await db.users.find(
@@ -580,12 +616,12 @@ async def get_class_attendance_stats(
         }
     }, {'_id': 0}).to_list(10000)
 
-    # Calculate monthly stats
+    # Calculate monthly stats (handle both 'alpa' and 'alpha')
     total = len(attendance_records)
     hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
     sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
     izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
-    alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+    alpa = sum(1 for a in attendance_records if a.get('status') in ['alpa', 'alpha'])
 
     monthly_percentage = (hadir / total * 100) if total > 0 else 0
 
@@ -597,19 +633,19 @@ async def get_class_attendance_stats(
     weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
     weekly_sakit = sum(1 for a in weekly_records if a.get('status') == 'sakit')
     weekly_izin = sum(1 for a in weekly_records if a.get('status') == 'izin')
-    weekly_alpa = sum(1 for a in weekly_records if a.get('status') == 'alpa')
+    weekly_alpa = sum(1 for a in weekly_records if a.get('status') in ['alpa', 'alpha'])
     weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
 
-    # Calculate daily stats (today)
-    today_start = datetime(now.year, now.month, now.day)
-    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
+    # Calculate daily stats (today - timezone-aware)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=tz)
+    today_end = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=tz)
     daily_records = [a for a in attendance_records
                     if today_start <= datetime.fromisoformat(a.get('created_at')) <= today_end]
     daily_total = len(daily_records)
     daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
     daily_sakit = sum(1 for a in daily_records if a.get('status') == 'sakit')
     daily_izin = sum(1 for a in daily_records if a.get('status') == 'izin')
-    daily_alpa = sum(1 for a in daily_records if a.get('status') == 'alpa')
+    daily_alpa = sum(1 for a in daily_records if a.get('status') in ['alpa', 'alpha'])
     daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
 
     # Calculate per-student summary
@@ -622,7 +658,7 @@ async def get_class_attendance_stats(
         s_hadir = sum(1 for r in student_records if r.get('status') == 'hadir')
         s_sakit = sum(1 for r in student_records if r.get('status') == 'sakit')
         s_izin = sum(1 for r in student_records if r.get('status') == 'izin')
-        s_alpa = sum(1 for r in student_records if r.get('status') == 'alpa')
+        s_alpa = sum(1 for r in student_records if r.get('status') in ['alpa', 'alpha'])
         s_percentage = (s_hadir / s_total * 100) if s_total > 0 else 0
 
         student_summaries.append({

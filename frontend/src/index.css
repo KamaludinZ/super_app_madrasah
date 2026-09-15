@@ -139,6 +139,58 @@ code, .font-mono {
     color: var(--gold);
 }
 
+/* Accessible Badge Variants - WCAG AA Compliant */
+.badge-brand {
+    background-color: hsl(151 100% 21% / 0.15);
+    color: #0B7A3B;
+    border-color: hsl(151 100% 21% / 0.3);
+}
+.badge-success {
+    background-color: hsl(142 76% 36% / 0.15);
+    color: #0E8A4B;
+    border-color: hsl(142 76% 36% / 0.3);
+}
+.badge-warning {
+    background-color: hsl(37 91% 55% / 0.15);
+    color: #B7791F;
+    border-color: hsl(37 91% 55% / 0.3);
+}
+.badge-danger {
+    background-color: hsl(18 83% 40% / 0.15);
+    color: #C2410C;
+    border-color: hsl(18 83% 40% / 0.3);
+}
+.badge-info {
+    background-color: hsl(172 66% 50% / 0.15);
+    color: #0F766E;
+    border-color: hsl(172 66% 50% / 0.3);
+}
+
+/* Standardized Spacing Utilities - 8px Grid System */
+.section-spacing {
+    @apply space-y-6;  /* 24px - Consistent section gaps */
+}
+
+.card-spacing {
+    @apply space-y-4;  /* 16px - Internal card spacing */
+}
+
+.grid-spacing-dense {
+    @apply gap-3;      /* 12px - Dense grids (stats, badges) */
+}
+
+.grid-spacing-default {
+    @apply gap-4;      /* 16px - Default grid spacing */
+}
+
+.grid-spacing-comfortable {
+    @apply gap-6;      /* 24px - Comfortable spacing for cards */
+}
+
+.page-container {
+    @apply px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto w-full;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
     width: 10px;
@@ -153,6 +205,47 @@ code, .font-mono {
 }
 ::-webkit-scrollbar-thumb:hover {
     background-color: rgba(0, 104, 55, 0.4);
+}
+
+/* Kemenag-themed Animations */
+@keyframes breath {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes zoomIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Islamic Pattern Background Animation */
+@keyframes patternShift {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
+}
+
+.animate-pattern {
+    animation: patternShift 20s linear infinite;
 }
 
 @layer base {

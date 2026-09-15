@@ -41,6 +41,7 @@ ROLES = [
     'musrifah_mahad',
     'murabbi_mahad',
     'bendahara_mahad',
+    'kelas',
 ]
 
 ROLE_LABELS = {
@@ -76,6 +77,7 @@ ROLE_LABELS = {
     'musrifah_mahad': 'Musrifah Mahad',
     'murabbi_mahad': 'Murabbi Mahad',
     'bendahara_mahad': 'Bendahara Mahad',
+    'kelas': 'Akun Kelas',
 }
 
 # Default teaching slots template (jam ke- format)
@@ -1361,3 +1363,151 @@ class RKAMDocumentModel(BaseModel):
     uploaded_by: Optional[str] = None  # User ID yang upload
     is_active: bool = True
     tags: Optional[List[str]] = None  # Tags untuk filtering
+
+
+# ============================================================
+# KELAS DIGITAL - MATERI & TUGAS
+# ============================================================
+class MateriMapelModel(BaseModel):
+    """Model untuk Materi Mata Pelajaran (Kelas Digital)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Informasi Materi
+    judul: str  # Judul materi
+    deskripsi: Optional[str] = None  # Deskripsi singkat
+    konten: str  # Konten materi (rich text HTML)
+    file_url: Optional[str] = None  # URL file lampiran
+
+    # Target Penerima
+    target_role: List[str] = Field(default_factory=list)  # ['kelas', 'siswa'] - bisa keduanya
+
+    # Target Kelas (jika target_role mengandung 'kelas')
+    target_kelas_ids: List[str] = Field(default_factory=list)  # List class_ids
+
+    # Target Siswa (jika target_role mengandung 'siswa')
+    # Format: [{'class_id': 'xxx', 'student_ids': ['s1', 's2'] atau 'all'}]
+    target_siswa: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Metadata Guru
+    teacher_id: str  # ID guru yang membuat
+    subject_id: str  # Mata pelajaran
+
+    # Academic Context
+    semester_id: str  # Semester materi dibuat
+    academic_year_id: Optional[str] = None  # Tahun pelajaran (dari semester)
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    # Metadata tambahan
+    is_active: bool = True  # Soft delete
+
+
+class TugasModel(BaseModel):
+    """Model untuk Tugas (Kelas Digital)."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Informasi Tugas
+    judul: str  # Judul tugas
+    deskripsi: Optional[str] = None  # Deskripsi singkat
+    konten: str  # Deskripsi tugas (rich text HTML)
+    file_url: Optional[str] = None  # URL file lampiran
+    deadline: Optional[str] = None  # Deadline dalam format ISO string (YYYY-MM-DDTHH:MM:SS)
+
+    # Target Penerima
+    target_role: List[str] = Field(default_factory=list)  # ['kelas', 'siswa']
+
+    # Target Kelas (jika target_role mengandung 'kelas')
+    target_kelas_ids: List[str] = Field(default_factory=list)
+
+    # Target Siswa (jika target_role mengandung 'siswa')
+    target_siswa: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Metadata Guru
+    teacher_id: str  # ID guru yang membuat
+    subject_id: str  # Mata pelajaran
+
+    # Academic Context
+    semester_id: str
+    academic_year_id: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    # Metadata tambahan
+    is_active: bool = True
+
+
+# ============================================================
+# REQUEST/RESPONSE MODELS - KELAS DIGITAL
+# ============================================================
+class KelasLoginRequest(BaseModel):
+    """Request untuk login sebagai akun kelas."""
+    academic_year_id: str  # Tahun pelajaran
+    semester: str  # Semester (ganjil/genap/1/2/3/4/5/6)
+    class_name: str  # Nama kelas (misal: 7A, 8B, 9C)
+    token: str  # Token kelas (password)
+    captcha_id: str
+    captcha_answer: int
+
+
+class MateriTugasCreateRequest(BaseModel):
+    """Request untuk membuat materi atau tugas."""
+    judul: str
+    deskripsi: Optional[str] = None  # Deskripsi singkat
+    konten: str
+    file_url: Optional[str] = None  # URL file lampiran
+    deadline: Optional[str] = None  # Untuk tugas: deadline dalam format ISO string
+    target_role: List[str]  # ['kelas'] atau ['siswa'] atau ['kelas', 'siswa']
+    subject_id: str
+
+    # Untuk target kelas
+    target_kelas_ids: Optional[List[str]] = None
+
+    # Untuk target siswa
+    # Format: [{'class_id': 'xxx', 'student_ids': ['s1', 's2'] atau 'all'}]
+    target_siswa: Optional[List[Dict[str, Any]]] = None
+
+
+class MateriTugasUpdateRequest(BaseModel):
+    """Request untuk update materi atau tugas."""
+    judul: Optional[str] = None
+    deskripsi: Optional[str] = None
+    konten: Optional[str] = None
+    file_url: Optional[str] = None
+    deadline: Optional[str] = None
+    target_role: Optional[List[str]] = None
+    subject_id: Optional[str] = None
+    target_kelas_ids: Optional[List[str]] = None
+    target_siswa: Optional[List[Dict[str, Any]]] = None
+
+
+class TugasSubmissionModel(BaseModel):
+    """Model untuk submission tugas dari siswa."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Relasi
+    tugas_id: str  # ID tugas yang dikumpulkan
+    student_id: str  # ID siswa yang mengumpulkan
+
+    # Konten submission
+    jawaban: str  # Jawaban/deskripsi dari siswa
+    file_url: Optional[str] = None  # URL file tugas (Google Drive, dll)
+
+    # Timestamps
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+    # Metadata
+    is_active: bool = True
+
+
+class TugasSubmissionRequest(BaseModel):
+    """Request untuk submit tugas oleh siswa."""
+    jawaban: str  # Jawaban/deskripsi tugas
+    file_url: Optional[str] = None  # Optional URL file tugas

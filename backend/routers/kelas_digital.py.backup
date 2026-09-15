@@ -1,0 +1,612 @@
+"""
+Kelas Digital Router - Authentication, Materi Mapel, dan Tugas untuk Role Kelas, Siswa, Guru, dan Admin.
+"""
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+
+from auth_utils import create_access_token, verify_captcha, verify_password
+from core import (
+    db,
+    get_current_user,
+    log_audit,
+    log_security,
+    logger,
+    serialize_doc,
+    get_settings,
+)
+from models import (
+    KelasLoginRequest,
+    LoginResponse,
+    MateriMapelModel,
+    MateriTugasCreateRequest,
+    MateriTugasUpdateRequest,
+    TugasModel,
+)
+
+router = APIRouter(prefix="/kelas", tags=["Kelas Digital"])
+
+
+# ============================================================
+# PUBLIC ENDPOINTS (for login form)
+# ============================================================
+@router.get("/public/academic-years")
+async def get_public_academic_years():
+    """Get academic years for kelas login (public endpoint)."""
+    items = await db.academic_years.find({}, {'_id': 0}).sort('name', -1).to_list(100)
+    return [serialize_doc(i) for i in items]
+
+
+@router.get("/public/semesters")
+async def get_public_semesters():
+    """Get semesters for kelas login (public endpoint)."""
+    items = await db.semesters.find({}, {'_id': 0}).sort('created_at', -1).to_list(200)
+    return [serialize_doc(i) for i in items]
+
+
+@router.get("/public/classes")
+async def get_public_classes():
+    """Get classes for kelas login (public endpoint)."""
+    items = await db.classes.find({}, {'_id': 0, 'token': 0}).sort('name', 1).to_list(500)
+    return [serialize_doc(i) for i in items]
+
+
+# ============================================================
+# AUTHENTICATION - LOGIN KELAS
+# ============================================================
+@router.post("/auth/login", response_model=LoginResponse)
+async def login_kelas(req: KelasLoginRequest, request: Request):
+    """Login untuk akun kelas menggunakan tahun pelajaran, semester, nama kelas, dan token."""
+
+    # Verify captcha
+    if not verify_captcha(req.captcha_id, req.captcha_answer):
+        await log_security('captcha_failed', f"kelas_{req.class_name}", request=request)
+        raise HTTPException(status_code=400, detail="Captcha salah atau kedaluwarsa")
+
+    # Find semester
+    semester = await db.semesters.find_one({
+        'academic_year_id': req.academic_year_id,
+        'code': req.semester
+    })
+    if not semester:
+        raise HTTPException(status_code=404, detail="Semester tidak ditemukan")
+
+    # Find class by name and semester
+    kelas = await db.classes.find_one({
+        'name': req.class_name,
+        'semester_id': semester['id']
+    })
+
+    if not kelas:
+        await log_security('login_failed', f"kelas_{req.class_name}",
+                          {'reason': 'class_not_found'}, request)
+        raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
+
+    # Verify token
+    if not kelas.get('token') or kelas['token'] != req.token:
+        await log_security('login_failed', f"kelas_{req.class_name}",
+                          {'reason': 'wrong_token'}, request)
+        raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
+
+    # Create token for kelas
+    wali_kelas_id_value = kelas.get('homeroom_teacher_id')
+    logger.info(f"[LOGIN] Creating JWT for kelas {kelas['name']}, homeroom_teacher_id from DB: {wali_kelas_id_value}")
+
+    access_token = create_access_token({
+        'sub': kelas['id'],
+        'username': f"kelas_{kelas['name']}",
+        'active_role': 'kelas',
+        'class_id': kelas['id'],
+        'semester_id': semester['id'],
+        'academic_year_id': req.academic_year_id,
+        'wali_kelas_id': wali_kelas_id_value,  # Add wali_kelas_id to JWT token
+    })
+
+    await log_security('login_success', f"kelas_{kelas['name']}",
+                      {'role': 'kelas', 'class_id': kelas['id']}, request)
+
+    # Prepare kelas data
+    kelas_clean = serialize_doc(kelas.copy())
+
+    # Get semester and academic year info
+    academic_year = await db.academic_years.find_one({'id': req.academic_year_id})
+
+    kelas_info = {
+        'id': kelas_clean['id'],
+        'name': kelas_clean['name'],
+        'grade': kelas_clean.get('grade'),
+        'parallel': kelas_clean.get('parallel'),
+        'wali_kelas_id': kelas_clean.get('homeroom_teacher_id'),  # Field in DB is homeroom_teacher_id
+        'semester_id': semester['id'],
+        'semester_name': semester.get('name'),
+        'semester_code': semester.get('code'),
+        'academic_year_id': req.academic_year_id,
+        'academic_year_name': academic_year.get('name') if academic_year else None,
+        'roles': ['kelas'],
+    }
+
+    settings = await get_settings()
+    return LoginResponse(
+        access_token=access_token,
+        user=kelas_info,
+        active_role='kelas',
+        expires_in_minutes=settings.get('session_max_hours', 12) * 60,
+        idle_timeout_minutes=settings.get('idle_timeout_minutes', 30),
+    )
+
+
+# ============================================================
+# DATA SISWA - UNTUK ROLE KELAS
+# ============================================================
+@router.get("/siswa")
+async def get_siswa_kelas(user: Dict = Depends(get_current_user)):
+    """Get daftar siswa di kelas (untuk role kelas)."""
+
+    # Only kelas role can access
+    if user.get('active_role') != 'kelas':
+        raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
+
+    class_id = user.get('class_id')
+    if not class_id:
+        raise HTTPException(status_code=400, detail="Class ID tidak ditemukan")
+
+    # Get all students in this class
+    students = await db.users.find({
+        'student_class_id': class_id,
+        'is_active': True
+    }).to_list(None)
+
+    # Get class info for absen number (anak_ke in class)
+    kelas = await db.classes.find_one({'id': class_id})
+
+    students_data = []
+    for idx, student in enumerate(students, 1):
+        students_data.append({
+            'no_absen': idx,
+            'nama': student.get('full_name'),
+            'nisn': student.get('nisn'),
+            'nis': student.get('nis'),
+            'jenis_kelamin': student.get('gender'),
+        })
+
+    # Sort by nama
+    students_data.sort(key=lambda x: x['nama'])
+
+    # Reassign no_absen after sorting
+    for idx, s in enumerate(students_data, 1):
+        s['no_absen'] = idx
+
+    return {
+        'class_id': class_id,
+        'class_name': kelas.get('name') if kelas else None,
+        'total_siswa': len(students_data),
+        'siswa': students_data,
+    }
+
+
+# ============================================================
+# WALI KELAS INFO - UNTUK ROLE KELAS
+# ============================================================
+@router.get("/wali-kelas")
+async def get_wali_kelas_info(user: Dict = Depends(get_current_user)):
+    """Get wali kelas information for the class (untuk role kelas)."""
+
+    logger.info(f"[WALI-KELAS] Endpoint hit! User: {user.get('id')}, Role: {user.get('active_role')}")
+    logger.info(f"[WALI-KELAS] wali_kelas_id: {user.get('wali_kelas_id')}")
+
+    # Only kelas role can access
+    if user.get('active_role') != 'kelas':
+        logger.warning(f"[WALI-KELAS] Access denied - wrong role: {user.get('active_role')}")
+        raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
+
+    wali_kelas_id = user.get('wali_kelas_id')
+    if not wali_kelas_id:
+        raise HTTPException(status_code=404, detail="Wali kelas tidak ditemukan")
+
+    # Get wali kelas info
+    wali_kelas = await db.users.find_one({'id': wali_kelas_id})
+    if not wali_kelas:
+        raise HTTPException(status_code=404, detail="Data wali kelas tidak ditemukan")
+
+    return {
+        'id': wali_kelas.get('id'),
+        'username': wali_kelas.get('username'),
+        'full_name': wali_kelas.get('full_name'),
+        'nip': wali_kelas.get('nip'),
+    }
+
+
+# ============================================================
+# MATERI MAPEL - CRUD
+# ============================================================
+@router.post("/materi")
+async def create_materi(
+    req: MateriTugasCreateRequest,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Create materi mapel (guru only)."""
+
+    # Only guru can create
+    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Hanya guru yang dapat membuat materi")
+
+    # Get active semester
+    semester = await db.semesters.find_one({'is_active': True})
+    if not semester:
+        raise HTTPException(status_code=400, detail="Tidak ada semester aktif")
+
+    # Create materi
+    materi_data = MateriMapelModel(
+        judul=req.judul,
+        konten=req.konten,
+        target_role=req.target_role,
+        target_kelas_ids=req.target_kelas_ids or [],
+        target_siswa=req.target_siswa or [],
+        teacher_id=user['id'],
+        subject_id=req.subject_id,
+        semester_id=semester['id'],
+        academic_year_id=semester.get('academic_year_id'),
+    )
+
+    await db.materi_mapel.insert_one(materi_data.dict())
+    await log_audit(user, 'create', 'materi_mapel', materi_data.id, request=request)
+
+    return {'message': 'Materi berhasil dibuat', 'id': materi_data.id}
+
+
+@router.get("/materi")
+async def get_materi_list(
+    class_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Get list materi based on user role."""
+
+    active_role = user.get('active_role')
+
+    # Build filter based on role
+    filter_query = {'is_active': True}
+
+    if active_role == 'kelas':
+        # Role kelas: show materi yang ditujukan untuk kelas ini
+        class_id = user.get('class_id')
+        filter_query['target_role'] = 'kelas'
+        filter_query['target_kelas_ids'] = class_id
+
+    elif active_role == 'siswa':
+        # Role siswa: show materi yang ditujukan untuk siswa ini
+        student_id = user['id']
+        # Get materi where student is in target_siswa
+        # This requires more complex query - will be handled differently
+        pass
+
+    elif active_role == 'guru':
+        # Role guru: show materi yang dibuat oleh guru ini
+        # If class_id provided, filter by class
+        filter_query['teacher_id'] = user['id']
+        if class_id:
+            filter_query['target_kelas_ids'] = class_id
+
+    elif active_role == 'admin':
+        # Admin can see all
+        if class_id:
+            filter_query['target_kelas_ids'] = class_id
+    else:
+        raise HTTPException(status_code=403, detail="Role tidak diizinkan")
+
+    materi_list = await db.materi_mapel.find(filter_query).sort('created_at', -1).to_list(None)
+
+    # Enrich with teacher and subject info
+    for materi in materi_list:
+        teacher = await db.users.find_one({'id': materi.get('teacher_id')})
+        subject = await db.subjects.find_one({'id': materi.get('subject_id')})
+
+        materi['teacher_name'] = teacher.get('full_name') if teacher else None
+        materi['subject_name'] = subject.get('name') if subject else None
+        materi['_id'] = None
+
+    return serialize_doc(materi_list)
+
+
+@router.get("/materi/{materi_id}")
+async def get_materi_detail(
+    materi_id: str,
+    user: Dict = Depends(get_current_user)
+):
+    """Get materi detail."""
+
+    materi = await db.materi_mapel.find_one({'id': materi_id, 'is_active': True})
+    if not materi:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+
+    # Check access permission
+    active_role = user.get('active_role')
+
+    if active_role == 'kelas':
+        class_id = user.get('class_id')
+        if class_id not in materi.get('target_kelas_ids', []):
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki akses ke materi ini")
+
+    # Enrich with info
+    teacher = await db.users.find_one({'id': materi.get('teacher_id')})
+    subject = await db.subjects.find_one({'id': materi.get('subject_id')})
+
+    materi['teacher_name'] = teacher.get('full_name') if teacher else None
+    materi['subject_name'] = subject.get('name') if subject else None
+    materi['_id'] = None
+
+    return serialize_doc(materi)
+
+
+@router.put("/materi/{materi_id}")
+async def update_materi(
+    materi_id: str,
+    req: MateriTugasUpdateRequest,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Update materi (guru or admin)."""
+
+    materi = await db.materi_mapel.find_one({'id': materi_id, 'is_active': True})
+    if not materi:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+
+    # Check permission
+    if 'admin' not in user.get('roles', []):
+        if materi.get('teacher_id') != user['id']:
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk mengubah materi ini")
+
+    # Update fields
+    update_data = {'updated_at': datetime.utcnow()}
+    if req.judul:
+        update_data['judul'] = req.judul
+    if req.konten:
+        update_data['konten'] = req.konten
+    if req.target_role:
+        update_data['target_role'] = req.target_role
+    if req.subject_id:
+        update_data['subject_id'] = req.subject_id
+    if req.target_kelas_ids is not None:
+        update_data['target_kelas_ids'] = req.target_kelas_ids
+    if req.target_siswa is not None:
+        update_data['target_siswa'] = req.target_siswa
+
+    await db.materi_mapel.update_one({'id': materi_id}, {'$set': update_data})
+    await log_audit(user, 'update', 'materi_mapel', materi_id, request=request)
+
+    return {'message': 'Materi berhasil diupdate'}
+
+
+@router.delete("/materi/{materi_id}")
+async def delete_materi(
+    materi_id: str,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Delete materi (soft delete)."""
+
+    materi = await db.materi_mapel.find_one({'id': materi_id, 'is_active': True})
+    if not materi:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+
+    # Check permission
+    if 'admin' not in user.get('roles', []):
+        if materi.get('teacher_id') != user['id']:
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk menghapus materi ini")
+
+    await db.materi_mapel.update_one({'id': materi_id}, {'$set': {'is_active': False}})
+    await log_audit(user, 'delete', 'materi_mapel', materi_id, request=request)
+
+    return {'message': 'Materi berhasil dihapus'}
+
+
+# ============================================================
+# TUGAS - CRUD (Similar to Materi)
+# ============================================================
+@router.post("/tugas")
+async def create_tugas(
+    req: MateriTugasCreateRequest,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Create tugas (guru only)."""
+
+    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Hanya guru yang dapat membuat tugas")
+
+    semester = await db.semesters.find_one({'is_active': True})
+    if not semester:
+        raise HTTPException(status_code=400, detail="Tidak ada semester aktif")
+
+    tugas_data = TugasModel(
+        judul=req.judul,
+        konten=req.konten,
+        target_role=req.target_role,
+        target_kelas_ids=req.target_kelas_ids or [],
+        target_siswa=req.target_siswa or [],
+        teacher_id=user['id'],
+        subject_id=req.subject_id,
+        semester_id=semester['id'],
+        academic_year_id=semester.get('academic_year_id'),
+    )
+
+    await db.tugas.insert_one(tugas_data.dict())
+    await log_audit(user, 'create', 'tugas', tugas_data.id, request=request)
+
+    return {'message': 'Tugas berhasil dibuat', 'id': tugas_data.id}
+
+
+@router.get("/tugas")
+async def get_tugas_list(
+    class_id: Optional[str] = None,
+    user: Dict = Depends(get_current_user)
+):
+    """Get list tugas based on user role."""
+
+    active_role = user.get('active_role')
+    filter_query = {'is_active': True}
+
+    if active_role == 'kelas':
+        class_id = user.get('class_id')
+        filter_query['target_role'] = 'kelas'
+        filter_query['target_kelas_ids'] = class_id
+
+    elif active_role == 'guru':
+        filter_query['teacher_id'] = user['id']
+        if class_id:
+            filter_query['target_kelas_ids'] = class_id
+
+    elif active_role == 'admin':
+        if class_id:
+            filter_query['target_kelas_ids'] = class_id
+    else:
+        raise HTTPException(status_code=403, detail="Role tidak diizinkan")
+
+    tugas_list = await db.tugas.find(filter_query).sort('created_at', -1).to_list(None)
+
+    for tugas in tugas_list:
+        teacher = await db.users.find_one({'id': tugas.get('teacher_id')})
+        subject = await db.subjects.find_one({'id': tugas.get('subject_id')})
+
+        tugas['teacher_name'] = teacher.get('full_name') if teacher else None
+        tugas['subject_name'] = subject.get('name') if subject else None
+        tugas['_id'] = None
+
+    return serialize_doc(tugas_list)
+
+
+@router.get("/tugas/{tugas_id}")
+async def get_tugas_detail(
+    tugas_id: str,
+    user: Dict = Depends(get_current_user)
+):
+    """Get tugas detail."""
+
+    tugas = await db.tugas.find_one({'id': tugas_id, 'is_active': True})
+    if not tugas:
+        raise HTTPException(status_code=404, detail="Tugas tidak ditemukan")
+
+    active_role = user.get('active_role')
+    if active_role == 'kelas':
+        class_id = user.get('class_id')
+        if class_id not in tugas.get('target_kelas_ids', []):
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki akses ke tugas ini")
+
+    teacher = await db.users.find_one({'id': tugas.get('teacher_id')})
+    subject = await db.subjects.find_one({'id': tugas.get('subject_id')})
+
+    tugas['teacher_name'] = teacher.get('full_name') if teacher else None
+    tugas['subject_name'] = subject.get('name') if subject else None
+    tugas['_id'] = None
+
+    return serialize_doc(tugas)
+
+
+@router.put("/tugas/{tugas_id}")
+async def update_tugas(
+    tugas_id: str,
+    req: MateriTugasUpdateRequest,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Update tugas (guru or admin)."""
+
+    tugas = await db.tugas.find_one({'id': tugas_id, 'is_active': True})
+    if not tugas:
+        raise HTTPException(status_code=404, detail="Tugas tidak ditemukan")
+
+    if 'admin' not in user.get('roles', []):
+        if tugas.get('teacher_id') != user['id']:
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk mengubah tugas ini")
+
+    update_data = {'updated_at': datetime.utcnow()}
+    if req.judul:
+        update_data['judul'] = req.judul
+    if req.konten:
+        update_data['konten'] = req.konten
+    if req.target_role:
+        update_data['target_role'] = req.target_role
+    if req.subject_id:
+        update_data['subject_id'] = req.subject_id
+    if req.target_kelas_ids is not None:
+        update_data['target_kelas_ids'] = req.target_kelas_ids
+    if req.target_siswa is not None:
+        update_data['target_siswa'] = req.target_siswa
+
+    await db.tugas.update_one({'id': tugas_id}, {'$set': update_data})
+    await log_audit(user, 'update', 'tugas', tugas_id, request=request)
+
+    return {'message': 'Tugas berhasil diupdate'}
+
+
+@router.delete("/tugas/{tugas_id}")
+async def delete_tugas(
+    tugas_id: str,
+    request: Request,
+    user: Dict = Depends(get_current_user)
+):
+    """Delete tugas (soft delete)."""
+
+    tugas = await db.tugas.find_one({'id': tugas_id, 'is_active': True})
+    if not tugas:
+        raise HTTPException(status_code=404, detail="Tugas tidak ditemukan")
+
+    if 'admin' not in user.get('roles', []):
+        if tugas.get('teacher_id') != user['id']:
+            raise HTTPException(status_code=403, detail="Anda tidak memiliki izin untuk menghapus tugas ini")
+
+    await db.tugas.update_one({'id': tugas_id}, {'$set': {'is_active': False}})
+    await log_audit(user, 'delete', 'tugas', tugas_id, request=request)
+
+    return {'message': 'Tugas berhasil dihapus'}
+
+
+# ============================================================
+# JADWAL MENGAJAR - Untuk Kelas (menampilkan mata pelajaran dengan guru)
+# ============================================================
+@router.get("/jadwal")
+async def get_jadwal_kelas(user: Dict = Depends(get_current_user)):
+    """Get jadwal mengajar untuk kelas (untuk menampilkan mapel dengan guru)."""
+
+    if user.get('active_role') != 'kelas':
+        raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
+
+    class_id = user.get('class_id')
+    semester_id = user.get('semester_id')
+
+    if not class_id or not semester_id:
+        raise HTTPException(status_code=400, detail="Class ID atau Semester ID tidak ditemukan")
+
+    # Get all schedules for this class
+    schedules = await db.schedules.find({
+        'class_id': class_id,
+        'semester_id': semester_id,
+        'is_published': True
+    }).to_list(None)
+
+    # Group by subject
+    subjects_map = {}
+    for schedule in schedules:
+        subject_id = schedule.get('subject_id')
+        teacher_id = schedule.get('teacher_id')
+
+        if subject_id not in subjects_map:
+            subject = await db.subjects.find_one({'id': subject_id})
+            teacher = await db.users.find_one({'id': teacher_id})
+
+            subjects_map[subject_id] = {
+                'subject_id': subject_id,
+                'subject_name': subject.get('name') if subject else None,
+                'subject_code': subject.get('code') if subject else None,
+                'teacher_id': teacher_id,
+                'teacher_name': teacher.get('full_name') if teacher else None,
+            }
+
+    return {
+        'class_id': class_id,
+        'semester_id': semester_id,
+        'subjects': list(subjects_map.values())
+    }
+

@@ -51,6 +51,14 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
     if 'admin' not in user.get('roles', []):
         raise HTTPException(status_code=403, detail="Hanya admin yang dapat menggunakan fitur ini")
 
+    # SECURITY: Prevent impersonating while already impersonating
+    if user.get('is_impersonating'):
+        raise HTTPException(status_code=400, detail="Tidak dapat impersonate saat sudah dalam mode impersonation. Kembali ke admin terlebih dahulu.")
+
+    # SECURITY: Prevent self-impersonation
+    if req.target_user_id == user['id']:
+        raise HTTPException(status_code=400, detail="Tidak dapat impersonate diri sendiri")
+
     # Get target user
     target_user = await db.users.find_one({'id': req.target_user_id})
     if not target_user:
@@ -58,6 +66,10 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
 
     if not target_user.get('is_active', True):
         raise HTTPException(status_code=403, detail="Akun target dinonaktifkan")
+
+    # SECURITY: Prevent impersonating another admin (optional, uncomment if needed)
+    # if 'admin' in target_user.get('roles', []):
+    #     raise HTTPException(status_code=403, detail="Tidak dapat impersonate admin lain")
 
     # Create token with impersonation info
     active_role = target_user['roles'][0] if target_user.get('roles') else 'guru'
@@ -92,6 +104,42 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
     )
 
 
+@router.get("/auth/impersonate-status")
+async def get_impersonate_status(request: Request, user: Dict = Depends(get_current_user)):
+    """Check current impersonation status and validate it's still valid.
+    Returns impersonation info if active, or null if not impersonating."""
+
+    impersonator_id = getattr(request.state, 'impersonator_id', None)
+
+    if not impersonator_id:
+        return {
+            'is_impersonating': False,
+            'impersonator_id': None,
+            'impersonator_username': None,
+            'target_user_id': None,
+            'target_username': None,
+        }
+
+    # Validate impersonator still exists and is admin
+    admin_user = await db.users.find_one({'id': impersonator_id})
+    if not admin_user or not admin_user.get('is_active', True) or 'admin' not in admin_user.get('roles', []):
+        # Impersonation is invalid, should stop
+        return {
+            'is_impersonating': False,
+            'is_invalid': True,
+            'error': 'Impersonation tidak valid. Admin original tidak aktif atau bukan admin.',
+        }
+
+    return {
+        'is_impersonating': True,
+        'impersonator_id': impersonator_id,
+        'impersonator_username': getattr(request.state, 'impersonator_username', None),
+        'target_user_id': user.get('id'),
+        'target_username': user.get('username'),
+        'is_valid': True,
+    }
+
+
 @router.post("/auth/stop-impersonate")
 async def stop_impersonating(request: Request, user: Dict = Depends(get_current_user)):
     """Stop impersonation and return to original admin account."""
@@ -109,6 +157,13 @@ async def stop_impersonating(request: Request, user: Dict = Depends(get_current_
     admin_user = await db.users.find_one({'id': impersonator_id})
     if not admin_user:
         raise HTTPException(status_code=404, detail="Admin user tidak ditemukan")
+
+    # SECURITY: Validate that the impersonator is still an active admin
+    if not admin_user.get('is_active', True):
+        raise HTTPException(status_code=403, detail="Akun admin original telah dinonaktifkan")
+
+    if 'admin' not in admin_user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Akun original bukan lagi admin")
 
     # Create new token for admin
     active_role = admin_user['roles'][0] if admin_user.get('roles') else 'admin'
@@ -242,7 +297,20 @@ async def login(req: LoginRequest, request: Request):
 async def switch_role(req: RoleSwitchRequest, request: Request, user: Dict = Depends(get_current_user)):
     if req.new_role not in user.get('roles', []):
         raise HTTPException(status_code=403, detail=f"Anda tidak memiliki peran '{req.new_role}'")
-    token = create_access_token({'sub': user['id'], 'username': user['username'], 'active_role': req.new_role})
+
+    # CRITICAL: Preserve impersonation info when switching roles
+    token_payload = {
+        'sub': user['id'],
+        'username': user['username'],
+        'active_role': req.new_role
+    }
+
+    # If currently impersonating, preserve impersonator info in new token
+    if user.get('is_impersonating'):
+        token_payload['impersonator_id'] = user.get('impersonator_id')
+        token_payload['impersonator_username'] = user.get('impersonator_username')
+
+    token = create_access_token(token_payload)
     await log_audit(user, 'role_switch', 'session', details={'new_role': req.new_role}, request=request)
     user.pop('password_hash', None)
     user['active_role'] = req.new_role

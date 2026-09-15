@@ -1,0 +1,525 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Loader2, BookOpen, Calendar, Plus, Edit, Trash2, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+
+const GuruMateriPage = () => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [materiKelas, setMateriKelas] = useState([]);
+  const [materiSiswa, setMateriSiswa] = useState([]);
+  const [activeTab, setActiveTab] = useState('kelas');
+
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingMateri, setEditingMateri] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    judul: '',
+    konten: '',
+    subject_id: '',
+    target_role: [],
+    target_kelas_ids: [],
+    target_siswa: [],
+  });
+
+  // Master data
+  const [subjects, setSubjects] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [studentsByClass, setStudentsByClass] = useState({});
+  const [loadingClasses, setLoadingClasses] = useState(false);
+
+  useEffect(() => {
+    loadMateri();
+    loadSubjects();
+  }, []);
+
+  const loadMateri = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/kelas/materi');
+
+      // Filter by target_role
+      const kelas = res.data.filter((m) => m.target_role?.includes?.('kelas') || m.target_role === 'kelas');
+      const siswa = res.data.filter((m) => m.target_role?.includes?.('siswa') || m.target_role === 'siswa');
+
+      setMateriKelas(kelas);
+      setMateriSiswa(siswa);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading materi:', err);
+      setError(err.response?.data?.detail || 'Gagal memuat materi');
+      setLoading(false);
+    }
+  };
+
+  const loadSubjects = async () => {
+    try {
+      const res = await api.get('/admin/subjects');
+      setSubjects(res.data || []);
+    } catch (err) {
+      console.error('Error loading subjects:', err);
+    }
+  };
+
+  const loadClasses = async () => {
+    try {
+      setLoadingClasses(true);
+      const res = await api.get('/admin/classes');
+      setClasses(res.data || []);
+      setLoadingClasses(false);
+    } catch (err) {
+      console.error('Error loading classes:', err);
+      setLoadingClasses(false);
+    }
+  };
+
+  const loadStudentsForClass = async (classId) => {
+    if (studentsByClass[classId]) return; // Already loaded
+
+    try {
+      const res = await api.get(`/admin/users?role=siswa&class_id=${classId}`);
+      setStudentsByClass(prev => ({
+        ...prev,
+        [classId]: res.data || []
+      }));
+    } catch (err) {
+      console.error('Error loading students:', err);
+    }
+  };
+
+  const handleOpenDialog = (materi = null) => {
+    if (materi) {
+      // Edit mode
+      setEditingMateri(materi);
+      setFormData({
+        judul: materi.judul || '',
+        konten: materi.konten || '',
+        subject_id: materi.subject_id || '',
+        target_role: Array.isArray(materi.target_role) ? materi.target_role : [materi.target_role],
+        target_kelas_ids: materi.target_kelas_ids || [],
+        target_siswa: materi.target_siswa || [],
+      });
+    } else {
+      // Add mode
+      setEditingMateri(null);
+      setFormData({
+        judul: '',
+        konten: '',
+        subject_id: '',
+        target_role: [],
+        target_kelas_ids: [],
+        target_siswa: [],
+      });
+    }
+    loadClasses();
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingMateri(null);
+    setFormData({
+      judul: '',
+      konten: '',
+      subject_id: '',
+      target_role: [],
+      target_kelas_ids: [],
+      target_siswa: [],
+    });
+  };
+
+  const handleSave = async () => {
+    if (!formData.judul.trim()) {
+      toast.error('Judul harus diisi');
+      return;
+    }
+    if (!formData.konten.trim()) {
+      toast.error('Konten harus diisi');
+      return;
+    }
+    if (!formData.subject_id) {
+      toast.error('Mata pelajaran harus dipilih');
+      return;
+    }
+    if (formData.target_role.length === 0) {
+      toast.error('Target (Kelas/Siswa) harus dipilih');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      if (editingMateri) {
+        // Update
+        await api.put(`/kelas/materi/${editingMateri.id}`, formData);
+        toast.success('Materi berhasil diupdate');
+      } else {
+        // Create
+        await api.post('/kelas/materi', formData);
+        toast.success('Materi berhasil dibuat');
+      }
+
+      handleCloseDialog();
+      loadMateri();
+    } catch (err) {
+      console.error('Error saving materi:', err);
+      toast.error(err.response?.data?.detail || 'Gagal menyimpan materi');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (materiId) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus materi ini?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/kelas/materi/${materiId}`);
+      toast.success('Materi berhasil dihapus');
+      loadMateri();
+    } catch (err) {
+      console.error('Error deleting materi:', err);
+      toast.error(err.response?.data?.detail || 'Gagal menghapus materi');
+    }
+  };
+
+  const handleTargetRoleChange = (role, checked) => {
+    setFormData(prev => {
+      const newTargetRole = checked
+        ? [...prev.target_role, role]
+        : prev.target_role.filter(r => r !== role);
+
+      return {
+        ...prev,
+        target_role: newTargetRole,
+        // Clear kelas selection if kelas unchecked
+        target_kelas_ids: newTargetRole.includes('kelas') ? prev.target_kelas_ids : [],
+        // Clear siswa selection if siswa unchecked
+        target_siswa: newTargetRole.includes('siswa') ? prev.target_siswa : [],
+      };
+    });
+  };
+
+  const handleClassToggle = (classId, checked) => {
+    setFormData(prev => ({
+      ...prev,
+      target_kelas_ids: checked
+        ? [...prev.target_kelas_ids, classId]
+        : prev.target_kelas_ids.filter(id => id !== classId)
+    }));
+
+    if (checked && formData.target_role.includes('siswa')) {
+      loadStudentsForClass(classId);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+          <p className="text-sm text-gray-600">Memuat data materi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  const renderMateriList = (materiList) => {
+    if (materiList.length === 0) {
+      return (
+        <div className="text-center text-gray-500 py-12">
+          Belum ada materi yang dibagikan
+        </div>
+      );
+    }
+
+    return (
+      <Accordion type="single" collapsible className="w-full">
+        {materiList.map((materi) => (
+          <AccordionItem key={materi.id} value={materi.id}>
+            <AccordionTrigger className="hover:no-underline">
+              <div className="flex items-start justify-between gap-4 text-left flex-1 pr-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold">{materi.judul}</h3>
+                  <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {format(new Date(materi.created_at), 'dd MMMM yyyy, HH:mm', {
+                        locale: id,
+                      })}
+                    </div>
+                    {materi.subject_name && (
+                      <span className="text-green-600 font-medium">
+                        {materi.subject_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-4">
+                <div
+                  className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg"
+                  dangerouslySetInnerHTML={{ __html: materi.konten }}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenDialog(materi)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(materi.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Hapus
+                  </Button>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <BookOpen className="h-8 w-8" />
+            Materi Mapel
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Kelola materi pembelajaran untuk kelas dan siswa
+          </p>
+        </div>
+        <Button
+          onClick={() => handleOpenDialog()}
+          className="bg-green-600 hover:bg-green-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Tambah Materi
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Daftar Materi</CardTitle>
+          <CardDescription>
+            Materi yang telah Anda bagikan kepada kelas dan siswa
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="kelas">
+                Materi Kelas ({materiKelas.length})
+              </TabsTrigger>
+              <TabsTrigger value="siswa">
+                Materi Siswa ({materiSiswa.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="kelas" className="mt-6">
+              {renderMateriList(materiKelas)}
+            </TabsContent>
+
+            <TabsContent value="siswa" className="mt-6">
+              {renderMateriList(materiSiswa)}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingMateri ? 'Edit Materi' : 'Tambah Materi Baru'}
+            </DialogTitle>
+            <DialogDescription>
+              Isi form di bawah ini untuk {editingMateri ? 'mengupdate' : 'membuat'} materi
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="judul">Judul Materi *</Label>
+              <Input
+                id="judul"
+                placeholder="Masukkan judul materi"
+                value={formData.judul}
+                onChange={(e) => setFormData(prev => ({ ...prev, judul: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subject">Mata Pelajaran *</Label>
+              <Select
+                value={formData.subject_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, subject_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih mata pelajaran" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((subject) => (
+                    <SelectItem key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="konten">Konten Materi *</Label>
+              <Textarea
+                id="konten"
+                placeholder="Masukkan konten materi (mendukung HTML sederhana)"
+                value={formData.konten}
+                onChange={(e) => setFormData(prev => ({ ...prev, konten: e.target.value }))}
+                rows={8}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500">
+                Anda dapat menggunakan HTML sederhana seperti &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;a&gt;, &lt;br&gt;, dll.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Target *</Label>
+              <div className="flex gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="target-kelas"
+                    checked={formData.target_role.includes('kelas')}
+                    onCheckedChange={(checked) => handleTargetRoleChange('kelas', checked)}
+                  />
+                  <label htmlFor="target-kelas" className="text-sm font-medium cursor-pointer">
+                    Untuk Kelas
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="target-siswa"
+                    checked={formData.target_role.includes('siswa')}
+                    onCheckedChange={(checked) => handleTargetRoleChange('siswa', checked)}
+                  />
+                  <label htmlFor="target-siswa" className="text-sm font-medium cursor-pointer">
+                    Untuk Siswa
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {formData.target_role.includes('kelas') && (
+              <div className="space-y-2">
+                <Label>Pilih Kelas</Label>
+                {loadingClasses ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Memuat kelas...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                    {classes.map((kelas) => (
+                      <div key={kelas.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`class-${kelas.id}`}
+                          checked={formData.target_kelas_ids.includes(kelas.id)}
+                          onCheckedChange={(checked) => handleClassToggle(kelas.id, checked)}
+                        />
+                        <label
+                          htmlFor={`class-${kelas.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {kelas.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formData.target_role.includes('siswa') && (
+              <div className="space-y-2">
+                <Label>Catatan Target Siswa</Label>
+                <Alert>
+                  <AlertDescription className="text-sm">
+                    Fitur pemilihan siswa individual akan tersedia segera. Saat ini, siswa akan menerima materi berdasarkan kelas yang dipilih di atas.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDialog} disabled={saving}>
+              Batal
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="bg-green-600 hover:bg-green-700">
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingMateri ? 'Update' : 'Simpan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default GuruMateriPage;

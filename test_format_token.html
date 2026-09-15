@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Format Token</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h2>Token Format Testing</h2>
+    <div id="results"></div>
+
+    <script>
+        // Format token function
+        const formatToken = (value) => {
+            const cleanValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+            if (cleanValue.length === 0) return '';
+
+            let formatted = '';
+
+            // Part 1: Class name (2-3 characters)
+            let classNameEnd = 2;
+
+            if (cleanValue.length >= 3 && !/\d/.test(cleanValue[2])) {
+                classNameEnd = 3;
+            }
+
+            const part1 = cleanValue.slice(0, classNameEnd);
+            formatted += part1;
+
+            // Part 2: Year (4 digits)
+            if (cleanValue.length > classNameEnd) {
+                const part2 = cleanValue.slice(classNameEnd, classNameEnd + 4);
+                formatted += '-' + part2;
+            }
+
+            // Part 3: Random code (4 characters)
+            if (cleanValue.length > classNameEnd + 4) {
+                const part3 = cleanValue.slice(classNameEnd + 4, classNameEnd + 8);
+                formatted += '-' + part3;
+            }
+
+            return formatted;
+        };
+
+        // Test cases
+        const tests = [
+            { input: '7a25265uvz', expected: '7A-2526-5UVZ' },
+            { input: '7A-2526-5UVZ', expected: '7A-2526-5UVZ' },
+            { input: '7a 2526 5uvz', expected: '7A-2526-5UVZ' },
+            { input: '7a2526t2lt', expected: '7A-2526-T2LT' },
+            { input: '7A-2026-AH5Q', expected: '7A-2026-AH5Q' },
+            { input: '8b2026bay8', expected: '8B-2026-BAY8' },
+            { input: '10a20265xyz', expected: '10A-2026-5XYZ' },
+            { input: '9c2026qfrb', expected: '9C-2026-QFRB' },
+        ];
+
+        // Run tests
+        const results = document.getElementById('results');
+        tests.forEach((test, i) => {
+            const result = formatToken(test.input);
+            const pass = result === test.expected;
+            const div = document.createElement('div');
+            div.className = 'test ' + (pass ? 'pass' : 'fail');
+            div.innerHTML = `
+                <strong>Test ${i + 1}:</strong> ${pass ? '✅ PASS' : '❌ FAIL'}<br>
+                Input: "${test.input}"<br>
+                Expected: "${test.expected}"<br>
+                Got: "${result}"
+            `;
+            results.appendChild(div);
+        });
+    </script>
+</body>
+</html>

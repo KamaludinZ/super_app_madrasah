@@ -517,7 +517,7 @@ async def list_users(
     role: Optional[str] = None,
     is_active: Optional[bool] = None,
     exclude_mutation: bool = False,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'waka_kesiswaan', 'kepala_tata_usaha'))
 ):
     q = {}
     if role:
@@ -729,7 +729,7 @@ async def set_student_mutation(uid: str, payload: Dict, request: Request,
 @router.get("/admin/mutations")
 async def list_mutations(mutation_type: str, role_group: str = 'siswa',
                          academic_year_id: Optional[str] = None,
-                         user: Dict = Depends(require_role('admin'))):
+                         user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     """Daftar user dengan mutation_type='masuk' atau 'keluar'.
     role_group: 'siswa' atau 'staff' (guru+tendik).
     """
@@ -763,7 +763,7 @@ async def list_mutations(mutation_type: str, role_group: str = 'siswa',
 
 @router.post("/admin/mutations/masuk")
 async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
-                                   user: Dict = Depends(require_role('admin'))):
+                                   user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     """Proses mutasi masuk (create new user or update existing)."""
     ay = await get_active_academic_year()
     if not ay:
@@ -864,7 +864,7 @@ async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
 
 @router.post("/admin/mutations/keluar")
 async def process_mutation_keluar(req: MutationKeluarSubmit, request: Request,
-                                    user: Dict = Depends(require_role('admin'))):
+                                    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     """Proses mutasi keluar (set user as inactive and mark mutation)."""
     ay = await get_active_academic_year()
     if not ay:
@@ -926,7 +926,7 @@ async def process_mutation_keluar(req: MutationKeluarSubmit, request: Request,
 
 @router.get("/admin/mutations/eligible-users")
 async def get_eligible_users_for_keluar(role_group: str = 'siswa',
-                                         user: Dict = Depends(require_role('admin'))):
+                                         user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     """Get list of active users yang bisa di-mutasi keluar."""
     if role_group not in ('siswa', 'staff'):
         raise HTTPException(400, "role_group harus 'siswa' atau 'staff'")

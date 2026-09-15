@@ -6,6 +6,8 @@ import {
   ThumbsUp, TrendingUp, School, Map, MapPin, Globe, Flag
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 
 export default function WaliKelasDashboard() {
   const [stats, setStats] = useState(null);
@@ -53,11 +55,10 @@ export default function WaliKelasDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="section-spacing">
+      <IslamicBackground pattern="tile" opacity={0.02} />
       <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
-          <BookMarked className="h-3 w-3 mr-1" /> Dashboard Wali Kelas
-        </Badge>
+        <KemenagBadge variant="default" className="mb-2" />
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
           Dashboard Kelas {classInfo.class.name}
         </h1>
@@ -68,7 +69,7 @@ export default function WaliKelasDashboard() {
 
       {/* Statistics Widgets Grid */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 grid-spacing-default">
           {/* Attendance Widget */}
           <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
             <CardContent className="p-5">

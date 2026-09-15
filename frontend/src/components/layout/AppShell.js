@@ -30,6 +30,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import EnableNotifications from '@/components/pwa/EnableNotifications';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
 import { OfflineQueueBadge } from '@/components/offline/OfflineQueueBadge';
+import { CommandPalette } from '@/components/CommandPalette';
 
 /**
  * Build sidebar items based ONLY on activeRole.
@@ -60,12 +61,13 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-guru' });
+    items.push({ to: '/guru/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-guru-materi' });
+    items.push({ to: '/guru/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-guru-tugas' });
   } else if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
     items.push({ to: '/wali-kelas/jurnal-kelas', label: 'Jurnal Kelas', icon: ClipboardList, testid: 'nav-wk-jurnal' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
-    items.push({ to: '/wali-kelas/kehadiran-statistik', label: 'Statistik Kehadiran', icon: FileSpreadsheet, testid: 'nav-wk-kehadiran-statistik' });
     items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
     items.push({ to: '/wali-kelas/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-wk-laporan' });
     items.push({ to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' });
@@ -96,12 +98,23 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
   } else if (role === 'siswa') {
     items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
+    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-siswa-data' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
-    items.push({ to: '/siswa/kehadiran', label: 'Kehadiran Saya', icon: UserCheck, testid: 'nav-siswa-kehadiran' });
+    items.push({ to: '/siswa/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-siswa-materi' });
+    items.push({ to: '/siswa/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-siswa-tugas' });
+    items.push({ to: '/wali-kelas/jurnal-kelas', label: 'Riwayat Jurnal Kelas', icon: History, testid: 'nav-siswa-jurnal' });
+    items.push({ to: '/siswa/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-siswa-kehadiran' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-siswa' });
+  } else if (role === 'kelas') {
+    items.push({ to: '/kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-kelas-siswa' });
+    items.push({ to: '/kelas/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-kelas-jadwal' });
+    items.push({ to: '/kelas/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-kelas-materi' });
+    items.push({ to: '/kelas/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-kelas-tugas' });
+    items.push({ to: '/kelas/jurnal', label: 'Riwayat Jurnal Kelas', icon: History, testid: 'nav-kelas-jurnal' });
+    items.push({ to: '/kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kelas-kehadiran' });
   } else if (role === 'orang_tua') {
     items.push({ to: '/dashboard', label: 'Anak Saya', icon: Users, testid: 'nav-ortu-anak' });
   } else if (role === 'waka_humas') {
@@ -188,6 +201,8 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' },
           { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' },
           { to: '/admin/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-admin-indikator-materi' },
+          { to: '/admin/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-admin-materi' },
+          { to: '/admin/tugas', label: 'Tugas Mapel', icon: ClipboardList, testid: 'nav-admin-tugas' },
           { to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input-admin' },
           { to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-rapor-admin' },
         ],
@@ -226,6 +241,45 @@ function navForRole(role, userRoles = []) {
         ],
       },
     ];
+  } else if (role === 'waka_kurikulum') {
+    // Waka Kurikulum uses grouped menu structure with dedicated routes
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      {
+        title: 'Manajemen Siswa',
+        items: [
+          { to: '/wakakur/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-wakakur-siswa' },
+          { to: '/wakakur/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wakakur-kehadiran' },
+          { to: '/wakakur/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-wakakur-buku-induk' },
+          { to: '/wakakur/cetak-absensi', label: 'Cetak Format Absensi Siswa Manual', icon: FileText, testid: 'nav-wakakur-cetak-absensi' },
+          { to: '/wakakur/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-wakakur-alumni' },
+          { to: '/wakakur/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-wakakur-mutasi' },
+          { to: '/wakakur/naik-kelas', label: 'Naik Kelas & Kelulusan', icon: ArrowRightLeft, testid: 'nav-wakakur-naik-kelas' },
+        ],
+      },
+      {
+        title: 'Akademik',
+        items: [
+          { to: '/wakakur/jadwal', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-wakakur-schedules' },
+          { to: '/wakakur/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-wakakur-jadwal-piket' },
+          { to: '/wakakur/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-wakakur-jurnal' },
+          { to: '/wakakur/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-wakakur-indikator-materi' },
+          { to: '/wakakur/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-wakakur-materi' },
+          { to: '/wakakur/tugas', label: 'Tugas Mapel', icon: ClipboardList, testid: 'nav-wakakur-tugas' },
+          { to: '/wakakur/nilai', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-wakakur-grades-input' },
+          { to: '/wakakur/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-wakakur-rapor' },
+        ],
+      },
+      {
+        title: 'Aktivitas & Program',
+        items: [
+          { to: '/wakakur/kegiatan', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-wakakur-kegiatan' },
+          { to: '/wakakur/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-wakakur-prestasi' },
+          { to: '/wakakur/piket', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-wakakur-piket-tasks' },
+          { to: '/wakakur/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-wakakur-pengumuman' },
+        ],
+      },
+    ];
   }
   return items;
 }
@@ -233,19 +287,30 @@ function navForRole(role, userRoles = []) {
 function ActivePeriodCard({ ctx, onClick }) {
   if (!ctx || !ctx.year_name) {
     return (
-      <div className="mx-3 mt-3 mb-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+      <div
+        className="mx-3 mt-3 mb-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+        role="status"
+        aria-live="polite"
+      >
         Belum ada Tahun Pelajaran aktif. Buat di menu Tahun Pelajaran.
       </div>
     );
   }
   // Show orange override UI only if user has override AND it's different from active global
   const showOverrideUI = ctx.is_override && !ctx.isViewingSameSemesterAsActive;
+
+  const ariaLabel = showOverrideUI
+    ? `Mode Lihat - Tahun Pelajaran ${ctx.year_name}, Semester ${ctx.semester_name}. Klik untuk ubah atau reset periode.`
+    : `Periode Aktif - Tahun Pelajaran ${ctx.year_name}, Semester ${ctx.semester_name}. Klik untuk pindah ke tahun pelajaran lampau.`;
+
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid="sidebar-active-period"
-      className={`group mx-3 mt-3 mb-1 rounded-xl p-3 text-white shadow-sm w-[calc(100%-1.5rem)] text-left transition-all hover:shadow-md ${
+      aria-label={ariaLabel}
+      aria-expanded="false"
+      className={`group mx-3 mt-3 mb-1 rounded-xl p-3 text-white shadow-sm w-[calc(100%-1.5rem)] text-left transition-all hover:shadow-md focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#006837] ${
         showOverrideUI
           ? 'bg-gradient-to-br from-amber-600 to-amber-700 ring-2 ring-amber-300/50'
           : 'bg-gradient-to-br from-[#006837] to-[#0B7A3B]'
@@ -348,15 +413,17 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
         to={it.to}
         data-testid={it.testid}
         onClick={onItemClick}
-        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+        aria-label={it.label}
+        aria-current={active ? 'page' : undefined}
+        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[#006837] focus-visible:ring-offset-2 ${
           active
             ? 'bg-[#006837] text-white shadow-sm'
             : 'text-slate-700 hover:bg-[#006837]/8 hover:text-[#006837]'
         } ${it.highlight && !active ? 'bg-amber-50 text-amber-900 border border-amber-200' : ''}`}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-4 w-4" aria-hidden="true" />
         <span className="flex-1">{it.label}</span>
-        {active && <ChevronRight className="h-3.5 w-3.5" />}
+        {active && <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}
       </Link>
     );
   };
@@ -364,7 +431,7 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
   return (
     <div className="flex flex-col">
       <ActivePeriodCard ctx={viewCtx} onClick={onTPClick} />
-      <nav className="flex flex-col gap-1 px-3 py-3" data-testid="sidebar-nav">
+      <nav className="flex flex-col gap-1 px-3 py-3" data-testid="sidebar-nav" aria-label="Menu navigasi utama">
         {isGrouped ? (
           items.map((item, idx) => {
             // If item has 'to' property, it's a regular menu item
@@ -378,14 +445,22 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
               <div key={groupKey} className="mt-3 first:mt-0">
                 <button
                   onClick={() => toggleGroup(groupKey)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#006837] transition-colors rounded-lg hover:bg-slate-50"
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#006837] transition-colors rounded-lg hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-[#006837] focus-visible:ring-offset-2"
                   data-testid={`group-toggle-${groupKey}`}
+                  aria-expanded={isExpanded}
+                  aria-controls={`group-content-${groupKey}`}
+                  aria-label={`${isExpanded ? 'Tutup' : 'Buka'} grup menu ${item.title}`}
                 >
                   <span>{item.title}</span>
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isExpanded ? '' : '-rotate-90'}`} aria-hidden="true" />
                 </button>
                 {isExpanded && (
-                  <div className="flex flex-col gap-1 mt-1">
+                  <div
+                    className="flex flex-col gap-1 mt-1"
+                    id={`group-content-${groupKey}`}
+                    role="group"
+                    aria-label={`Menu ${item.title}`}
+                  >
                     {item.items.map((it) => renderMenuItem(it))}
                   </div>
                 )}
@@ -429,17 +504,19 @@ export default function AppShell({ children }) {
     }
   };
 
-  // Auto-prompt password change on first load if needed.
+  // Auto-prompt password change on first load if needed (skip for 'kelas' role).
   useEffect(() => {
     const ps = user?.password_status;
-    if (ps?.should_prompt) {
+    const activeRole = user?.active_role || (user?.roles?.[0]);
+    // Don't prompt password change for 'kelas' role
+    if (ps?.should_prompt && activeRole !== 'kelas') {
       const alreadyShown = sessionStorage.getItem('matsa_pw_prompt_shown');
       if (!alreadyShown) {
         setPwDialogOpen(true);
         sessionStorage.setItem('matsa_pw_prompt_shown', '1');
       }
     }
-  }, [user?.id]);
+  }, [user?.id, user?.active_role, user?.roles]);
 
   const refreshViewCtx = React.useCallback(() => {
     api.get('/auth/view-context').then(({ data }) => {
@@ -484,6 +561,7 @@ export default function AppShell({ children }) {
   return (
     <div className="min-h-screen bg-[var(--cream)] flex">
       <EnableNotifications />
+      <CommandPalette />
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-white border-r border-slate-200 sticky top-0 h-screen">
         <div className="px-5 py-5 border-b border-slate-100">
@@ -502,10 +580,20 @@ export default function AppShell({ children }) {
         <div className="flex-1 overflow-y-auto">
           <Sidebar items={items} current={loc.pathname} viewCtx={viewCtx} onTPClick={() => setVcDialogOpen(true)} />
         </div>
-        <div className="p-3 border-t border-slate-100">
+        <div className="p-3 border-t border-slate-100 space-y-2">
+          <button
+            onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-slate-600 hover:text-[#006837] hover:bg-slate-50 rounded-lg transition-colors group"
+            aria-label="Buka Command Palette"
+          >
+            <span className="font-medium">Pencarian Cepat</span>
+            <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-slate-100 px-1.5 font-mono text-[10px] font-medium text-slate-600 group-hover:bg-slate-200">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </button>
           <div className="text-xs text-slate-600 font-medium">{schoolName}</div>
           {appVersion && (
-            <div className="text-[10px] text-slate-400 mt-1">Version {appVersion}</div>
+            <div className="text-[10px] text-slate-400">Version {appVersion}</div>
           )}
         </div>
       </aside>
@@ -558,13 +646,13 @@ export default function AppShell({ children }) {
             <div className="flex items-center gap-2">
               {/* Panduan button */}
               <Button
-                variant="ghost" size="icon"
+                variant="ghost"
                 onClick={() => nav('/panduan')}
-                className="rounded-full hover:bg-[#006837]/8 hidden sm:inline-flex"
+                className="h-11 w-11 sm:h-10 sm:w-10 rounded-full hover:bg-[#006837]/8 hidden sm:inline-flex focus-visible:ring-2 focus-visible:ring-[#006837] focus-visible:ring-offset-2 p-0 items-center justify-center"
                 data-testid="topbar-panduan-btn"
-                title="Panduan Pengguna"
+                aria-label="Panduan Pengguna"
               >
-                <HelpCircle className="h-5 w-5 text-slate-700" />
+                <HelpCircle className="h-5 w-5 text-slate-700" aria-hidden="true" />
               </Button>
 
               {/* Notification Bell */}
@@ -654,12 +742,17 @@ export default function AppShell({ children }) {
                     ))}
                     <DropdownMenuSeparator />
                   </div>
-                  <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
-                    <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
-                    <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password
-                  </DropdownMenuItem>
+                  {/* Hide Profile and Change Password for 'kelas' role */}
+                  {activeRole !== 'kelas' && (
+                    <>
+                      <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
+                        <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
+                        <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => nav('/panduan')} data-testid="menu-panduan" className="sm:hidden">
                     <HelpCircle className="h-4 w-4 mr-2" /> Panduan Pengguna
                   </DropdownMenuItem>

@@ -28,10 +28,10 @@ async def test_teaching_reminder():
     semester_id = ctx.get('semester_id')
 
     if not semester_id:
-        print("❌ No active semester found")
+        print("No active semester found")
         return
 
-    print(f"✓ Active semester: {semester_id[:8]}...")
+    print(f"Active semester: {semester_id[:8]}...")
 
     # Get schedules for today
     schedules = await db.schedules.find({
@@ -39,14 +39,14 @@ async def test_teaching_reminder():
         'day': day
     }, {'_id': 0}).to_list(1000)
 
-    print(f"✓ Found {len(schedules)} schedules for {day}\n")
+    print(f"Found {len(schedules)} schedules for {day}\n")
 
     # Get reminders sent today
     reminders_sent = await db.teaching_reminders.find({
         'date': current_date
     }, {'_id': 0}).to_list(1000)
 
-    print(f"📤 Reminders sent today: {len(reminders_sent)}\n")
+    print(f"Reminders sent today: {len(reminders_sent)}\n")
 
     # Show next 5 upcoming schedules
     print(f"{'='*60}")
@@ -111,8 +111,8 @@ async def test_teaching_reminder():
         print(f"{i}. {item['start_time']} - {subject_name} ({class_name})")
         print(f"   Teacher: {teacher_name}")
         print(f"   Reminder times:")
-        print(f"     - 10 min before: {item['reminder_time']} {'✓ Sent' if before_sent else '⏳ Pending'}")
-        print(f"     - Start time: {item['start_time']} {'✓ Sent' if start_sent else '⏳ Pending'}")
+        print(f"     - 10 min before: {item['reminder_time']} {'[SENT]' if before_sent else '[PENDING]'}")
+        print(f"     - Start time: {item['start_time']} {'[SENT]' if start_sent else '[PENDING]'}")
         print(f"   Schedule ID: {schedule.get('id')[:16]}...")
         print()
 
@@ -125,7 +125,7 @@ async def test_teaching_reminder():
     # Show example of what will happen
     if upcoming:
         next_schedule = upcoming[0]
-        print(f"⏰ NEXT UPCOMING:")
+        print(f"NEXT UPCOMING:")
         print(f"   - At {next_schedule['reminder_time']}: Send '10 minutes before' notification")
         print(f"   - At {next_schedule['start_time']}: Send 'start time' notification")
         print()

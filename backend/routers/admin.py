@@ -18,6 +18,8 @@ from core import (
     logger,
     require_role,
     serialize_doc,
+    MANAGEMENT_ROLES,
+    ACADEMIC_MANAGEMENT_ROLES,
 )
 from journal_core import current_day_id, now_wib
 
@@ -30,7 +32,7 @@ router = APIRouter()
 @router.get("/admin/audit-logs")
 async def get_audit_logs(limit: int = 200, target_id: Optional[str] = None,
                          target_type: Optional[str] = None,
-                         user: Dict = Depends(require_role('admin'))):
+                         user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'waka_kurikulum'))):
     q = {}
     if target_id:
         q['entity_id'] = target_id
@@ -50,7 +52,7 @@ async def get_security_logs(limit: int = 200, user: Dict = Depends(require_role(
 # ADMIN STATS
 # ============================================================
 @router.get("/admin/stats")
-async def admin_stats(user: Dict = Depends(require_role('admin'))):
+async def admin_stats(user: Dict = Depends(require_role(*MANAGEMENT_ROLES))):
     """Dashboard stats filtered by user's view context (semester)"""
     today = current_day_id()
     ctx = await get_active_context(user)
@@ -69,11 +71,12 @@ async def admin_stats(user: Dict = Depends(require_role('admin'))):
         'total_users': total_users, 'total_classes': total_classes, 'total_rooms': total_rooms,
         'total_schedules_today': total_schedules_today, 'total_journals_today': total_journals_today,
         'active_semester': ctx.get('semester_name'), 'current_day': today,
+        'active_academic_year': ctx.get('academic_year_name'),
     }
 
 
 @router.get("/admin/stats/students")
-async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
+async def admin_stats_students(user: Dict = Depends(require_role(*MANAGEMENT_ROLES))):
     """Statistik siswa: total, per tingkat (7/8/9), mutasi filtered by user's view context (semester)."""
     ctx = await get_active_context(user)
     semester_id = ctx.get('semester_id')
@@ -104,11 +107,12 @@ async def admin_stats_students(user: Dict = Depends(require_role('admin'))):
         'mutasi_masuk': mutasi_masuk,
         'mutasi_keluar': mutasi_keluar,
         'semester_name': ctx.get('semester_name'),
+        'academic_year': ctx.get('academic_year_name'),
     }
 
 
 @router.get("/admin/stats/achievements")
-async def admin_stats_achievements(user: Dict = Depends(require_role('admin'))):
+async def admin_stats_achievements(user: Dict = Depends(require_role(*MANAGEMENT_ROLES))):
     """Statistik prestasi: total, per tingkat lomba."""
     total = await db.achievements.count_documents({})
     verified = await db.achievements.count_documents({'is_verified': True})
@@ -368,7 +372,7 @@ async def get_attendance_by_class(
     class_id: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan'))
 ):
     """Get attendance records for a specific class.
 
@@ -405,8 +409,42 @@ async def get_attendance_by_class(
         }
     }, {'_id': 0}).to_list(10000)
 
+    # Enrich attendance records with journal data (subject, teacher info)
+    journal_ids = list(set([r.get('journal_id') for r in attendance_records if r.get('journal_id')]))
+    journals = await db.journals.find({'id': {'$in': journal_ids}}, {'_id': 0, 'id': 1, 'subject_id': 1, 'teacher_id': 1}).to_list(1000) if journal_ids else []
+    journal_map = {j['id']: j for j in journals}
+
+    # Get subjects and teachers
+    subject_ids = list(set([j.get('subject_id') for j in journals if j.get('subject_id')]))
+    teacher_ids = list(set([j.get('teacher_id') for j in journals if j.get('teacher_id')]))
+
+    subjects = await db.subjects.find({'id': {'$in': subject_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'code': 1}).to_list(500) if subject_ids else []
+    teachers = await db.users.find({'id': {'$in': teacher_ids}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(200) if teacher_ids else []
+
+    subject_map = {s['id']: s for s in subjects}
+    teacher_map = {t['id']: t for t in teachers}
+
+    # Enrich each attendance record
+    enriched_count = 0
+    for record in attendance_records:
+        journal_id = record.get('journal_id')
+        if journal_id and journal_id in journal_map:
+            journal = journal_map[journal_id]
+            subject_id = journal.get('subject_id')
+            teacher_id = journal.get('teacher_id')
+
+            if subject_id and subject_id in subject_map:
+                record['subject_name'] = subject_map[subject_id].get('name')
+                record['subject_code'] = subject_map[subject_id].get('code')
+
+            if teacher_id and teacher_id in teacher_map:
+                record['teacher_name'] = teacher_map[teacher_id].get('full_name')
+
+            enriched_count += 1
+
     # Build per-student summary
     student_summaries = []
+    logger.info(f"[ATTENDANCE-BY-CLASS] Total students: {len(students)}, Total attendance records: {len(attendance_records)}, Enriched: {enriched_count}")
     for student in students:
         student_id = student['id']
         student_records = [r for r in attendance_records if r.get('student_id') == student_id]
@@ -416,9 +454,42 @@ async def get_attendance_by_class(
         hadir = sum(1 for r in student_records if r.get('status') == 'hadir')
         sakit = sum(1 for r in student_records if r.get('status') == 'sakit')
         izin = sum(1 for r in student_records if r.get('status') == 'izin')
-        alpa = sum(1 for r in student_records if r.get('status') == 'alpa')
+        alpa = sum(1 for r in student_records if r.get('status') in ['alpa', 'alpha'])
+
+        if len(student_records) > 0:
+            logger.info(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: total={total}, hadir={hadir}, sakit={sakit}, izin={izin}, alpa={alpa}")
+            logger.info(f"[ATTENDANCE-BY-CLASS] Sample statuses for {student['full_name']}: {[r.get('status') for r in student_records[:5]]}")
 
         percentage = (hadir / total * 100) if total > 0 else 0
+
+        # Prepare records with serialized dates
+        serialized_records = []
+        for record in student_records:
+            # Handle datetime serialization more robustly
+            created_at_value = record.get('created_at')
+            if isinstance(created_at_value, datetime):
+                date_str = created_at_value.isoformat()
+            elif isinstance(created_at_value, str):
+                date_str = created_at_value
+            else:
+                date_str = str(created_at_value) if created_at_value else None
+
+            serialized_record = {
+                'id': record.get('id'),
+                'student_id': record.get('student_id'),
+                'status': record.get('status'),
+                'date': date_str,
+                'subject_name': record.get('subject_name'),
+                'subject_code': record.get('subject_code'),
+                'teacher_name': record.get('teacher_name'),
+                'created_at': date_str,
+                'journal_id': record.get('journal_id'),
+            }
+            serialized_records.append(serialized_record)
+
+        if len(serialized_records) > 0:
+            logger.info(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: {len(serialized_records)} records prepared")
+            logger.info(f"[ATTENDANCE-BY-CLASS] Sample record: {serialized_records[0] if serialized_records else 'None'}")
 
         student_summaries.append({
             'student_id': student_id,
@@ -429,7 +500,8 @@ async def get_attendance_by_class(
             'sakit': sakit,
             'izin': izin,
             'alpa': alpa,
-            'percentage': round(percentage, 2)
+            'percentage': round(percentage, 2),
+            'records': serialized_records
         })
 
     # Calculate class-level statistics
@@ -437,7 +509,7 @@ async def get_attendance_by_class(
     total_hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
     total_sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
     total_izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
-    total_alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+    total_alpa = sum(1 for a in attendance_records if a.get('status') in ['alpa', 'alpha'])
     class_percentage = (total_hadir / total_records * 100) if total_records > 0 else 0
 
     return {
@@ -461,28 +533,69 @@ async def get_attendance_by_grade(
     grade_level: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan'))
 ):
-    """Get attendance statistics aggregated by grade level (jenjang).
+    """Get attendance statistics aggregated by grade level (tingkat).
 
     Returns statistics for all classes in the specified grade level.
-    Grade level examples: 'VII', 'VIII', 'IX', '1', '2', etc.
+    Grade level examples: '7', '8', '9' (tingkat)
     """
     # Default to current month/year if not provided
+    from core import get_active_context
     now = now_wib()
     target_month = month if month else now.month
     target_year = year if year else now.year
+
+    # Get active context to filter by active semester and academic year
+    active_context = await get_active_context(user)
 
     # Get first and last day of the month
     first_day = datetime(target_year, target_month, 1)
     last_day_num = calendar.monthrange(target_year, target_month)[1]
     last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
 
-    # Get all classes for this grade level
-    classes = await db.classes.find(
-        {'grade_level': grade_level},
-        {'_id': 0, 'id': 1, 'name': 1, 'grade_level': 1}
+    # Build filter for active classes in the specified tingkat
+    class_filter = {}
+    if active_context:
+        class_filter['academic_year_id'] = active_context.get('academic_year_id')
+        class_filter['semester_id'] = active_context.get('semester_id')
+
+    logger.info(f"[ATTENDANCE BY GRADE] Searching for tingkat: {grade_level}")
+    logger.info(f"[ATTENDANCE BY GRADE] Active context filter: {class_filter}")
+
+    # Get all classes (we'll filter by tingkat after extraction)
+    all_classes = await db.classes.find(
+        class_filter,
+        {'_id': 0, 'id': 1, 'name': 1, 'tingkat': 1, 'grade_level': 1}
     ).sort('name', 1).to_list(100)
+
+    logger.info(f"[ATTENDANCE BY GRADE] Found {len(all_classes)} active classes total")
+
+    # Filter classes by tingkat (extract from name if needed)
+    import re
+    classes = []
+    for cls in all_classes:
+        # Try to get tingkat from field, or extract from class name
+        tingkat = cls.get('tingkat') or cls.get('grade_level')
+
+        # If still None, try to extract from class name (e.g., "7A" -> 7)
+        if not tingkat:
+            class_name = cls.get('name', '')
+            match = re.match(r'^(\d+)', class_name)
+            if match:
+                tingkat = int(match.group(1))
+
+        # Convert grade_level to int for comparison
+        try:
+            target_tingkat = int(grade_level)
+            if tingkat == target_tingkat:
+                classes.append(cls)
+                logger.debug(f"[ATTENDANCE BY GRADE] Matched class: {cls.get('name')} (tingkat={tingkat})")
+        except (ValueError, TypeError):
+            logger.warning(f"[ATTENDANCE BY GRADE] Invalid grade_level parameter: {grade_level}")
+            continue
+
+    logger.info(f"[ATTENDANCE BY GRADE] Found {len(classes)} classes for tingkat {grade_level}")
 
     if not classes:
         return {
@@ -526,6 +639,8 @@ async def get_attendance_by_grade(
             }
         }, {'_id': 0}).to_list(10000)
 
+        logger.info(f"[ATTENDANCE BY GRADE] Class {cls['name']}: {len(student_ids)} students, {len(attendance_records)} attendance records")
+
         all_attendance_records.extend(attendance_records)
 
         # Calculate class statistics
@@ -533,7 +648,7 @@ async def get_attendance_by_grade(
         hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
         sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
         izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
-        alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+        alpa = sum(1 for a in attendance_records if a.get('status') in ['alpa', 'alpha'])
         percentage = (hadir / total * 100) if total > 0 else 0
 
         class_summaries.append({
@@ -553,8 +668,10 @@ async def get_attendance_by_grade(
     grade_hadir = sum(1 for a in all_attendance_records if a.get('status') == 'hadir')
     grade_sakit = sum(1 for a in all_attendance_records if a.get('status') == 'sakit')
     grade_izin = sum(1 for a in all_attendance_records if a.get('status') == 'izin')
-    grade_alpa = sum(1 for a in all_attendance_records if a.get('status') == 'alpa')
+    grade_alpa = sum(1 for a in all_attendance_records if a.get('status') in ['alpa', 'alpha'])
     grade_percentage = (grade_hadir / grade_total * 100) if grade_total > 0 else 0
+
+    logger.info(f"[ATTENDANCE BY GRADE] Grade {grade_level} statistics: total={grade_total}, hadir={grade_hadir}, sakit={grade_sakit}, izin={grade_izin}, alpa={grade_alpa}")
 
     return {
         'grade_level': grade_level,
@@ -576,7 +693,7 @@ async def get_attendance_by_grade(
 async def get_attendance_overall(
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan'))
 ):
     """Get overall school-wide attendance statistics.
 
@@ -590,19 +707,41 @@ async def get_attendance_overall(
     target_month = month if month else now.month
     target_year = year if year else now.year
 
+    # Get active context to filter by active semester and academic year
+    from core import get_active_context
+    active_context = await get_active_context(user)
+
     # Get first and last day of the month
     first_day = datetime(target_year, target_month, 1)
     last_day_num = calendar.monthrange(target_year, target_month)[1]
     last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
 
-    # Get all students
+    # Get only classes from active academic year and semester
+    class_filter = {}
+    if active_context:
+        class_filter['academic_year_id'] = active_context.get('academic_year_id')
+        class_filter['semester_id'] = active_context.get('semester_id')
+
+    # Get active classes to filter students
+    active_classes = await db.classes.find(class_filter, {'_id': 0, 'id': 1}).to_list(500)
+    active_class_ids = [c['id'] for c in active_classes]
+
+    logger.info(f"[ATTENDANCE] Active class IDs: {len(active_class_ids)} classes")
+    logger.info(f"[ATTENDANCE] Filter: academic_year={active_context.get('academic_year_id') if active_context else 'None'}, semester={active_context.get('semester_id') if active_context else 'None'}")
+
+    # Get students only from active classes
     all_students = await db.users.find(
-        {'roles': 'siswa'},
+        {
+            'roles': 'siswa',
+            'student_class_id': {'$in': active_class_ids}
+        },
         {'_id': 0, 'id': 1, 'student_class_id': 1}
     ).to_list(5000)
     all_student_ids = [s['id'] for s in all_students]
 
-    # Get all attendance records for the month
+    logger.info(f"[ATTENDANCE] Active students: {len(all_student_ids)} students in active classes")
+
+    # Get attendance records for active students in the month
     attendance_records = await db.attendances.find({
         'student_id': {'$in': all_student_ids},
         'created_at': {
@@ -611,47 +750,120 @@ async def get_attendance_overall(
         }
     }, {'_id': 0}).to_list(50000)
 
+    logger.info(f"[ATTENDANCE] Attendance records: {len(attendance_records)} records for the month")
+
+    # IMPORTANT: Convert all created_at to timezone-naive datetime objects NOW
+    # This prevents timezone comparison errors later
+    for record in attendance_records:
+        created_at = record.get('created_at')
+        if created_at:
+            if isinstance(created_at, str):
+                # Parse string to datetime and make it naive
+                try:
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    # Create new naive datetime from components
+                    record['created_at'] = datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.microsecond)
+                except:
+                    # If parsing fails, try without timezone
+                    try:
+                        record['created_at'] = datetime.fromisoformat(created_at)
+                    except:
+                        pass
+            elif isinstance(created_at, datetime):
+                # Already a datetime, create new naive datetime from components
+                record['created_at'] = datetime(
+                    created_at.year, created_at.month, created_at.day,
+                    created_at.hour, created_at.minute, created_at.second,
+                    created_at.microsecond
+                )
+
     # Calculate monthly stats
     monthly_total = len(attendance_records)
     monthly_hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
     monthly_sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
     monthly_izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
-    monthly_alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
+    monthly_alpa = sum(1 for a in attendance_records if a.get('status') in ['alpa', 'alpha'])
     monthly_percentage = (monthly_hadir / monthly_total * 100) if monthly_total > 0 else 0
 
     # Calculate weekly stats (last 7 days)
-    week_ago = now - timedelta(days=7)
-    weekly_records = [a for a in attendance_records
-                     if datetime.fromisoformat(a.get('created_at')) >= week_ago]
+    # Make week_ago timezone-naive for comparison
+    now_naive = datetime(now.year, now.month, now.day, now.hour, now.minute, now.second, now.microsecond)
+    week_ago_naive = now_naive - timedelta(days=7)
+    weekly_records = []
+    for a in attendance_records:
+        try:
+            created_at = a.get('created_at')
+            # created_at is already timezone-naive from preprocessing above
+            if created_at and isinstance(created_at, datetime):
+                if created_at >= week_ago_naive:
+                    weekly_records.append(a)
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.error(f"[ATTENDANCE] Error comparing created_at: {created_at}, type: {type(created_at)}, error: {e}")
+            continue
     weekly_total = len(weekly_records)
     weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
     weekly_sakit = sum(1 for a in weekly_records if a.get('status') == 'sakit')
     weekly_izin = sum(1 for a in weekly_records if a.get('status') == 'izin')
-    weekly_alpa = sum(1 for a in weekly_records if a.get('status') == 'alpa')
+    weekly_alpa = sum(1 for a in weekly_records if a.get('status') in ['alpa', 'alpha'])
     weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
 
     # Calculate daily stats (today)
-    today_start = datetime(now.year, now.month, now.day)
-    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
-    daily_records = [a for a in attendance_records
-                    if today_start <= datetime.fromisoformat(a.get('created_at')) <= today_end]
+    # Use the same now_naive we created for weekly stats
+    today_start = datetime(now_naive.year, now_naive.month, now_naive.day)
+    today_end = datetime(now_naive.year, now_naive.month, now_naive.day, 23, 59, 59)
+    daily_records = []
+    for a in attendance_records:
+        try:
+            created_at = a.get('created_at')
+            # created_at is already timezone-naive from preprocessing above
+            if created_at and isinstance(created_at, datetime):
+                if today_start <= created_at <= today_end:
+                    daily_records.append(a)
+        except (ValueError, AttributeError, TypeError) as e:
+            logger.error(f"[ATTENDANCE] Error comparing created_at: {created_at}, type: {type(created_at)}, error: {e}")
+            continue
     daily_total = len(daily_records)
     daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
     daily_sakit = sum(1 for a in daily_records if a.get('status') == 'sakit')
     daily_izin = sum(1 for a in daily_records if a.get('status') == 'izin')
-    daily_alpa = sum(1 for a in daily_records if a.get('status') == 'alpa')
+    daily_alpa = sum(1 for a in daily_records if a.get('status') in ['alpa', 'alpha'])
     daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
 
-    # Get all classes and group by grade level
-    all_classes = await db.classes.find({}, {'_id': 0, 'id': 1, 'name': 1, 'grade_level': 1}).to_list(500)
+    # Use the same class_filter we created above for active classes
+    # Fetch both tingkat and grade_level to see which one exists
+    all_classes = await db.classes.find(class_filter, {'_id': 0, 'id': 1, 'name': 1, 'tingkat': 1, 'grade_level': 1}).to_list(500)
 
-    # Build breakdown by grade level
-    grade_levels = {}
+    # DEBUG: Log class data
+    logger.info(f"[ATTENDANCE] Total classes found: {len(all_classes)}")
+    if all_classes:
+        logger.info(f"[ATTENDANCE] Sample class data (full): {all_classes[0]}")
+        tingkat_sample = [cls.get('tingkat') for cls in all_classes[:5]]
+        grade_level_sample = [cls.get('grade_level') for cls in all_classes[:5]]
+        logger.info(f"[ATTENDANCE] Sample tingkat values: {tingkat_sample}")
+        logger.info(f"[ATTENDANCE] Sample grade_level values: {grade_level_sample}")
+
+    # Build breakdown by tingkat
+    tingkat_levels = {}
     for cls in all_classes:
-        grade_level = cls.get('grade_level', 'Unknown')
-        if grade_level not in grade_levels:
-            grade_levels[grade_level] = {
-                'grade_level': grade_level,
+        # Try to get tingkat from field, or extract from class name
+        tingkat = cls.get('tingkat') or cls.get('grade_level')
+
+        # If still None, try to extract from class name (e.g., "7A" -> 7)
+        if not tingkat:
+            class_name = cls.get('name', '')
+            # Extract first digit from class name
+            import re
+            match = re.match(r'^(\d+)', class_name)
+            if match:
+                tingkat = int(match.group(1))
+            else:
+                tingkat = 'Unknown'
+
+        logger.debug(f"[ATTENDANCE] Class {cls.get('name')}: tingkat={tingkat}")
+        if tingkat not in tingkat_levels:
+            tingkat_levels[tingkat] = {
+                'tingkat': tingkat,  # Hanya angka tingkat (7, 8, 9)
+                'class_count': 0,  # Jumlah kelas di tingkat ini
                 'classes': [],
                 'total': 0,
                 'hadir': 0,
@@ -659,6 +871,9 @@ async def get_attendance_overall(
                 'izin': 0,
                 'alpa': 0
             }
+
+        # Increment class count for this tingkat
+        tingkat_levels[tingkat]['class_count'] += 1
 
         # Get students in this class
         class_students = [s['id'] for s in all_students if s.get('student_class_id') == cls['id']]
@@ -669,10 +884,10 @@ async def get_attendance_overall(
         class_hadir = sum(1 for r in class_records if r.get('status') == 'hadir')
         class_sakit = sum(1 for r in class_records if r.get('status') == 'sakit')
         class_izin = sum(1 for r in class_records if r.get('status') == 'izin')
-        class_alpa = sum(1 for r in class_records if r.get('status') == 'alpa')
+        class_alpa = sum(1 for r in class_records if r.get('status') in ['alpa', 'alpha'])
         class_percentage = (class_hadir / class_total * 100) if class_total > 0 else 0
 
-        grade_levels[grade_level]['classes'].append({
+        tingkat_levels[tingkat]['classes'].append({
             'class_id': cls['id'],
             'class_name': cls['name'],
             'total': class_total,
@@ -683,17 +898,17 @@ async def get_attendance_overall(
             'percentage': round(class_percentage, 2)
         })
 
-        # Accumulate for grade level
-        grade_levels[grade_level]['total'] += class_total
-        grade_levels[grade_level]['hadir'] += class_hadir
-        grade_levels[grade_level]['sakit'] += class_sakit
-        grade_levels[grade_level]['izin'] += class_izin
-        grade_levels[grade_level]['alpa'] += class_alpa
+        # Accumulate for tingkat
+        tingkat_levels[tingkat]['total'] += class_total
+        tingkat_levels[tingkat]['hadir'] += class_hadir
+        tingkat_levels[tingkat]['sakit'] += class_sakit
+        tingkat_levels[tingkat]['izin'] += class_izin
+        tingkat_levels[tingkat]['alpa'] += class_alpa
 
-    # Calculate percentages for grade levels
-    for grade in grade_levels.values():
-        grade['percentage'] = (grade['hadir'] / grade['total'] * 100) if grade['total'] > 0 else 0
-        grade['percentage'] = round(grade['percentage'], 2)
+    # Calculate percentages for tingkat levels
+    for tingkat in tingkat_levels.values():
+        tingkat['percentage'] = (tingkat['hadir'] / tingkat['total'] * 100) if tingkat['total'] > 0 else 0
+        tingkat['percentage'] = round(tingkat['percentage'], 2)
 
     return {
         'month': target_month,
@@ -722,5 +937,5 @@ async def get_attendance_overall(
             'alpa': daily_alpa,
             'percentage': round(daily_percentage, 2)
         },
-        'by_grade': list(grade_levels.values())
+        'by_grade': list(tingkat_levels.values())
     }

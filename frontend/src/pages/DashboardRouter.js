@@ -5,6 +5,7 @@ import GuruDashboard from './dashboards/GuruDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 import WaliKelasDashboard from './dashboards/WaliKelasDashboard';
+import KelasDashboard from './dashboards/KelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 import PublicPagesSection from '@/components/PublicPagesSection';
 import NotificationPermissionBanner from '@/components/NotificationPermissionBanner';
@@ -15,7 +16,19 @@ import NotificationPermissionBanner from '@/components/NotificationPermissionBan
  */
 export default function DashboardRouter() {
   const { activeRole } = useAuth();
-  const isAdmin = activeRole === 'admin';
+
+  // Roles that should see admin-style dashboard with stats
+  const adminLikeRoles = [
+    'admin',
+    'kepala_sekolah',
+    'kepala_tata_usaha',
+    'waka_sarana_prasarana',
+    'waka_kesiswaan',
+    'waka_kurikulum',
+    'waka_humas'
+  ];
+
+  const isAdmin = adminLikeRoles.includes(activeRole);
 
   // Check if user is a teacher (should see notification banner)
   const isTeacher = [
@@ -30,6 +43,12 @@ export default function DashboardRouter() {
   let DashboardComponent;
   switch (activeRole) {
     case 'admin':
+    case 'kepala_sekolah':
+    case 'kepala_tata_usaha':
+    case 'waka_sarana_prasarana':
+    case 'waka_kesiswaan':
+    case 'waka_kurikulum':
+    case 'waka_humas':
       DashboardComponent = AdminDashboard; break;
     case 'siswa':
       DashboardComponent = SiswaDashboard; break;
@@ -37,6 +56,8 @@ export default function DashboardRouter() {
       DashboardComponent = StaffDashboard; break;
     case 'wali_kelas':
       DashboardComponent = WaliKelasDashboard; break;
+    case 'kelas':
+      DashboardComponent = KelasDashboard; break;
     case 'guru':
     case 'guru_piket':
     case 'guru_bk':

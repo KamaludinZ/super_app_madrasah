@@ -68,8 +68,8 @@ def _user_matches_roles(user: Dict, target_roles: List[str]) -> bool:
 # ADMIN: ANNOUNCEMENTS CRUD
 # ============================================================
 @router.get("/admin/announcements")
-async def admin_list_announcements(user: Dict = Depends(require_role('admin'))):
-    """List ALL announcements (active + inactive) for admin management."""
+async def admin_list_announcements(user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
+    """List ALL announcements (active + inactive) for admin management and waka kurikulum."""
     items = await db.announcements.find({}, {'_id': 0}).sort('created_at', -1).to_list(500)
     return [serialize_doc(i) for i in items]
 

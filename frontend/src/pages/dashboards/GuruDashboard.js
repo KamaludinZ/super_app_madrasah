@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
+import { NoJurnalEmptyState } from '@/components/ui/EmptyState';
 
 export default function GuruDashboard() {
   const { user, activeRole } = useAuth();
@@ -22,10 +25,11 @@ export default function GuruDashboard() {
   const roleLabel = ROLE_LABELS[activeRole] || 'Guru';
 
   return (
-    <div className="space-y-6">
+    <div className="section-spacing">
+      <IslamicBackground pattern="star" opacity={0.02} />
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2" data-testid="dashboard-role-badge">Dashboard {roleLabel}</Badge>
+          <KemenagBadge variant="default" className="mb-2" data-testid="dashboard-role-badge" />
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Assalamu'alaikum, {user?.full_name?.split(' ')[0] || 'Bapak/Ibu'}</h1>
           <p className="text-sm text-slate-600 mt-1">Berikut ringkasan mengajar Anda hari ini</p>
         </div>
@@ -36,7 +40,7 @@ export default function GuruDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 grid-spacing-dense">
         <KPI label="Jadwal Hari Ini" value={total} icon={Calendar} />
         <KPI label="Jurnal Terisi" value={filled} icon={CheckCircle2} color="emerald" />
         <KPI label="Belum Diisi" value={total - filled} icon={Circle} color="amber" />
@@ -48,10 +52,7 @@ export default function GuruDashboard() {
           {loading ? (
             <div className="text-sm text-slate-500">Memuat...</div>
           ) : schedule.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
-              <Calendar className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <div className="text-sm">Tidak ada jadwal mengajar hari ini</div>
-            </div>
+            <NoJurnalEmptyState />
           ) : (
             <div className="space-y-2" data-testid="guru-schedule-list">
               {schedule.map((s, idx) => (

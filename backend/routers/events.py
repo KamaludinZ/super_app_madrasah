@@ -19,9 +19,9 @@ async def list_madrasah_events(
     year: Optional[int] = None,
     month: Optional[int] = None,
     is_active: Optional[bool] = None,
-    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan', 'waka_kurikulum'))
 ):
-    """List madrasah events - accessible by admin, waka humas, kepala sekolah, and unit pelayanan."""
+    """List madrasah events - accessible by admin, waka humas, kepala sekolah, unit pelayanan, and waka kurikulum."""
     q = {}
 
     if is_active is not None:
@@ -301,7 +301,7 @@ async def delete_staff_event(
 async def get_madrasah_events_duration_stats(
     year: Optional[int] = None,
     month: Optional[int] = None,
-    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan'))
+    user: Dict = Depends(require_role('admin', 'waka_humas', 'kepala_sekolah', 'unit_pelayanan', 'waka_kurikulum'))
 ):
     """Get duration statistics for madrasah events - average duration in days and hours."""
     q = {}

@@ -66,10 +66,6 @@ const KehadiranPage = () => {
       try {
         const { data } = await api.get('/classes');
         setClasses(data);
-
-        // Extract unique grade levels
-        const grades = [...new Set(data.map(c => c.grade_level))].filter(Boolean).sort();
-        setGradeLevels(grades);
       } catch (error) {
         console.error('Error loading classes:', error);
         toast.error('Gagal memuat data kelas');
@@ -77,6 +73,17 @@ const KehadiranPage = () => {
     };
     loadClasses();
   }, []);
+
+  // Extract tingkat levels from overall data (filtered by active academic year/semester)
+  useEffect(() => {
+    if (overallData?.by_grade) {
+      const tingkats = overallData.by_grade
+        .map(g => g.tingkat)
+        .filter(t => t !== 'Unknown' && t != null)
+        .sort((a, b) => a - b);
+      setGradeLevels(tingkats);
+    }
+  }, [overallData]);
 
   // Fetch data based on view mode
   useEffect(() => {
@@ -109,6 +116,12 @@ const KehadiranPage = () => {
             year: selectedYear
           }
         });
+        console.log('[API Response] Class Data:', data);
+        if (data.students && data.students.length > 0) {
+          console.log('[API Response] First student:', data.students[0]);
+          console.log('[API Response] First student records:', data.students[0].records);
+          console.log('[API Response] First student records length:', data.students[0].records?.length || 0);
+        }
         setClassData(data);
       }
     } catch (error) {
@@ -120,6 +133,14 @@ const KehadiranPage = () => {
   };
 
   const openDetailDialog = (student, records) => {
+    console.log('[Detail Dialog] Student:', student);
+    console.log('[Detail Dialog] Records:', records);
+    console.log('[Detail Dialog] Records length:', records?.length || 0);
+    console.log('[Detail Dialog] Records type:', typeof records);
+    console.log('[Detail Dialog] Is Array:', Array.isArray(records));
+    if (records && records.length > 0) {
+      console.log('[Detail Dialog] First record:', records[0]);
+    }
     setDetailDialog({
       open: true,
       student: student,
@@ -224,13 +245,13 @@ const KehadiranPage = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Breakdown Per Jenjang</h2>
+                <h2 className="text-lg font-semibold">Breakdown Per Tingkat</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Statistik kehadiran per tingkatan kelas
                 </p>
               </div>
               <Badge variant="outline">
-                {overallData.by_grade?.length || 0} Jenjang
+                {overallData.by_grade?.length || 0} Tingkat
               </Badge>
             </div>
           </CardHeader>
@@ -239,7 +260,7 @@ const KehadiranPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Jenjang</TableHead>
+                    <TableHead>Tingkat</TableHead>
                     <TableHead className="text-center">Jumlah Kelas</TableHead>
                     <TableHead className="text-center">Total Kehadiran</TableHead>
                     <TableHead className="text-center">Hadir</TableHead>
@@ -252,7 +273,9 @@ const KehadiranPage = () => {
                 <TableBody>
                   {overallData.by_grade?.map((grade, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="font-medium">{grade.grade_level}</TableCell>
+                      <TableCell className="font-medium">
+                        {grade.tingkat === 'Unknown' ? 'Unknown' : `Tingkat ${grade.tingkat}`}
+                      </TableCell>
                       <TableCell className="text-center">{grade.class_count}</TableCell>
                       <TableCell className="text-center">{grade.total}</TableCell>
                       <TableCell className="text-center text-emerald-700 font-semibold">{grade.hadir}</TableCell>
@@ -286,9 +309,9 @@ const KehadiranPage = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Statistik Jenjang {gradeData.grade_level}</h2>
+                <h2 className="text-lg font-semibold">Statistik Tingkat {gradeData.grade_level}</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  Total keseluruhan untuk jenjang ini
+                  Total keseluruhan untuk tingkat ini
                 </p>
               </div>
             </div>
@@ -388,7 +411,7 @@ const KehadiranPage = () => {
               <div>
                 <h2 className="text-lg font-semibold">Kelas {classData.class?.name}</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  Jenjang: {classData.class?.grade_level} | Wali Kelas: {classData.class?.homeroom_teacher_name || '-'}
+                  Tingkat: {classData.class?.tingkat} | Wali Kelas: {classData.class?.homeroom_teacher_name || '-'}
                 </p>
               </div>
             </div>
@@ -457,11 +480,11 @@ const KehadiranPage = () => {
                       <TableCell className="font-medium">{idx + 1}</TableCell>
                       <TableCell>{student.student_name}</TableCell>
                       <TableCell className="text-center text-xs font-mono">{student.nisn || '-'}</TableCell>
-                      <TableCell className="text-center">{student.summary?.total || 0}</TableCell>
-                      <TableCell className="text-center text-emerald-700 font-semibold">{student.summary?.hadir || 0}</TableCell>
-                      <TableCell className="text-center text-yellow-700">{student.summary?.sakit || 0}</TableCell>
-                      <TableCell className="text-center text-blue-700">{student.summary?.izin || 0}</TableCell>
-                      <TableCell className="text-center text-red-700">{student.summary?.alpa || 0}</TableCell>
+                      <TableCell className="text-center">{student.total || 0}</TableCell>
+                      <TableCell className="text-center text-emerald-700 font-semibold">{student.hadir || 0}</TableCell>
+                      <TableCell className="text-center text-yellow-700">{student.sakit || 0}</TableCell>
+                      <TableCell className="text-center text-blue-700">{student.izin || 0}</TableCell>
+                      <TableCell className="text-center text-red-700">{student.alpa || 0}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300">
                           {student.percentage || 0}%
@@ -507,7 +530,7 @@ const KehadiranPage = () => {
         <div>
           <h1 className="text-2xl font-bold">Kehadiran Siswa</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Statistik kehadiran siswa per kelas, jenjang, dan keseluruhan
+            Statistik kehadiran siswa per kelas, tingkat, dan keseluruhan
           </p>
         </div>
 
@@ -556,7 +579,7 @@ const KehadiranPage = () => {
           </TabsTrigger>
           <TabsTrigger value="by-grade" className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
-            Per Jenjang
+            Per Tingkat
           </TabsTrigger>
           <TabsTrigger value="by-class" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -568,15 +591,15 @@ const KehadiranPage = () => {
         <div className="mt-4">
           {viewMode === 'by-grade' && (
             <div className="flex items-center gap-3">
-              <Label>Pilih Jenjang:</Label>
+              <Label>Pilih Tingkat:</Label>
               <Select value={selectedGrade} onValueChange={setSelectedGrade}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Pilih jenjang..." />
+                  <SelectValue placeholder="Pilih tingkat..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {gradeLevels.map((grade) => (
-                    <SelectItem key={grade} value={grade}>
-                      {grade}
+                  {gradeLevels.map((tingkat) => (
+                    <SelectItem key={tingkat} value={tingkat}>
+                      Tingkat {tingkat}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -592,11 +615,15 @@ const KehadiranPage = () => {
                   <SelectValue placeholder="Pilih kelas..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
-                      {cls.name} - {cls.grade_level}
-                    </SelectItem>
-                  ))}
+                  {classes.map((cls) => {
+                    // Extract tingkat from class name (e.g., "7A" -> 7)
+                    const tingkat = cls.tingkat || cls.name.match(/^(\d+)/)?.[1] || '';
+                    return (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}{tingkat ? ` - Tingkat ${tingkat}` : ''}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -612,7 +639,7 @@ const KehadiranPage = () => {
           {selectedGrade ? renderByGradeView() : (
             <Card>
               <CardContent className="py-12 text-center text-gray-500">
-                <p className="text-lg font-medium">Pilih jenjang untuk melihat statistik</p>
+                <p className="text-lg font-medium">Pilih tingkat untuk melihat statistik</p>
               </CardContent>
             </Card>
           )}
@@ -642,30 +669,33 @@ const KehadiranPage = () => {
             {/* Student Summary */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div className="text-center p-3 rounded-lg border bg-gray-50">
-                <div className="text-xl font-bold">{detailDialog.student?.summary?.total || 0}</div>
+                <div className="text-xl font-bold">{detailDialog.student?.total || 0}</div>
                 <div className="text-xs text-gray-600">Total</div>
               </div>
               <div className="text-center p-3 rounded-lg border bg-emerald-50">
-                <div className="text-xl font-bold text-emerald-700">{detailDialog.student?.summary?.hadir || 0}</div>
+                <div className="text-xl font-bold text-emerald-700">{detailDialog.student?.hadir || 0}</div>
                 <div className="text-xs text-gray-600">Hadir</div>
               </div>
               <div className="text-center p-3 rounded-lg border bg-yellow-50">
-                <div className="text-xl font-bold text-yellow-700">{detailDialog.student?.summary?.sakit || 0}</div>
+                <div className="text-xl font-bold text-yellow-700">{detailDialog.student?.sakit || 0}</div>
                 <div className="text-xs text-gray-600">Sakit</div>
               </div>
               <div className="text-center p-3 rounded-lg border bg-blue-50">
-                <div className="text-xl font-bold text-blue-700">{detailDialog.student?.summary?.izin || 0}</div>
+                <div className="text-xl font-bold text-blue-700">{detailDialog.student?.izin || 0}</div>
                 <div className="text-xs text-gray-600">Izin</div>
               </div>
               <div className="text-center p-3 rounded-lg border bg-red-50">
-                <div className="text-xl font-bold text-red-700">{detailDialog.student?.summary?.alpa || 0}</div>
+                <div className="text-xl font-bold text-red-700">{detailDialog.student?.alpa || 0}</div>
                 <div className="text-xs text-gray-600">Alpa</div>
               </div>
             </div>
 
             {/* Detailed Records */}
             <div>
-              <h3 className="text-sm font-semibold mb-3">Riwayat Kehadiran Detail</h3>
+              <h3 className="text-sm font-semibold mb-3">
+                Riwayat Kehadiran Detail
+                {detailDialog.records && ` (${detailDialog.records.length} record)`}
+              </h3>
               {detailDialog.records && detailDialog.records.length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
@@ -682,7 +712,7 @@ const KehadiranPage = () => {
                       {detailDialog.records.map((record, idx) => (
                         <TableRow key={record.id || idx}>
                           <TableCell className="font-medium">{idx + 1}</TableCell>
-                          <TableCell className="text-sm">{formatDate(record.date)}</TableCell>
+                          <TableCell className="text-sm">{formatDate(record.date || record.created_at)}</TableCell>
                           <TableCell>
                             <div className="font-medium text-sm">{record.subject_name || '-'}</div>
                             {record.subject_code && (
@@ -701,8 +731,9 @@ const KehadiranPage = () => {
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <p>Tidak ada riwayat kehadiran</p>
+                <div className="text-center py-8 text-gray-500 border rounded-md bg-gray-50">
+                  <p className="font-medium">Tidak ada riwayat kehadiran</p>
+                  <p className="text-xs mt-1">Data kehadiran detail tidak tersedia untuk siswa ini</p>
                 </div>
               )}
             </div>

@@ -157,7 +157,29 @@ async def get_current_user(
     payload = decode_token(credentials.credentials)
     if not payload:
         raise HTTPException(status_code=401, detail="Token tidak valid atau kedaluwarsa")
+
+    active_role = payload.get('active_role')
     user_id = payload.get('sub')
+
+    # Special handling for 'kelas' role
+    if active_role == 'kelas':
+        # For kelas, 'sub' contains class_id
+        kelas = await db.classes.find_one({'id': user_id})
+        if not kelas or not kelas.get('is_active', True):
+            raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau dinonaktifkan")
+
+        # Build a user-like object for kelas
+        kelas['active_role'] = 'kelas'
+        kelas['roles'] = ['kelas']
+
+        # Copy additional fields from JWT payload (semester_id, academic_year_id, wali_kelas_id, etc.)
+        for key in ['semester_id', 'academic_year_id', 'class_id', 'wali_kelas_id', 'username']:
+            if key in payload:
+                kelas[key] = payload[key]
+
+        return serialize_doc(kelas)
+
+    # Regular user authentication
     user = await db.users.find_one({'id': user_id})
     if not user or not user.get('is_active', True):
         raise HTTPException(status_code=401, detail="User tidak ditemukan atau dinonaktifkan")
@@ -175,6 +197,11 @@ async def get_current_user(
         user['impersonator_username'] = impersonator_username
 
     return serialize_doc(user)
+
+
+# Helper constants for common role groups
+MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarana_prasarana', 'waka_humas')
+ACADEMIC_MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'waka_kurikulum')
 
 
 def require_role(*allowed_roles: str):

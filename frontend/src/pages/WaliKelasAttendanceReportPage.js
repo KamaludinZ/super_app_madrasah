@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { UserCheck, Calendar, Loader2, ChevronRight, X } from 'lucide-react';
+import { UserCheck, Calendar, Loader2, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,15 +56,21 @@ export default function WaliKelasAttendanceReportPage() {
   const loadReport = async () => {
     setLoading(true);
     try {
+      console.log('[WK-ATTENDANCE] Loading report for class:', homeroomClassId, 'month:', selectedMonth);
       const { data } = await api.get('/wali-kelas/attendance-report', {
         params: {
           class_id: homeroomClassId,
           month: selectedMonth
         }
       });
+      console.log('[WK-ATTENDANCE] Received data:', data);
+      console.log('[WK-ATTENDANCE] Data length:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('[WK-ATTENDANCE] First student:', data[0]);
+      }
       setReportData(data);
     } catch (e) {
-      console.error('Error loading report:', e);
+      console.error('[WK-ATTENDANCE] Error loading report:', e);
     } finally {
       setLoading(false);
     }
@@ -306,16 +312,11 @@ export default function WaliKelasAttendanceReportPage() {
       <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && closeDetails()}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <div>
-                <div className="text-lg">Detail Kehadiran</div>
-                <div className="text-sm font-normal text-slate-600 mt-1">
-                  {selectedStudent?.student_name} - {monthOptions.find(m => m.value === selectedMonth)?.label}
-                </div>
+            <DialogTitle>
+              <div className="text-lg">Detail Kehadiran</div>
+              <div className="text-sm font-normal text-slate-600 mt-1">
+                {selectedStudent?.student_name} - {monthOptions.find(m => m.value === selectedMonth)?.label}
               </div>
-              <Button variant="ghost" size="sm" onClick={closeDetails}>
-                <X className="h-4 w-4" />
-              </Button>
             </DialogTitle>
           </DialogHeader>
 

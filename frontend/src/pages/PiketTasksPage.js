@@ -137,11 +137,21 @@ export default function PiketTasksPage() {
       siswa_sakit: 0
     };
 
-    Object.values(fillAttendance).forEach(status => {
+    // Convert fillAttendance object to array format for backend
+    const attendanceRecordsArray = fillStudents.map(student => {
+      const status = fillAttendance[student.id] || 'hadir';
+
+      // Count for summary
       if (status === 'hadir') attendanceSummary.siswa_hadir++;
-      else if (status === 'alpa') attendanceSummary.siswa_tidak_hadir++;
+      else if (status === 'alpha') attendanceSummary.siswa_tidak_hadir++;
       else if (status === 'izin') attendanceSummary.siswa_izin++;
       else if (status === 'sakit') attendanceSummary.siswa_sakit++;
+
+      return {
+        student_id: student.id,
+        student_name: student.full_name || student.username,
+        status: status
+      };
     });
 
     try {
@@ -151,9 +161,9 @@ export default function PiketTasksPage() {
         materi: fillForm.materi,
         catatan: fillForm.catatan,
         piket_note: fillForm.piket_note,
-        jenis_izin: fillForm.jenis_izin, // Kirim jenis izin dari task
+        jenis_izin: fillForm.jenis_izin,
         ...attendanceSummary,
-        attendance_records: fillAttendance, // Send individual records
+        attendance_records: attendanceRecordsArray,
       });
       toast.success('Jurnal berhasil diisi atas nama guru pengajar');
       setFillOpen(false); await refresh();
@@ -543,40 +553,157 @@ export default function PiketTasksPage() {
                       <TableRow>
                         <TableHead className="w-[50px]">No</TableHead>
                         <TableHead>Nama Siswa</TableHead>
-                        <TableHead className="w-[140px]">Status</TableHead>
+                        <TableHead className="w-[180px]">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fillStudents.map((student, index) => (
-                        <TableRow key={student.id}>
-                          <TableCell className="text-center text-xs">{index + 1}</TableCell>
-                          <TableCell className="text-sm">{student.full_name}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={fillAttendance[student.id] || 'hadir'}
-                              onValueChange={(val) => setFillAttendance({ ...fillAttendance, [student.id]: val })}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="hadir">Hadir</SelectItem>
-                                <SelectItem value="izin">Izin</SelectItem>
-                                <SelectItem value="sakit">Sakit</SelectItem>
-                                <SelectItem value="alpa">Alpa</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {fillStudents.map((student, index) => {
+                        const status = fillAttendance[student.id] || 'hadir';
+                        return (
+                          <TableRow key={student.id}>
+                            <TableCell className="text-center text-xs">{index + 1}</TableCell>
+                            <TableCell className="text-sm">{student.full_name}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={status === 'hadir' ? 'default' : 'outline'}
+                                  className={`h-7 px-2 text-xs font-semibold ${status === 'hadir' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'hover:bg-emerald-50'}`}
+                                  onClick={() => setFillAttendance({ ...fillAttendance, [student.id]: 'hadir' })}
+                                >
+                                  H
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={status === 'sakit' ? 'default' : 'outline'}
+                                  className={`h-7 px-2 text-xs font-semibold ${status === 'sakit' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'hover:bg-amber-50'}`}
+                                  onClick={() => setFillAttendance({ ...fillAttendance, [student.id]: 'sakit' })}
+                                >
+                                  S
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={status === 'izin' ? 'default' : 'outline'}
+                                  className={`h-7 px-2 text-xs font-semibold ${status === 'izin' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-blue-50'}`}
+                                  onClick={() => setFillAttendance({ ...fillAttendance, [student.id]: 'izin' })}
+                                >
+                                  I
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={status === 'alpha' ? 'default' : 'outline'}
+                                  className={`h-7 px-2 text-xs font-semibold ${status === 'alpha' ? 'bg-red-600 hover:bg-red-700 text-white' : 'hover:bg-red-50'}`}
+                                  onClick={() => setFillAttendance({ ...fillAttendance, [student.id]: 'alpha' })}
+                                >
+                                  A
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-2 text-xs text-slate-600 flex gap-4">
-                  <span>Hadir: {Object.values(fillAttendance).filter(s => s === 'hadir').length}</span>
-                  <span>Izin: {Object.values(fillAttendance).filter(s => s === 'izin').length}</span>
-                  <span>Sakit: {Object.values(fillAttendance).filter(s => s === 'sakit').length}</span>
-                  <span>Alpa: {Object.values(fillAttendance).filter(s => s === 'alpa').length}</span>
+                <div className="mt-3 space-y-2">
+                  <Label className="text-xs text-slate-500">Ringkasan Kehadiran</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Hadir */}
+                    {fillStudents.filter(s => (fillAttendance[s.id] || 'hadir') === 'hadir').length > 0 && (
+                      <Card className="border-emerald-200">
+                        <CardHeader className="bg-emerald-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm font-semibold text-emerald-700">
+                              Hadir ({fillStudents.filter(s => (fillAttendance[s.id] || 'hadir') === 'hadir').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-2">
+                          <div className="grid grid-cols-1 gap-1">
+                            {fillStudents.filter(s => (fillAttendance[s.id] || 'hadir') === 'hadir').map((student, idx) => (
+                              <div key={idx} className="text-xs bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                                {student.full_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Sakit */}
+                    {fillStudents.filter(s => fillAttendance[s.id] === 'sakit').length > 0 && (
+                      <Card className="border-amber-200">
+                        <CardHeader className="bg-amber-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                            <span className="text-sm font-semibold text-amber-700">
+                              Sakit ({fillStudents.filter(s => fillAttendance[s.id] === 'sakit').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-2">
+                          <div className="grid grid-cols-1 gap-1">
+                            {fillStudents.filter(s => fillAttendance[s.id] === 'sakit').map((student, idx) => (
+                              <div key={idx} className="text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                                {student.full_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Izin */}
+                    {fillStudents.filter(s => fillAttendance[s.id] === 'izin').length > 0 && (
+                      <Card className="border-blue-200">
+                        <CardHeader className="bg-blue-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span className="text-sm font-semibold text-blue-700">
+                              Izin ({fillStudents.filter(s => fillAttendance[s.id] === 'izin').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-2">
+                          <div className="grid grid-cols-1 gap-1">
+                            {fillStudents.filter(s => fillAttendance[s.id] === 'izin').map((student, idx) => (
+                              <div key={idx} className="text-xs bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                                {student.full_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Alpha */}
+                    {fillStudents.filter(s => fillAttendance[s.id] === 'alpha').length > 0 && (
+                      <Card className="border-rose-200">
+                        <CardHeader className="bg-rose-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                            <span className="text-sm font-semibold text-rose-700">
+                              Alpha ({fillStudents.filter(s => fillAttendance[s.id] === 'alpha').length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-2">
+                          <div className="grid grid-cols-1 gap-1">
+                            {fillStudents.filter(s => fillAttendance[s.id] === 'alpha').map((student, idx) => (
+                              <div key={idx} className="text-xs bg-rose-50 px-2 py-1 rounded border border-rose-200">
+                                {student.full_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

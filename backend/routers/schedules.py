@@ -992,7 +992,7 @@ async def list_piket(day: Optional[str] = None, user: Dict = Depends(get_current
 
 
 @router.post("/piket-schedules")
-async def create_piket(payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+async def create_piket(payload: Dict, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     doc = {
         'id': str(uuid.uuid4()),
         'day': payload.get('day', 'senin'),
@@ -1024,7 +1024,7 @@ async def piket_today(user: Dict = Depends(get_current_user)):
 
 
 @router.put("/piket-schedules/{pid}")
-async def update_piket(pid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin'))):
+async def update_piket(pid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     payload.pop('_id', None)
     payload.pop('id', None)
     res = await db.piket_schedules.update_one({'id': pid}, {'$set': payload})
@@ -1036,7 +1036,7 @@ async def update_piket(pid: str, payload: Dict, request: Request, user: Dict = D
 
 
 @router.delete("/piket-schedules/{pid}")
-async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_role('admin'))):
+async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
     await db.piket_schedules.delete_one({'id': pid})
     await log_audit(user, 'delete', 'piket_schedule', pid, request=request)
     return {'message': 'Dihapus'}

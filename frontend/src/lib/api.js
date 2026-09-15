@@ -22,7 +22,12 @@ api.interceptors.response.use(
       localStorage.removeItem('matsa_token');
       localStorage.removeItem('matsa_user');
       // soft redirect
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/public')) {
+      const path = window.location.pathname;
+      if (!path.startsWith('/login') &&
+          !path.startsWith('/public') &&
+          !path.startsWith('/kelas-login') &&
+          !path.startsWith('/forgot-password') &&
+          !path.startsWith('/reset-password')) {
         window.location.href = '/login';
       }
     }

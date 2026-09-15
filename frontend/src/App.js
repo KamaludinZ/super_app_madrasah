@@ -82,7 +82,11 @@ import AdminCetakAbsensiManualPage from '@/pages/admin/AdminCetakAbsensiManualPa
 import AdminVervalSiswaPage from '@/pages/admin/AdminVervalSiswaPage';
 import AdminVervalGTKPage from '@/pages/admin/AdminVervalGTKPage';
 import AdminIndikatorMateriPage from '@/pages/admin/AdminIndikatorMateriPage';
+import AdminMateriPage from '@/pages/admin/AdminMateriPage';
+import AdminTugasPage from '@/pages/admin/AdminTugasPage';
 import GuruInputIndikatorMateriPage from '@/pages/GuruInputIndikatorMateriPage';
+import GuruMateriPage from '@/pages/guru/GuruMateriPage';
+import GuruTugasPage from '@/pages/guru/GuruTugasPage';
 import AdminTatibKategoriPage from '@/pages/admin/AdminTatibKategoriPage';
 import AdminTatibInputPage from '@/pages/admin/AdminTatibInputPage';
 import AdminTatibPenangananPage from '@/pages/admin/AdminTatibPenangananPage';
@@ -97,6 +101,33 @@ import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
 import { PublicPageGuard } from '@/components/PublicPageGuard';
+
+// Kelas Digital Pages
+import KelasLoginPage from '@/pages/KelasLoginPage';
+import KelasDataSiswaPage from '@/pages/kelas/KelasDataSiswaPage';
+import KelasJadwalPage from '@/pages/kelas/KelasJadwalPage';
+import KelasMateriPage from '@/pages/kelas/KelasMateriPage';
+import KelasTugasPage from '@/pages/kelas/KelasTugasPage';
+import SiswaMateriPage from '@/pages/siswa/SiswaMateriPage';
+import SiswaTugasPage from '@/pages/siswa/SiswaTugasPage';
+import KelasJurnalPage from '@/pages/kelas/KelasJurnalPage';
+import KelasKehadiranPage from '@/pages/kelas/KelasKehadiranPage';
+
+// Waka Kurikulum Pages
+import WakaKurSiswaPage from '@/pages/wakakur/WakaKurSiswaPage';
+import WakaKurSchedulesPage from '@/pages/wakakur/WakaKurSchedulesPage';
+import WakaKurJurnalPage from '@/pages/wakakur/WakaKurJurnalPage';
+import WakaKurKehadiranPage from '@/pages/wakakur/WakaKurKehadiranPage';
+import WakaKurMateriPage from '@/pages/wakakur/WakaKurMateriPage';
+import WakaKurTugasPage from '@/pages/wakakur/WakaKurTugasPage';
+import WakaKurKegiatanPage from '@/pages/wakakur/WakaKurKegiatanPage';
+import WakaKurPengumumanPage from '@/pages/wakakur/WakaKurPengumumanPage';
+import WakaKurPrestasiPage from '@/pages/wakakur/WakaKurPrestasiPage';
+import WakaKurAlumniPage from '@/pages/wakakur/WakaKurAlumniPage';
+import WakaKurMutasiPage from '@/pages/wakakur/WakaKurMutasiPage';
+import WakaKurNaikKelasPage from '@/pages/wakakur/WakaKurNaikKelasPage';
+import WakaKurIndikatorMateriPage from '@/pages/wakakur/WakaKurIndikatorMateriPage';
+import WakaKurJadwalPiketPage from '@/pages/wakakur/WakaKurJadwalPiketPage';
 
 import './App.css';
 
@@ -200,6 +231,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/kelas-login" element={<KelasLoginPage />} />
           <Route path="/public/monitoring" element={<PublicPageGuard pageName="monitoring"><PublicMonitoring /></PublicPageGuard>} />
           <Route path="/public/prestasi" element={<PublicPageGuard pageName="prestasi"><PublicPrestasi /></PublicPageGuard>} />
           <Route path="/public/agenda" element={<PublicPageGuard pageName="agenda"><PublicAgenda /></PublicPageGuard>} />
@@ -215,7 +247,6 @@ function App() {
             <Route path="/wali-kelas/siswa" element={<DataSiswaPage />} />
             <Route path="/wali-kelas/jurnal-kelas" element={<WaliKelasJurnalKelasPage />} />
             <Route path="/wali-kelas/kehadiran" element={<WaliKelasAttendanceReportPage />} />
-            <Route path="/wali-kelas/kehadiran-statistik" element={<WaliKelasAttendancePage />} />
             <Route path="/wali-kelas/kebersihan" element={<WaliKelasCleanlinessReportPage />} />
             <Route path="/wali-kelas/laporan" element={<WaliKelasReportsPage />} />
             <Route path="/siswa/kehadiran" element={<StudentAttendancePage />} />
@@ -267,6 +298,8 @@ function App() {
             <Route path="/admin/verval-siswa" element={<AdminVervalSiswaPage />} />
             <Route path="/admin/verval-gtk" element={<AdminVervalGTKPage />} />
             <Route path="/admin/indikator-materi" element={<AdminIndikatorMateriPage />} />
+            <Route path="/admin/materi" element={<AdminMateriPage />} />
+            <Route path="/admin/tugas" element={<AdminTugasPage />} />
             <Route path="/admin/pip/penerima" element={<AdminPIPReceiverPage />} />
             <Route path="/admin/pip/ajuan" element={<AdminPIPProposalPage />} />
             <Route path="/admin/tatib/kategori" element={<AdminTatibKategoriPage />} />
@@ -274,6 +307,8 @@ function App() {
             <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
             <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
+            <Route path="/guru/materi" element={<GuruMateriPage />} />
+            <Route path="/guru/tugas" element={<GuruTugasPage />} />
             <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
             <Route path="/my-agenda" element={<MyAgendaPage />} />
             <Route path="/profile" element={<ProfilePageByRole />} />
@@ -288,6 +323,31 @@ function App() {
             <Route path="/pengumuman" element={<AnnouncementsListPage />} />
             <Route path="/panduan" element={<PanduanPage />} />
             <Route path="/panduan/:slug" element={<PanduanPage />} />
+            {/* Kelas Digital - Protected Routes */}
+            <Route path="/kelas/siswa" element={<KelasDataSiswaPage />} />
+            <Route path="/kelas/jadwal" element={<KelasJadwalPage />} />
+            <Route path="/kelas/materi" element={<KelasMateriPage />} />
+            <Route path="/kelas/tugas" element={<KelasTugasPage />} />
+            <Route path="/kelas/jurnal" element={<KelasJurnalPage />} />
+            <Route path="/kelas/kehadiran" element={<KelasKehadiranPage />} />
+            {/* Siswa Routes */}
+            <Route path="/siswa/materi" element={<SiswaMateriPage />} />
+            <Route path="/siswa/tugas" element={<SiswaTugasPage />} />
+            {/* Waka Kurikulum Routes */}
+            <Route path="/wakakur/siswa" element={<WakaKurSiswaPage />} />
+            <Route path="/wakakur/jadwal" element={<WakaKurSchedulesPage />} />
+            <Route path="/wakakur/jurnal" element={<WakaKurJurnalPage />} />
+            <Route path="/wakakur/kehadiran" element={<WakaKurKehadiranPage />} />
+            <Route path="/wakakur/materi" element={<WakaKurMateriPage />} />
+            <Route path="/wakakur/tugas" element={<WakaKurTugasPage />} />
+            <Route path="/wakakur/kegiatan" element={<WakaKurKegiatanPage />} />
+            <Route path="/wakakur/pengumuman" element={<WakaKurPengumumanPage />} />
+            <Route path="/wakakur/prestasi" element={<WakaKurPrestasiPage />} />
+            <Route path="/wakakur/alumni" element={<WakaKurAlumniPage />} />
+            <Route path="/wakakur/mutasi" element={<WakaKurMutasiPage />} />
+            <Route path="/wakakur/naik-kelas" element={<WakaKurNaikKelasPage />} />
+            <Route path="/wakakur/indikator-materi" element={<WakaKurIndikatorMateriPage />} />
+            <Route path="/wakakur/jadwal-piket" element={<WakaKurJadwalPiketPage />} />
             {/* Dashboard routes for public pages when set to 'dashboard' mode */}
             <Route path="/monitoring" element={<PublicMonitoring />} />
             <Route path="/prestasi-siswa" element={<PublicPrestasi />} />

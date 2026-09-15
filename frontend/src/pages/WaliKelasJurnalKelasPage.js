@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,8 @@ export default function WaliKelasJurnalKelasPage() {
     start_date: '', end_date: '',
   });
   const [detailDialog, setDetailDialog] = useState({ open: false, journal: null });
+  const [attendanceDetail, setAttendanceDetail] = useState(null);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   const buildParams = () => {
     const p = { class_id: myClassId }; // Always filter by wali kelas's class
@@ -72,6 +74,30 @@ export default function WaliKelasJurnalKelasPage() {
     })();
     // eslint-disable-next-line
   }, []);
+
+  const loadAttendanceDetail = async (journalId) => {
+    try {
+      setLoadingAttendance(true);
+      console.log('[WALIKELAS-ATTENDANCE] Loading attendance for journal:', journalId);
+      const res = await api.get(`/journals/${journalId}/attendance`);
+      console.log('[WALIKELAS-ATTENDANCE] Response data:', res.data);
+      console.log('[WALIKELAS-ATTENDANCE] attendance object:', res.data?.attendance);
+      console.log('[WALIKELAS-ATTENDANCE] summary:', res.data?.summary);
+      setAttendanceDetail(res.data);
+      setLoadingAttendance(false);
+    } catch (err) {
+      console.error('[WALIKELAS-ATTENDANCE] Error loading attendance detail:', err);
+      console.error('[WALIKELAS-ATTENDANCE] Error response:', err.response?.data);
+      setLoadingAttendance(false);
+      toast.error('Gagal memuat detail kehadiran');
+    }
+  };
+
+  const handleShowDetail = (journal) => {
+    setDetailDialog({ open: true, journal });
+    setAttendanceDetail(null);
+    loadAttendanceDetail(journal.id);
+  };
 
   const reset = () => {
     setFilters({ teacher_id: 'all', subject_id: 'all', start_date: '', end_date: '' });
@@ -135,7 +161,7 @@ export default function WaliKelasJurnalKelasPage() {
   const openDetail = async (journal) => {
     try {
       const { data: fullJournal } = await api.get(`/jurnal/${journal.id}`);
-      setDetailDialog({ open: true, journal: fullJournal });
+      handleShowDetail(fullJournal);
     } catch (e) {
       toast.error('Gagal memuat detail jurnal');
     }
@@ -231,6 +257,7 @@ export default function WaliKelasJurnalKelasPage() {
                       <TableHead>JTM</TableHead>
                       <TableHead>Mapel</TableHead>
                       <TableHead>Guru</TableHead>
+                      <TableHead>Diisi Oleh</TableHead>
                       <TableHead>Ruang</TableHead>
                       <TableHead>Materi</TableHead>
                       <TableHead className="text-center">Hadir</TableHead>
@@ -242,9 +269,9 @@ export default function WaliKelasJurnalKelasPage() {
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
                     ) : data.items.length === 0 ? (
-                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-slate-500">Belum ada jurnal untuk kelas ini</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="text-center py-8 text-slate-500">Belum ada jurnal untuk kelas ini</TableCell></TableRow>
                     ) : (
                       data.items.map((j) => (
                         <TableRow key={j.id}>
@@ -252,6 +279,17 @@ export default function WaliKelasJurnalKelasPage() {
                           <TableCell className="text-center">{j.jtm_count || 1}</TableCell>
                           <TableCell className="text-sm">{j.subject_name}</TableCell>
                           <TableCell className="text-sm">{j.teacher_name}</TableCell>
+                          <TableCell>
+                            {j.fill_mode === 'piket' ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                                ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
+                              </Badge>
+                            ) : j.fill_mode === 'admin' ? (
+                              <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-sm">{j.room_name}</TableCell>
                           <TableCell className="max-w-xs truncate text-sm">{j.materi}</TableCell>
                           <TableCell className="text-center"><Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">{j.siswa_hadir || 0}</Badge></TableCell>
@@ -329,12 +367,118 @@ export default function WaliKelasJurnalKelasPage() {
               </div>
               <div><Label className="text-xs text-slate-500">Materi</Label><div className="font-medium whitespace-pre-wrap">{detailDialog.journal.materi}</div></div>
               {detailDialog.journal.catatan && <div><Label className="text-xs text-slate-500">Catatan</Label><div className="font-medium whitespace-pre-wrap">{detailDialog.journal.catatan}</div></div>}
+
+              {/* Summary */}
               <div className="grid grid-cols-4 gap-3">
-                <div className="text-center p-3 bg-emerald-50 rounded-lg"><div className="text-2xl font-bold text-emerald-700">{detailDialog.journal.siswa_hadir || 0}</div><div className="text-xs text-emerald-600">Hadir</div></div>
-                <div className="text-center p-3 bg-amber-50 rounded-lg"><div className="text-2xl font-bold text-amber-700">{detailDialog.journal.siswa_sakit || 0}</div><div className="text-xs text-amber-600">Sakit</div></div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg"><div className="text-2xl font-bold text-blue-700">{detailDialog.journal.siswa_izin || 0}</div><div className="text-xs text-blue-600">Izin</div></div>
-                <div className="text-center p-3 bg-rose-50 rounded-lg"><div className="text-2xl font-bold text-rose-700">{detailDialog.journal.siswa_tidak_hadir || 0}</div><div className="text-xs text-rose-600">Alpa</div></div>
+                <div className="text-center p-3 bg-emerald-50 rounded-lg border border-emerald-200"><div className="text-2xl font-bold text-emerald-700">{detailDialog.journal.siswa_hadir || 0}</div><div className="text-xs text-emerald-600">Hadir</div></div>
+                <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200"><div className="text-2xl font-bold text-amber-700">{detailDialog.journal.siswa_sakit || 0}</div><div className="text-xs text-amber-600">Sakit</div></div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200"><div className="text-2xl font-bold text-blue-700">{detailDialog.journal.siswa_izin || 0}</div><div className="text-xs text-blue-600">Izin</div></div>
+                <div className="text-center p-3 bg-rose-50 rounded-lg border border-rose-200"><div className="text-2xl font-bold text-rose-700">{detailDialog.journal.siswa_tidak_hadir || 0}</div><div className="text-xs text-rose-600">Alpa</div></div>
               </div>
+
+              {/* Detail Per Siswa - Grouped by Status */}
+              {loadingAttendance ? (
+                <div className="text-center py-8 text-slate-500 text-sm">
+                  Memuat detail kehadiran...
+                </div>
+              ) : attendanceDetail && (
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">Detail Kehadiran Siswa</Label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {/* Siswa Hadir */}
+                    {attendanceDetail.attendance.hadir.length > 0 && (
+                      <Card className="border-emerald-200">
+                        <CardHeader className="bg-emerald-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm font-semibold text-emerald-700">
+                              Hadir ({attendanceDetail.attendance.hadir.length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.hadir.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-emerald-50 p-2 rounded border border-emerald-200">
+                                {student.student_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Sakit */}
+                    {attendanceDetail.attendance.sakit.length > 0 && (
+                      <Card className="border-amber-200">
+                        <CardHeader className="bg-amber-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                            <span className="text-sm font-semibold text-amber-700">
+                              Sakit ({attendanceDetail.attendance.sakit.length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.sakit.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-amber-50 p-2 rounded border border-amber-200">
+                                {student.student_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Izin */}
+                    {attendanceDetail.attendance.izin.length > 0 && (
+                      <Card className="border-blue-200">
+                        <CardHeader className="bg-blue-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span className="text-sm font-semibold text-blue-700">
+                              Izin ({attendanceDetail.attendance.izin.length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.izin.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-blue-50 p-2 rounded border border-blue-200">
+                                {student.student_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Siswa Alpha */}
+                    {attendanceDetail.attendance.alpha.length > 0 && (
+                      <Card className="border-rose-200">
+                        <CardHeader className="bg-rose-50 py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                            <span className="text-sm font-semibold text-rose-700">
+                              Alpha ({attendanceDetail.attendance.alpha.length})
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            {attendanceDetail.attendance.alpha.map((student, idx) => (
+                              <div key={idx} className="text-sm bg-rose-50 p-2 rounded border border-rose-200">
+                                {student.student_name}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

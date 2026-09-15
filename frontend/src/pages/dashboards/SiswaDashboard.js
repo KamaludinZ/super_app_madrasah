@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2, Globe, ExternalLink, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
+import { NoDataEmptyState } from '@/components/ui/EmptyState';
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -123,9 +126,10 @@ export default function SiswaDashboard() {
   const days = getDaysInMonth(currentMonth);
 
   return (
-    <div className="space-y-6">
+    <div className="section-spacing">
+      <IslamicBackground pattern="star" opacity={0.02} />
       <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">Dashboard Siswa</Badge>
+        <KemenagBadge variant="default" className="mb-2" />
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Assalamu'alaikum, {user?.full_name?.split(' ')[0]}</h1>
         <p className="text-sm text-slate-600 mt-1">Kelas: <span className="font-semibold">{data?.class?.name || '-'}</span></p>
       </div>
@@ -140,7 +144,7 @@ export default function SiswaDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 grid-spacing-dense">
               {apps.map((app) => (
                 <a
                   key={app.id}
@@ -179,10 +183,10 @@ export default function SiswaDashboard() {
           {loading ? (
             <div className="text-slate-500 text-sm">Memuat...</div>
           ) : !data?.today_schedule?.length ? (
-            <div className="text-center py-8 text-slate-500">
-              <Calendar className="h-10 w-10 mx-auto opacity-40 mb-2" />
-              <div className="text-sm">Tidak ada jadwal hari ini</div>
-            </div>
+            <NoDataEmptyState
+              title="Tidak Ada Jadwal"
+              description="Tidak ada jadwal pelajaran untuk hari ini"
+            />
           ) : (
             <div className="space-y-2">
               {data.today_schedule.map((s, idx) => (

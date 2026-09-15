@@ -13,7 +13,7 @@ router = APIRouter()
 async def promote_class(
     payload: PromotionRequest,
     request: Request,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
 ):
     """
     Naik kelas: pindahkan siswa ke kelas berikutnya di TP baru.
@@ -105,7 +105,7 @@ async def promote_class(
 async def move_semester(
     payload: PromotionRequest,
     request: Request,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
 ):
     """
     Pindah semester: untuk kelas accelerated yang pindah semester dalam 1 TP.
@@ -190,7 +190,7 @@ async def move_semester(
 async def graduate_students(
     payload: PromotionRequest,
     request: Request,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
 ):
     """
     Kelulusan: tandai siswa sebagai lulus.
@@ -296,7 +296,7 @@ async def graduate_students(
 async def preview_promotion(
     from_class_id: str,
     type: str,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
 ):
     """
     Preview siswa yang akan diproses untuk naik kelas/semester/lulus.

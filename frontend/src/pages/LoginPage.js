@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import MadrasahBackdrop from '@/components/branding/MadrasahBackdrop';
 import { usePublicPagesVisibility } from '@/hooks/usePublicPagesVisibility';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
 
 export default function LoginPage() {
   const nav = useNavigate();
@@ -179,9 +180,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-hero-wash flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-amber-50/20 flex items-center justify-center p-4 relative overflow-hidden">
       <MadrasahBackdrop />
-      <div className="absolute inset-0 bg-pattern-geometric opacity-30 pointer-events-none" />
       <div className="relative w-full max-w-5xl grid lg:grid-cols-2 gap-8 items-center">
         {/* Left brand panel - hidden on mobile */}
         <motion.div
@@ -199,7 +199,7 @@ export default function LoginPage() {
               </div>
             )}
             <div>
-              <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">Kementerian Agama RI</Badge>
+              <KemenagBadge variant="default" className="mb-2" />
               <h1 className="text-3xl font-extrabold text-[#006837] leading-tight">
                 Super Apps<br />MATSANDATAMA
               </h1>
@@ -242,7 +242,7 @@ export default function LoginPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <Card className="shadow-xl border-slate-200 surface-ivory">
+          <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
             <CardContent className="p-8">
               <div className="lg:hidden flex items-center gap-3 mb-6">
                 {settings?.logo_url ? (
@@ -336,10 +336,20 @@ export default function LoginPage() {
                   {submitting ? 'Memproses...' : (<><LogIn className="h-4 w-4 mr-2" /> Masuk</>)}
                 </Button>
 
-                <div className="text-center pt-1">
-                  <Link to="/forgot-password" className="text-xs text-[#006837] hover:underline font-medium" data-testid="link-forgot-password">
-                    Lupa password?
-                  </Link>
+                <div className="text-center pt-1 space-y-2">
+                  <div>
+                    <Link to="/forgot-password" className="text-xs text-[#006837] hover:underline font-medium" data-testid="link-forgot-password">
+                      Lupa password?
+                    </Link>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200">
+                    <Link to="/kelas-login" className="text-xs text-blue-600 hover:underline font-medium flex items-center justify-center gap-1" data-testid="link-kelas-digital">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      Akses Kelas Digital
+                    </Link>
+                  </div>
                 </div>
               </form>
 
@@ -371,7 +381,7 @@ export default function LoginPage() {
       {/* Version info at bottom */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
         <p className="text-xs text-slate-500">
-          Super Apps MATSANDATAMA v1.2.1 &copy; {new Date().getFullYear()} - Kementerian Agama RI
+          Super Apps MATSANDATAMA v1.2.2 &copy; {new Date().getFullYear()} - Kementerian Agama RI
         </p>
       </div>
     </div>

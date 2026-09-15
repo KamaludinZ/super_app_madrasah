@@ -29,8 +29,11 @@ export default function AdminMadrasahEventsPage() {
   const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterYear, setFilterYear] = useState('');
-  const [filterMonth, setFilterMonth] = useState('');
+
+  // Set default filter to current month and year
+  const now = new Date();
+  const [filterYear, setFilterYear] = useState(now.getFullYear().toString());
+  const [filterMonth, setFilterMonth] = useState((now.getMonth() + 1).toString());
 
   const [form, setForm] = useState({
     name: '',

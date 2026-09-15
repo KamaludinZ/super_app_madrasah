@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seed Attendance Data - Super App Madrasah</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #1976d2;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-box ol {
+            margin-left: 20px;
+            color: #555;
+            line-height: 1.8;
+        }
+
+        .info-box code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            color: #c62828;
+        }
+
+        .loading {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            color: #e65100;
+        }
+
+        .result-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .result-content {
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            color: #e65100;
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Seed Attendance Data</h1>
+        <p class="subtitle">Buat data kehadiran untuk semua jurnal yang sudah ada</p>
+
+        <div class="info-box">
+            <h3>📋 Cara Menggunakan:</h3>
+            <ol>
+                <li>Pastikan Anda sudah <strong>login sebagai Admin</strong> di aplikasi</li>
+                <li>Klik tombol "Mulai Seeding" di bawah</li>
+                <li>Tunggu proses selesai (biasanya beberapa detik)</li>
+                <li>Setelah selesai, refresh halaman jurnal Anda</li>
+                <li>Klik tombol "Detail" pada jurnal untuk melihat nama siswa</li>
+            </ol>
+        </div>
+
+        <div class="warning-box">
+            <strong>⚠️ Catatan Penting:</strong>
+            Script ini akan membuat data kehadiran siswa untuk semua jurnal yang belum memiliki data kehadiran. Jurnal yang sudah memiliki data kehadiran akan dilewati.
+        </div>
+
+        <button onclick="seedData()" id="seedBtn">
+            🚀 Mulai Seeding Data Attendance
+        </button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function seedData() {
+            const resultDiv = document.getElementById('result');
+            const btn = document.getElementById('seedBtn');
+
+            // Show loading state
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'loading';
+            resultDiv.innerHTML = `
+                <div class="result-title">
+                    <span class="spinner"></span>
+                    Sedang memproses...
+                </div>
+                <div class="result-content">Mohon tunggu, sistem sedang membuat data kehadiran untuk semua jurnal...</div>
+            `;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Memproses...';
+
+            try {
+                // Get token from localStorage (assuming user is logged in)
+                const token = localStorage.getItem('token');
+
+                if (!token) {
+                    throw new Error('Anda belum login! Silakan login sebagai Admin terlebih dahulu.');
+                }
+
+                const response = await fetch('http://localhost:8000/api/seed-attendance-data', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.className = 'success';
+                    resultDiv.innerHTML = `
+                        <div class="result-title">✅ Seeding Berhasil!</div>
+                        <div class="result-content">📊 Hasil Seeding:
+
+Total Jurnal: ${data.total_journals}
+Jurnal Baru (Di-seed): ${data.seeded}
+Jurnal Dilewati (Sudah Ada Data): ${data.skipped}
+
+${data.message}
+
+✨ Silakan refresh halaman jurnal Anda dan klik tombol "Detail" untuk melihat nama-nama siswa berdasarkan status kehadiran!</div>
+                    `;
+                    btn.innerHTML = '✅ Seeding Selesai!';
+                } else {
+                    resultDiv.className = 'error';
+                    resultDiv.innerHTML = `
+                        <div class="result-title">❌ Error</div>
+                        <div class="result-content">${data.detail || JSON.stringify(data, null, 2)}
+
+${response.status === 403 ? '⚠️ Pastikan Anda login sebagai Admin!' : ''}</div>
+                    `;
+                    btn.disabled = false;
+                    btn.innerHTML = '🔄 Coba Lagi';
+                }
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `
+                    <div class="result-title">❌ Network Error</div>
+                    <div class="result-content">${error.message}
+
+💡 Tips:
+- Pastikan server backend sedang berjalan
+- Pastikan Anda sudah login sebagai Admin di aplikasi utama
+- Buka aplikasi di tab lain terlebih dahulu untuk login</div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Coba Lagi';
+            }
+        }
+
+        // Check if user is logged in
+        window.addEventListener('load', function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `
+                    <div class="result-title">⚠️ Belum Login</div>
+                    <div class="result-content">Anda belum login!
+
+Silakan:
+1. Buka aplikasi Super App Madrasah di tab lain
+2. Login dengan akun Admin
+3. Kembali ke halaman ini
+4. Klik tombol "Mulai Seeding"</div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

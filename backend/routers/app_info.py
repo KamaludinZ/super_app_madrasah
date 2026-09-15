@@ -14,10 +14,10 @@ from core import get_current_user, require_role
 router = APIRouter()
 
 # Version information
-CURRENT_VERSION = "1.2.1"
+CURRENT_VERSION = "1.2.2"
 APP_NAME = "Super Apps MATSANDATAMA"
 APP_DESCRIPTION = "Sistem Jurnal Presisi Multi-Role MTsN 2 Kota Malang"
-RELEASE_DATE = "2026-08-10"
+RELEASE_DATE = "2026-09-15"
 
 # GitHub repository for version checking
 # Set via environment variable: GITHUB_REPO=owner/repo-name
@@ -45,8 +45,8 @@ AUTO_UPDATE_LOCK = asyncio.Lock()
 
 
 @router.get("/app-info")
-async def get_app_info(user: Dict = Depends(get_current_user)):
-    """Get application information."""
+async def get_app_info():
+    """Get application information (public endpoint)."""
     return {
         "app_name": APP_NAME,
         "description": APP_DESCRIPTION,
@@ -67,7 +67,8 @@ async def get_app_info(user: Dict = Depends(get_current_user)):
             "Notifikasi Real-time",
             "Backup & Restore",
             "Audit Log",
-            "Multi-role Access Control"
+            "Multi-role Access Control",
+            "Kelas Digital"
         ]
     }
 

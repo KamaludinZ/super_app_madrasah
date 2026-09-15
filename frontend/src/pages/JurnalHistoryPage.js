@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { History, Calendar, Clock, BookOpen, Download, Filter, X, ShieldAlert, Eye, User } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,8 @@ export default function JurnalHistoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJournal, setSelectedJournal] = useState(null);
+  const [attendanceDetail, setAttendanceDetail] = useState(null);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   // Edit dialog states
   const [editOpen, setEditOpen] = useState(false);
@@ -32,6 +34,31 @@ export default function JurnalHistoryPage() {
 
   const isPiket = activeRole === 'guru_piket';
   const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
+
+  const loadAttendanceDetail = async (journalId) => {
+    try {
+      setLoadingAttendance(true);
+      console.log('[GURU-ATTENDANCE] Loading attendance for journal:', journalId);
+      const res = await api.get(`/journals/${journalId}/attendance`);
+      console.log('[GURU-ATTENDANCE] Response data:', res.data);
+      console.log('[GURU-ATTENDANCE] attendance object:', res.data?.attendance);
+      console.log('[GURU-ATTENDANCE] summary:', res.data?.summary);
+      setAttendanceDetail(res.data);
+      setLoadingAttendance(false);
+    } catch (err) {
+      console.error('[GURU-ATTENDANCE] Error loading attendance detail:', err);
+      console.error('[GURU-ATTENDANCE] Error response:', err.response?.data);
+      setLoadingAttendance(false);
+      toast.error('Gagal memuat detail kehadiran');
+    }
+  };
+
+  const handleShowDetail = (journal) => {
+    setSelectedJournal(journal);
+    setDetailOpen(true);
+    setAttendanceDetail(null);
+    loadAttendanceDetail(journal.id);
+  };
 
   // Filter states
   const [filterDateStart, setFilterDateStart] = useState('');
@@ -423,16 +450,12 @@ export default function JurnalHistoryPage() {
                     <TableHead className="min-w-[140px]">Mata Pelajaran</TableHead>
                     <TableHead className="min-w-[100px]">Kelas</TableHead>
                     {isPiket && <TableHead className="min-w-[140px]">Guru Pengajar</TableHead>}
+                    <TableHead className="min-w-[120px]">Diisi Oleh</TableHead>
                     <TableHead className="min-w-[100px]">Ruangan</TableHead>
                     <TableHead className="min-w-[100px]">Mode QR</TableHead>
                     <TableHead className="min-w-[250px]">Materi</TableHead>
                     <TableHead className="min-w-[200px]">Catatan</TableHead>
-                    {isPiket && (
-                      <>
-                        <TableHead className="min-w-[120px]">Mode Pengisian</TableHead>
-                        <TableHead className="min-w-[200px]">Catatan Piket</TableHead>
-                      </>
-                    )}
+                    {isPiket && <TableHead className="min-w-[200px]">Catatan Piket</TableHead>}
                     <TableHead className="text-center">Hadir</TableHead>
                     <TableHead className="text-center">Sakit</TableHead>
                     <TableHead className="text-center">Izin</TableHead>
@@ -487,6 +510,17 @@ export default function JurnalHistoryPage() {
                         </TableCell>
                       )}
                       <TableCell>
+                        {j.fill_mode === 'piket' ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                            ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
+                          </Badge>
+                        ) : j.fill_mode === 'admin' ? (
+                          <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <span className="text-sm text-slate-700">{j.room_name || '-'}</span>
                       </TableCell>
                       <TableCell>
@@ -507,29 +541,15 @@ export default function JurnalHistoryPage() {
                         )}
                       </TableCell>
                       {isPiket && (
-                        <>
-                          <TableCell>
-                            {j.fill_mode === 'piket' ? (
-                              <Badge className="bg-blue-50 text-blue-700 border-blue-200">
-                                <ShieldAlert className="h-3 w-3 mr-1" />
-                                Piket
-                              </Badge>
-                            ) : j.fill_mode === 'admin' ? (
-                              <Badge className="bg-purple-50 text-purple-700 border-purple-200">Admin</Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-slate-50">Guru</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {j.piket_note ? (
-                              <div className="text-sm text-blue-600 italic max-w-xs">
-                                {j.piket_note}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
-                            )}
-                          </TableCell>
-                        </>
+                        <TableCell>
+                          {j.piket_notes ? (
+                            <div className="text-sm text-slate-600 max-w-xs">
+                              {j.piket_notes}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </TableCell>
                       )}
                       <TableCell className="text-center">
                         <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
@@ -560,7 +580,7 @@ export default function JurnalHistoryPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => { setSelectedJournal(j); setDetailOpen(true); }}
+                          onClick={() => handleShowDetail(j)}
                           className="h-8 px-3"
                         >
                           <Eye className="h-4 w-4 mr-1" />
@@ -687,46 +707,107 @@ export default function JurnalHistoryPage() {
                     </div>
                   </div>
 
-                  {/* Detail Per Siswa */}
-                  {selectedJournal.attendance_details && selectedJournal.attendance_details.length > 0 ? (
-                    <div className="border rounded">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50">
-                            <TableHead className="w-[50px]">No</TableHead>
-                            <TableHead>Nama Siswa</TableHead>
-                            <TableHead className="text-center w-[100px]">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedJournal.attendance_details.map((att, idx) => {
-                            const statusBadge = {
-                              'hadir': <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 font-semibold">H - Hadir</Badge>,
-                              'sakit': <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-semibold">S - Sakit</Badge>,
-                              'izin': <Badge className="bg-blue-100 text-blue-700 border-blue-300 font-semibold">I - Izin</Badge>,
-                              'alpa': <Badge className="bg-rose-100 text-rose-700 border-rose-300 font-semibold">A - Alpa</Badge>,
-                            };
-                            return (
-                              <TableRow key={idx}>
-                                <TableCell className="text-slate-500">{idx + 1}</TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-slate-400" />
-                                    <span className="font-medium">{att.student_name || '-'}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {statusBadge[att.status] || <Badge variant="outline">{att.status}</Badge>}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
+                  {/* Detail Per Siswa - Grouped by Status */}
+                  {loadingAttendance ? (
                     <div className="text-center py-8 text-slate-500 text-sm">
-                      Detail kehadiran siswa tidak tersedia
+                      Memuat detail kehadiran...
+                    </div>
+                  ) : attendanceDetail && (
+                    <div>
+                      <Label className="text-sm font-semibold mb-2 block">Detail Kehadiran Siswa</Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        {/* Siswa Hadir */}
+                        {attendanceDetail.attendance.hadir.length > 0 && (
+                          <Card className="border-emerald-200">
+                            <CardHeader className="bg-emerald-50 py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm font-semibold text-emerald-700">
+                                  Hadir ({attendanceDetail.attendance.hadir.length})
+                                </span>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {attendanceDetail.attendance.hadir.map((student, idx) => (
+                                  <div key={idx} className="text-sm bg-emerald-50 p-2 rounded border border-emerald-200">
+                                    {student.student_name}
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Siswa Sakit */}
+                        {attendanceDetail.attendance.sakit.length > 0 && (
+                          <Card className="border-amber-200">
+                            <CardHeader className="bg-amber-50 py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <span className="text-sm font-semibold text-amber-700">
+                                  Sakit ({attendanceDetail.attendance.sakit.length})
+                                </span>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {attendanceDetail.attendance.sakit.map((student, idx) => (
+                                  <div key={idx} className="text-sm bg-amber-50 p-2 rounded border border-amber-200">
+                                    {student.student_name}
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Siswa Izin */}
+                        {attendanceDetail.attendance.izin.length > 0 && (
+                          <Card className="border-blue-200">
+                            <CardHeader className="bg-blue-50 py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <span className="text-sm font-semibold text-blue-700">
+                                  Izin ({attendanceDetail.attendance.izin.length})
+                                </span>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {attendanceDetail.attendance.izin.map((student, idx) => (
+                                  <div key={idx} className="text-sm bg-blue-50 p-2 rounded border border-blue-200">
+                                    {student.student_name}
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Siswa Alpha */}
+                        {attendanceDetail.attendance.alpha.length > 0 && (
+                          <Card className="border-rose-200">
+                            <CardHeader className="bg-rose-50 py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                                <span className="text-sm font-semibold text-rose-700">
+                                  Alpha ({attendanceDetail.attendance.alpha.length})
+                                </span>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {attendanceDetail.attendance.alpha.map((student, idx) => (
+                                  <div key={idx} className="text-sm bg-rose-50 p-2 rounded border border-rose-200">
+                                    {student.student_name}
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
                     </div>
                   )}
                 </CardContent>

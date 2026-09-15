@@ -21,9 +21,65 @@
       "Bash(server.py)",
       "Bash(routers/push.py)",
       "Bash(find:*)",
-      "Bash(timeout 15 python:*)"
+      "Bash(timeout 15 python:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(taskkill /F /PID 5368)",
+      "Bash(taskkill //F //PID 5368)",
+      "Bash(nul)",
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(start test_format_token.html)",
+      "Bash(del test_format.js test_format_token.html 2)",
+      "Bash(timeout:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(C:super_app_madrasahsuper_app_madrasahfrontendsrcpageskelasKelasDataSiswaPage.js)",
+      "Bash(C:super_app_madrasahsuper_app_madrasahfrontendsrcpageskelasKelasMateriPage.js)",
+      "Bash(C:super_app_madrasahsuper_app_madrasahfrontendsrcpageskelasKelasTugasPage.js)",
+      "Bash(C:super_app_madrasahsuper_app_madrasahfrontendsrcpageskelasKelasJurnalPage.js)",
+      "Bash(ping:*)",
+      "Bash(del routers__pycache__kelas_digital.cpython-314.pyc)",
+      "Bash(kelas_digital.py)",
+      "Bash(rm:*)",
+      "Bash(cat:*)",
+      "Bash(kelas_digital.py.backup)",
+      "Bash(start C:super_app_madrasahsuper_app_madrasahbackendseed_attendance.html)",
+      "Bash(dir:*)",
+      "Bash(start \"C:\\super_app_madrasah\\super_app_madrasah\\backend\\seed_attendance.html\")",
+      "Bash(copy:*)",
+      "Bash(del:*)",
+      "Bash(routers/kelas_digital.py)",
+      "Skill(impeccable)",
+      "Bash(C:UsersMTsN 2 KOTA MALANG.claudeskillsimpeccablescriptsimpeccable.cmd context)",
+      "Bash(\"C:\\Users\\MTsN 2 KOTA MALANG\\.claude\\skills\\impeccable\\scripts\\impeccable.cmd\" context)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"C:\\\\Users\\\\MTsN 2 KOTA MALANG\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\impeccable\" ] || \"C:\\\\Users\\\\MTsN 2 KOTA MALANG\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\impeccable\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -f \"C:\\\\Users\\\\MTsN 2 KOTA MALANG\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\impeccable\" ] || \"C:\\\\Users\\\\MTsN 2 KOTA MALANG\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\impeccable\" hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "description": "Impeccable design detector: immediate-tier checks after Edit/Write on UI files, full-rule deep pass on Stop."
 }

@@ -1,18 +1,20 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Briefcase, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Link } from 'react-router-dom';
 import { ROLE_LABELS } from '@/lib/api';
+import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 
 export default function StaffDashboard() {
   const { user, activeRole } = useAuth();
 
   return (
-    <div className="space-y-6">
+    <div className="section-spacing">
+      <IslamicBackground pattern="tile" opacity={0.02} />
       <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">Dashboard {ROLE_LABELS[activeRole]}</Badge>
+        <KemenagBadge variant="default" className="mb-2" />
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Assalamu'alaikum, {user?.full_name?.split(' ')[0]}</h1>
         <p className="text-sm text-slate-600 mt-1">Selamat datang di Super Apps MATSANDATAMA</p>
       </div>

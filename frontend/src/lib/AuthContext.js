@@ -10,7 +10,25 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const raw = localStorage.getItem('matsa_user');
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+
+      const userData = JSON.parse(raw);
+
+      // CRITICAL: Restore impersonation state on initial load
+      const impersonationRaw = localStorage.getItem('matsa_impersonation');
+      if (impersonationRaw) {
+        try {
+          const impersonationState = JSON.parse(impersonationRaw);
+          userData.is_impersonating = impersonationState.is_impersonating;
+          userData.impersonator_id = impersonationState.impersonator_id;
+          userData.impersonator_username = impersonationState.impersonator_username;
+        } catch (e) {
+          console.error('Failed to restore impersonation state on init:', e);
+          localStorage.removeItem('matsa_impersonation');
+        }
+      }
+
+      return userData;
     } catch {
       return null;
     }
@@ -23,6 +41,22 @@ export function AuthProvider({ children }) {
   const refreshMe = useCallback(async () => {
     try {
       const { data } = await api.get('/auth/me');
+
+      // CRITICAL: Restore impersonation state from localStorage after refresh
+      const impersonationRaw = localStorage.getItem('matsa_impersonation');
+      if (impersonationRaw) {
+        try {
+          const impersonationState = JSON.parse(impersonationRaw);
+          // Merge impersonation flags back into user object
+          data.is_impersonating = impersonationState.is_impersonating;
+          data.impersonator_id = impersonationState.impersonator_id;
+          data.impersonator_username = impersonationState.impersonator_username;
+        } catch (e) {
+          console.error('Failed to restore impersonation state:', e);
+          localStorage.removeItem('matsa_impersonation');
+        }
+      }
+
       setUser(data);
       setActiveRole(data.active_role);
       localStorage.setItem('matsa_user', JSON.stringify(data));
@@ -40,6 +74,33 @@ export function AuthProvider({ children }) {
       } catch (e) { /* */ }
       if (localStorage.getItem('matsa_token')) {
         await refreshMe();
+
+        // CRITICAL: Validate impersonation state after refresh
+        const impersonationRaw = localStorage.getItem('matsa_impersonation');
+        if (impersonationRaw) {
+          try {
+            const { data: status } = await api.get('/auth/impersonate-status');
+
+            // If impersonation is invalid, clean up and force logout
+            if (status.is_invalid || !status.is_impersonating) {
+              console.warn('Invalid impersonation state detected, cleaning up...');
+              localStorage.removeItem('matsa_impersonation');
+
+              // Force logout if impersonation is invalid
+              if (status.is_invalid) {
+                toast.error('Sesi impersonation tidak valid. Silakan login kembali.');
+                logoutFnRef.current?.('invalid_impersonation');
+              } else {
+                // Just clean up the flag if no longer impersonating
+                await refreshMe();
+              }
+            }
+          } catch (e) {
+            console.error('Failed to validate impersonation:', e);
+            // On error, assume impersonation is invalid and clean up
+            localStorage.removeItem('matsa_impersonation');
+          }
+        }
       }
       setLoading(false);
     })();
@@ -73,6 +134,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('matsa_user');
     localStorage.removeItem('matsa_active_role');
     localStorage.removeItem('matsa_session_info');
+    localStorage.removeItem('matsa_impersonation'); // Clear impersonation state on logout
     setUser(null);
     setActiveRole(null);
     if (reason === 'idle') {
@@ -88,6 +150,21 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/auth/switch-role', { new_role: newRole });
     localStorage.setItem('matsa_token', data.access_token);
     localStorage.setItem('matsa_active_role', data.active_role);
+
+    // CRITICAL: Preserve impersonation state when switching roles
+    const impersonationRaw = localStorage.getItem('matsa_impersonation');
+    if (impersonationRaw) {
+      try {
+        const impersonationState = JSON.parse(impersonationRaw);
+        // Merge impersonation flags back into user object
+        data.user.is_impersonating = impersonationState.is_impersonating;
+        data.user.impersonator_id = impersonationState.impersonator_id;
+        data.user.impersonator_username = impersonationState.impersonator_username;
+      } catch (e) {
+        console.error('Failed to preserve impersonation state during role switch:', e);
+      }
+    }
+
     localStorage.setItem('matsa_user', JSON.stringify(data.user));
     setUser(data.user);
     setActiveRole(data.active_role);
@@ -99,6 +176,17 @@ export function AuthProvider({ children }) {
     localStorage.setItem('matsa_token', data.access_token);
     localStorage.setItem('matsa_active_role', data.active_role);
     localStorage.setItem('matsa_user', JSON.stringify(data.user));
+
+    // CRITICAL: Store impersonation state persistently to survive refreshes
+    localStorage.setItem('matsa_impersonation', JSON.stringify({
+      is_impersonating: true,
+      impersonator_id: data.user.impersonator_id,
+      impersonator_username: data.user.impersonator_username,
+      target_user_id: data.user.id,
+      target_username: data.user.username,
+      started_at: Date.now(),
+    }));
+
     if (data.expires_in_minutes) {
       localStorage.setItem('matsa_session_info', JSON.stringify({
         expires_in_minutes: data.expires_in_minutes,
@@ -117,6 +205,10 @@ export function AuthProvider({ children }) {
     localStorage.setItem('matsa_token', data.access_token);
     localStorage.setItem('matsa_active_role', data.active_role);
     localStorage.setItem('matsa_user', JSON.stringify(data.user));
+
+    // CRITICAL: Clear impersonation state
+    localStorage.removeItem('matsa_impersonation');
+
     if (data.expires_in_minutes) {
       localStorage.setItem('matsa_session_info', JSON.stringify({
         expires_in_minutes: data.expires_in_minutes,
