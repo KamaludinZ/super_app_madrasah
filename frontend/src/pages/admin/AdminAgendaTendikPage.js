@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Briefcase, Search, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Briefcase, Search, Eye, EyeOff, AlertCircle, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -53,6 +53,12 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Dibatalkan', color: 'bg-rose-100 text-rose-700' },
 ];
 
+const MONTH_LABELS = {
+  1: 'Januari', 2: 'Februari', 3: 'Maret', 4: 'April',
+  5: 'Mei', 6: 'Juni', 7: 'Juli', 8: 'Agustus',
+  9: 'September', 10: 'Oktober', 11: 'November', 12: 'Desember',
+};
+
 export default function AdminAgendaTendikPage() {
   const { activeRole } = useAuth();
   const isAdmin = activeRole === 'admin';
@@ -67,15 +73,45 @@ export default function AdminAgendaTendikPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [availableYears, setAvailableYears] = useState([]);
+
+  const today = new Date();
+  const [filterYear, setFilterYear] = useState(today.getFullYear().toString());
+  const [filterMonth, setFilterMonth] = useState((today.getMonth() + 1).toString());
 
   useEffect(() => {
     loadData();
     // Update waktu setiap detik untuk auto-update status
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
+  }, [filterYear, filterMonth]);
+
+  useEffect(() => {
+    fetchAvailableYears();
   }, []);
 
+  const fetchAvailableYears = async () => {
+    try {
+      // Ambil daftar tahun dari master data Tahun Takwim, bukan dari data
+      // agenda yang sedang terfilter, agar pilihan tahun tidak ikut
+      // menyempit mengikuti filter yang sedang aktif.
+      const { data } = await api.get('/tahun-takwim');
+      const years = [...new Set(data.map(t => String(t.year)).filter(Boolean))]
+        .sort((a, b) => Number(b) - Number(a));
+      setAvailableYears(years);
+    } catch (e) {
+      // ignore, dropdown tahun akan kosong tapi filter tetap berfungsi
+    }
+  };
+
+  const clearFilters = () => {
+    setFilterYear('');
+    setFilterMonth('');
+    setSearch('');
+  };
+
   const loadData = async () => {
+    setLoading(true);
     try {
       // Load tenaga kependidikan
       const { data: usersData } = await api.get('/users');
@@ -87,7 +123,10 @@ export default function AdminAgendaTendikPage() {
       setJabatanList(jabatanData);
 
       // Load agendas from backend
-      const { data: agendasData } = await api.get('/staff-events');
+      const params = {};
+      if (filterYear) params.year = parseInt(filterYear);
+      if (filterMonth) params.month = parseInt(filterMonth);
+      const { data: agendasData } = await api.get('/staff-events', { params });
       // Filter only tendik events
       const tendikAgendas = agendasData.filter(a => {
         const user = usersData.find(u => u.id === a.user_id);
@@ -197,6 +236,12 @@ export default function AdminAgendaTendikPage() {
            a.user_name?.toLowerCase().includes(s);
   });
 
+  // Pastikan tahun yang sedang aktif tetap tampil di dropdown meski belum
+  // ada dalam daftar master (mis. tahun baru dipilih tapi belum sempat direfresh).
+  const yearOptions = filterYear && !availableYears.includes(filterYear)
+    ? [filterYear, ...availableYears].sort((a, b) => Number(b) - Number(a))
+    : availableYears;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -213,19 +258,60 @@ export default function AdminAgendaTendikPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
-          <div className="p-4 border-b border-slate-100">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Cari agenda..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
+        <CardContent className="p-4 border-b border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <Label className="text-xs">Cari</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Cari agenda..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Tahun</Label>
+              <Select value={filterYear || undefined} onValueChange={(v) => setFilterYear(v === 'all' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua Tahun" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Tahun</SelectItem>
+                  {yearOptions.map(y => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Bulan</Label>
+              <Select value={filterMonth || undefined} onValueChange={(v) => setFilterMonth(v === 'all' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua Bulan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Bulan</SelectItem>
+                  {Object.entries(MONTH_LABELS).map(([num, label]) => (
+                    <SelectItem key={num} value={num}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button variant="outline" onClick={clearFilters} className="w-full gap-2">
+                <X className="h-4 w-4" />
+                Clear Filter
+              </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
