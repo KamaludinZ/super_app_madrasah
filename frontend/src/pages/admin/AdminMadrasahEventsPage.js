@@ -29,6 +29,7 @@ export default function AdminMadrasahEventsPage() {
   const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [availableYears, setAvailableYears] = useState([]);
 
   // Set default filter to current month and year
   const now = new Date();
@@ -50,6 +51,24 @@ export default function AdminMadrasahEventsPage() {
     fetchEvents();
     fetchStats();
   }, [filterYear, filterMonth]);
+
+  useEffect(() => {
+    fetchAvailableYears();
+  }, []);
+
+  const fetchAvailableYears = async () => {
+    try {
+      // Ambil daftar tahun dari master data Tahun Takwim, bukan dari data
+      // kegiatan yang sedang terfilter, agar pilihan tahun tidak ikut
+      // menyempit mengikuti filter yang sedang aktif.
+      const { data } = await api.get('/tahun-takwim');
+      const years = [...new Set(data.map(t => String(t.year)).filter(Boolean))]
+        .sort((a, b) => Number(b) - Number(a));
+      setAvailableYears(years);
+    } catch (e) {
+      // ignore, dropdown tahun akan kosong tapi filter tetap berfungsi
+    }
+  };
 
   const fetchEvents = async () => {
     try {
@@ -165,7 +184,11 @@ export default function AdminMadrasahEventsPage() {
     return true;
   });
 
-  const availableYears = [...new Set(events.map(e => e.date?.substring(0, 4)))].sort((a, b) => b - a);
+  // Pastikan tahun yang sedang aktif tetap tampil di dropdown meski belum
+  // ada dalam daftar (mis. tahun baru dipilih tapi belum sempat direfresh).
+  const yearOptions = filterYear && !availableYears.includes(filterYear)
+    ? [filterYear, ...availableYears].sort((a, b) => Number(b) - Number(a))
+    : availableYears;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -209,7 +232,7 @@ export default function AdminMadrasahEventsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua Tahun</SelectItem>
-                    {availableYears.map(y => (
+                    {yearOptions.map(y => (
                       <SelectItem key={y} value={y}>{y}</SelectItem>
                     ))}
                   </SelectContent>

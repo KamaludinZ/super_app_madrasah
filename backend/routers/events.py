@@ -36,6 +36,9 @@ async def list_madrasah_events(
         q['date'] = {'$gte': from_date, '$lte': to_date}
     elif year:
         q['date'] = {'$gte': f"{year}-01-01", '$lte': f"{year}-12-31"}
+    elif month:
+        # Bulan saja tanpa tahun: cocokkan bulan tsb di semua tahun (format tanggal YYYY-MM-DD)
+        q['date'] = {'$regex': f'^\\d{{4}}-{month:02d}-\\d{{2}}$'}
 
     items = await db.madrasah_events.find(q, {'_id': 0}).sort('date', -1).sort('start_time', 1).to_list(1000)
 
@@ -315,6 +318,9 @@ async def get_madrasah_events_duration_stats(
         q['date'] = {'$gte': from_date, '$lte': to_date}
     elif year:
         q['date'] = {'$gte': f"{year}-01-01", '$lte': f"{year}-12-31"}
+    elif month:
+        # Bulan saja tanpa tahun: cocokkan bulan tsb di semua tahun (format tanggal YYYY-MM-DD)
+        q['date'] = {'$regex': f'^\\d{{4}}-{month:02d}-\\d{{2}}$'}
 
     # Get all events
     events = await db.madrasah_events.find(q, {'_id': 0, 'date': 1, 'end_date': 1, 'start_time': 1, 'end_time': 1}).to_list(10000)
