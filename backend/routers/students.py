@@ -29,7 +29,7 @@ from excel_io import (
 )
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
-from routers._shared import user_can_view_class
+from routers._shared import compute_completeness, user_can_view_class
 
 router = APIRouter()
 
@@ -62,10 +62,14 @@ async def list_students(
         # Exclude students with mutation_type 'keluar'
         q['mutation_type'] = {'$ne': 'keluar'}
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
+    student_ids = [s['id'] for s in items if s.get('id')]
+    details = await db.student_details.find({'student_id': {'$in': student_ids}}, {'_id': 0}).to_list(2000)
+    detail_map = {d['student_id']: d for d in details}
     enriched = []
     for s in items:
         cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
         s['class_name'] = cls.get('name') if cls else None
+        s['completeness_percentage'] = compute_completeness(s, detail_map.get(s.get('id')))
         enriched.append(serialize_doc(s))
     return enriched
 

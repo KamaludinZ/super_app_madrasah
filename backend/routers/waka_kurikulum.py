@@ -13,6 +13,7 @@ from core import (
     get_active_context,
     ACADEMIC_MANAGEMENT_ROLES,
 )
+from routers._shared import compute_completeness
 
 router = APIRouter()
 
@@ -60,7 +61,16 @@ async def wakakur_list_students(
         q['mutation_type'] = {'$exists': False}
 
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(5000)
-    return [serialize_doc(i) for i in items]
+    student_ids = [s['id'] for s in items if s.get('id')]
+    details = await db.student_details.find({'student_id': {'$in': student_ids}}, {'_id': 0}).to_list(5000)
+    detail_map = {d['student_id']: d for d in details}
+    enriched = []
+    for s in items:
+        cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
+        s['class_name'] = cls.get('name') if cls else None
+        s['completeness_percentage'] = compute_completeness(s, detail_map.get(s.get('id')))
+        enriched.append(serialize_doc(s))
+    return enriched
 
 
 @router.get("/wakakur/siswa/{sid}/detail")

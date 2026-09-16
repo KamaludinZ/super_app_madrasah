@@ -101,33 +101,6 @@ export default function DataSiswaPage() {
     return `${years} tahun ${months} bulan`;
   };
 
-  // Calculate biodata completeness percentage
-  const calculateCompleteness = (student) => {
-    // Required fields for biodata completeness
-    const requiredFields = [
-      'nisn',
-      'nik',
-      'tempat_lahir',
-      'tanggal_lahir',
-      'jenis_kelamin',
-      'alamat',
-      'nama_ayah',
-      'nama_ibu',
-      'telepon',
-      'email'
-    ];
-
-    let filledCount = 0;
-    requiredFields.forEach(field => {
-      if (student[field]) {
-        filledCount++;
-      }
-    });
-
-    const percentage = (filledCount / requiredFields.length) * 100;
-    return Math.round(percentage);
-  };
-
   const handleDelete = async (student) => {
     if (!window.confirm(`Hapus data siswa ${student.full_name} (${student.nisn || student.id})?`)) return;
     try {
@@ -229,18 +202,18 @@ export default function DataSiswaPage() {
                           <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">P</Badge>
                         ) : <span className="text-slate-400 text-xs">-</span>}
                       </TableCell>
-                      <TableCell className="text-sm">{s.tempat_lahir || '-'}</TableCell>
+                      <TableCell className="text-sm">{s.birth_place || '-'}</TableCell>
                       <TableCell className="text-sm">
-                        {s.tanggal_lahir ? new Date(s.tanggal_lahir).toLocaleDateString('id-ID', {
+                        {s.birth_date ? new Date(s.birth_date).toLocaleDateString('id-ID', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric'
                         }) : '-'}
                       </TableCell>
-                      <TableCell className="text-sm">{calculateAge(s.tanggal_lahir)}</TableCell>
+                      <TableCell className="text-sm">{calculateAge(s.birth_date)}</TableCell>
                       <TableCell>
                         {(() => {
-                          const percentage = calculateCompleteness(s);
+                          const percentage = s.completeness_percentage ?? 0;
                           return (
                             <div className="flex items-center gap-2">
                               <div className={`font-semibold ${

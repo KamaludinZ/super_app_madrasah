@@ -353,18 +353,21 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
   ) : (
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="bg-slate-100 inline-flex w-auto flex-wrap h-auto" data-testid="detail-tabs">
-              <TabsTrigger value="siswa" data-testid="tab-siswa"><User className="h-3.5 w-3.5 mr-1" /> Data Siswa</TabsTrigger>
-              <TabsTrigger value="ortu" data-testid="tab-ortu"><Users className="h-3.5 w-3.5 mr-1" /> Data Orang Tua</TabsTrigger>
-              <TabsTrigger value="alamat" data-testid="tab-alamat"><MapPin className="h-3.5 w-3.5 mr-1" /> Data Alamat</TabsTrigger>
+              <TabsTrigger value="siswa" data-testid="tab-siswa"><User className="h-3.5 w-3.5 mr-1" /> Data Siswa <span className="text-rose-500 ml-0.5">*</span></TabsTrigger>
+              <TabsTrigger value="ortu" data-testid="tab-ortu"><Users className="h-3.5 w-3.5 mr-1" /> Data Orang Tua <span className="text-rose-500 ml-0.5">*</span></TabsTrigger>
+              <TabsTrigger value="alamat" data-testid="tab-alamat"><MapPin className="h-3.5 w-3.5 mr-1" /> Data Alamat <span className="text-rose-500 ml-0.5">*</span></TabsTrigger>
               <TabsTrigger value="prestasi" data-testid="tab-prestasi"><Trophy className="h-3.5 w-3.5 mr-1" /> Prestasi</TabsTrigger>
               <TabsTrigger value="keahlian" data-testid="tab-keahlian"><Sparkles className="h-3.5 w-3.5 mr-1" /> Keahlian</TabsTrigger>
               <TabsTrigger value="tahfidz" data-testid="tab-tahfidz"><BookOpen className="h-3.5 w-3.5 mr-1" /> Tahfidz</TabsTrigger>
               <TabsTrigger value="beasiswa" data-testid="tab-beasiswa"><Award className="h-3.5 w-3.5 mr-1" /> Beasiswa & Bantuan</TabsTrigger>
               <TabsTrigger value="pendidikan-lain" data-testid="tab-pendidikan-lain"><GraduationCap className="h-3.5 w-3.5 mr-1" /> Pendidikan Lain</TabsTrigger>
-              <TabsTrigger value="kebutuhan-khusus" data-testid="tab-kebutuhan-khusus"><HeartHandshake className="h-3.5 w-3.5 mr-1" /> Kebutuhan Khusus</TabsTrigger>
-              <TabsTrigger value="berkas" data-testid="tab-berkas"><FolderUp className="h-3.5 w-3.5 mr-1" /> Upload Berkas</TabsTrigger>
+              <TabsTrigger value="kebutuhan-khusus" data-testid="tab-kebutuhan-khusus"><HeartHandshake className="h-3.5 w-3.5 mr-1" /> Kebutuhan Khusus <span className="text-rose-500 ml-0.5">*</span></TabsTrigger>
+              <TabsTrigger value="berkas" data-testid="tab-berkas"><FolderUp className="h-3.5 w-3.5 mr-1" /> Upload Berkas <span className="text-rose-500 ml-0.5">*</span></TabsTrigger>
               <TabsTrigger value="riwayat" data-testid="tab-riwayat"><History className="h-3.5 w-3.5 mr-1" /> Riwayat Kelas</TabsTrigger>
             </TabsList>
+            <p className="text-xs text-slate-500 mt-1.5">
+              <span className="text-rose-500">*</span> Tab wajib diisi untuk kelengkapan data siswa
+            </p>
 
             <TabsContent value="siswa" className="mt-4 space-y-3">
               <Section title="Identitas Pribadi" icon={User}>
