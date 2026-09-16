@@ -517,7 +517,7 @@ async def list_users(
     role: Optional[str] = None,
     is_active: Optional[bool] = None,
     exclude_mutation: bool = False,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'waka_kesiswaan', 'kepala_tata_usaha'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'waka_kesiswaan', 'kepala_tata_usaha', 'unit_pelayanan'))
 ):
     q = {}
     if role:
