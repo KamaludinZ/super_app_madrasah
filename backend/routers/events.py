@@ -143,12 +143,13 @@ async def list_staff_events(
     """List staff events - admin can see all, others see only their own."""
     q = {}
 
-    # Admin and unit_pelayanan can filter by user_id, others only see their own
-    is_admin = 'admin' in user.get('roles', [])
-    is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
-    if user_id and (is_admin or is_unit_pelayanan):
+    # Admin, unit_pelayanan, and kepala_sekolah (read-only) can see/filter all data;
+    # others only see their own
+    roles = user.get('roles', [])
+    can_view_all = any(r in roles for r in ('admin', 'unit_pelayanan', 'kepala_sekolah'))
+    if user_id and can_view_all:
         q['user_id'] = user_id
-    elif not (is_admin or is_unit_pelayanan):
+    elif not can_view_all:
         q['user_id'] = user['id']
 
     if is_active is not None:

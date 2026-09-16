@@ -129,6 +129,8 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-kepsek' });
     items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-kepsek-agenda' });
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' });
+    items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-kepsek-agenda-guru' });
+    items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-kepsek-agenda-tendik' });
     items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' });
     items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' });

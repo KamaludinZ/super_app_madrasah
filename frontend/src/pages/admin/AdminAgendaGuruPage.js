@@ -52,6 +52,8 @@ const MONTH_LABELS = {
 export default function AdminAgendaGuruPage() {
   const { activeRole } = useAuth();
   const isAdmin = activeRole === 'admin';
+  // Kepala sekolah hanya melihat (read-only): tidak bisa tambah/edit/hapus agenda.
+  const canEdit = activeRole !== 'kepala_sekolah';
 
   const [agendas, setAgendas] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -240,9 +242,11 @@ export default function AdminAgendaGuruPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Agenda Guru</h1>
           <p className="text-sm text-slate-600 mt-1">{agendas.length} agenda terjadwal</p>
         </div>
-        <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
-          <Plus className="h-4 w-4" /> Tambah Agenda
-        </Button>
+        {canEdit && (
+          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+            <Plus className="h-4 w-4" /> Tambah Agenda
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -386,9 +390,11 @@ export default function AdminAgendaGuruPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" onClick={() => openEdit(agenda)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
+                            {canEdit && (
+                              <Button size="icon" variant="ghost" onClick={() => openEdit(agenda)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
                             {isAdmin && (
                               <Button size="icon" variant="ghost" onClick={() => handleDelete(agenda)} className="text-rose-600">
                                 <Trash2 className="h-4 w-4" />
