@@ -23,6 +23,7 @@ from routers import (
     alumni,
     app_info,
     auth,
+    bk,
     classes,
     dokumen_siswa,
     events,
@@ -33,6 +34,7 @@ from routers import (
     journals,
     kelas_digital,
     notifications,
+    perpus,
     phase4,
     promotions,
     public,
@@ -40,6 +42,7 @@ from routers import (
     reports,
     rkam,
     rooms,
+    sarpras,
     schedules,
     school_apps,
     semesters,
@@ -49,6 +52,7 @@ from routers import (
     subjects,
     tahun_takwim,
     tatib,
+    uks,
     users,
     verval,
     wali_parent,
@@ -100,6 +104,10 @@ api_router.include_router(events.router)
 api_router.include_router(rkam.router)
 api_router.include_router(school_apps.router)
 api_router.include_router(waka_kurikulum.router)
+api_router.include_router(bk.router)
+api_router.include_router(perpus.router)
+api_router.include_router(uks.router)
+api_router.include_router(sarpras.router)
 
 # Debug kelas_digital router
 logger.info(f"[DEBUG] About to include kelas_digital router")

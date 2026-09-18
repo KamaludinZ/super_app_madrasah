@@ -722,6 +722,29 @@ class SettingsModel(BaseModel):
     maintenance_mode: bool = False
     maintenance_message: Optional[str] = None  # custom message shown to users
     maintenance_ends_at: Optional[str] = None  # estimated end time (ISO)
+    # AI provider integrations (multi-provider; one active provider used system-wide)
+    ai_active_provider: Optional[str] = None  # 'local', 'gemini', 'anthropic', 'openai'
+    ai_providers: Dict[str, Dict[str, Any]] = Field(default_factory=lambda: {
+        'local': {'enabled': False, 'base_url': '', 'api_key': '', 'model': ''},
+        'gemini': {'enabled': False, 'api_key': '', 'model': 'gemini-2.0-flash'},
+        'anthropic': {'enabled': False, 'api_key': '', 'model': 'claude-haiku-4-5-20251001'},
+        'openai': {'enabled': False, 'api_key': '', 'model': 'gpt-4o-mini'},
+    })
+    # WhatsApp integration (generic third-party gateway, e.g. Fonnte/Wablas-style)
+    whatsapp_enabled: bool = False
+    whatsapp_provider_name: Optional[str] = None  # free-text label, e.g. "Fonnte"
+    whatsapp_base_url: Optional[str] = None
+    whatsapp_api_key: Optional[str] = None
+    whatsapp_sender_id: Optional[str] = None  # device/sender identifier used by the gateway
+    # CLKB / PCL self-service questionnaire scheduling (admin-controlled open/close gate)
+    clkb_open: bool = False
+    clkb_open_start: Optional[str] = None  # ISO datetime, optional window start
+    clkb_open_end: Optional[str] = None  # ISO datetime, optional window end
+    clkb_info: Optional[str] = None  # extra instructions shown to students
+    pcl_open: bool = False
+    pcl_open_start: Optional[str] = None
+    pcl_open_end: Optional[str] = None
+    pcl_info: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     updated_by: Optional[str] = None
 

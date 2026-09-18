@@ -91,6 +91,32 @@ import AdminTatibKategoriPage from '@/pages/admin/AdminTatibKategoriPage';
 import AdminTatibInputPage from '@/pages/admin/AdminTatibInputPage';
 import AdminTatibPenangananPage from '@/pages/admin/AdminTatibPenangananPage';
 import AdminTatibDataPage from '@/pages/admin/AdminTatibDataPage';
+import AdminBKKunjunganPage from '@/pages/admin/bk/AdminBKKunjunganPage';
+import AdminBKClkbPage from '@/pages/admin/bk/AdminBKClkbPage';
+import AdminBKPclPage from '@/pages/admin/bk/AdminBKPclPage';
+import AdminBKHomeVisitPage from '@/pages/admin/bk/AdminBKHomeVisitPage';
+import AdminBKSekolahLanjutanPage from '@/pages/admin/bk/AdminBKSekolahLanjutanPage';
+import AdminBKLaporanPage from '@/pages/admin/bk/AdminBKLaporanPage';
+import AdminPerpusKoleksiPage from '@/pages/admin/perpus/AdminPerpusKoleksiPage';
+import AdminPerpusPeminjamanPage from '@/pages/admin/perpus/AdminPerpusPeminjamanPage';
+import AdminPerpusKunjunganPage from '@/pages/admin/perpus/AdminPerpusKunjunganPage';
+import AdminPerpusLaporanPage from '@/pages/admin/perpus/AdminPerpusLaporanPage';
+import AdminUKSKunjunganPage from '@/pages/admin/uks/AdminUKSKunjunganPage';
+import AdminUKSObatPage from '@/pages/admin/uks/AdminUKSObatPage';
+import AdminUKSJenisPenangananPage from '@/pages/admin/uks/AdminUKSJenisPenangananPage';
+import AdminUKSDataSiswaGtkPage from '@/pages/admin/uks/AdminUKSDataSiswaGtkPage';
+import AdminUKSAsetPage from '@/pages/admin/uks/AdminUKSAsetPage';
+import AdminUKSLaporanPage from '@/pages/admin/uks/AdminUKSLaporanPage';
+import AdminSarprasAsetTetapPage from '@/pages/admin/sarpras/AdminSarprasAsetTetapPage';
+import AdminSarprasAsetLancarPage from '@/pages/admin/sarpras/AdminSarprasAsetLancarPage';
+import AdminSarprasRuanganAsetPage from '@/pages/admin/sarpras/AdminSarprasRuanganAsetPage';
+import AdminSarprasPenghapusanPage from '@/pages/admin/sarpras/AdminSarprasPenghapusanPage';
+import AdminSarprasPeminjamanBarangPage from '@/pages/admin/sarpras/AdminSarprasPeminjamanBarangPage';
+import AdminSarprasPeminjamanRuanganPage from '@/pages/admin/sarpras/AdminSarprasPeminjamanRuanganPage';
+import AdminSarprasJurnalRuanganPage from '@/pages/admin/sarpras/AdminSarprasJurnalRuanganPage';
+import AdminSarprasJurnalAlatPage from '@/pages/admin/sarpras/AdminSarprasJurnalAlatPage';
+import AdminSarprasJurnalPerawatanPage from '@/pages/admin/sarpras/AdminSarprasJurnalPerawatanPage';
+import AdminSarprasKerusakanPage from '@/pages/admin/sarpras/AdminSarprasKerusakanPage';
 import MyVervalRequestsPage from '@/pages/MyVervalRequestsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ProfilePageEMIS from '@/pages/ProfilePageEMIS';
@@ -110,6 +136,8 @@ import KelasMateriPage from '@/pages/kelas/KelasMateriPage';
 import KelasTugasPage from '@/pages/kelas/KelasTugasPage';
 import SiswaMateriPage from '@/pages/siswa/SiswaMateriPage';
 import SiswaTugasPage from '@/pages/siswa/SiswaTugasPage';
+import SiswaCLKBPage from '@/pages/siswa/SiswaCLKBPage';
+import SiswaPCLPage from '@/pages/siswa/SiswaPCLPage';
 import KelasJurnalPage from '@/pages/kelas/KelasJurnalPage';
 import KelasKehadiranPage from '@/pages/kelas/KelasKehadiranPage';
 
@@ -306,6 +334,32 @@ function App() {
             <Route path="/admin/tatib/input" element={<AdminTatibInputPage />} />
             <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
+            <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
+            <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
+            <Route path="/admin/bk/pcl" element={<AdminBKPclPage />} />
+            <Route path="/admin/bk/home-visit" element={<AdminBKHomeVisitPage />} />
+            <Route path="/admin/bk/sekolah-lanjutan" element={<AdminBKSekolahLanjutanPage />} />
+            <Route path="/admin/bk/laporan" element={<AdminBKLaporanPage />} />
+            <Route path="/admin/perpus/koleksi" element={<AdminPerpusKoleksiPage />} />
+            <Route path="/admin/perpus/peminjaman" element={<AdminPerpusPeminjamanPage />} />
+            <Route path="/admin/perpus/kunjungan" element={<AdminPerpusKunjunganPage />} />
+            <Route path="/admin/perpus/laporan" element={<AdminPerpusLaporanPage />} />
+            <Route path="/admin/uks/kunjungan" element={<AdminUKSKunjunganPage />} />
+            <Route path="/admin/uks/obat" element={<AdminUKSObatPage />} />
+            <Route path="/admin/uks/jenis-penanganan" element={<AdminUKSJenisPenangananPage />} />
+            <Route path="/admin/uks/data-siswa-gtk" element={<AdminUKSDataSiswaGtkPage />} />
+            <Route path="/admin/uks/aset" element={<AdminUKSAsetPage />} />
+            <Route path="/admin/uks/laporan" element={<AdminUKSLaporanPage />} />
+            <Route path="/admin/sarpras/aset-tetap" element={<AdminSarprasAsetTetapPage />} />
+            <Route path="/admin/sarpras/aset-lancar" element={<AdminSarprasAsetLancarPage />} />
+            <Route path="/admin/sarpras/ruangan-aset" element={<AdminSarprasRuanganAsetPage />} />
+            <Route path="/admin/sarpras/penghapusan" element={<AdminSarprasPenghapusanPage />} />
+            <Route path="/admin/sarpras/peminjaman-barang" element={<AdminSarprasPeminjamanBarangPage />} />
+            <Route path="/admin/sarpras/peminjaman-ruangan" element={<AdminSarprasPeminjamanRuanganPage />} />
+            <Route path="/admin/sarpras/jurnal-ruangan" element={<AdminSarprasJurnalRuanganPage />} />
+            <Route path="/admin/sarpras/jurnal-alat" element={<AdminSarprasJurnalAlatPage />} />
+            <Route path="/admin/sarpras/jurnal-perawatan" element={<AdminSarprasJurnalPerawatanPage />} />
+            <Route path="/admin/sarpras/kerusakan" element={<AdminSarprasKerusakanPage />} />
             <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
             <Route path="/guru/materi" element={<GuruMateriPage />} />
             <Route path="/guru/tugas" element={<GuruTugasPage />} />
@@ -333,6 +387,8 @@ function App() {
             {/* Siswa Routes */}
             <Route path="/siswa/materi" element={<SiswaMateriPage />} />
             <Route path="/siswa/tugas" element={<SiswaTugasPage />} />
+            <Route path="/siswa/clkb" element={<SiswaCLKBPage />} />
+            <Route path="/siswa/pcl" element={<SiswaPCLPage />} />
             {/* Waka Kurikulum Routes */}
             <Route path="/wakakur/siswa" element={<WakaKurSiswaPage />} />
             <Route path="/wakakur/jadwal" element={<WakaKurSchedulesPage />} />

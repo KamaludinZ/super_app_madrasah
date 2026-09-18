@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog, FileText, User, Eye, EyeOff, Globe } from 'lucide-react';
+import { Settings, Upload, Save, Plus, Trash2, Clock, CalendarDays, Mail, Send, ServerCog, FileText, User, Eye, EyeOff, Globe, Bot, Sparkles, MessageCircle, CheckCircle2, XCircle, Loader2, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -219,6 +219,66 @@ export default function AdminSettingsPage() {
     }
   };
 
+  const AI_PROVIDER_META = {
+    local: { label: 'AI Lokal (Custom)', desc: 'Server AI Anda sendiri (Ollama, LM Studio, vLLM, dll) — kompatibel format OpenAI', icon: ServerCog },
+    gemini: { label: 'Google Gemini', desc: 'Provider gratis/cloud dari Google', icon: Sparkles },
+    anthropic: { label: 'Anthropic Claude', desc: 'Model Claude dari Anthropic', icon: Bot },
+    openai: { label: 'OpenAI GPT', desc: 'Model GPT dari OpenAI', icon: Bot },
+  };
+
+  const getAiProvider = (key) => (form.ai_providers && form.ai_providers[key]) || {};
+  const updateAiProvider = (key, field, val) => {
+    const providers = { ...(form.ai_providers || {}) };
+    providers[key] = { ...(providers[key] || {}), [field]: val };
+    setForm({ ...form, ai_providers: providers });
+  };
+
+  const [aiTesting, setAiTesting] = useState(null); // provider key being tested
+  const [aiTestResult, setAiTestResult] = useState({}); // { [provider]: {success, reply/error} }
+  const handleTestAi = async (providerKey) => {
+    setAiTesting(providerKey);
+    setAiTestResult((prev) => ({ ...prev, [providerKey]: null }));
+    try {
+      const { data } = await api.post('/admin/settings/test-ai', {
+        provider: providerKey,
+        config: getAiProvider(providerKey),
+      });
+      setAiTestResult((prev) => ({ ...prev, [providerKey]: data }));
+      if (data.success) toast.success(`Provider ${AI_PROVIDER_META[providerKey]?.label || providerKey} terhubung`);
+      else toast.error(data.error || 'Gagal terhubung');
+    } catch (e) {
+      const msg = e?.response?.data?.detail || 'Gagal menguji koneksi';
+      setAiTestResult((prev) => ({ ...prev, [providerKey]: { success: false, error: msg } }));
+      toast.error(msg);
+    } finally {
+      setAiTesting(null);
+    }
+  };
+
+  const [waTesting, setWaTesting] = useState(false);
+  const [waTestPhone, setWaTestPhone] = useState('');
+  const handleTestWhatsapp = async () => {
+    if (!waTestPhone.trim()) {
+      toast.error('Masukkan nomor tujuan uji coba (format 628xxxx)');
+      return;
+    }
+    setWaTesting(true);
+    try {
+      const { data } = await api.post('/admin/settings/test-whatsapp', {
+        whatsapp_base_url: form.whatsapp_base_url,
+        whatsapp_api_key: form.whatsapp_api_key,
+        whatsapp_sender_id: form.whatsapp_sender_id,
+        target_phone: waTestPhone.trim(),
+      });
+      if (data.success) toast.success('Pesan uji coba WhatsApp terkirim');
+      else toast.error(data.error || 'Gagal mengirim');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menguji WhatsApp');
+    } finally {
+      setWaTesting(false);
+    }
+  };
+
   if (!form) return <div className="text-sm text-slate-500">Memuat...</div>;
 
   return (
@@ -236,6 +296,9 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="jurnal" data-testid="tab-jurnal-config">Jurnal & GPS</TabsTrigger>
           <TabsTrigger value="session" data-testid="tab-session">Sesi & Keamanan</TabsTrigger>
           <TabsTrigger value="smtp" data-testid="tab-smtp">SMTP & Email</TabsTrigger>
+          <TabsTrigger value="ai-integration" data-testid="tab-ai-integration">Integrasi AI</TabsTrigger>
+          <TabsTrigger value="whatsapp-integration" data-testid="tab-whatsapp-integration">Integrasi WhatsApp</TabsTrigger>
+          <TabsTrigger value="clkb-pcl" data-testid="tab-clkb-pcl">CLKB & PCL</TabsTrigger>
           <TabsTrigger value="public-pages" data-testid="tab-public-pages">Halaman Public</TabsTrigger>
           <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
         </TabsList>
@@ -601,6 +664,268 @@ export default function AdminSettingsPage() {
                   Isi <strong>SMTP Host</strong> terlebih dahulu, lalu klik <strong>Simpan Pengaturan</strong>, baru lakukan uji coba.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ai-integration" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                  <Bot className="h-5 w-5 text-violet-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Integrasi AI Multi-Provider</h2>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Hubungkan satu atau beberapa provider AI untuk mendukung analisa, ringkasan otomatis,
+                    bantuan pelayanan, dan fitur cerdas lainnya. Akan dikembangkan bertahap.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label>Provider Aktif (dipakai sistem)</Label>
+                <Select value={form.ai_active_provider || 'none'} onValueChange={(v) => setForm({ ...form, ai_active_provider: v === 'none' ? null : v })}>
+                  <SelectTrigger className="mt-1 max-w-sm" data-testid="settings-ai-active-provider"><SelectValue placeholder="Belum dipilih" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Belum dipilih</SelectItem>
+                    {Object.entries(AI_PROVIDER_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>{meta.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500 mt-1">Fitur AI di seluruh aplikasi (misalnya ringkasan CLKB/PCL) akan memakai provider ini.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {Object.entries(AI_PROVIDER_META).map(([key, meta]) => {
+            const cfg = getAiProvider(key);
+            const Icon = meta.icon;
+            const result = aiTestResult[key];
+            return (
+              <Card key={key}>
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-start gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                        <Icon className="h-4.5 w-4.5 text-slate-700" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold">{meta.label}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">{meta.desc}</p>
+                      </div>
+                    </div>
+                    <Switch checked={!!cfg.enabled} onCheckedChange={(v) => updateAiProvider(key, 'enabled', v)} data-testid={`ai-enable-${key}`} />
+                  </div>
+
+                  {key === 'local' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs">Base URL (endpoint OpenAI-compatible)</Label>
+                        <Input value={cfg.base_url || ''} onChange={(e) => updateAiProvider(key, 'base_url', e.target.value)}
+                          placeholder="http://localhost:11434/v1" className="mt-1" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">API Key (opsional)</Label>
+                        <Input type="password" value={cfg.api_key || ''} onChange={(e) => updateAiProvider(key, 'api_key', e.target.value)}
+                          placeholder="Kosongkan jika tidak perlu" className="mt-1" autoComplete="new-password" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Nama Model</Label>
+                        <Input value={cfg.model || ''} onChange={(e) => updateAiProvider(key, 'model', e.target.value)}
+                          placeholder="llama3.1, qwen2.5, dsb" className="mt-1" />
+                      </div>
+                    </div>
+                  )}
+
+                  {key !== 'local' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">API Key</Label>
+                        <Input type="password" value={cfg.api_key || ''} onChange={(e) => updateAiProvider(key, 'api_key', e.target.value)}
+                          placeholder="••••••••" className="mt-1" autoComplete="new-password" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Nama Model</Label>
+                        <Input value={cfg.model || ''} onChange={(e) => updateAiProvider(key, 'model', e.target.value)}
+                          placeholder={key === 'gemini' ? 'gemini-2.0-flash' : key === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gpt-4o-mini'} className="mt-1" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => handleTestAi(key)} disabled={aiTesting === key} className="gap-2">
+                      {aiTesting === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      {aiTesting === key ? 'Menguji...' : 'Uji Koneksi'}
+                    </Button>
+                    {result && (
+                      <span className={`text-xs flex items-center gap-1 ${result.success ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {result.success ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                        {result.success ? (result.reply || 'Terhubung') : result.error}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 italic">Simpan pengaturan terlebih dahulu agar konfigurasi tersimpan permanen sebelum digunakan fitur lain.</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </TabsContent>
+
+        <TabsContent value="whatsapp-integration" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                  <MessageCircle className="h-5 w-5 text-emerald-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Integrasi WhatsApp</h2>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Hubungkan gateway WhatsApp pihak ketiga (mis. Fonnte, Wablas) untuk notifikasi pengingat
+                    dan layanan pendukung lainnya. Fitur pengiriman akan dikembangkan bertahap.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
+                <div>
+                  <div className="font-semibold text-sm">Aktifkan Integrasi WhatsApp</div>
+                  <div className="text-xs text-slate-600">Nonaktifkan untuk menghentikan sementara semua pengiriman WhatsApp</div>
+                </div>
+                <Switch checked={!!form.whatsapp_enabled} onCheckedChange={(v) => setForm({ ...form, whatsapp_enabled: v })} data-testid="settings-whatsapp-enabled" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Nama Provider</Label>
+                  <Input value={form.whatsapp_provider_name || ''} onChange={(e) => setForm({ ...form, whatsapp_provider_name: e.target.value })}
+                    placeholder="Fonnte, Wablas, dsb" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Sender / Device ID</Label>
+                  <Input value={form.whatsapp_sender_id || ''} onChange={(e) => setForm({ ...form, whatsapp_sender_id: e.target.value })}
+                    placeholder="Opsional, tergantung provider" className="mt-1" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Base URL API</Label>
+                  <Input value={form.whatsapp_base_url || ''} onChange={(e) => setForm({ ...form, whatsapp_base_url: e.target.value })}
+                    placeholder="https://api.fonnte.com/send" className="mt-1" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>API Key / Token</Label>
+                  <Input type="password" value={form.whatsapp_api_key || ''} onChange={(e) => setForm({ ...form, whatsapp_api_key: e.target.value })}
+                    placeholder="••••••••" className="mt-1" autoComplete="new-password" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <Send className="h-5 w-5 text-amber-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Uji Coba Pengiriman WhatsApp</h2>
+                  <p className="text-xs text-slate-600 mt-1">Simpan pengaturan dulu, lalu masukkan nomor tujuan (format 628xxxxxxxxxx) untuk verifikasi.</p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input value={waTestPhone} onChange={(e) => setWaTestPhone(e.target.value)}
+                  placeholder="628123456789" className="flex-1" />
+                <Button onClick={handleTestWhatsapp} disabled={waTesting || !form.whatsapp_base_url}
+                  className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+                  {waTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {waTesting ? 'Mengirim...' : 'Kirim Test'}
+                </Button>
+              </div>
+              {!form.whatsapp_base_url && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  Isi <strong>Base URL API</strong> terlebih dahulu, lalu klik <strong>Simpan Pengaturan</strong>, baru lakukan uji coba.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clkb-pcl" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                  <ClipboardCheck className="h-5 w-5 text-blue-700" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Jadwal Pengisian CLKB & PCL</h2>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Atur kapan siswa dapat memulai pengisian Cek List Kebiasaan Belajar (CLKB) dan Problem Cek List (PCL).
+                    Saat ditutup, siswa hanya bisa melihat riwayat pengisian sebelumnya.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Buka Pengisian CLKB</Label>
+                    <p className="text-xs text-slate-600 mt-0.5">Cek List Kebiasaan Belajar untuk siswa</p>
+                  </div>
+                  <Switch checked={!!form.clkb_open} onCheckedChange={(v) => setForm({ ...form, clkb_open: v })} data-testid="settings-clkb-open" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Mulai (opsional)</Label>
+                    <Input type="datetime-local" value={form.clkb_open_start || ''} onChange={(e) => setForm({ ...form, clkb_open_start: e.target.value })} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Selesai (opsional)</Label>
+                    <Input type="datetime-local" value={form.clkb_open_end || ''} onChange={(e) => setForm({ ...form, clkb_open_end: e.target.value })} className="mt-1" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Info Tambahan untuk Siswa</Label>
+                  <textarea rows={2} value={form.clkb_info || ''} onChange={(e) => setForm({ ...form, clkb_info: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006837]/30"
+                    placeholder="Contoh: Silakan isi CLKB sebelum tanggal 30" />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Buka Pengisian PCL</Label>
+                    <p className="text-xs text-slate-600 mt-0.5">Problem Cek List untuk siswa</p>
+                  </div>
+                  <Switch checked={!!form.pcl_open} onCheckedChange={(v) => setForm({ ...form, pcl_open: v })} data-testid="settings-pcl-open" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Mulai (opsional)</Label>
+                    <Input type="datetime-local" value={form.pcl_open_start || ''} onChange={(e) => setForm({ ...form, pcl_open_start: e.target.value })} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Selesai (opsional)</Label>
+                    <Input type="datetime-local" value={form.pcl_open_end || ''} onChange={(e) => setForm({ ...form, pcl_open_end: e.target.value })} className="mt-1" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Info Tambahan untuk Siswa</Label>
+                  <textarea rows={2} value={form.pcl_info || ''} onChange={(e) => setForm({ ...form, pcl_info: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-slate-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006837]/30"
+                    placeholder="Contoh: Isilah dengan jujur, hasil membantu guru BK" />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Jika Mulai/Selesai dikosongkan, sistem hanya mengacu pada tombol aktif/nonaktif di atas tanpa batas waktu otomatis.</span>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

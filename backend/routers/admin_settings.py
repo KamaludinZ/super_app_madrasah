@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from core import db, get_settings, log_audit, require_role
 from email_utils import send_email
+from ai_client import generate_text, AIError
+from whatsapp_client import send_message as wa_send_message, WhatsAppError
 
 router = APIRouter()
 
@@ -81,3 +83,48 @@ async def test_smtp(payload: Dict[str, Any], request: Request = None,
     )
     await log_audit(user, 'test_smtp', 'settings', None, details={'success': result['success']}, request=request)
     return result
+
+
+@router.post("/admin/settings/test-ai")
+async def test_ai_provider(payload: Dict[str, Any], request: Request = None,
+                           user: Dict = Depends(require_role('admin'))):
+    """Send a small test prompt to the given (or active) AI provider to verify connectivity."""
+    settings = await get_settings()
+    provider = payload.get('provider')
+    # Allow testing an unsaved draft config by overlaying it onto settings first
+    if provider and payload.get('config'):
+        providers = dict(settings.get('ai_providers') or {})
+        providers[provider] = {**providers.get(provider, {}), **payload['config'], 'enabled': True}
+        settings = {**settings, 'ai_providers': providers}
+
+    try:
+        text = await generate_text(
+            settings,
+            prompt="Balas singkat dalam satu kalimat: koneksi berhasil.",
+            system="Kamu adalah asisten uji koneksi. Jawab singkat dan ramah dalam Bahasa Indonesia.",
+            provider_override=provider,
+        )
+        await log_audit(user, 'test_ai', 'settings', provider, details={'success': True}, request=request)
+        return {'success': True, 'reply': text}
+    except AIError as e:
+        await log_audit(user, 'test_ai', 'settings', provider, details={'success': False, 'error': str(e)}, request=request)
+        return {'success': False, 'error': str(e)}
+
+
+@router.post("/admin/settings/test-whatsapp")
+async def test_whatsapp(payload: Dict[str, Any], request: Request = None,
+                        user: Dict = Depends(require_role('admin'))):
+    """Send a test WhatsApp message to verify gateway configuration."""
+    settings = await get_settings()
+    cfg = {**settings, **{k: v for k, v in payload.items() if k != 'target_phone'}, 'whatsapp_enabled': True}
+    target_phone = payload.get('target_phone')
+    if not target_phone:
+        raise HTTPException(400, "Nomor tujuan wajib diisi (target_phone)")
+
+    try:
+        result = await wa_send_message(cfg, target_phone, "Test integrasi WhatsApp dari Super Apps MATSANDATAMA berhasil.")
+        await log_audit(user, 'test_whatsapp', 'settings', None, details={'success': True}, request=request)
+        return {'success': True, 'result': result}
+    except WhatsAppError as e:
+        await log_audit(user, 'test_whatsapp', 'settings', None, details={'success': False, 'error': str(e)}, request=request)
+        return {'success': False, 'error': str(e)}

@@ -13,6 +13,9 @@ import {
   CalendarDays, Database, ListChecks, ArrowRightLeft,
   Megaphone, ChevronDown, Briefcase, Info, CheckCircle2, UserCircle, HelpCircle,
   Target, Award, DollarSign, LogIn, Loader2, Globe,
+  HeartHandshake, ClipboardCheck, AlertTriangle, Home, School, FileBarChart,
+  Stethoscope, Pill, ClipboardPlus, HeartPulse,
+  Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -83,6 +86,12 @@ function navForRole(role, userRoles = []) {
   } else if (role === 'guru_bk') {
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' });
     items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' });
+    items.push({ to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-bk-kunjungan' });
+    items.push({ to: '/admin/bk/clkb', label: 'CLKB', icon: ClipboardCheck, testid: 'nav-bk-clkb' });
+    items.push({ to: '/admin/bk/pcl', label: 'PCL', icon: AlertTriangle, testid: 'nav-bk-pcl' });
+    items.push({ to: '/admin/bk/home-visit', label: 'Jurnal Home Visit', icon: Home, testid: 'nav-bk-home-visit' });
+    items.push({ to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-bk-sekolah-lanjutan' });
+    items.push({ to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-bk-laporan-clkb-pcl' });
     items.push({ to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-bk-kebersihan' });
     items.push({ to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-bk-laporan' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' });
@@ -107,6 +116,8 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-siswa' });
+    items.push({ to: '/siswa/clkb', label: 'CLKB', icon: ClipboardCheck, testid: 'nav-siswa-clkb' });
+    items.push({ to: '/siswa/pcl', label: 'PCL', icon: AlertTriangle, testid: 'nav-siswa-pcl' });
   } else if (role === 'kelas') {
     items.push({ to: '/kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-kelas-siswa' });
     items.push({ to: '/kelas/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-kelas-jadwal' });
@@ -229,6 +240,53 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-admin-tatib-kategori' },
           { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-admin-tatib-penanganan' },
           { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-admin-tatib-data' },
+        ],
+      },
+      {
+        title: 'Menu BK',
+        items: [
+          { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-admin-bk-kunjungan' },
+          { to: '/admin/bk/clkb', label: 'Cek List Kebiasaan Belajar (CLKB)', icon: ClipboardCheck, testid: 'nav-admin-bk-clkb' },
+          { to: '/admin/bk/pcl', label: 'Problem Cek List (PCL)', icon: AlertTriangle, testid: 'nav-admin-bk-pcl' },
+          { to: '/admin/bk/home-visit', label: 'Jurnal Home Visit', icon: Home, testid: 'nav-admin-bk-home-visit' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-admin-bk-alumni' },
+          { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-admin-bk-sekolah-lanjutan' },
+          { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-admin-bk-laporan' },
+        ],
+      },
+      {
+        title: 'Menu Perpus',
+        items: [
+          { to: '/admin/perpus/peminjaman', label: 'Data Peminjaman Buku', icon: BookOpen, testid: 'nav-admin-perpus-peminjaman' },
+          { to: '/admin/perpus/kunjungan', label: 'Data Kunjungan Perpus', icon: Users, testid: 'nav-admin-perpus-kunjungan' },
+          { to: '/admin/perpus/koleksi', label: 'Data Aset & Koleksi Perpus', icon: BookMarked, testid: 'nav-admin-perpus-koleksi' },
+          { to: '/admin/perpus/laporan', label: 'Laporan Perpus', icon: FileBarChart, testid: 'nav-admin-perpus-laporan' },
+        ],
+      },
+      {
+        title: 'Menu UKS',
+        items: [
+          { to: '/admin/uks/kunjungan', label: 'Data Kunjungan', icon: Stethoscope, testid: 'nav-admin-uks-kunjungan' },
+          { to: '/admin/uks/obat', label: 'Data Obat', icon: Pill, testid: 'nav-admin-uks-obat' },
+          { to: '/admin/uks/jenis-penanganan', label: 'Jenis Penanganan', icon: ClipboardPlus, testid: 'nav-admin-uks-jenis-penanganan' },
+          { to: '/admin/uks/data-siswa-gtk', label: 'Data Siswa dan GTK', icon: Users, testid: 'nav-admin-uks-data-siswa-gtk' },
+          { to: '/admin/uks/aset', label: 'Aset UKS', icon: HeartPulse, testid: 'nav-admin-uks-aset' },
+          { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-admin-uks-laporan' },
+        ],
+      },
+      {
+        title: 'Menu Sarpras',
+        items: [
+          { to: '/admin/sarpras/aset-tetap', label: 'Data Aset Tetap Komite & BMN', icon: Building2, testid: 'nav-admin-sarpras-aset-tetap' },
+          { to: '/admin/sarpras/aset-lancar', label: 'Aset Lancar', icon: Package, testid: 'nav-admin-sarpras-aset-lancar' },
+          { to: '/admin/sarpras/ruangan-aset', label: 'Data Ruangan dan Aset', icon: DoorOpen, testid: 'nav-admin-sarpras-ruangan-aset' },
+          { to: '/admin/sarpras/penghapusan', label: 'Penghapusan Barang', icon: Trash, testid: 'nav-admin-sarpras-penghapusan' },
+          { to: '/admin/sarpras/peminjaman-barang', label: 'Peminjaman Barang', icon: Handshake, testid: 'nav-admin-sarpras-peminjaman-barang' },
+          { to: '/admin/sarpras/peminjaman-ruangan', label: 'Peminjaman Ruangan', icon: CalendarClock, testid: 'nav-admin-sarpras-peminjaman-ruangan' },
+          { to: '/admin/sarpras/jurnal-ruangan', label: 'Jurnal Penggunaan Ruangan', icon: BookOpenCheck, testid: 'nav-admin-sarpras-jurnal-ruangan' },
+          { to: '/admin/sarpras/jurnal-alat', label: 'Jurnal Penggunaan Alat', icon: Wrench, testid: 'nav-admin-sarpras-jurnal-alat' },
+          { to: '/admin/sarpras/jurnal-perawatan', label: 'Jurnal Perawatan Aset', icon: ClipboardList, testid: 'nav-admin-sarpras-jurnal-perawatan' },
+          { to: '/admin/sarpras/kerusakan', label: 'Laporan Kerusakan & Perbaikan', icon: AlertOctagon, testid: 'nav-admin-sarpras-kerusakan' },
         ],
       },
       {
