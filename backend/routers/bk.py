@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 import uuid
 
-from core import db, get_current_user, require_role, serialize_doc, log_audit, get_settings
+from core import db, get_active_context, get_current_user, require_role, serialize_doc, log_audit, get_settings
 from clkb_bank import CLKB_ITEMS, CLKB_PETUNJUK, CLKB_TOTAL_ITEMS
 from pcl_bank import PCL_CATEGORIES, PCL_ESSAY_QUESTIONS, PCL_PETUNJUK, pcl_total_items
 from ai_client import generate_text, AIError
@@ -909,7 +909,7 @@ async def get_laporan_summary(
     semester: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    user: Dict = Depends(require_role(*BK_ROLES))
+    user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah'))
 ):
     """Aggregate BK activity counts across kunjungan, CLKB, PCL, and home visit."""
     base_query = {}
@@ -959,4 +959,53 @@ async def get_laporan_summary(
         'pcl_belum_ditanggapi': pcl_belum_ditanggapi,
         'pcl_schedule_open': _pcl_window_open(settings),
         'total_home_visit': len(home_visit),
+    }
+
+
+@router.get("/bk/laporan/kehadiran-summary")
+async def get_kehadiran_summary(user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah'))):
+    """School-wide attendance aggregate for the active semester (from daily
+    class_attendance submissions), plus a top-alpa student ranking — used by
+    the Guru BK and Kepala Sekolah dashboards to spot attendance trends."""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    query = {'semester_id': semester_id} if semester_id else {}
+
+    records = await db.class_attendance.find(query, {'_id': 0}).to_list(20000)
+
+    totals = {'hadir': 0, 'sakit': 0, 'izin': 0, 'alpa': 0}
+    siswa_alpa = {}
+    for rec in records:
+        for entry in rec.get('records', []):
+            status = entry.get('status', 'hadir')
+            if status in totals:
+                totals[status] += 1
+            if status == 'alpa':
+                sid = entry.get('student_id')
+                if sid:
+                    siswa_alpa.setdefault(sid, {'siswa_id': sid, 'count_alpa': 0})
+                    siswa_alpa[sid]['count_alpa'] += 1
+
+    total_all = sum(totals.values())
+    percentage_hadir = round((totals['hadir'] / total_all) * 100, 1) if total_all else 0
+
+    top_alpa = sorted(siswa_alpa.values(), key=lambda x: x['count_alpa'], reverse=True)[:10]
+    for item in top_alpa:
+        siswa = await db.users.find_one({'id': item['siswa_id']}, {'_id': 0, 'full_name': 1, 'nis': 1})
+        cls = None
+        if siswa:
+            u = await db.users.find_one({'id': item['siswa_id']}, {'_id': 0, 'student_class_id': 1})
+            if u and u.get('student_class_id'):
+                cls = await db.classes.find_one({'id': u['student_class_id']}, {'_id': 0, 'name': 1})
+        item['siswa_nama'] = siswa.get('full_name') if siswa else None
+        item['siswa_kelas'] = cls.get('name') if cls else None
+
+    return {
+        'total_records': total_all,
+        'hadir': totals['hadir'],
+        'sakit': totals['sakit'],
+        'izin': totals['izin'],
+        'alpa': totals['alpa'],
+        'percentage_hadir': percentage_hadir,
+        'top_alpa': top_alpa,
     }

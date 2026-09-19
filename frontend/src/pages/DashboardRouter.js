@@ -2,6 +2,8 @@ import React from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
+import GuruBkDashboard from './dashboards/GuruBkDashboard';
+import KepsekDashboard from './dashboards/KepsekDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 import UnitKesehatanDashboard from './dashboards/UnitKesehatanDashboard';
@@ -50,13 +52,14 @@ export default function DashboardRouter() {
   let DashboardComponent;
   switch (activeRole) {
     case 'admin':
-    case 'kepala_sekolah':
     case 'kepala_tata_usaha':
     case 'waka_sarana_prasarana':
     case 'waka_kesiswaan':
     case 'waka_kurikulum':
     case 'waka_humas':
       DashboardComponent = AdminDashboard; break;
+    case 'kepala_sekolah':
+      DashboardComponent = KepsekDashboard; break;
     case 'siswa':
       DashboardComponent = SiswaDashboard; break;
     case 'tenaga_kependidikan':
@@ -67,6 +70,8 @@ export default function DashboardRouter() {
       DashboardComponent = WaliKelasDashboard; break;
     case 'kelas':
       DashboardComponent = KelasDashboard; break;
+    case 'guru_bk':
+      DashboardComponent = GuruBkDashboard; break;
     case 'guru':
     case 'guru_ipa':
     case 'guru_ips':
@@ -75,7 +80,6 @@ export default function DashboardRouter() {
     case 'guru_agama':
     case 'guru_tik':
     case 'guru_piket':
-    case 'guru_bk':
     case 'guru_tata_tertib':
     case 'guru_ekstrakurikuler':
       DashboardComponent = GuruDashboard; break;

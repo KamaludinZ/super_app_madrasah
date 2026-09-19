@@ -710,19 +710,38 @@ async def admin_jurnal_stats_teacher(
     if results:
         logger.info(f"[STATS-BY-TEACHER] Sample result: {results[0]}")
 
+    # Weekly scheduled slots per teacher (active semester), used as a rough
+    # denominator for a fill-rate ratio — NOT a precise expected-vs-actual
+    # count (doesn't account for holidays/weeks elapsed), just a relative
+    # indicator of how much of a teacher's weekly teaching load gets journaled.
+    schedule_query = {'semester_id': semester_id} if semester_id else {}
+    if class_id:
+        schedule_query['class_id'] = class_id
+    schedules = await db.schedules.find(schedule_query, {'_id': 0, 'teacher_id': 1}).to_list(5000)
+    slots_by_teacher = {}
+    for s in schedules:
+        tid = s.get('teacher_id')
+        if tid:
+            slots_by_teacher[tid] = slots_by_teacher.get(tid, 0) + 1
+
     enriched = []
     for r in results:
         teacher = await db.users.find_one({'id': r['_id']}, {'_id': 0, 'full_name': 1, 'username': 1})
+        weekly_slots = slots_by_teacher.get(r['_id'], 0)
+        total_jurnal = r.get('total_jurnal', 0)
+        fill_rate_pct = round((total_jurnal / weekly_slots) * 100, 1) if weekly_slots else None
         enriched.append({
             'teacher_id': r['_id'],
             'teacher_name': teacher.get('full_name') if teacher else 'Unknown',
             'username': teacher.get('username') if teacher else None,
-            'total_jurnal': r.get('total_jurnal', 0),
+            'total_jurnal': total_jurnal,
             'total_jtm': r.get('total_jtm', 0),
             'total_hadir': r.get('total_hadir', 0),
             'total_sakit': r.get('total_sakit', 0),
             'total_izin': r.get('total_izin', 0),
             'total_alpa': r.get('total_alpa', 0),
+            'weekly_slots': weekly_slots,
+            'fill_rate_pct': fill_rate_pct,
         })
 
     logger.info(f"[STATS-BY-TEACHER] Enriched results count: {len(enriched)}")

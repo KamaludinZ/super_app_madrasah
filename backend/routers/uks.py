@@ -323,7 +323,7 @@ def _calc_umur(birth_date: Optional[str]) -> Optional[str]:
 
 
 @router.get("/uks/pasien/{pasien_id}/profile")
-async def get_pasien_profile(pasien_id: str, user: Dict = Depends(require_role(*UKS_ROLES))):
+async def get_pasien_profile(pasien_id: str, user: Dict = Depends(require_role(*UKS_ROLES, 'kepala_sekolah'))):
     """Rich profile for the Detail Kunjungan dialog: identity, wali kelas
     (from the student's currently assigned class), address, parent/wali
     contacts, and mahad status — siswa only fields are None for GTK patients."""
@@ -1194,7 +1194,7 @@ async def delete_aset(aset_id: str, user: Dict = Depends(require_role(*UKS_ROLES
 async def get_laporan_summary(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    user: Dict = Depends(require_role(*UKS_ROLES))
+    user: Dict = Depends(require_role(*UKS_ROLES, 'kepala_sekolah'))
 ):
     date_query = {}
     if start_date:
@@ -1359,7 +1359,7 @@ async def get_rekap_kunjungan(
     bulan: Optional[str] = Query(None, description="YYYY-MM, wajib jika period=bulan"),
     semester_id: Optional[str] = Query(None, description="wajib jika period=semester"),
     tahun: Optional[str] = Query(None, description="YYYY, wajib jika period=tahun"),
-    user: Dict = Depends(require_role(*UKS_ROLES)),
+    user: Dict = Depends(require_role(*UKS_ROLES, 'kepala_sekolah')),
 ):
     return await _build_rekap_kunjungan(period, bulan, semester_id, tahun)
 

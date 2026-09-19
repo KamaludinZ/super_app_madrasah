@@ -204,6 +204,18 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' });
     items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-kepsek-rkam' });
+    items.push({ to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-kepsek-tatib-data' });
+    items.push({ to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-kepsek-bk-kunjungan' });
+    items.push({ to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-kepsek-bk-laporan' });
+    items.push({ to: '/admin/uks/kunjungan', label: 'Data Kunjungan UKS', icon: Stethoscope, testid: 'nav-kepsek-uks-kunjungan' });
+    items.push({ to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-kepsek-uks-laporan' });
+    items.push({ to: '/admin/perpus/kunjungan', label: 'Data Kunjungan Perpus', icon: Users, testid: 'nav-kepsek-perpus-kunjungan' });
+    items.push({ to: '/admin/perpus/peminjaman', label: 'Data Peminjaman Perpus', icon: BookOpen, testid: 'nav-kepsek-perpus-peminjaman' });
+    items.push({ to: '/admin/perpus/laporan', label: 'Laporan Perpus', icon: FileBarChart, testid: 'nav-kepsek-perpus-laporan' });
+    items.push({ to: '/admin/sarpras/kerusakan', label: 'Laporan Kerusakan & Perbaikan', icon: AlertOctagon, testid: 'nav-kepsek-sarpras-kerusakan' });
+    items.push({ to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-kepsek-kebersihan' });
+    items.push({ to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-kepsek-alumni' });
+    items.push({ to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-kepsek-sekolah-lanjutan' });
   } else if (role === 'unit_pelayanan') {
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-unitpel-kegiatan' });
     items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-unitpel-agenda-guru' });

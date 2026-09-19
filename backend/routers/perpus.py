@@ -79,7 +79,7 @@ def _user_fields(prefix: str, u: Dict) -> Dict:
 # ============================================================
 
 @router.get("/perpus/warga-madrasah")
-async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends(require_role(*PERPUS_ROLES))):
+async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends(require_role(*PERPUS_ROLES, 'kepala_sekolah'))):
     """Minimal lookup of all active users (siswa, guru, tendik) for the borrower/visitor picker."""
     query = {'is_active': {'$ne': False}}
     if search:
@@ -342,7 +342,7 @@ async def delete_kunjungan(kunjungan_id: str, user: Dict = Depends(require_role(
 async def get_laporan_summary(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    user: Dict = Depends(require_role(*PERPUS_ROLES))
+    user: Dict = Depends(require_role(*PERPUS_ROLES, 'kepala_sekolah'))
 ):
     date_query = {}
     if start_date:

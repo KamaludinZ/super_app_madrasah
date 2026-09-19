@@ -165,7 +165,7 @@ async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
 # CLASS CLEANLINESS (Kebersihan Kelas)
 # ============================================================
 @router.get("/cleanliness/admin/recap")
-async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk'))):
+async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk', 'kepala_sekolah'))):
     """Admin & Guru BK: rekapitulasi penilaian kebersihan semua kelas, filtered by user's view context (semester)."""
     # Get all classes for active semester
     ctx = await get_active_context(user)

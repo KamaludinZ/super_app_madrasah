@@ -172,7 +172,7 @@ async def _resolve_aset(aset_tipe: str, aset_id: str):
 # ============================================================
 
 @router.get("/sarpras/warga-madrasah")
-async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends(require_role(*SARPRAS_ROLES))):
+async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends(require_role(*SARPRAS_ROLES, 'kepala_sekolah'))):
     query = {'is_active': {'$ne': False}}
     if search:
         query['full_name'] = {'$regex': search, '$options': 'i'}
@@ -719,7 +719,7 @@ async def delete_kerusakan(item_id: str, user: Dict = Depends(require_role(*SARP
 
 
 @router.get("/sarpras/kerusakan/summary")
-async def get_kerusakan_summary(user: Dict = Depends(require_role(*SARPRAS_ROLES))):
+async def get_kerusakan_summary(user: Dict = Depends(require_role(*SARPRAS_ROLES, 'kepala_sekolah'))):
     items = await db.sarpras_kerusakan.find({}, {'_id': 0}).to_list(10000)
 
     def by_field(records, field):
