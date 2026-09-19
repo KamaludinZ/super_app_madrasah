@@ -633,7 +633,7 @@ async def get_summary_stats(
     tahun_pelajaran_id: Optional[str] = None,
     semester: Optional[str] = None,
     kelas: Optional[str] = None,
-    user: Dict = Depends(require_role('admin', 'guru_bk', 'kepala_sekolah'))
+    user: Dict = Depends(require_role('admin', 'guru_bk', 'guru_tata_tertib', 'kepala_sekolah'))
 ):
     """Get overall tatib statistics summary."""
     query = {}

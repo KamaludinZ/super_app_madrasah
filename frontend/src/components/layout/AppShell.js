@@ -154,8 +154,27 @@ function navForRole(role, userRoles = []) {
       },
     ];
   } else if (role === 'guru_tata_tertib') {
-    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' });
-    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' });
+    // Guru Tata Tertib uses grouped menu structure, mirroring admin's Tatib & BK groups
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      {
+        title: 'Umum',
+        items: [
+          { to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' },
+          { to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tatib' },
+        ],
+      },
+      {
+        title: 'Manajemen Tatib & BK',
+        items: [
+          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-tatib-tatib-input' },
+          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-tatib-tatib-kategori' },
+          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-tatib-tatib-penanganan' },
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-tatib-tatib-data' },
+        ],
+      },
+    ];
   } else if (role === 'guru_ekstrakurikuler') {
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler Saya', icon: Sparkles, testid: 'nav-ekstra-coach' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });

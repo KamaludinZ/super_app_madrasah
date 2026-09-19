@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/AuthContext';
 import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
 import GuruBkDashboard from './dashboards/GuruBkDashboard';
+import GuruTatibDashboard from './dashboards/GuruTatibDashboard';
 import KepsekDashboard from './dashboards/KepsekDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
@@ -72,6 +73,8 @@ export default function DashboardRouter() {
       DashboardComponent = KelasDashboard; break;
     case 'guru_bk':
       DashboardComponent = GuruBkDashboard; break;
+    case 'guru_tata_tertib':
+      DashboardComponent = GuruTatibDashboard; break;
     case 'guru':
     case 'guru_ipa':
     case 'guru_ips':
@@ -80,7 +83,6 @@ export default function DashboardRouter() {
     case 'guru_agama':
     case 'guru_tik':
     case 'guru_piket':
-    case 'guru_tata_tertib':
     case 'guru_ekstrakurikuler':
       DashboardComponent = GuruDashboard; break;
     default:
