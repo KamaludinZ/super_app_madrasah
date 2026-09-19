@@ -22,6 +22,7 @@ import JadwalPage from '@/pages/JadwalPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminPenggunaSiswaPage from '@/pages/admin/AdminPenggunaSiswaPage';
 import AdminClassesPage from '@/pages/admin/AdminClassesPage';
+import UnitPelayananKelasPage from '@/pages/admin/UnitPelayananKelasPage';
 import AdminJabatanPage from '@/pages/admin/AdminJabatanPage';
 import AdminRoomsPage from '@/pages/admin/AdminRoomsPage';
 import AdminSubjectsPage from '@/pages/admin/AdminSubjectsPage';
@@ -106,6 +107,8 @@ import AdminUKSCkgPage from '@/pages/admin/uks/AdminUKSCkgPage';
 import AdminUKSObatPage from '@/pages/admin/uks/AdminUKSObatPage';
 import AdminUKSJenisPenangananPage from '@/pages/admin/uks/AdminUKSJenisPenangananPage';
 import AdminUKSDataSiswaGtkPage from '@/pages/admin/uks/AdminUKSDataSiswaGtkPage';
+import AdminUKSDataSiswaPage from '@/pages/admin/uks/AdminUKSDataSiswaPage';
+import AdminUKSDataGtkPage from '@/pages/admin/uks/AdminUKSDataGtkPage';
 import AdminUKSAsetPage from '@/pages/admin/uks/AdminUKSAsetPage';
 import AdminUKSLaporanPage from '@/pages/admin/uks/AdminUKSLaporanPage';
 import AdminSarprasAsetTetapPage from '@/pages/admin/sarpras/AdminSarprasAsetTetapPage';
@@ -305,6 +308,7 @@ function App() {
             <Route path="/admin/gtk/e-kinerja" element={<AdminEKinerjaPage />} />
             <Route path="/admin/gtk/profesionalitas" element={<AdminProfesionalitasGTKPage />} />
             <Route path="/admin/classes" element={<AdminClassesPage />} />
+            <Route path="/unit-pelayanan/kelas" element={<UnitPelayananKelasPage />} />
             <Route path="/admin/jabatan" element={<AdminJabatanPage />} />
             <Route path="/admin/rooms" element={<AdminRoomsPage />} />
             <Route path="/admin/subjects" element={<AdminSubjectsPage />} />
@@ -356,6 +360,8 @@ function App() {
             <Route path="/admin/uks/obat" element={<AdminUKSObatPage />} />
             <Route path="/admin/uks/jenis-penanganan" element={<AdminUKSJenisPenangananPage />} />
             <Route path="/admin/uks/data-siswa-gtk" element={<AdminUKSDataSiswaGtkPage />} />
+            <Route path="/admin/uks/data-siswa" element={<AdminUKSDataSiswaPage />} />
+            <Route path="/admin/uks/data-gtk" element={<AdminUKSDataGtkPage />} />
             <Route path="/admin/uks/aset" element={<AdminUKSAsetPage />} />
             <Route path="/admin/uks/laporan" element={<AdminUKSLaporanPage />} />
             <Route path="/admin/sarpras/aset-tetap" element={<AdminSarprasAsetTetapPage />} />

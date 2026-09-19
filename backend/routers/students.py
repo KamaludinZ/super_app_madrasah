@@ -47,12 +47,16 @@ async def list_students(
     if 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1:
         me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
         return [serialize_doc(me)] if me else []
+    # Roles with broad (all-class) read visibility, matching user_can_view_class's overlap set.
+    BROAD_VISIBILITY_ROLES = {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan', 'unit_kesehatan', 'unit_pelayanan'}
+    has_broad_visibility = 'admin' in user.get('roles', []) or bool(set(user.get('roles', [])) & BROAD_VISIBILITY_ROLES)
+
     q = {'roles': 'siswa'}
     if class_id:
         if not await user_can_view_class(user, class_id):
             raise HTTPException(403, "Tidak diizinkan melihat siswa kelas ini")
         q['student_class_id'] = class_id
-    elif 'admin' not in user.get('roles', []):
+    elif not has_broad_visibility:
         cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
         if cls:
             q['student_class_id'] = cls['id']

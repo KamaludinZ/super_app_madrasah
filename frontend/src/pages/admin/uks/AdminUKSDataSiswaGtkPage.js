@@ -19,7 +19,7 @@ export default function AdminUKSDataSiswaGtkPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/admin/siswa')}>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/admin/uks/data-siswa')}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <GraduationCap className="h-6 w-6" />
@@ -34,7 +34,7 @@ export default function AdminUKSDataSiswaGtkPage() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/admin/gtk')}>
+        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/admin/uks/data-gtk')}>
           <CardContent className="p-6 flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
               <Briefcase className="h-6 w-6" />

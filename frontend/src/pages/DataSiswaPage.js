@@ -20,12 +20,18 @@ export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
   const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
   const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
+  const isGuruTatib = activeRole === 'guru_tata_tertib';
+  const isUnitPelayanan = activeRole === 'unit_pelayanan';
+  // Guru Tata Tertib and Unit Pelayanan see the same all-students admin-style
+  // view/filters, but without any create/edit/delete/account actions (view-only).
+  const hasAdminView = isAdmin || isGuruTatib || isUnitPelayanan;
   const homeroomClassId = user?.homeroom_class_id;
   const canEdit = isAdmin; // Only admin can edit/delete students
   const canViewAccount = isAdmin || isWaliKelas; // Admin and wali kelas can view account info
 
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('all');
+  const [tingkatFilter, setTingkatFilter] = useState('all');
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -37,7 +43,7 @@ export default function DataSiswaPage() {
   useEffect(() => {
     (async () => {
       try {
-        if (isAdmin) {
+        if (hasAdminView) {
           // Get active academic year first
           const ayRes = await api.get('/academic-years/active');
           const activeAY = ayRes.data;
@@ -56,7 +62,7 @@ export default function DataSiswaPage() {
       } finally { setLoading(false); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isWaliKelas, homeroomClassId]);
+  }, [hasAdminView, isWaliKelas, homeroomClassId]);
 
   const loadStudents = async (classId) => {
     setLoading(true);
@@ -70,15 +76,19 @@ export default function DataSiswaPage() {
   };
 
   useEffect(() => {
-    if (isAdmin) {
+    if (hasAdminView) {
       loadStudents(selectedClass);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClass]);
 
+  const tingkatOptions = [...new Set(classes.map((c) => c.grade).filter((g) => g !== undefined && g !== null))].sort((a, b) => a - b);
+  const classIdToGrade = classes.reduce((acc, c) => { acc[c.id] = c.grade; return acc; }, {});
+
   const filtered = students.filter((s) => {
     if (search && !s.full_name?.toLowerCase().includes(search.toLowerCase()) && !s.nisn?.includes(search)) return false;
     if (genderFilter !== 'all' && s.gender !== genderFilter) return false;
+    if (tingkatFilter !== 'all' && String(classIdToGrade[s.student_class_id]) !== String(tingkatFilter)) return false;
     return true;
   });
 
@@ -121,7 +131,7 @@ export default function DataSiswaPage() {
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Daftar Siswa</h1>
           <p className="text-sm text-slate-600 mt-1">
-            {isAdmin ? 'Semua siswa madrasah' : isWaliKelas ? 'Siswa di kelas Anda' : 'Siswa'}
+            {hasAdminView ? 'Semua siswa madrasah' : isWaliKelas ? 'Siswa di kelas Anda' : 'Siswa'}
           </p>
         </div>
       </div>
@@ -136,12 +146,21 @@ export default function DataSiswaPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input placeholder="Cari nama atau NISN..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="search-siswa" />
           </div>
-          {isAdmin && (
+          {hasAdminView && (
+            <Select value={tingkatFilter} onValueChange={setTingkatFilter}>
+              <SelectTrigger data-testid="filter-tingkat"><SelectValue placeholder="Filter Tingkat" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Tingkat</SelectItem>
+                {tingkatOptions.map((g) => <SelectItem key={g} value={String(g)}>Kelas {g}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {hasAdminView && (
             <Select value={selectedClass} onValueChange={setSelectedClass}>
               <SelectTrigger data-testid="filter-kelas"><SelectValue placeholder="Filter Kelas" /></SelectTrigger>
               <SelectContent>

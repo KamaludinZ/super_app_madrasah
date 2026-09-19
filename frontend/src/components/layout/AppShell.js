@@ -160,8 +160,8 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Umum',
         items: [
-          { to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' },
-          { to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' },
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-tatib-siswa' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' },
           { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tatib' },
         ],
       },
@@ -240,6 +240,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-unitpel-agenda-guru' });
     items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-unitpel-agenda-tendik' });
     items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-unitpel-siswa' });
+    items.push({ to: '/unit-pelayanan/kelas', label: 'Kelas', icon: BookOpen, testid: 'nav-unitpel-kelas' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-unitpel' });
   } else if (role === 'unit_kesehatan') {
     // Unit Kesehatan (petugas UKS) uses grouped menu structure, mirroring admin's Menu UKS group
