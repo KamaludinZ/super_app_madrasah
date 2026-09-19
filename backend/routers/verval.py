@@ -207,10 +207,20 @@ async def approve_verval_request(
     if request_type == 'profile_update':
         target_collection = verval_req.get('target_collection', 'users')
         if target_collection == 'student_details':
+            new_data = dict(verval_req.get('new_data', {}))
+            # Identitas Pribadi (nama/NISN/NIS/jenis kelamin/tempat & tanggal lahir) hidup di
+            # collection users, bukan student_details. Siswa mengajukan keduanya dalam satu
+            # request (dedup per user_id+request_type), jadi patch users dititip di sini.
+            users_patch = new_data.pop('_users_patch', None)
+            if users_patch:
+                await db.users.update_one(
+                    {'id': verval_req['user_id']},
+                    {'$set': users_patch}
+                )
             # Apply perubahan ke sub-collection detail siswa (Data Siswa/Ortu/Alamat/Keahlian/dst)
             await db.student_details.update_one(
                 {'student_id': verval_req['user_id']},
-                {'$set': verval_req.get('new_data', {})},
+                {'$set': new_data},
                 upsert=True,
             )
         else:

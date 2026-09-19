@@ -133,7 +133,14 @@ export default function AdminVervalSiswaPage() {
 
   const renderComparison = () => {
     if (!selectedRequest) return null;
-    const { old_data, new_data, request_type } = selectedRequest;
+    const { request_type } = selectedRequest;
+    // Identitas Pribadi (nama/NISN/NIS/jenis kelamin/tempat & tanggal lahir) dititip di
+    // _users_patch pada request bertarget student_details; ratakan agar tampil sebagai
+    // field biasa di perbandingan, bukan blok JSON mentah.
+    const old_data = { ...(selectedRequest.old_data || {}), ...(selectedRequest.old_data?._users_patch || {}) };
+    const new_data = { ...(selectedRequest.new_data || {}), ...(selectedRequest.new_data?._users_patch || {}) };
+    delete old_data._users_patch;
+    delete new_data._users_patch;
 
     if (request_type === 'prestasi_create') {
       const fields = Object.keys(new_data || {}).filter((f) => !HIDDEN_PRESTASI_FIELDS.has(f));

@@ -9,10 +9,18 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit, g
 from clkb_bank import CLKB_ITEMS, CLKB_PETUNJUK, CLKB_TOTAL_ITEMS
 from pcl_bank import PCL_CATEGORIES, PCL_ESSAY_QUESTIONS, PCL_PETUNJUK, pcl_total_items
 from ai_client import generate_text, AIError
+from auth_utils import WIB_TZ
 
 router = APIRouter()
 
 BK_ROLES = ('admin', 'guru_bk')
+
+
+def _now_wib_naive_iso() -> str:
+    """Current time as a naive 'YYYY-MM-DDTHH:MM' WIB string, comparable to
+    <input type="datetime-local"> values (which carry no timezone info and
+    are always entered in the viewer's local wall-clock time, i.e. WIB)."""
+    return datetime.now(WIB_TZ).strftime('%Y-%m-%dT%H:%M')
 
 
 # ============================================================
@@ -58,6 +66,14 @@ class BKResponseRequest(BaseModel):
     rekomendasi: Optional[str] = None
 
 
+class ScheduleUpdateRequest(BaseModel):
+    """Request model for staff to open/close the CLKB or PCL fill-in window."""
+    is_open: bool
+    open_start: Optional[str] = None
+    open_end: Optional[str] = None
+    info: Optional[str] = None
+
+
 class JurnalHomeVisitRequest(BaseModel):
     """Request model for a home visit journal entry."""
     siswa_id: str
@@ -79,6 +95,12 @@ class SekolahLanjutanRequest(BaseModel):
     status: Optional[str] = 'Rencana'  # Rencana, Mendaftar, Diterima, Tidak Diterima
     catatan: Optional[str] = None
     tahun_ajaran_lulus: Optional[str] = None
+
+
+class SekolahTujuanRequest(BaseModel):
+    """Request model for a reusable destination-school master data entry."""
+    nama: str
+    jenjang: Optional[str] = None  # e.g., "SMA", "SMK", "MA", "Pondok Pesantren"
 
 
 async def _get_siswa_or_404(siswa_id: str):
@@ -159,7 +181,7 @@ async def create_kunjungan(req: KunjunganKonselingRequest, user: Dict = Depends(
     }
 
     await db.bk_kunjungan.insert_one(doc)
-    await log_audit(user['id'], 'bk_kunjungan_create', f"Recorded kunjungan konseling for {siswa.get('full_name')}")
+    await log_audit(user, 'bk_kunjungan_create', f"Recorded kunjungan konseling for {siswa.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -176,7 +198,7 @@ async def update_kunjungan(kunjungan_id: str, req: KunjunganKonselingRequest, us
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.bk_kunjungan.update_one({'id': kunjungan_id}, {'$set': update_data})
-    await log_audit(user['id'], 'bk_kunjungan_update', f"Updated kunjungan konseling: {kunjungan_id}")
+    await log_audit(user, 'bk_kunjungan_update', f"Updated kunjungan konseling: {kunjungan_id}")
 
     updated = await db.bk_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -189,7 +211,7 @@ async def delete_kunjungan(kunjungan_id: str, user: Dict = Depends(require_role(
         raise HTTPException(404, "Data kunjungan tidak ditemukan")
 
     await db.bk_kunjungan.delete_one({'id': kunjungan_id})
-    await log_audit(user['id'], 'bk_kunjungan_delete', f"Deleted kunjungan konseling: {kunjungan_id}")
+    await log_audit(user, 'bk_kunjungan_delete', f"Deleted kunjungan konseling: {kunjungan_id}")
     return {'message': 'Data kunjungan berhasil dihapus'}
 
 
@@ -200,7 +222,7 @@ async def delete_kunjungan(kunjungan_id: str, user: Dict = Depends(require_role(
 def _clkb_window_open(settings: Dict) -> bool:
     if not settings.get('clkb_open'):
         return False
-    now = datetime.utcnow().isoformat()
+    now = _now_wib_naive_iso()
     start = settings.get('clkb_open_start')
     end = settings.get('clkb_open_end')
     if start and now < start:
@@ -219,6 +241,44 @@ async def get_clkb_form(user: Dict = Depends(get_current_user)):
         'petunjuk': CLKB_PETUNJUK,
         'total_items': CLKB_TOTAL_ITEMS,
         'is_open': _clkb_window_open(settings),
+        'info': settings.get('clkb_info'),
+        'open_start': settings.get('clkb_open_start'),
+        'open_end': settings.get('clkb_open_end'),
+    }
+
+
+@router.get("/bk/clkb/schedule")
+async def get_clkb_schedule(user: Dict = Depends(require_role(*BK_ROLES))):
+    """Staff-only: current CLKB schedule config, for quick access from the CLKB page."""
+    settings = await get_settings()
+    return {
+        'is_open': settings.get('clkb_open', False),
+        'window_active': _clkb_window_open(settings),
+        'open_start': settings.get('clkb_open_start'),
+        'open_end': settings.get('clkb_open_end'),
+        'info': settings.get('clkb_info'),
+    }
+
+
+@router.put("/bk/clkb/schedule")
+async def update_clkb_schedule(req: ScheduleUpdateRequest, user: Dict = Depends(require_role(*BK_ROLES))):
+    """Staff-only: open/close the CLKB fill-in window directly from the CLKB page."""
+    update_data = {
+        'clkb_open': req.is_open,
+        'clkb_open_start': req.open_start,
+        'clkb_open_end': req.open_end,
+        'clkb_info': req.info,
+        'updated_at': datetime.utcnow().isoformat(),
+        'updated_by': user.get('username'),
+    }
+    await db.settings.update_one({'id': 'global_config'}, {'$set': update_data}, upsert=True)
+    await log_audit(user, 'bk_clkb_schedule_update', f"CLKB schedule set to {'open' if req.is_open else 'closed'}")
+    settings = await get_settings()
+    return {
+        'is_open': settings.get('clkb_open', False),
+        'window_active': _clkb_window_open(settings),
+        'open_start': settings.get('clkb_open_start'),
+        'open_end': settings.get('clkb_open_end'),
         'info': settings.get('clkb_info'),
     }
 
@@ -275,7 +335,7 @@ async def submit_clkb(req: CLKBSubmitRequest, user: Dict = Depends(get_current_u
     }
 
     await db.bk_clkb_submissions.insert_one(doc)
-    await log_audit(user['id'], 'bk_clkb_submit', f"CLKB submission by {siswa.get('full_name')}")
+    await log_audit(user, 'bk_clkb_submit', f"CLKB submission by {siswa.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -354,7 +414,7 @@ async def generate_clkb_ai_summary(submission_id: str, user: Dict = Depends(requ
         raise HTTPException(400, str(e))
 
     await db.bk_clkb_submissions.update_one({'id': submission_id}, {'$set': {'ai_summary': summary, 'ai_summary_at': datetime.utcnow().isoformat()}})
-    await log_audit(user['id'], 'bk_clkb_ai_summary', f"Generated AI summary for CLKB {submission_id}")
+    await log_audit(user, 'bk_clkb_ai_summary', f"Generated AI summary for CLKB {submission_id}")
     return {'ai_summary': summary}
 
 
@@ -372,7 +432,7 @@ async def respond_clkb(submission_id: str, req: BKResponseRequest, user: Dict = 
         'ditanggapi_pada': datetime.utcnow().isoformat(),
     }
     await db.bk_clkb_submissions.update_one({'id': submission_id}, {'$set': update_data})
-    await log_audit(user['id'], 'bk_clkb_respond', f"Responded to CLKB {submission_id}")
+    await log_audit(user, 'bk_clkb_respond', f"Responded to CLKB {submission_id}")
 
     updated = await db.bk_clkb_submissions.find_one({'id': submission_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -384,7 +444,7 @@ async def delete_clkb_submission(submission_id: str, user: Dict = Depends(requir
     if not existing:
         raise HTTPException(404, "Data CLKB tidak ditemukan")
     await db.bk_clkb_submissions.delete_one({'id': submission_id})
-    await log_audit(user['id'], 'bk_clkb_delete', f"Deleted CLKB submission: {submission_id}")
+    await log_audit(user, 'bk_clkb_delete', f"Deleted CLKB submission: {submission_id}")
     return {'message': 'Data CLKB berhasil dihapus'}
 
 
@@ -395,7 +455,7 @@ async def delete_clkb_submission(submission_id: str, user: Dict = Depends(requir
 def _pcl_window_open(settings: Dict) -> bool:
     if not settings.get('pcl_open'):
         return False
-    now = datetime.utcnow().isoformat()
+    now = _now_wib_naive_iso()
     start = settings.get('pcl_open_start')
     end = settings.get('pcl_open_end')
     if start and now < start:
@@ -414,6 +474,44 @@ async def get_pcl_form(user: Dict = Depends(get_current_user)):
         'petunjuk': PCL_PETUNJUK,
         'total_items': pcl_total_items(),
         'is_open': _pcl_window_open(settings),
+        'info': settings.get('pcl_info'),
+        'open_start': settings.get('pcl_open_start'),
+        'open_end': settings.get('pcl_open_end'),
+    }
+
+
+@router.get("/bk/pcl/schedule")
+async def get_pcl_schedule(user: Dict = Depends(require_role(*BK_ROLES))):
+    """Staff-only: current PCL schedule config, for quick access from the PCL page."""
+    settings = await get_settings()
+    return {
+        'is_open': settings.get('pcl_open', False),
+        'window_active': _pcl_window_open(settings),
+        'open_start': settings.get('pcl_open_start'),
+        'open_end': settings.get('pcl_open_end'),
+        'info': settings.get('pcl_info'),
+    }
+
+
+@router.put("/bk/pcl/schedule")
+async def update_pcl_schedule(req: ScheduleUpdateRequest, user: Dict = Depends(require_role(*BK_ROLES))):
+    """Staff-only: open/close the PCL fill-in window directly from the PCL page."""
+    update_data = {
+        'pcl_open': req.is_open,
+        'pcl_open_start': req.open_start,
+        'pcl_open_end': req.open_end,
+        'pcl_info': req.info,
+        'updated_at': datetime.utcnow().isoformat(),
+        'updated_by': user.get('username'),
+    }
+    await db.settings.update_one({'id': 'global_config'}, {'$set': update_data}, upsert=True)
+    await log_audit(user, 'bk_pcl_schedule_update', f"PCL schedule set to {'open' if req.is_open else 'closed'}")
+    settings = await get_settings()
+    return {
+        'is_open': settings.get('pcl_open', False),
+        'window_active': _pcl_window_open(settings),
+        'open_start': settings.get('pcl_open_start'),
+        'open_end': settings.get('pcl_open_end'),
         'info': settings.get('pcl_info'),
     }
 
@@ -475,7 +573,7 @@ async def submit_pcl(req: PCLSubmitRequest, user: Dict = Depends(get_current_use
     }
 
     await db.bk_pcl_submissions.insert_one(doc)
-    await log_audit(user['id'], 'bk_pcl_submit', f"PCL submission by {siswa.get('full_name')}")
+    await log_audit(user, 'bk_pcl_submit', f"PCL submission by {siswa.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -572,7 +670,7 @@ async def generate_pcl_ai_summary(submission_id: str, user: Dict = Depends(requi
         raise HTTPException(400, str(e))
 
     await db.bk_pcl_submissions.update_one({'id': submission_id}, {'$set': {'ai_summary': summary, 'ai_summary_at': datetime.utcnow().isoformat()}})
-    await log_audit(user['id'], 'bk_pcl_ai_summary', f"Generated AI summary for PCL {submission_id}")
+    await log_audit(user, 'bk_pcl_ai_summary', f"Generated AI summary for PCL {submission_id}")
     return {'ai_summary': summary}
 
 
@@ -590,7 +688,7 @@ async def respond_pcl(submission_id: str, req: BKResponseRequest, user: Dict = D
         'ditanggapi_pada': datetime.utcnow().isoformat(),
     }
     await db.bk_pcl_submissions.update_one({'id': submission_id}, {'$set': update_data})
-    await log_audit(user['id'], 'bk_pcl_respond', f"Responded to PCL {submission_id}")
+    await log_audit(user, 'bk_pcl_respond', f"Responded to PCL {submission_id}")
 
     updated = await db.bk_pcl_submissions.find_one({'id': submission_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -602,7 +700,7 @@ async def delete_pcl_submission(submission_id: str, user: Dict = Depends(require
     if not existing:
         raise HTTPException(404, "Data PCL tidak ditemukan")
     await db.bk_pcl_submissions.delete_one({'id': submission_id})
-    await log_audit(user['id'], 'bk_pcl_delete', f"Deleted PCL submission: {submission_id}")
+    await log_audit(user, 'bk_pcl_delete', f"Deleted PCL submission: {submission_id}")
     return {'message': 'Data PCL berhasil dihapus'}
 
 
@@ -653,7 +751,7 @@ async def create_home_visit(req: JurnalHomeVisitRequest, user: Dict = Depends(re
     }
 
     await db.bk_home_visit.insert_one(doc)
-    await log_audit(user['id'], 'bk_home_visit_create', f"Recorded home visit for {siswa.get('full_name')}")
+    await log_audit(user, 'bk_home_visit_create', f"Recorded home visit for {siswa.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -670,7 +768,7 @@ async def update_home_visit(hv_id: str, req: JurnalHomeVisitRequest, user: Dict 
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.bk_home_visit.update_one({'id': hv_id}, {'$set': update_data})
-    await log_audit(user['id'], 'bk_home_visit_update', f"Updated home visit: {hv_id}")
+    await log_audit(user, 'bk_home_visit_update', f"Updated home visit: {hv_id}")
 
     updated = await db.bk_home_visit.find_one({'id': hv_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -683,8 +781,50 @@ async def delete_home_visit(hv_id: str, user: Dict = Depends(require_role(*BK_RO
         raise HTTPException(404, "Data home visit tidak ditemukan")
 
     await db.bk_home_visit.delete_one({'id': hv_id})
-    await log_audit(user['id'], 'bk_home_visit_delete', f"Deleted home visit: {hv_id}")
+    await log_audit(user, 'bk_home_visit_delete', f"Deleted home visit: {hv_id}")
     return {'message': 'Data home visit berhasil dihapus'}
+
+
+# ============================================================
+# SEKOLAH TUJUAN (REUSABLE MASTER DATA FOR "NAMA SEKOLAH TUJUAN")
+# ============================================================
+
+@router.get("/bk/sekolah-tujuan")
+async def list_sekolah_tujuan(user: Dict = Depends(get_current_user)):
+    items = await db.bk_sekolah_tujuan.find({}, {'_id': 0}).sort('nama', 1).to_list(1000)
+    return [serialize_doc(i) for i in items]
+
+
+@router.post("/bk/sekolah-tujuan")
+async def create_sekolah_tujuan(req: SekolahTujuanRequest, user: Dict = Depends(require_role(*BK_ROLES))):
+    existing = await db.bk_sekolah_tujuan.find_one({'nama': req.nama})
+    if existing:
+        raise HTTPException(400, f"Sekolah '{req.nama}' sudah ada di daftar")
+
+    doc = {
+        'id': str(uuid.uuid4()),
+        **req.model_dump(),
+        'created_by': user['id'],
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.bk_sekolah_tujuan.insert_one(doc)
+    await log_audit(user, 'bk_sekolah_tujuan_create', f"Created sekolah tujuan: {req.nama}")
+    return serialize_doc(doc)
+
+
+@router.delete("/bk/sekolah-tujuan/{item_id}")
+async def delete_sekolah_tujuan(item_id: str, user: Dict = Depends(require_role(*BK_ROLES))):
+    existing = await db.bk_sekolah_tujuan.find_one({'id': item_id})
+    if not existing:
+        raise HTTPException(404, "Sekolah tujuan tidak ditemukan")
+
+    used = await db.bk_sekolah_lanjutan.count_documents({'nama_sekolah_tujuan': existing['nama']})
+    if used > 0:
+        raise HTTPException(400, f"Sekolah ini masih digunakan oleh {used} data sekolah lanjutan")
+
+    await db.bk_sekolah_tujuan.delete_one({'id': item_id})
+    await log_audit(user, 'bk_sekolah_tujuan_delete', f"Deleted sekolah tujuan: {item_id}")
+    return {'message': 'Sekolah tujuan berhasil dihapus'}
 
 
 # ============================================================
@@ -725,7 +865,7 @@ async def create_sekolah_lanjutan(req: SekolahLanjutanRequest, user: Dict = Depe
     }
 
     await db.bk_sekolah_lanjutan.insert_one(doc)
-    await log_audit(user['id'], 'bk_sekolah_lanjutan_create', f"Recorded sekolah lanjutan for {siswa.get('full_name')}")
+    await log_audit(user, 'bk_sekolah_lanjutan_create', f"Recorded sekolah lanjutan for {siswa.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -742,7 +882,7 @@ async def update_sekolah_lanjutan(item_id: str, req: SekolahLanjutanRequest, use
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.bk_sekolah_lanjutan.update_one({'id': item_id}, {'$set': update_data})
-    await log_audit(user['id'], 'bk_sekolah_lanjutan_update', f"Updated sekolah lanjutan: {item_id}")
+    await log_audit(user, 'bk_sekolah_lanjutan_update', f"Updated sekolah lanjutan: {item_id}")
 
     updated = await db.bk_sekolah_lanjutan.find_one({'id': item_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -755,7 +895,7 @@ async def delete_sekolah_lanjutan(item_id: str, user: Dict = Depends(require_rol
         raise HTTPException(404, "Data tidak ditemukan")
 
     await db.bk_sekolah_lanjutan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'bk_sekolah_lanjutan_delete', f"Deleted sekolah lanjutan: {item_id}")
+    await log_audit(user, 'bk_sekolah_lanjutan_delete', f"Deleted sekolah lanjutan: {item_id}")
     return {'message': 'Data berhasil dihapus'}
 
 

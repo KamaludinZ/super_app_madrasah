@@ -26,30 +26,43 @@ const emptyForm = {
 export default function AdminBKKunjunganPage() {
   const [list, setList] = useState([]);
   const [students, setStudents] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
+  const [filterTingkat, setFilterTingkat] = useState('');
+  const [filterJenisLayanan, setFilterJenisLayanan] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [form, setForm] = useState(emptyForm);
+  const [selectedTingkat, setSelectedTingkat] = useState('');
+  const [selectedKelas, setSelectedKelas] = useState('');
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [res, studentsRes] = await Promise.all([
+      const [res, studentsRes, classesRes] = await Promise.all([
         api.get('/bk/kunjungan'),
         api.get('/students'),
+        api.get('/classes'),
       ]);
       setList(res.data || []);
       setStudents(studentsRes.data || []);
+      setClasses(classesRes.data || []);
     } catch (e) {
       toast.error('Gagal memuat data kunjungan');
     } finally {
       setLoading(false);
     }
   };
+
+  const tingkatOptions = [...new Set(classes.map((c) => c.grade).filter((g) => g !== undefined && g !== null))].sort((a, b) => a - b);
+  const kelasOptions = classes.filter((c) => String(c.grade) === String(selectedTingkat));
+  const studentsInKelas = students.filter((s) => s.student_class_id === selectedKelas);
 
   const openModal = (item = null) => {
     if (item) {
@@ -62,9 +75,15 @@ export default function AdminBKKunjunganPage() {
         penanganan: item.penanganan || '',
         tindak_lanjut: item.tindak_lanjut || '',
       });
+      const siswa = students.find((s) => s.id === item.siswa_id);
+      const kelas = classes.find((c) => c.id === siswa?.student_class_id);
+      setSelectedTingkat(kelas ? String(kelas.grade) : '');
+      setSelectedKelas(kelas ? kelas.id : '');
     } else {
       setEditing(null);
       setForm(emptyForm);
+      setSelectedTingkat('');
+      setSelectedKelas('');
     }
     setShowModal(true);
   };
@@ -103,7 +122,16 @@ export default function AdminBKKunjunganPage() {
     }
   };
 
+  // Tingkat (grade level) is derived from the class name's leading digits,
+  // e.g. "7B" -> "7" -- classes in this school always follow that pattern.
+  const getTingkat = (kelas) => (kelas || '').match(/^\d+/)?.[0] || null;
+  const filterTingkatOptions = [...new Set(list.map((item) => getTingkat(item.siswa_kelas)).filter(Boolean))].sort();
+
   const filtered = list.filter((item) => {
+    if (filterTingkat && getTingkat(item.siswa_kelas) !== filterTingkat) return false;
+    if (filterJenisLayanan && item.jenis_layanan !== filterJenisLayanan) return false;
+    if (filterStartDate && item.tanggal < filterStartDate) return false;
+    if (filterEndDate && item.tanggal > filterEndDate) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (item.siswa_nama || '').toLowerCase().includes(q) ||
@@ -127,7 +155,7 @@ export default function AdminBKKunjunganPage() {
       </div>
 
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
@@ -136,6 +164,27 @@ export default function AdminBKKunjunganPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Select value={filterTingkat || 'all'} onValueChange={(v) => setFilterTingkat(v === 'all' ? '' : v)}>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Semua Tingkat" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Tingkat</SelectItem>
+                {filterTingkatOptions.map((t) => <SelectItem key={t} value={t}>Kelas {t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterJenisLayanan || 'all'} onValueChange={(v) => setFilterJenisLayanan(v === 'all' ? '' : v)}>
+              <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Semua Jenis Layanan" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Jenis Layanan</SelectItem>
+                {JENIS_LAYANAN.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="w-full sm:w-40" />
+              <span className="text-slate-400 text-sm">s.d.</span>
+              <Input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="w-full sm:w-40" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -203,17 +252,58 @@ export default function AdminBKKunjunganPage() {
             <DialogTitle>{editing ? 'Edit Kunjungan Konseling' : 'Input Kunjungan Konseling'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tingkat <span className="text-rose-500">*</span></Label>
+                <Select
+                  value={selectedTingkat || 'none'}
+                  onValueChange={(v) => {
+                    const tingkat = v === 'none' ? '' : v;
+                    setSelectedTingkat(tingkat);
+                    setSelectedKelas('');
+                    setForm({ ...form, siswa_id: '' });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Pilih Tingkat" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Pilih Tingkat</SelectItem>
+                    {tingkatOptions.map((g) => <SelectItem key={g} value={String(g)}>Kelas {g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Kelas <span className="text-rose-500">*</span></Label>
+                <Select
+                  value={selectedKelas || 'none'}
+                  onValueChange={(v) => {
+                    const kelas = v === 'none' ? '' : v;
+                    setSelectedKelas(kelas);
+                    setForm({ ...form, siswa_id: '' });
+                  }}
+                  disabled={!selectedTingkat}
+                >
+                  <SelectTrigger><SelectValue placeholder="Pilih Kelas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Pilih Kelas</SelectItem>
+                    {kelasOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Siswa <span className="text-rose-500">*</span></Label>
-              <Select value={form.siswa_id || 'none'} onValueChange={(v) => setForm({ ...form, siswa_id: v === 'none' ? '' : v })}>
-                <SelectTrigger><SelectValue placeholder="Pilih Siswa" /></SelectTrigger>
+              <Select value={form.siswa_id || 'none'} onValueChange={(v) => setForm({ ...form, siswa_id: v === 'none' ? '' : v })} disabled={!selectedKelas}>
+                <SelectTrigger><SelectValue placeholder={selectedKelas ? 'Pilih Siswa' : 'Pilih tingkat & kelas dahulu'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Pilih Siswa</SelectItem>
-                  {students.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.nis} - {s.full_name} {s.class_name ? `(${s.class_name})` : ''}</SelectItem>
+                  {studentsInKelas.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nis} - {s.full_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedKelas && studentsInKelas.length === 0 && (
+                <p className="text-xs text-amber-600">Tidak ada siswa terdaftar di kelas ini</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Tanggal <span className="text-rose-500">*</span></Label>

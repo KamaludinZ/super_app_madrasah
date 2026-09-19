@@ -4,6 +4,7 @@ import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
+import UnitKesehatanDashboard from './dashboards/UnitKesehatanDashboard';
 import WaliKelasDashboard from './dashboards/WaliKelasDashboard';
 import KelasDashboard from './dashboards/KelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
@@ -33,6 +34,12 @@ export default function DashboardRouter() {
   // Check if user is a teacher (should see notification banner)
   const isTeacher = [
     'guru',
+    'guru_ipa',
+    'guru_ips',
+    'guru_bahasa',
+    'guru_seni',
+    'guru_agama',
+    'guru_tik',
     'guru_piket',
     'guru_bk',
     'guru_tata_tertib',
@@ -54,11 +61,19 @@ export default function DashboardRouter() {
       DashboardComponent = SiswaDashboard; break;
     case 'tenaga_kependidikan':
       DashboardComponent = StaffDashboard; break;
+    case 'unit_kesehatan':
+      DashboardComponent = UnitKesehatanDashboard; break;
     case 'wali_kelas':
       DashboardComponent = WaliKelasDashboard; break;
     case 'kelas':
       DashboardComponent = KelasDashboard; break;
     case 'guru':
+    case 'guru_ipa':
+    case 'guru_ips':
+    case 'guru_bahasa':
+    case 'guru_seni':
+    case 'guru_agama':
+    case 'guru_tik':
     case 'guru_piket':
     case 'guru_bk':
     case 'guru_tata_tertib':

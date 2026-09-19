@@ -217,7 +217,7 @@ async def create_aset_tetap(req: AsetTetapRequest, user: Dict = Depends(require_
         'updated_at': datetime.utcnow().isoformat(),
     }
     await db.sarpras_aset_tetap.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_aset_tetap_create', f"Created aset tetap: {req.nama_aset}")
+    await log_audit(user, 'sarpras_aset_tetap_create', f"Created aset tetap: {req.nama_aset}")
     return serialize_doc(doc)
 
 
@@ -236,7 +236,7 @@ async def update_aset_tetap(aset_id: str, req: AsetTetapRequest, user: Dict = De
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.sarpras_aset_tetap.update_one({'id': aset_id}, {'$set': update_data})
-    await log_audit(user['id'], 'sarpras_aset_tetap_update', f"Updated aset tetap: {aset_id}")
+    await log_audit(user, 'sarpras_aset_tetap_update', f"Updated aset tetap: {aset_id}")
 
     updated = await db.sarpras_aset_tetap.find_one({'id': aset_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -248,7 +248,7 @@ async def delete_aset_tetap(aset_id: str, user: Dict = Depends(require_role(*SAR
     if not existing:
         raise HTTPException(404, "Aset tetap tidak ditemukan")
     await db.sarpras_aset_tetap.delete_one({'id': aset_id})
-    await log_audit(user['id'], 'sarpras_aset_tetap_delete', f"Deleted aset tetap: {aset_id}")
+    await log_audit(user, 'sarpras_aset_tetap_delete', f"Deleted aset tetap: {aset_id}")
     return {'message': 'Aset tetap berhasil dihapus'}
 
 
@@ -282,7 +282,7 @@ async def create_aset_lancar(req: AsetLancarRequest, user: Dict = Depends(requir
         'updated_at': datetime.utcnow().isoformat(),
     }
     await db.sarpras_aset_lancar.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_aset_lancar_create', f"Created aset lancar: {req.nama_barang}")
+    await log_audit(user, 'sarpras_aset_lancar_create', f"Created aset lancar: {req.nama_barang}")
     return serialize_doc(doc)
 
 
@@ -301,7 +301,7 @@ async def update_aset_lancar(aset_id: str, req: AsetLancarRequest, user: Dict = 
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.sarpras_aset_lancar.update_one({'id': aset_id}, {'$set': update_data})
-    await log_audit(user['id'], 'sarpras_aset_lancar_update', f"Updated aset lancar: {aset_id}")
+    await log_audit(user, 'sarpras_aset_lancar_update', f"Updated aset lancar: {aset_id}")
 
     updated = await db.sarpras_aset_lancar.find_one({'id': aset_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -313,7 +313,7 @@ async def delete_aset_lancar(aset_id: str, user: Dict = Depends(require_role(*SA
     if not existing:
         raise HTTPException(404, "Aset lancar tidak ditemukan")
     await db.sarpras_aset_lancar.delete_one({'id': aset_id})
-    await log_audit(user['id'], 'sarpras_aset_lancar_delete', f"Deleted aset lancar: {aset_id}")
+    await log_audit(user, 'sarpras_aset_lancar_delete', f"Deleted aset lancar: {aset_id}")
     return {'message': 'Aset lancar berhasil dihapus'}
 
 
@@ -378,7 +378,7 @@ async def create_penghapusan(req: PenghapusanRequest, user: Dict = Depends(requi
         new_val = max(0, (current_jumlah or 0) - req.jumlah_dihapus)
         await collection.update_one({'id': req.aset_id}, {'$set': {field: new_val}})
 
-    await log_audit(user['id'], 'sarpras_penghapusan_create', f"Penghapusan: {aset_doc.get(name_field)}")
+    await log_audit(user, 'sarpras_penghapusan_create', f"Penghapusan: {aset_doc.get(name_field)}")
     return serialize_doc(doc)
 
 
@@ -388,7 +388,7 @@ async def delete_penghapusan(item_id: str, user: Dict = Depends(require_role(*SA
     if not existing:
         raise HTTPException(404, "Data penghapusan tidak ditemukan")
     await db.sarpras_penghapusan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_penghapusan_delete', f"Deleted penghapusan: {item_id}")
+    await log_audit(user, 'sarpras_penghapusan_delete', f"Deleted penghapusan: {item_id}")
     return {'message': 'Data penghapusan berhasil dihapus'}
 
 
@@ -420,7 +420,7 @@ async def create_peminjaman_barang(req: PeminjamanBarangRequest, user: Dict = De
         'updated_at': datetime.utcnow().isoformat(),
     }
     await db.sarpras_peminjaman_barang.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_peminjaman_barang_create', f"{peminjam.get('full_name')} meminjam {aset_doc.get(name_field)}")
+    await log_audit(user, 'sarpras_peminjaman_barang_create', f"{peminjam.get('full_name')} meminjam {aset_doc.get(name_field)}")
     return serialize_doc(doc)
 
 
@@ -440,7 +440,7 @@ async def update_peminjaman_barang(item_id: str, req: PeminjamanBarangRequest, u
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.sarpras_peminjaman_barang.update_one({'id': item_id}, {'$set': update_data})
-    await log_audit(user['id'], 'sarpras_peminjaman_barang_update', f"Updated peminjaman barang: {item_id}")
+    await log_audit(user, 'sarpras_peminjaman_barang_update', f"Updated peminjaman barang: {item_id}")
 
     updated = await db.sarpras_peminjaman_barang.find_one({'id': item_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -452,7 +452,7 @@ async def delete_peminjaman_barang(item_id: str, user: Dict = Depends(require_ro
     if not existing:
         raise HTTPException(404, "Data peminjaman tidak ditemukan")
     await db.sarpras_peminjaman_barang.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_peminjaman_barang_delete', f"Deleted peminjaman barang: {item_id}")
+    await log_audit(user, 'sarpras_peminjaman_barang_delete', f"Deleted peminjaman barang: {item_id}")
     return {'message': 'Data peminjaman berhasil dihapus'}
 
 
@@ -486,7 +486,7 @@ async def create_peminjaman_ruangan(req: PeminjamanRuanganRequest, user: Dict = 
         'updated_at': datetime.utcnow().isoformat(),
     }
     await db.sarpras_peminjaman_ruangan.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_peminjaman_ruangan_create', f"{peminjam.get('full_name')} memesan ruangan {room.get('name')}")
+    await log_audit(user, 'sarpras_peminjaman_ruangan_create', f"{peminjam.get('full_name')} memesan ruangan {room.get('name')}")
     return serialize_doc(doc)
 
 
@@ -506,7 +506,7 @@ async def update_peminjaman_ruangan(item_id: str, req: PeminjamanRuanganRequest,
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.sarpras_peminjaman_ruangan.update_one({'id': item_id}, {'$set': update_data})
-    await log_audit(user['id'], 'sarpras_peminjaman_ruangan_update', f"Updated peminjaman ruangan: {item_id}")
+    await log_audit(user, 'sarpras_peminjaman_ruangan_update', f"Updated peminjaman ruangan: {item_id}")
 
     updated = await db.sarpras_peminjaman_ruangan.find_one({'id': item_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -518,7 +518,7 @@ async def delete_peminjaman_ruangan(item_id: str, user: Dict = Depends(require_r
     if not existing:
         raise HTTPException(404, "Data peminjaman ruangan tidak ditemukan")
     await db.sarpras_peminjaman_ruangan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_peminjaman_ruangan_delete', f"Deleted peminjaman ruangan: {item_id}")
+    await log_audit(user, 'sarpras_peminjaman_ruangan_delete', f"Deleted peminjaman ruangan: {item_id}")
     return {'message': 'Data peminjaman ruangan berhasil dihapus'}
 
 
@@ -552,7 +552,7 @@ async def create_jurnal_ruangan(req: JurnalRuanganRequest, user: Dict = Depends(
         doc.update(_user_fields('penanggung_jawab', pj))
 
     await db.sarpras_jurnal_ruangan.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_jurnal_ruangan_create', f"Jurnal penggunaan ruangan: {room.get('name')}")
+    await log_audit(user, 'sarpras_jurnal_ruangan_create', f"Jurnal penggunaan ruangan: {room.get('name')}")
     return serialize_doc(doc)
 
 
@@ -562,7 +562,7 @@ async def delete_jurnal_ruangan(item_id: str, user: Dict = Depends(require_role(
     if not existing:
         raise HTTPException(404, "Data jurnal tidak ditemukan")
     await db.sarpras_jurnal_ruangan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_jurnal_ruangan_delete', f"Deleted jurnal ruangan: {item_id}")
+    await log_audit(user, 'sarpras_jurnal_ruangan_delete', f"Deleted jurnal ruangan: {item_id}")
     return {'message': 'Data jurnal berhasil dihapus'}
 
 
@@ -596,7 +596,7 @@ async def create_jurnal_alat(req: JurnalAlatRequest, user: Dict = Depends(requir
         doc.update(_user_fields('pengguna', pengguna))
 
     await db.sarpras_jurnal_alat.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_jurnal_alat_create', f"Jurnal penggunaan alat: {aset_doc.get(name_field)}")
+    await log_audit(user, 'sarpras_jurnal_alat_create', f"Jurnal penggunaan alat: {aset_doc.get(name_field)}")
     return serialize_doc(doc)
 
 
@@ -606,7 +606,7 @@ async def delete_jurnal_alat(item_id: str, user: Dict = Depends(require_role(*SA
     if not existing:
         raise HTTPException(404, "Data jurnal tidak ditemukan")
     await db.sarpras_jurnal_alat.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_jurnal_alat_delete', f"Deleted jurnal alat: {item_id}")
+    await log_audit(user, 'sarpras_jurnal_alat_delete', f"Deleted jurnal alat: {item_id}")
     return {'message': 'Data jurnal berhasil dihapus'}
 
 
@@ -636,7 +636,7 @@ async def create_jurnal_perawatan(req: JurnalPerawatanRequest, user: Dict = Depe
         'created_at': datetime.utcnow().isoformat(),
     }
     await db.sarpras_jurnal_perawatan.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_jurnal_perawatan_create', f"Perawatan aset: {aset_doc.get(name_field)}")
+    await log_audit(user, 'sarpras_jurnal_perawatan_create', f"Perawatan aset: {aset_doc.get(name_field)}")
     return serialize_doc(doc)
 
 
@@ -646,7 +646,7 @@ async def delete_jurnal_perawatan(item_id: str, user: Dict = Depends(require_rol
     if not existing:
         raise HTTPException(404, "Data jurnal perawatan tidak ditemukan")
     await db.sarpras_jurnal_perawatan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_jurnal_perawatan_delete', f"Deleted jurnal perawatan: {item_id}")
+    await log_audit(user, 'sarpras_jurnal_perawatan_delete', f"Deleted jurnal perawatan: {item_id}")
     return {'message': 'Data jurnal perawatan berhasil dihapus'}
 
 
@@ -682,7 +682,7 @@ async def create_kerusakan(req: LaporanKerusakanRequest, user: Dict = Depends(re
         doc.update(_user_fields('pelapor', pelapor))
 
     await db.sarpras_kerusakan.insert_one(doc)
-    await log_audit(user['id'], 'sarpras_kerusakan_create', f"Laporan kerusakan: {aset_doc.get(name_field)}")
+    await log_audit(user, 'sarpras_kerusakan_create', f"Laporan kerusakan: {aset_doc.get(name_field)}")
     return serialize_doc(doc)
 
 
@@ -702,7 +702,7 @@ async def update_kerusakan(item_id: str, req: LaporanKerusakanRequest, user: Dic
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.sarpras_kerusakan.update_one({'id': item_id}, {'$set': update_data})
-    await log_audit(user['id'], 'sarpras_kerusakan_update', f"Updated laporan kerusakan: {item_id}")
+    await log_audit(user, 'sarpras_kerusakan_update', f"Updated laporan kerusakan: {item_id}")
 
     updated = await db.sarpras_kerusakan.find_one({'id': item_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -714,7 +714,7 @@ async def delete_kerusakan(item_id: str, user: Dict = Depends(require_role(*SARP
     if not existing:
         raise HTTPException(404, "Data laporan kerusakan tidak ditemukan")
     await db.sarpras_kerusakan.delete_one({'id': item_id})
-    await log_audit(user['id'], 'sarpras_kerusakan_delete', f"Deleted laporan kerusakan: {item_id}")
+    await log_audit(user, 'sarpras_kerusakan_delete', f"Deleted laporan kerusakan: {item_id}")
     return {'message': 'Data laporan kerusakan berhasil dihapus'}
 
 

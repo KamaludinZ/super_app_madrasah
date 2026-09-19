@@ -13,8 +13,8 @@ import { Pill, ArrowDownCircle, ArrowUpCircle, Plus, Pencil, Trash2, Loader2, Sa
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
-const emptyObatForm = { nama_obat: '', jenis: '', satuan: 'pcs', stok: 0, stok_minimum: 0, tanggal_kadaluarsa: '', keterangan: '' };
-const emptyMasukForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, sumber: '', keterangan: '' };
+const emptyObatForm = { nama_obat: '', jenis: '', satuan: 'pcs', untuk_penanganan: '', dosis: '', stok_minimum: 0, keterangan: '' };
+const emptyMasukForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, tanggal_kadaluarsa: '', sumber: '', keterangan: '' };
 const emptyKeluarForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, keterangan: '' };
 
 export default function AdminUKSObatPage() {
@@ -62,8 +62,8 @@ export default function AdminUKSObatPage() {
       setEditingObat(item);
       setObatForm({
         nama_obat: item.nama_obat || '', jenis: item.jenis || '', satuan: item.satuan || 'pcs',
-        stok: item.stok ?? 0, stok_minimum: item.stok_minimum ?? 0,
-        tanggal_kadaluarsa: item.tanggal_kadaluarsa || '', keterangan: item.keterangan || '',
+        untuk_penanganan: item.untuk_penanganan || '', dosis: item.dosis || '',
+        stok_minimum: item.stok_minimum ?? 0, keterangan: item.keterangan || '',
       });
     } else {
       setEditingObat(null);
@@ -76,7 +76,7 @@ export default function AdminUKSObatPage() {
     if (!obatForm.nama_obat) { toast.error('Nama obat wajib diisi'); return; }
     setSaving(true);
     try {
-      const payload = { ...obatForm, stok: Number(obatForm.stok) || 0, stok_minimum: Number(obatForm.stok_minimum) || 0 };
+      const payload = { ...obatForm, stok_minimum: Number(obatForm.stok_minimum) || 0 };
       if (editingObat) {
         await api.put(`/uks/obat/${editingObat.id}`, payload);
         toast.success('Data obat berhasil diperbarui');
@@ -202,15 +202,18 @@ export default function AdminUKSObatPage() {
                       <TableRow>
                         <TableHead>Nama Obat</TableHead>
                         <TableHead>Jenis</TableHead>
-                        <TableHead className="text-center">Stok</TableHead>
+                        <TableHead>Untuk Penanganan</TableHead>
+                        <TableHead>Dosis</TableHead>
+                        <TableHead className="text-center">Stok Tersisa</TableHead>
+                        <TableHead className="text-center">Stok Terpakai</TableHead>
                         <TableHead className="text-center">Stok Min</TableHead>
-                        <TableHead>Kadaluarsa</TableHead>
+                        <TableHead>Kadaluarsa Terdekat</TableHead>
                         <TableHead className="text-right">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredObat.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">
+                        <TableRow><TableCell colSpan={9} className="text-center py-12 text-slate-500">
                           <Pill className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                           <div className="font-semibold">Belum ada data obat</div>
                         </TableCell></TableRow>
@@ -219,13 +222,16 @@ export default function AdminUKSObatPage() {
                           <TableRow key={item.id}>
                             <TableCell className="font-semibold">{item.nama_obat}</TableCell>
                             <TableCell>{item.jenis || '-'}</TableCell>
+                            <TableCell className="max-w-xs"><div className="line-clamp-2">{item.untuk_penanganan || '-'}</div></TableCell>
+                            <TableCell className="max-w-xs"><div className="line-clamp-2">{item.dosis || '-'}</div></TableCell>
                             <TableCell className="text-center">
-                              <Badge className={item.stok <= (item.stok_minimum || 0) ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}>
-                                {item.stok} {item.satuan}
+                              <Badge className={item.stok_menipis ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}>
+                                {item.stok_tersisa ?? 0} {item.satuan}
                               </Badge>
                             </TableCell>
+                            <TableCell className="text-center font-mono">{item.stok_terpakai ?? 0}</TableCell>
                             <TableCell className="text-center font-mono">{item.stok_minimum}</TableCell>
-                            <TableCell className="font-mono">{item.tanggal_kadaluarsa || '-'}</TableCell>
+                            <TableCell className="font-mono">{item.tanggal_kadaluarsa_terdekat || '-'}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
                                 <Button size="icon" variant="ghost" onClick={() => openObatModal(item)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></Button>
@@ -256,6 +262,8 @@ export default function AdminUKSObatPage() {
                       <TableHead>Tanggal</TableHead>
                       <TableHead>Obat</TableHead>
                       <TableHead className="text-center">Jumlah</TableHead>
+                      <TableHead className="text-center">Sisa Batch</TableHead>
+                      <TableHead>Kadaluarsa</TableHead>
                       <TableHead>Sumber</TableHead>
                       <TableHead>Petugas</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
@@ -263,13 +271,15 @@ export default function AdminUKSObatPage() {
                   </TableHeader>
                   <TableBody>
                     {masukList.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">Belum ada data obat masuk</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">Belum ada data obat masuk</TableCell></TableRow>
                     ) : (
                       masukList.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-mono">{item.tanggal}</TableCell>
                           <TableCell className="font-semibold">{item.obat_nama}</TableCell>
                           <TableCell className="text-center"><Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">+{item.jumlah}</Badge></TableCell>
+                          <TableCell className="text-center font-mono">{item.stok_sisa}</TableCell>
+                          <TableCell className="font-mono">{item.tanggal_kadaluarsa || '-'}</TableCell>
                           <TableCell>{item.sumber || '-'}</TableCell>
                           <TableCell>{item.petugas_nama || '-'}</TableCell>
                           <TableCell className="text-right">
@@ -347,19 +357,18 @@ export default function AdminUKSObatPage() {
                 <Input value={obatForm.satuan} onChange={(e) => setObatForm({ ...obatForm, satuan: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Stok Awal</Label>
-                <Input type="number" min="0" value={obatForm.stok} onChange={(e) => setObatForm({ ...obatForm, stok: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Stok Minimum</Label>
-                <Input type="number" min="0" value={obatForm.stok_minimum} onChange={(e) => setObatForm({ ...obatForm, stok_minimum: e.target.value })} />
-              </div>
+            <div className="space-y-2">
+              <Label>Untuk Penanganan</Label>
+              <Input value={obatForm.untuk_penanganan} onChange={(e) => setObatForm({ ...obatForm, untuk_penanganan: e.target.value })} placeholder="Contoh: Meredakan demam dan nyeri ringan" />
             </div>
             <div className="space-y-2">
-              <Label>Tanggal Kadaluarsa</Label>
-              <Input type="date" value={obatForm.tanggal_kadaluarsa} onChange={(e) => setObatForm({ ...obatForm, tanggal_kadaluarsa: e.target.value })} />
+              <Label>Dosis</Label>
+              <Input value={obatForm.dosis} onChange={(e) => setObatForm({ ...obatForm, dosis: e.target.value })} placeholder="Contoh: 1 tablet tiap 6 jam setelah makan" />
+            </div>
+            <div className="space-y-2">
+              <Label>Stok Minimum</Label>
+              <Input type="number" min="0" value={obatForm.stok_minimum} onChange={(e) => setObatForm({ ...obatForm, stok_minimum: e.target.value })} />
+              <p className="text-xs text-slate-500">Ambang batas untuk peringatan "Stok Menipis". Stok aktual dikelola lewat tab Obat Masuk.</p>
             </div>
             <div className="space-y-2">
               <Label>Keterangan</Label>
@@ -386,7 +395,7 @@ export default function AdminUKSObatPage() {
                 <SelectTrigger><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Pilih Obat</SelectItem>
-                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok})</SelectItem>)}
+                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok_tersisa ?? 0})</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -399,6 +408,10 @@ export default function AdminUKSObatPage() {
                 <Label>Jumlah <span className="text-rose-500">*</span></Label>
                 <Input type="number" min="1" value={masukForm.jumlah} onChange={(e) => setMasukForm({ ...masukForm, jumlah: e.target.value })} />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Tanggal Kadaluarsa</Label>
+              <Input type="date" value={masukForm.tanggal_kadaluarsa} onChange={(e) => setMasukForm({ ...masukForm, tanggal_kadaluarsa: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label>Sumber</Label>
@@ -429,7 +442,7 @@ export default function AdminUKSObatPage() {
                 <SelectTrigger><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Pilih Obat</SelectItem>
-                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok})</SelectItem>)}
+                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok_tersisa ?? 0})</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

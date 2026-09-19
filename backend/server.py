@@ -33,6 +33,7 @@ from routers import (
     jabatan,
     journals,
     kelas_digital,
+    lab,
     notifications,
     perpus,
     phase4,
@@ -108,6 +109,7 @@ api_router.include_router(bk.router)
 api_router.include_router(perpus.router)
 api_router.include_router(uks.router)
 api_router.include_router(sarpras.router)
+api_router.include_router(lab.router)
 
 # Debug kelas_digital router
 logger.info(f"[DEBUG] About to include kelas_digital router")

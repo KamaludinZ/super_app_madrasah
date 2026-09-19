@@ -12,6 +12,12 @@ ROLES = [
     'admin',
     'siswa',
     'guru',
+    'guru_ipa',
+    'guru_ips',
+    'guru_bahasa',
+    'guru_seni',
+    'guru_agama',
+    'guru_tik',
     'tenaga_kependidikan',
     'guru_ekstrakurikuler',
     'guru_piket',
@@ -48,6 +54,12 @@ ROLE_LABELS = {
     'admin': 'Administrator',
     'siswa': 'Siswa',
     'guru': 'Guru Mata Pelajaran',
+    'guru_ipa': 'Guru IPA',
+    'guru_ips': 'Guru IPS',
+    'guru_bahasa': 'Guru Bahasa',
+    'guru_seni': 'Guru Seni',
+    'guru_agama': 'Guru Agama',
+    'guru_tik': 'Guru TIK',
     'tenaga_kependidikan': 'Tenaga Kependidikan',
     'guru_ekstrakurikuler': 'Guru Ekstrakurikuler',
     'guru_piket': 'Guru Piket',
@@ -588,6 +600,9 @@ class StudentDetailModel(BaseModel):
     # 'Berbakat/memiliki kemampuan dan kecerdasan luar biasa' | 'Lainnya'
     kebutuhan_disabilitas: List[str] = Field(default_factory=list)
     # ['Tidak ada', 'Tuna netra', 'Tuna Rungu', 'Tuna Daksa', 'Tuna Grahita', 'Tuna laras', 'Tuna wicara', 'Lainnya']
+    # === DATA MAHAD ===
+    santri_mahad: bool = False
+    kamar_mahad: Optional[str] = None  # nama kamar di mahad, hanya relevan jika santri_mahad
     # === UPLOAD BERKAS (PDF, maks 2MB per file, via verval) ===
     berkas_kartu_keluarga: Optional[str] = None
     berkas_akta_kelahiran: Optional[str] = None
@@ -830,6 +845,7 @@ class UserUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     nip_nuptk: Optional[str] = None
     nisn: Optional[str] = None
+    nis: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     roles: Optional[List[str]] = None

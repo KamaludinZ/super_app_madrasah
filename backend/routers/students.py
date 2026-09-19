@@ -69,7 +69,10 @@ async def list_students(
     for s in items:
         cls = await db.classes.find_one({'id': s.get('student_class_id')}, {'_id': 0, 'name': 1})
         s['class_name'] = cls.get('name') if cls else None
-        s['completeness_percentage'] = compute_completeness(s, detail_map.get(s.get('id')))
+        detail = detail_map.get(s.get('id'))
+        s['completeness_percentage'] = compute_completeness(s, detail)
+        s['santri_mahad'] = bool(detail.get('santri_mahad')) if detail else False
+        s['kamar_mahad'] = detail.get('kamar_mahad') if detail else None
         enriched.append(serialize_doc(s))
     return enriched
 

@@ -89,7 +89,7 @@ async def create_kategori(req: KategoriTatibRequest, user: Dict = Depends(requir
     }
 
     await db.tatib_kategori.insert_one(doc)
-    await log_audit(user['id'], 'tatib_kategori_create', f"Created kategori: {req.nama}")
+    await log_audit(user, 'tatib_kategori_create', f"Created kategori: {req.nama}")
     return serialize_doc(doc)
 
 
@@ -104,7 +104,7 @@ async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dic
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_kategori.update_one({'id': kategori_id}, {'$set': update_data})
-    await log_audit(user['id'], 'tatib_kategori_update', f"Updated kategori: {kategori_id}")
+    await log_audit(user, 'tatib_kategori_update', f"Updated kategori: {kategori_id}")
 
     updated = await db.tatib_kategori.find_one({'id': kategori_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -125,7 +125,7 @@ async def delete_kategori(kategori_id: str, user: Dict = Depends(require_role('a
         raise HTTPException(400, f"Kategori masih digunakan oleh {jenis_count} jenis dan {tatib_count} aturan")
 
     await db.tatib_kategori.delete_one({'id': kategori_id})
-    await log_audit(user['id'], 'tatib_kategori_delete', f"Deleted kategori: {kategori_id}")
+    await log_audit(user, 'tatib_kategori_delete', f"Deleted kategori: {kategori_id}")
     return {'message': 'Kategori berhasil dihapus'}
 
 
@@ -165,7 +165,7 @@ async def create_jenis(req: JenisTatibRequest, user: Dict = Depends(require_role
     }
 
     await db.tatib_jenis.insert_one(doc)
-    await log_audit(user['id'], 'tatib_jenis_create', f"Created jenis: {req.nama}")
+    await log_audit(user, 'tatib_jenis_create', f"Created jenis: {req.nama}")
     return serialize_doc(doc)
 
 
@@ -192,7 +192,7 @@ async def update_jenis(jenis_id: str, req: JenisTatibRequest, user: Dict = Depen
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_jenis.update_one({'id': jenis_id}, {'$set': update_data})
-    await log_audit(user['id'], 'tatib_jenis_update', f"Updated jenis: {jenis_id}")
+    await log_audit(user, 'tatib_jenis_update', f"Updated jenis: {jenis_id}")
 
     updated = await db.tatib_jenis.find_one({'id': jenis_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -211,7 +211,7 @@ async def delete_jenis(jenis_id: str, user: Dict = Depends(require_role('admin')
         raise HTTPException(400, f"Jenis masih digunakan oleh {tatib_count} aturan")
 
     await db.tatib_jenis.delete_one({'id': jenis_id})
-    await log_audit(user['id'], 'tatib_jenis_delete', f"Deleted jenis: {jenis_id}")
+    await log_audit(user, 'tatib_jenis_delete', f"Deleted jenis: {jenis_id}")
     return {'message': 'Jenis berhasil dihapus'}
 
 
@@ -283,7 +283,7 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(require_role('ad
     }
 
     await db.tatib_aturan.insert_one(doc)
-    await log_audit(user['id'], 'tatib_aturan_create', f"Created aturan: {req.kode} - {req.nama_aturan}")
+    await log_audit(user, 'tatib_aturan_create', f"Created aturan: {req.kode} - {req.nama_aturan}")
     return serialize_doc(doc)
 
 
@@ -318,7 +318,7 @@ async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_aturan.update_one({'id': aturan_id}, {'$set': update_data})
-    await log_audit(user['id'], 'tatib_aturan_update', f"Updated aturan: {aturan_id}")
+    await log_audit(user, 'tatib_aturan_update', f"Updated aturan: {aturan_id}")
 
     updated = await db.tatib_aturan.find_one({'id': aturan_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -337,7 +337,7 @@ async def delete_aturan(aturan_id: str, user: Dict = Depends(require_role('admin
         raise HTTPException(400, f"Aturan masih digunakan oleh {penanganan_count} data penanganan")
 
     await db.tatib_aturan.delete_one({'id': aturan_id})
-    await log_audit(user['id'], 'tatib_aturan_delete', f"Deleted aturan: {aturan_id}")
+    await log_audit(user, 'tatib_aturan_delete', f"Deleted aturan: {aturan_id}")
     return {'message': 'Aturan berhasil dihapus'}
 
 
@@ -412,7 +412,7 @@ async def import_aturan_excel(
             except Exception as e:
                 errors.append(f"Baris {idx + 2}: {str(e)}")
 
-        await log_audit(user['id'], 'tatib_aturan_import', f"Imported {imported} aturan from Excel")
+        await log_audit(user, 'tatib_aturan_import', f"Imported {imported} aturan from Excel")
 
         return {
             'imported': imported,
@@ -517,7 +517,7 @@ async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_cur
 
     action_type = "prestasi" if tatib.get('poin', 0) > 0 else "pelanggaran"
     await log_audit(
-        user['id'],
+        user,
         'tatib_penanganan_create',
         f"Recorded {action_type} for {siswa.get('full_name')}: {tatib.get('nama_aturan')}"
     )
@@ -562,7 +562,7 @@ async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Di
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_penanganan.update_one({'id': penanganan_id}, {'$set': update_data})
-    await log_audit(user['id'], 'tatib_penanganan_update', f"Updated penanganan: {penanganan_id}")
+    await log_audit(user, 'tatib_penanganan_update', f"Updated penanganan: {penanganan_id}")
 
     updated = await db.tatib_penanganan.find_one({'id': penanganan_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -576,7 +576,7 @@ async def delete_penanganan(penanganan_id: str, user: Dict = Depends(require_rol
         raise HTTPException(404, "Penanganan tidak ditemukan")
 
     await db.tatib_penanganan.delete_one({'id': penanganan_id})
-    await log_audit(user['id'], 'tatib_penanganan_delete', f"Deleted penanganan: {penanganan_id}")
+    await log_audit(user, 'tatib_penanganan_delete', f"Deleted penanganan: {penanganan_id}")
     return {'message': 'Penanganan berhasil dihapus'}
 
 

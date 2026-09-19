@@ -184,6 +184,8 @@ export default function DataSiswaPage() {
                     <TableHead>UMUR</TableHead>
                     <TableHead>% DATA</TableHead>
                     <TableHead>KELAS</TableHead>
+                    <TableHead>MAHAD</TableHead>
+                    <TableHead>KAMAR</TableHead>
                     <TableHead>STATUS</TableHead>
                     <TableHead className="text-right">AKSI</TableHead>
                   </TableRow>
@@ -239,6 +241,14 @@ export default function DataSiswaPage() {
                       </TableCell>
                       <TableCell>{s.class_name || '-'}</TableCell>
                       <TableCell>
+                        {s.santri_mahad ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Santri</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-slate-500">Bukan</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{s.santri_mahad ? (s.kamar_mahad || '-') : '-'}</TableCell>
+                      <TableCell>
                         {s.mutation_type === 'keluar' ? (
                           <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">Mutasi Keluar</Badge>
                         ) : s.mutation_type === 'masuk' ? (
@@ -286,7 +296,7 @@ export default function DataSiswaPage() {
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={12} className="text-center py-12 text-slate-500">
+                    <TableRow><TableCell colSpan={14} className="text-center py-12 text-slate-500">
                       <GraduationCap className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                       <div className="font-semibold">Tidak ada data siswa</div>
                     </TableCell></TableRow>

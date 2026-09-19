@@ -14,7 +14,7 @@ import {
   Megaphone, ChevronDown, Briefcase, Info, CheckCircle2, UserCircle, HelpCircle,
   Target, Award, DollarSign, LogIn, Loader2, Globe,
   HeartHandshake, ClipboardCheck, AlertTriangle, Home, School, FileBarChart,
-  Stethoscope, Pill, ClipboardPlus, HeartPulse,
+  Stethoscope, Pill, ClipboardPlus, HeartPulse, Syringe,
   Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
@@ -44,12 +44,32 @@ import { CommandPalette } from '@/components/CommandPalette';
  * - Array of items (for roles without groups)
  * - Array of groups with {title, items} structure (for admin with groups)
  */
+const SUBJECT_TEACHER_ROLES = ['guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik'];
+const LAB_GROUP_BY_ROLE = {
+  guru_ipa: { title: 'Menu Lab IPA', labKey: 'ipa', testidPrefix: 'lab-ipa' },
+  guru_tik: { title: 'Menu Lab Komputer', labKey: 'komputer', testidPrefix: 'lab-komputer' },
+};
+
+function buildLabGroupItems(labKey, testidPrefix) {
+  return [
+    { to: `/lab/${labKey}/alat-bahan`, label: 'Alat dan Bahan Lab', icon: Package, testid: `nav-${testidPrefix}-alat-bahan` },
+    { to: `/lab/${labKey}/jadwal`, label: 'Jadwal Penggunaan Lab', icon: CalendarClock, testid: `nav-${testidPrefix}-jadwal` },
+    { to: `/lab/${labKey}/jurnal-penggunaan`, label: 'Jurnal Penggunaan Lab', icon: BookOpenCheck, testid: `nav-${testidPrefix}-jurnal-penggunaan` },
+    { to: `/lab/${labKey}/jurnal-pengelolaan`, label: 'Jurnal Pengelolaan', icon: ClipboardList, testid: `nav-${testidPrefix}-jurnal-pengelolaan` },
+    { to: `/lab/${labKey}/peminjaman-alat`, label: 'Peminjaman Alat', icon: Handshake, testid: `nav-${testidPrefix}-peminjaman-alat` },
+    { to: `/lab/${labKey}/kerusakan`, label: 'Laporan Kerusakan', icon: AlertOctagon, testid: `nav-${testidPrefix}-kerusakan` },
+  ];
+}
+
 function navForRole(role, userRoles = []) {
-  const items = role === 'guru'
+  const isSubjectTeacher = SUBJECT_TEACHER_ROLES.includes(role);
+  const items = isSubjectTeacher
     ? [{ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true }]
     : [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' }];
 
-  if (role === 'guru') {
+  const labGroup = LAB_GROUP_BY_ROLE[role];
+
+  if (isSubjectTeacher) {
     items.push({ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' });
     items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-guru' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
@@ -66,6 +86,20 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-guru' });
     items.push({ to: '/guru/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-guru-materi' });
     items.push({ to: '/guru/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-guru-tugas' });
+
+    if (labGroup) {
+      return [
+        { to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true },
+        {
+          title: 'Menu Guru',
+          items: items.slice(1), // drop the highlighted Jurnal Presisi entry, already shown above
+        },
+        {
+          title: labGroup.title,
+          items: buildLabGroupItems(labGroup.labKey, labGroup.testidPrefix),
+        },
+      ];
+    }
   } else if (role === 'wali_kelas') {
     items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
@@ -84,17 +118,41 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal Piket', icon: History, testid: 'nav-jurnal-history-piket' });
     items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-piket-kebersihan' });
   } else if (role === 'guru_bk') {
-    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' });
-    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' });
-    items.push({ to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-bk-kunjungan' });
-    items.push({ to: '/admin/bk/clkb', label: 'CLKB', icon: ClipboardCheck, testid: 'nav-bk-clkb' });
-    items.push({ to: '/admin/bk/pcl', label: 'PCL', icon: AlertTriangle, testid: 'nav-bk-pcl' });
-    items.push({ to: '/admin/bk/home-visit', label: 'Jurnal Home Visit', icon: Home, testid: 'nav-bk-home-visit' });
-    items.push({ to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-bk-sekolah-lanjutan' });
-    items.push({ to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-bk-laporan-clkb-pcl' });
-    items.push({ to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-bk-kebersihan' });
-    items.push({ to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-bk-laporan' });
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' });
+    // Guru BK uses grouped menu structure, mirroring admin's Tatib & BK groups
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      {
+        title: 'Umum',
+        items: [
+          { to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' },
+          { to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-bk-kebersihan' },
+          { to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-bk-laporan' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' },
+        ],
+      },
+      {
+        title: 'Manajemen Tatib & BK',
+        items: [
+          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-bk-tatib-input' },
+          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-bk-tatib-kategori' },
+          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-bk-tatib-penanganan' },
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-bk-tatib-data' },
+        ],
+      },
+      {
+        title: 'Menu BK',
+        items: [
+          { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-bk-kunjungan' },
+          { to: '/admin/bk/clkb', label: 'Cek List Kebiasaan Belajar (CLKB)', icon: ClipboardCheck, testid: 'nav-bk-clkb' },
+          { to: '/admin/bk/pcl', label: 'Problem Cek List (PCL)', icon: AlertTriangle, testid: 'nav-bk-pcl' },
+          { to: '/admin/bk/home-visit', label: 'Jurnal Home Visit', icon: Home, testid: 'nav-bk-home-visit' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-bk-alumni' },
+          { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-bk-sekolah-lanjutan' },
+          { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-bk-laporan-clkb-pcl' },
+        ],
+      },
+    ];
   } else if (role === 'guru_tata_tertib') {
     items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-tatib-siswa' });
     items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-tatib-kehadiran' });
@@ -152,6 +210,23 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-unitpel-agenda-tendik' });
     items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-unitpel-siswa' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-unitpel' });
+  } else if (role === 'unit_kesehatan') {
+    // Unit Kesehatan (petugas UKS) uses grouped menu structure, mirroring admin's Menu UKS group
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      {
+        title: 'Menu UKS',
+        items: [
+          { to: '/admin/uks/kunjungan', label: 'Data Kunjungan', icon: Stethoscope, testid: 'nav-uks-kunjungan' },
+          { to: '/admin/uks/ckg', label: 'Data CKG', icon: Syringe, testid: 'nav-uks-ckg' },
+          { to: '/admin/uks/obat', label: 'Data Obat', icon: Pill, testid: 'nav-uks-obat' },
+          { to: '/admin/uks/jenis-penanganan', label: 'Jenis Penanganan', icon: ClipboardPlus, testid: 'nav-uks-jenis-penanganan' },
+          { to: '/admin/uks/data-siswa-gtk', label: 'Data Siswa dan GTK', icon: Users, testid: 'nav-uks-data-siswa-gtk' },
+          { to: '/admin/uks/aset', label: 'Aset UKS', icon: HeartPulse, testid: 'nav-uks-aset' },
+          { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-uks-laporan' },
+        ],
+      },
+    ];
   } else if (role === 'admin') {
     // Admin uses grouped menu structure
     return [
@@ -267,6 +342,7 @@ function navForRole(role, userRoles = []) {
         title: 'Menu UKS',
         items: [
           { to: '/admin/uks/kunjungan', label: 'Data Kunjungan', icon: Stethoscope, testid: 'nav-admin-uks-kunjungan' },
+          { to: '/admin/uks/ckg', label: 'Data CKG', icon: Syringe, testid: 'nav-admin-uks-ckg' },
           { to: '/admin/uks/obat', label: 'Data Obat', icon: Pill, testid: 'nav-admin-uks-obat' },
           { to: '/admin/uks/jenis-penanganan', label: 'Jenis Penanganan', icon: ClipboardPlus, testid: 'nav-admin-uks-jenis-penanganan' },
           { to: '/admin/uks/data-siswa-gtk', label: 'Data Siswa dan GTK', icon: Users, testid: 'nav-admin-uks-data-siswa-gtk' },

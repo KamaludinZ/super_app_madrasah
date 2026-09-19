@@ -141,7 +141,7 @@ async def create_koleksi(req: KoleksiRequest, user: Dict = Depends(require_role(
     }
 
     await db.perpus_koleksi.insert_one(doc)
-    await log_audit(user['id'], 'perpus_koleksi_create', f"Created koleksi: {req.judul}")
+    await log_audit(user, 'perpus_koleksi_create', f"Created koleksi: {req.judul}")
     return serialize_doc(doc)
 
 
@@ -155,7 +155,7 @@ async def update_koleksi(koleksi_id: str, req: KoleksiRequest, user: Dict = Depe
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.perpus_koleksi.update_one({'id': koleksi_id}, {'$set': update_data})
-    await log_audit(user['id'], 'perpus_koleksi_update', f"Updated koleksi: {koleksi_id}")
+    await log_audit(user, 'perpus_koleksi_update', f"Updated koleksi: {koleksi_id}")
 
     updated = await db.perpus_koleksi.find_one({'id': koleksi_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -170,7 +170,7 @@ async def delete_koleksi(koleksi_id: str, user: Dict = Depends(require_role(*PER
         raise HTTPException(400, f"Koleksi masih dipinjam ({active_loans} peminjaman aktif)")
 
     await db.perpus_koleksi.delete_one({'id': koleksi_id})
-    await log_audit(user['id'], 'perpus_koleksi_delete', f"Deleted koleksi: {koleksi_id}")
+    await log_audit(user, 'perpus_koleksi_delete', f"Deleted koleksi: {koleksi_id}")
     return {'message': 'Koleksi berhasil dihapus'}
 
 
@@ -227,7 +227,7 @@ async def create_peminjaman(req: PeminjamanRequest, user: Dict = Depends(require
 
     await db.perpus_peminjaman.insert_one(doc)
     await db.perpus_koleksi.update_one({'id': req.koleksi_id}, {'$inc': {'jumlah_tersedia': -1}})
-    await log_audit(user['id'], 'perpus_peminjaman_create', f"{peminjam.get('full_name')} meminjam {koleksi.get('judul')}")
+    await log_audit(user, 'perpus_peminjaman_create', f"{peminjam.get('full_name')} meminjam {koleksi.get('judul')}")
     return serialize_doc(doc)
 
 
@@ -259,7 +259,7 @@ async def update_peminjaman(peminjaman_id: str, req: PeminjamanRequest, user: Di
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.perpus_peminjaman.update_one({'id': peminjaman_id}, {'$set': update_data})
-    await log_audit(user['id'], 'perpus_peminjaman_update', f"Updated peminjaman: {peminjaman_id}")
+    await log_audit(user, 'perpus_peminjaman_update', f"Updated peminjaman: {peminjaman_id}")
 
     updated = await db.perpus_peminjaman.find_one({'id': peminjaman_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -275,7 +275,7 @@ async def delete_peminjaman(peminjaman_id: str, user: Dict = Depends(require_rol
         await db.perpus_koleksi.update_one({'id': existing['koleksi_id']}, {'$inc': {'jumlah_tersedia': 1}})
 
     await db.perpus_peminjaman.delete_one({'id': peminjaman_id})
-    await log_audit(user['id'], 'perpus_peminjaman_delete', f"Deleted peminjaman: {peminjaman_id}")
+    await log_audit(user, 'perpus_peminjaman_delete', f"Deleted peminjaman: {peminjaman_id}")
     return {'message': 'Data peminjaman berhasil dihapus'}
 
 
@@ -319,7 +319,7 @@ async def create_kunjungan(req: KunjunganRequest, user: Dict = Depends(require_r
     }
 
     await db.perpus_kunjungan.insert_one(doc)
-    await log_audit(user['id'], 'perpus_kunjungan_create', f"Recorded kunjungan: {pengunjung.get('full_name')}")
+    await log_audit(user, 'perpus_kunjungan_create', f"Recorded kunjungan: {pengunjung.get('full_name')}")
     return serialize_doc(doc)
 
 
@@ -330,7 +330,7 @@ async def delete_kunjungan(kunjungan_id: str, user: Dict = Depends(require_role(
         raise HTTPException(404, "Data kunjungan tidak ditemukan")
 
     await db.perpus_kunjungan.delete_one({'id': kunjungan_id})
-    await log_audit(user['id'], 'perpus_kunjungan_delete', f"Deleted kunjungan: {kunjungan_id}")
+    await log_audit(user, 'perpus_kunjungan_delete', f"Deleted kunjungan: {kunjungan_id}")
     return {'message': 'Data kunjungan berhasil dihapus'}
 
 

@@ -102,6 +102,7 @@ import AdminPerpusPeminjamanPage from '@/pages/admin/perpus/AdminPerpusPeminjama
 import AdminPerpusKunjunganPage from '@/pages/admin/perpus/AdminPerpusKunjunganPage';
 import AdminPerpusLaporanPage from '@/pages/admin/perpus/AdminPerpusLaporanPage';
 import AdminUKSKunjunganPage from '@/pages/admin/uks/AdminUKSKunjunganPage';
+import AdminUKSCkgPage from '@/pages/admin/uks/AdminUKSCkgPage';
 import AdminUKSObatPage from '@/pages/admin/uks/AdminUKSObatPage';
 import AdminUKSJenisPenangananPage from '@/pages/admin/uks/AdminUKSJenisPenangananPage';
 import AdminUKSDataSiswaGtkPage from '@/pages/admin/uks/AdminUKSDataSiswaGtkPage';
@@ -117,6 +118,12 @@ import AdminSarprasJurnalRuanganPage from '@/pages/admin/sarpras/AdminSarprasJur
 import AdminSarprasJurnalAlatPage from '@/pages/admin/sarpras/AdminSarprasJurnalAlatPage';
 import AdminSarprasJurnalPerawatanPage from '@/pages/admin/sarpras/AdminSarprasJurnalPerawatanPage';
 import AdminSarprasKerusakanPage from '@/pages/admin/sarpras/AdminSarprasKerusakanPage';
+import LabAlatBahanPage from '@/pages/lab/LabAlatBahanPage';
+import LabJadwalPage from '@/pages/lab/LabJadwalPage';
+import LabJurnalPenggunaanPage from '@/pages/lab/LabJurnalPenggunaanPage';
+import LabJurnalPengelolaanPage from '@/pages/lab/LabJurnalPengelolaanPage';
+import LabPeminjamanAlatPage from '@/pages/lab/LabPeminjamanAlatPage';
+import LabKerusakanPage from '@/pages/lab/LabKerusakanPage';
 import MyVervalRequestsPage from '@/pages/MyVervalRequestsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ProfilePageEMIS from '@/pages/ProfilePageEMIS';
@@ -345,6 +352,7 @@ function App() {
             <Route path="/admin/perpus/kunjungan" element={<AdminPerpusKunjunganPage />} />
             <Route path="/admin/perpus/laporan" element={<AdminPerpusLaporanPage />} />
             <Route path="/admin/uks/kunjungan" element={<AdminUKSKunjunganPage />} />
+            <Route path="/admin/uks/ckg" element={<AdminUKSCkgPage />} />
             <Route path="/admin/uks/obat" element={<AdminUKSObatPage />} />
             <Route path="/admin/uks/jenis-penanganan" element={<AdminUKSJenisPenangananPage />} />
             <Route path="/admin/uks/data-siswa-gtk" element={<AdminUKSDataSiswaGtkPage />} />
@@ -360,6 +368,12 @@ function App() {
             <Route path="/admin/sarpras/jurnal-alat" element={<AdminSarprasJurnalAlatPage />} />
             <Route path="/admin/sarpras/jurnal-perawatan" element={<AdminSarprasJurnalPerawatanPage />} />
             <Route path="/admin/sarpras/kerusakan" element={<AdminSarprasKerusakanPage />} />
+            <Route path="/lab/:labKey/alat-bahan" element={<LabAlatBahanPage />} />
+            <Route path="/lab/:labKey/jadwal" element={<LabJadwalPage />} />
+            <Route path="/lab/:labKey/jurnal-penggunaan" element={<LabJurnalPenggunaanPage />} />
+            <Route path="/lab/:labKey/jurnal-pengelolaan" element={<LabJurnalPengelolaanPage />} />
+            <Route path="/lab/:labKey/peminjaman-alat" element={<LabPeminjamanAlatPage />} />
+            <Route path="/lab/:labKey/kerusakan" element={<LabKerusakanPage />} />
             <Route path="/guru/indikator-materi" element={<GuruInputIndikatorMateriPage />} />
             <Route path="/guru/materi" element={<GuruMateriPage />} />
             <Route path="/guru/tugas" element={<GuruTugasPage />} />

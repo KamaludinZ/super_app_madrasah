@@ -7,9 +7,30 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ClipboardCheck, Loader2, Save, History, Info, CheckCircle2, XCircle, Lock, Eye, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ClipboardCheck, Loader2, Save, History, Info, CheckCircle2, XCircle, Lock, Eye, ThumbsUp, ThumbsDown, Check, X, CalendarClock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+
+// submitted_at is stored as a naive UTC ISO string (no timezone suffix).
+// Appending 'Z' tells the browser to parse it as UTC so it converts correctly
+// to the viewer's local time instead of being misread as already-local.
+function formatServerTime(isoString) {
+  if (!isoString) return '-';
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(isoString);
+  const d = new Date(hasTz ? isoString : `${isoString}Z`);
+  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+// clkb_open_start/end come from a <datetime-local> input: already WIB
+// wall-clock time with no timezone marker, so it's formatted directly
+// (no UTC conversion) to avoid double-shifting the hour.
+function formatWibWindow(isoLocalString) {
+  if (!isoLocalString) return null;
+  const [datePart, timePart] = isoLocalString.split('T');
+  if (!datePart || !timePart) return isoLocalString;
+  const [y, m, d] = datePart.split('-');
+  return `${d}/${m}/${y} ${timePart} WIB`;
+}
 
 export default function SiswaCLKBPage() {
   const [tab, setTab] = useState('baru');
@@ -145,6 +166,21 @@ export default function SiswaCLKBPage() {
             </Card>
           ) : (
             <>
+              {(form.open_start || form.open_end) && (
+                <Card className="bg-emerald-50 border-emerald-200">
+                  <CardContent className="p-4">
+                    <div className="flex gap-2 items-start">
+                      <CalendarClock className="h-4 w-4 text-emerald-700 mt-0.5 shrink-0" />
+                      <div className="text-sm text-emerald-900">
+                        <span className="font-semibold">Jadwal Pengisian: </span>
+                        {form.open_start ? formatWibWindow(form.open_start) : 'Kapan saja'}
+                        {form.open_end && ` s.d. ${formatWibWindow(form.open_end)}`}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="bg-blue-50 border-blue-200">
                 <CardContent className="p-4">
                   <div className="flex gap-2 items-start">
@@ -259,7 +295,7 @@ export default function SiswaCLKBPage() {
                   {history.map((h) => (
                     <div key={h.id} className="p-4 flex items-center justify-between gap-3 flex-wrap">
                       <div>
-                        <div className="text-sm font-semibold text-slate-800">{new Date(h.submitted_at).toLocaleString('id-ID')}</div>
+                        <div className="text-sm font-semibold text-slate-800">{formatServerTime(h.submitted_at)}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           {h.scoring?.total_selected} dipilih ({h.scoring?.completion_percentage}%) ·
                           <span className="text-emerald-600"> +{h.scoring?.plus_count}</span> ·
@@ -290,6 +326,7 @@ export default function SiswaCLKBPage() {
           <DialogHeader><DialogTitle>Detail Pengisian CLKB</DialogTitle></DialogHeader>
           {detailItem && (
             <div className="space-y-4 py-2">
+              <div className="text-xs text-slate-500">{formatServerTime(detailItem.submitted_at)}</div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="p-3 rounded-lg bg-slate-50">
                   <div className="text-lg font-bold text-slate-900">{detailItem.scoring?.total_selected}</div>
@@ -304,6 +341,46 @@ export default function SiswaCLKBPage() {
                   <div className="text-xs text-rose-600">Negatif</div>
                 </div>
               </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Jawaban Pernyataan</h3>
+                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                  {(form?.items || []).map((it) => {
+                    const isSelected = (detailItem.selected || []).includes(it.no);
+                    return (
+                      <div key={it.no} className={`flex items-start gap-2 p-2 text-sm ${isSelected ? 'bg-[#006837]/5' : ''}`}>
+                        {isSelected ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <X className="h-3.5 w-3.5 text-slate-300 shrink-0 mt-0.5" />
+                        )}
+                        <span className={isSelected ? 'text-slate-800' : 'text-slate-400'}>
+                          <span className="text-slate-400 mr-1">{it.no}.</span>{it.pernyataan}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-slate-200 space-y-1.5 text-sm">
+                <h3 className="text-sm font-semibold text-slate-700 mb-1">Keterangan Tambahan</h3>
+                <div><span className="text-slate-500">Rata-rata belajar:</span> {detailItem.waktu_belajar_jam || <span className="italic text-slate-400">tidak diisi</span>}
+                  {(detailItem.waktu_belajar_dari || detailItem.waktu_belajar_sampai) && ` (${detailItem.waktu_belajar_dari || '-'}–${detailItem.waktu_belajar_sampai || '-'})`}
+                </div>
+                <div><span className="text-slate-500">Perlu info cara belajar:</span> {detailItem.perlu_info_cara_belajar === true ? 'Ya' : detailItem.perlu_info_cara_belajar === false ? 'Tidak' : <span className="italic text-slate-400">tidak diisi</span>}</div>
+                {detailItem.perlu_info_cara_belajar && (
+                  <div><span className="text-slate-500">Topik diminati:</span> {(detailItem.topik_diminati || []).length > 0 || detailItem.topik_lainnya
+                    ? [...(detailItem.topik_diminati || []), detailItem.topik_lainnya].filter(Boolean).join(', ')
+                    : <span className="italic text-slate-400">tidak diisi</span>}
+                  </div>
+                )}
+                <div><span className="text-slate-500">Kebiasaan ingin diperbaiki:</span> {detailItem.kebiasaan_diperbaiki?.length > 0
+                  ? detailItem.kebiasaan_diperbaiki.join('; ')
+                  : <span className="italic text-slate-400">tidak diisi</span>}
+                </div>
+              </div>
+
               {detailItem.tanggapan_bk && (
                 <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 space-y-1">
                   <div className="text-xs font-semibold text-emerald-800">Tanggapan Guru BK ({detailItem.ditanggapi_oleh})</div>

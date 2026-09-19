@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   User, Users, MapPin, Save, Loader2, Heart, Phone, Mail,
   Calendar, Hash, Globe, FileText, GraduationCap, Pencil, Eye, History,
-  Trophy, Sparkles, BookOpen, Award, Plus, Trash2, Upload, X, ExternalLink, HeartHandshake, FolderUp,
+  Trophy, Sparkles, BookOpen, Award, Plus, Trash2, Upload, X, ExternalLink, HeartHandshake, FolderUp, Home,
 } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
@@ -90,6 +90,8 @@ const EMPTY_DETAIL = {
   pendidikan_lain: [],
   jenis_kebutuhan_khusus: '',
   kebutuhan_disabilitas: [],
+  santri_mahad: false,
+  kamar_mahad: '',
   berkas_kartu_keluarga: '',
   berkas_akta_kelahiran: '',
   berkas_ijazah_sd: '',
@@ -115,6 +117,8 @@ function normalizeDetail(raw) {
     pendidikan_lain: raw?.pendidikan_lain || [],
     jenis_kebutuhan_khusus: raw?.jenis_kebutuhan_khusus || '',
     kebutuhan_disabilitas: raw?.kebutuhan_disabilitas || [],
+    santri_mahad: raw?.santri_mahad || false,
+    kamar_mahad: raw?.kamar_mahad || '',
   };
 }
 
@@ -135,6 +139,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
   const [achievements, setAchievements] = useState([]);
   const [loadingAchievements, setLoadingAchievements] = useState(false);
   const [initialDetailSnapshot, setInitialDetailSnapshot] = useState(EMPTY_DETAIL);
+  const [initialStudentSnapshot, setInitialStudentSnapshot] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({ nik: '', nomor_kk: '' });
 
   useEffect(() => {
@@ -144,6 +149,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
       try {
         const { data } = await api.get(`/students/${student.id}/detail`);
         setStudentData(data.student);
+        setInitialStudentSnapshot(data.student);
         if (data.detail) {
           const normalized = normalizeDetail(data.detail);
           setDetail(normalized);
@@ -340,6 +346,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
           nomor_kk: payload.nomor_kk || null,
           nama_kepala_keluarga: payload.nama_kepala_keluarga || null,
           ibu_nama: payload?.ibu?.nama || null,
+          full_name: studentData?.full_name || undefined,
+          nisn: studentData?.nisn ?? '',
+          nis: studentData?.nis ?? '',
+          gender: studentData?.gender || undefined,
+          birth_place: studentData?.birth_place ?? '',
+          birth_date: studentData?.birth_date ?? '',
         });
         await api.put(`/students/${student.id}/detail`, payload);
 
@@ -354,20 +366,43 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
 
         toast.success('Detail siswa disimpan');
       } else {
-        // Payload berisi struktur detail (ayah/ibu/alamat/keahlian/dst) yang disimpan
-        // di collection student_details, BUKAN di collection users.
+        const userType = (studentData?.roles || student?.roles || []).includes('siswa')
+          ? 'siswa'
+          : (studentData?.roles || student?.roles || []).includes('tenaga_kependidikan')
+            ? 'tenaga_kependidikan'
+            : 'guru';
+
+        // Identitas Pribadi (nama/NISN/NIS/jenis kelamin/tempat & tanggal lahir) hidup di
+        // collection users, terpisah dari student_details. Karena hanya boleh ada 1 request
+        // profile_update pending per siswa, kedua perubahan dititip dalam satu request yang
+        // sama via kunci _users_patch (di-flatten & di-apply terpisah saat approve).
+        const identityFields = ['full_name', 'nisn', 'nis', 'gender', 'birth_place', 'birth_date'];
+        const identityOld = {};
+        const identityNew = {};
+        let identityChanged = false;
+        identityFields.forEach((k) => {
+          const oldVal = initialStudentSnapshot?.[k] ?? '';
+          const newVal = studentData?.[k] ?? '';
+          identityOld[k] = oldVal;
+          identityNew[k] = newVal;
+          if (oldVal !== newVal) identityChanged = true;
+        });
+
+        const oldDataPayload = { ...(initialDetailSnapshot || {}) };
+        const newDataPayload = { ...payload };
+        if (identityChanged) {
+          oldDataPayload._users_patch = identityOld;
+          newDataPayload._users_patch = identityNew;
+        }
+
         await api.post('/verval-requests', {
           user_id: student.id,
-          user_type: (studentData?.roles || student?.roles || []).includes('siswa')
-            ? 'siswa'
-            : (studentData?.roles || student?.roles || []).includes('tenaga_kependidikan')
-              ? 'tenaga_kependidikan'
-              : 'guru',
+          user_type: userType,
           request_type: 'profile_update',
           target_collection: 'student_details',
           target_id: student.id,
-          old_data: initialDetailSnapshot || {},
-          new_data: payload,
+          old_data: oldDataPayload,
+          new_data: newDataPayload,
         });
         toast.success('Pengajuan perubahan data dikirim untuk review');
       }
@@ -471,11 +506,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
 
             <TabsContent value="siswa" className="mt-4 space-y-3">
               <Section title="Identitas Pribadi" icon={User}>
-                <FormRow label="Nama Lengkap" value={studentData?.full_name} readOnly />
-                <FormRow label="NISN" value={studentData?.nisn} readOnly mono />
-                <FormRow label="Jenis Kelamin" value={studentData?.gender === 'L' ? 'Laki-laki' : studentData?.gender === 'P' ? 'Perempuan' : '-'} readOnly />
-                <FormRow label="Tempat Lahir" value={studentData?.birth_place} readOnly />
-                <FormRow label="Tanggal Lahir" value={studentData?.birth_date} readOnly mono />
+                <InputRow label="Nama Lengkap" value={studentData?.full_name} onChange={(v) => setStudentData({ ...studentData, full_name: v })} disabled={!editMode} readOnly={!canEdit} />
+                <InputRow label="NISN" value={studentData?.nisn} onChange={(v) => setStudentData({ ...studentData, nisn: v })} disabled={!editMode} readOnly={!canEdit} mono />
+                <InputRow label="NIS" value={studentData?.nis} onChange={(v) => setStudentData({ ...studentData, nis: v })} disabled={!editMode} readOnly={!canEdit} mono placeholder="Opsional" />
+                <SelectRow label="Jenis Kelamin" value={studentData?.gender === 'L' ? 'Laki-laki' : studentData?.gender === 'P' ? 'Perempuan' : ''} options={['Laki-laki', 'Perempuan']} onChange={(v) => setStudentData({ ...studentData, gender: v === 'Laki-laki' ? 'L' : 'P' })} disabled={!editMode || !canEdit} />
+                <InputRow label="Tempat Lahir" value={studentData?.birth_place} onChange={(v) => setStudentData({ ...studentData, birth_place: v })} disabled={!editMode} readOnly={!canEdit} />
+                <InputRow label="Tanggal Lahir" value={studentData?.birth_date} onChange={(v) => setStudentData({ ...studentData, birth_date: v })} disabled={!editMode} readOnly={!canEdit} type="date" mono />
                 <SelectRow label="Warga Negara *" value={detail.citizenship} options={['WNI', 'WNA']} onChange={(v) => setField('citizenship', v)} disabled={!editMode} testid="citizenship" />
                 {detail.citizenship === 'WNI' && (
                   <InputRow label="NIK (16 digit) *" value={detail.nik} onChange={(v) => {
@@ -517,6 +553,13 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                   setFieldErrors((prev) => ({ ...prev, nomor_kk: next.length === 0 || next.length === 16 ? '' : 'Nomor KK harus tepat 16 digit angka' }));
                 }} disabled={!editMode} mono maxLength={16} error={fieldErrors.nomor_kk} />
                 <InputRow label="Nama Kepala Keluarga *" value={detail.nama_kepala_keluarga} onChange={(v) => setField('nama_kepala_keluarga', v)} disabled={!editMode} />
+              </Section>
+
+              <Section title="Data Mahad" icon={Home}>
+                <CheckboxRow label="Santri Mahad" checked={detail.santri_mahad} onChange={(v) => setField('santri_mahad', v)} disabled={!editMode} />
+                {detail.santri_mahad && (
+                  <InputRow label="Nama Kamar Mahad" value={detail.kamar_mahad} onChange={(v) => setField('kamar_mahad', v)} disabled={!editMode} />
+                )}
               </Section>
             </TabsContent>
 
