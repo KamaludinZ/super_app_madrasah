@@ -45,22 +45,31 @@ async def list_verval_requests(
     List verval requests.
     - reviewer_view=true:
       - admin: semua request (dengan filter opsional)
-      - wali_kelas: hanya request milik siswa di kelas binaannya
+      - guru_bk yang sedang aktif berperan guru_bk (request_type=prestasi_create
+        saja): semua pengajuan prestasi, sama seperti admin — untuk keperluan lihat
+        status "Menunggu" di menu Data Prestasi. Tidak diberi akses approve/reject
+        (tetap dibatasi require_role di endpoint tersebut).
+      - wali_kelas (role lain): hanya request milik siswa di kelas binaannya.
     - reviewer_view=false:
       - admin: semua request (dengan filter opsional)
       - user biasa: hanya request milik sendiri
     """
     query: Dict = {}
 
-    role = _reviewer_role(user)
-    if reviewer_view and role:
-        if role == 'wali_kelas':
-            student_ids = await _wali_kelas_student_ids(user)
-            query['user_id'] = {'$in': student_ids}
-            query['user_type'] = 'siswa'
+    is_admin = 'admin' in user.get('roles', [])
+    is_guru_bk_prestasi_view = (
+        reviewer_view and user.get('active_role') == 'guru_bk'
+        and request_type == 'prestasi_create'
+    )
+
+    if is_admin or is_guru_bk_prestasi_view:
+        pass  # no scoping — see everything, same as admin
+    elif reviewer_view and _reviewer_role(user) == 'wali_kelas':
+        student_ids = await _wali_kelas_student_ids(user)
+        query['user_id'] = {'$in': student_ids}
+        query['user_type'] = 'siswa'
     else:
-        if 'admin' not in user.get('roles', []):
-            query['user_id'] = user['id']
+        query['user_id'] = user['id']
 
     if user_type:
         query['user_type'] = user_type

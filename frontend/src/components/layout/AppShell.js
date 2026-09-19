@@ -124,10 +124,9 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Umum',
         items: [
-          { to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-bk-siswa' },
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-bk-siswa' },
           { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-bk-kehadiran' },
           { to: '/admin/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-bk-kebersihan' },
-          { to: '/admin/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-bk-laporan' },
           { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-bk' },
         ],
       },

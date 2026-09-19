@@ -157,12 +157,17 @@ export default function AchievementsPage() {
   const isTendik = activeRole === 'tenaga_kependidikan';
   const canVerify = isAdmin || isWaliKelas;
   const submitsViaVerval = !isAdmin;
+  // Guru BK's "Data Prestasi" menu item is meant to browse student achievements
+  // (like admin's reporting view), not just their own guru submissions.
+  const isGuruBk = activeRole === 'guru_bk';
 
   // Default tab based on role
-  const defaultHolder = isSiswa ? 'siswa' : isGuru ? 'guru' : isTendik ? 'tendik' : 'siswa';
+  const defaultHolder = isSiswa ? 'siswa' : isGuruBk ? 'siswa' : isGuru ? 'guru' : isTendik ? 'tendik' : 'siswa';
 
   const [holderTab, setHolderTab] = useState(defaultHolder);
-  const [statusTab, setStatusTab] = useState(canVerify ? 'pending' : 'all');
+  // Default to "Semua" so admin/wali kelas don't land on an empty "Menunggu"
+  // tab when there are no pending submissions but plenty of verified ones.
+  const [statusTab, setStatusTab] = useState('all');
   const [items, setItems] = useState([]);
   const [students, setStudents] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -181,30 +186,37 @@ export default function AchievementsPage() {
       const { data } = await api.get('/achievements');
       let combined = data || [];
 
-      // Non-admin/non-wali_kelas: gabungkan juga pengajuan prestasi milik sendiri yang
-      // masih pending/rejected di verval-requests, karena baru masuk ke /achievements
-      // setelah disetujui. Tanpa ini, pengajuan siswa "hilang" dari halaman ini sampai di-approve.
-      if (!isAdmin && !isWaliKelas) {
-        try {
-          const { data: vReqs } = await api.get('/verval-requests', {
-            params: { request_type: 'prestasi_create' },
-          });
-          const pendingOrRejected = (vReqs || [])
-            .filter((r) => r.status === 'pending' || r.status === 'rejected')
-            .map((r) => ({
-              ...(r.new_data || {}),
-              id: `verval-${r.id}`,
-              is_verified: false,
-              submitted_by: r.submitted_by,
-              _isPendingRequest: true,
-              _vervalRequestId: r.id,
-              _vervalStatus: r.status,
-              _adminNotes: r.admin_notes,
-            }));
-          combined = [...pendingOrRejected, ...combined];
-        } catch (e) {
-          // Non-fatal: tetap tampilkan achievements yang sudah approved.
-        }
+      // Gabungkan juga pengajuan prestasi yang masih pending/rejected di verval-requests,
+      // karena baru masuk ke /achievements setelah disetujui. Tanpa ini, pengajuan
+      // "hilang" dari halaman ini sampai di-approve.
+      // - admin & wali_kelas: reviewer_view=true -> semua pengajuan (wali_kelas dibatasi
+      //   ke siswa binaannya oleh backend).
+      // - guru_bk: reviewer_view=true -> semua pengajuan prestasi siswa (bukan hanya
+      //   miliknya sendiri), agar bisa memantau status "Menunggu" di tab Data Prestasi.
+      // - role lain: hanya pengajuan milik sendiri.
+      try {
+        const isReviewer = isAdmin || isWaliKelas || isGuruBk;
+        const { data: vReqs } = await api.get('/verval-requests', {
+          params: {
+            request_type: 'prestasi_create',
+            ...(isReviewer ? { reviewer_view: true } : {}),
+          },
+        });
+        const pendingOrRejected = (vReqs || [])
+          .filter((r) => r.status === 'pending' || r.status === 'rejected')
+          .map((r) => ({
+            ...(r.new_data || {}),
+            id: `verval-${r.id}`,
+            is_verified: false,
+            submitted_by: r.submitted_by,
+            _isPendingRequest: true,
+            _vervalRequestId: r.id,
+            _vervalStatus: r.status,
+            _adminNotes: r.admin_notes,
+          }));
+        combined = [...pendingOrRejected, ...combined];
+      } catch (e) {
+        // Non-fatal: tetap tampilkan achievements yang sudah approved.
       }
 
       setItems(combined);
@@ -461,6 +473,7 @@ export default function AchievementsPage() {
     if (isAdmin) return true; // Admin sees all tabs
     if (isWaliKelas) return t.value === 'siswa'; // Wali kelas only sees siswa tab
     if (isSiswa) return t.value === 'siswa';
+    if (isGuruBk) return t.value === 'siswa' || t.value === 'guru'; // Guru BK browses siswa prestasi too
     if (isGuru && !isWaliKelas) return t.value === 'guru'; // Pure guru (not wali kelas)
     if (isTendik) return t.value === 'tendik';
     return false;
@@ -735,7 +748,7 @@ export default function AchievementsPage() {
                                       <Pencil className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {(a._isPendingRequest ? a._vervalStatus === 'pending' : (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified))) && (
+                                  {(a._isPendingRequest ? (a._vervalStatus === 'pending' && (isAdmin || a.submitted_by === user?.id)) : (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified))) && (
                                     <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title={a._isPendingRequest ? 'Batalkan Pengajuan' : 'Hapus'} data-testid={`delete-achievement-${a.id}`}>
                                       <Trash2 className="h-4 w-4" />
                                     </Button>

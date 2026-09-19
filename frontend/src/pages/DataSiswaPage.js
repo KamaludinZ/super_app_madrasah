@@ -20,11 +20,10 @@ export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
   const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
   const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
-  const isGuruTatib = activeRole === 'guru_tata_tertib';
-  const isUnitPelayanan = activeRole === 'unit_pelayanan';
-  // Guru Tata Tertib and Unit Pelayanan see the same all-students admin-style
-  // view/filters, but without any create/edit/delete/account actions (view-only).
-  const hasAdminView = isAdmin || isGuruTatib || isUnitPelayanan;
+  // These roles see the same all-students admin-style view/filters, but
+  // without any create/edit/delete/account actions (view-only).
+  const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk'];
+  const hasAdminView = isAdmin || VIEW_ONLY_BROAD_ROLES.includes(activeRole);
   const homeroomClassId = user?.homeroom_class_id;
   const canEdit = isAdmin; // Only admin can edit/delete students
   const canViewAccount = isAdmin || isWaliKelas; // Admin and wali kelas can view account info
