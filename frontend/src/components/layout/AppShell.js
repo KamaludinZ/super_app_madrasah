@@ -86,6 +86,9 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-guru' });
     items.push({ to: '/guru/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-guru-materi' });
     items.push({ to: '/guru/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-guru-tugas' });
+    items.push({ to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-guru-ekinerja' });
+    items.push({ to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-guru-profesionalitas' });
+    items.push({ to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-guru-absensi-saya' });
 
     if (labGroup) {
       return [
@@ -182,6 +185,28 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-tendik' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
     items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
+    items.push({ to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-tendik-ekinerja' });
+    items.push({ to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-tendik-profesionalitas' });
+    items.push({ to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-tendik-absensi-saya' });
+  } else if (role === 'kepala_tata_usaha') {
+    // Kepala Tata Usaha: grup Manajemen GTK yang sama seperti admin.
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-ktu' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-ktu' },
+      {
+        title: 'Manajemen GTK',
+        items: [
+          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-ktu-gtk' },
+          { to: '/admin/buku-induk-kepegawaian', label: 'Buku Induk Kepegawaian', icon: BookMarked, testid: 'nav-ktu-buku-induk-kepegawaian' },
+          { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi', icon: UserCheck, testid: 'nav-ktu-absensi' },
+          { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-ktu-agenda-guru' },
+          { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-ktu-agenda-tendik' },
+          { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-ktu-ekinerja' },
+          { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-ktu-profesionalitas' },
+        ],
+      },
+    ];
   } else if (role === 'siswa') {
     items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
@@ -218,6 +243,9 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' });
     items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-kepsek-agenda-guru' });
     items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-kepsek-agenda-tendik' });
+    items.push({ to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-kepsek-ekinerja' });
+    items.push({ to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-kepsek-profesionalitas' });
+    items.push({ to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi GTK', icon: UserCheck, testid: 'nav-kepsek-laporan-absensi-gtk' });
     items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' });
     items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' });

@@ -19,6 +19,7 @@ import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDi
 
 const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
 const TENDIK_ROLES = ['tenaga_kependidikan'];
+const STATUS_KEPEGAWAIAN_LIST = ['PNS', 'PPPK', 'Non ASN'];
 
 export default function AdminGTKPage() {
   const navigate = useNavigate();
@@ -65,6 +66,23 @@ export default function AdminGTKPage() {
     tendik: users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
   };
 
+  const guruUsers = users.filter((u) => (u.roles || []).some((r) => GURU_ROLES.includes(r)));
+  const tendikUsers = users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r)));
+
+  const genderStats = (list) => ({
+    L: list.filter((u) => u.gender === 'L').length,
+    P: list.filter((u) => u.gender === 'P').length,
+  });
+  const kepegawaianStats = (list) => STATUS_KEPEGAWAIAN_LIST.reduce((acc, s) => {
+    acc[s] = list.filter((u) => u.status_kepegawaian === s).length;
+    return acc;
+  }, {});
+
+  const guruGender = genderStats(guruUsers);
+  const tendikGender = genderStats(tendikUsers);
+  const guruKepegawaian = kepegawaianStats(guruUsers);
+  const tendikKepegawaian = kepegawaianStats(tendikUsers);
+
   const handleDelete = async (u) => {
     if (!window.confirm(`Hapus data GTK ${u.full_name} (${u.username})?`)) return;
     try {
@@ -107,6 +125,54 @@ export default function AdminGTKPage() {
           <div className="text-3xl font-extrabold tabular-nums text-slate-900">{counts.tendik}</div>
           <div className="text-xs text-slate-500 mt-0.5">staf TU, perpustakaan, dll</div>
         </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <GraduationCap className="h-4 w-4 text-emerald-600" /> Guru
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-center">
+                <div className="text-lg font-bold text-blue-700">{guruGender.L}</div>
+                <div className="text-xs text-blue-600">Laki-laki</div>
+              </div>
+              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-center">
+                <div className="text-lg font-bold text-rose-700">{guruGender.P}</div>
+                <div className="text-xs text-rose-600">Perempuan</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
+              {STATUS_KEPEGAWAIAN_LIST.map((s) => (
+                <Badge key={s} variant="outline" className="text-xs">{s}: {guruKepegawaian[s]}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Briefcase className="h-4 w-4 text-purple-600" /> Tenaga Kependidikan
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-center">
+                <div className="text-lg font-bold text-blue-700">{tendikGender.L}</div>
+                <div className="text-xs text-blue-600">Laki-laki</div>
+              </div>
+              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-center">
+                <div className="text-lg font-bold text-rose-700">{tendikGender.P}</div>
+                <div className="text-xs text-rose-600">Perempuan</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
+              {STATUS_KEPEGAWAIAN_LIST.map((s) => (
+                <Badge key={s} variant="outline" className="text-xs">{s}: {tendikKepegawaian[s]}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -164,6 +230,7 @@ export default function AdminGTKPage() {
                         <TableHead>L/P</TableHead>
                         <TableHead>PERAN</TableHead>
                         <TableHead>JABATAN</TableHead>
+                        <TableHead>STATUS KEPEGAWAIAN</TableHead>
                         <TableHead>STATUS</TableHead>
                         <TableHead className="text-right">AKSI</TableHead>
                       </TableRow>
@@ -204,6 +271,13 @@ export default function AdminGTKPage() {
                             )}
                           </TableCell>
                           <TableCell>
+                            {u.status_kepegawaian ? (
+                              <Badge variant="outline" className="text-xs">{u.status_kepegawaian}</Badge>
+                            ) : (
+                              <span className="italic text-slate-400 text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {u.mutation_type === 'keluar' ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">Mutasi Keluar</Badge> :
                              u.mutation_type === 'masuk' ? <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">Mutasi Masuk</Badge> :
                              u.is_active !== false ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Aktif</Badge> :
@@ -239,7 +313,7 @@ export default function AdminGTKPage() {
                         );
                       })}
                       {filtered.length === 0 && (
-                        <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">
+                        <TableRow><TableCell colSpan={9} className="text-center py-12 text-slate-500">
                           <Briefcase className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                           <div className="font-semibold">Tidak ada data GTK</div>
                         </TableCell></TableRow>

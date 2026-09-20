@@ -80,6 +80,11 @@ export default function AdminMutationsPage() {
   const [eligibleUsers, setEligibleUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Cascading filters for the Mutasi Keluar form
+  const [keluarTingkat, setKeluarTingkat] = useState('');
+  const [keluarKelasId, setKeluarKelasId] = useState('');
+  const [keluarStaffJenis, setKeluarStaffJenis] = useState(''); // 'guru' | 'tenaga_kependidikan'
+
   useEffect(() => {
     api.get('/academic-years/active').then(({ data }) => setActiveAY(data)).catch(() => {});
     loadClasses();
@@ -118,6 +123,27 @@ export default function AdminMutationsPage() {
     return acc;
   }, {});
 
+  // Cascading helpers for Mutasi Keluar: Siswa uses Tingkat -> Kelas -> Nama;
+  // Staff uses Jenis (Guru/Tendik) -> Nama.
+  const classIdToGrade = classes.reduce((acc, c) => { acc[c.id] = c.grade; return acc; }, {});
+  const keluarTingkatOptions = [...new Set(
+    eligibleUsers
+      .filter((u) => u.student_class_id)
+      .map((u) => classIdToGrade[u.student_class_id])
+      .filter((g) => g !== undefined && g !== null)
+  )].sort((a, b) => a - b);
+  const keluarKelasOptions = classes.filter(
+    (c) => String(c.grade) === String(keluarTingkat) && eligibleUsers.some((u) => u.student_class_id === c.id)
+  );
+  const keluarSiswaOptions = eligibleUsers.filter((u) => u.student_class_id === keluarKelasId);
+
+  const GURU_ROLES_FOR_MUTASI = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
+  const keluarStaffOptions = eligibleUsers.filter((u) => {
+    if (keluarStaffJenis === 'guru') return (u.roles || []).some((r) => GURU_ROLES_FOR_MUTASI.includes(r));
+    if (keluarStaffJenis === 'tenaga_kependidikan') return (u.roles || []).includes('tenaga_kependidikan');
+    return false;
+  });
+
   const openMasukDialog = (roleGroup) => {
     setCurrentRoleGroup(roleGroup);
     setMasukForm({
@@ -150,6 +176,9 @@ export default function AdminMutationsPage() {
       mutation_destination: '',
       mutation_document_url: '',
     });
+    setKeluarTingkat('');
+    setKeluarKelasId('');
+    setKeluarStaffJenis('');
     loadEligibleUsers(roleGroup);
     setKeluarDialogOpen(true);
   };
@@ -543,21 +572,97 @@ export default function AdminMutationsPage() {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label>{currentRoleGroup === 'siswa' ? 'Pilih Siswa' : 'Pilih Guru/Tendik'} <span className="text-rose-600">*</span></Label>
-                <Select value={keluarForm.user_id || undefined} onValueChange={(val) => setKeluarForm({ ...keluarForm, user_id: val })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligibleUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.full_name} {u.nisn ? `(NISN: ${u.nisn})` : ''} {u.nip_nuptk ? `(NIP: ${u.nip_nuptk})` : ''} {u.class_name ? `- ${u.class_name}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {currentRoleGroup === 'siswa' ? (
+                <>
+                  <div>
+                    <Label>Tingkat <span className="text-rose-600">*</span></Label>
+                    <Select
+                      value={keluarTingkat || undefined}
+                      onValueChange={(val) => {
+                        setKeluarTingkat(val);
+                        setKeluarKelasId('');
+                        setKeluarForm({ ...keluarForm, user_id: '' });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Pilih Tingkat" /></SelectTrigger>
+                      <SelectContent>
+                        {keluarTingkatOptions.map((g) => <SelectItem key={g} value={String(g)}>Kelas {g}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Kelas <span className="text-rose-600">*</span></Label>
+                    <Select
+                      value={keluarKelasId || undefined}
+                      onValueChange={(val) => {
+                        setKeluarKelasId(val);
+                        setKeluarForm({ ...keluarForm, user_id: '' });
+                      }}
+                      disabled={!keluarTingkat}
+                    >
+                      <SelectTrigger><SelectValue placeholder={keluarTingkat ? 'Pilih Kelas' : 'Pilih tingkat dahulu'} /></SelectTrigger>
+                      <SelectContent>
+                        {keluarKelasOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Pilih Siswa <span className="text-rose-600">*</span></Label>
+                    <Select value={keluarForm.user_id || undefined} onValueChange={(val) => setKeluarForm({ ...keluarForm, user_id: val })} disabled={!keluarKelasId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={keluarKelasId ? 'Pilih Siswa' : 'Pilih kelas dahulu'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {keluarSiswaOptions.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.full_name} {u.nisn ? `(NISN: ${u.nisn})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {keluarKelasId && keluarSiswaOptions.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Tidak ada siswa aktif di kelas ini</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-span-2">
+                    <Label>Jenis <span className="text-rose-600">*</span></Label>
+                    <Select
+                      value={keluarStaffJenis || undefined}
+                      onValueChange={(val) => {
+                        setKeluarStaffJenis(val);
+                        setKeluarForm({ ...keluarForm, user_id: '' });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Pilih Jenis" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="guru">Guru</SelectItem>
+                        <SelectItem value="tenaga_kependidikan">Tenaga Kependidikan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Pilih Nama <span className="text-rose-600">*</span></Label>
+                    <Select value={keluarForm.user_id || undefined} onValueChange={(val) => setKeluarForm({ ...keluarForm, user_id: val })} disabled={!keluarStaffJenis}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={keluarStaffJenis ? 'Pilih Nama' : 'Pilih jenis dahulu'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {keluarStaffOptions.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.full_name} {u.nip_nuptk ? `(NIP: ${u.nip_nuptk})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {keluarStaffJenis && keluarStaffOptions.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">Tidak ada {keluarStaffJenis === 'guru' ? 'guru' : 'tenaga kependidikan'} aktif yang bisa dimutasi</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               {currentRoleGroup === 'staff' && (
                 <>

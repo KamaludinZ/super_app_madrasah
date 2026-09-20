@@ -720,6 +720,162 @@ def parse_nism_update_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
 
 
 # ============================================================
+# TEMPLATE RHK (RENCANA HASIL KERJA) - E-KINERJA GTK
+# ============================================================
+RHK_HEADERS = ['id', 'year', 'leading_sektor', 'rhk_atasan', 'aspek',
+               'indikator_kinerja_individu', 'target', 'satuan_hasil', 'target_kuantitas',
+               'target_kualitas', 'target_waktu', 'target_biaya',
+               'perilaku_kerja', 'bulan_berlaku', 'output_url']
+RHK_COL_WIDTHS = [36, 8, 22, 30, 30, 40, 20, 22, 16, 16, 16, 16, 30, 30, 40]
+
+RHK_INSTRUCTIONS_COMMON = [
+    "Leading Sektor harus salah satu dari:",
+    "  Kepala Tata Usaha, Tim Penjamin Mutu, Waka Humas, Waka Sarpras,",
+    "  Waka Kesiswaan, Waka Kurikulum",
+    "",
+    "Kolom 'perilaku_kerja' diisi gabungan dipisah koma, pilih dari:",
+    "  Orientasi Pelayanan, Komitmen, Inisiatif Kerja, Kerjasama, Kepemimpinan",
+    "",
+    "Kolom 'bulan_berlaku' diisi gabungan nama bulan dipisah koma, contoh:",
+    "  Januari,Februari,Maret",
+    "",
+    "Kolom WAJIB diisi: year, leading_sektor, rhk_atasan, indikator_kinerja_individu.",
+    "Kolom 'satuan_hasil' diisi satuan volume tetap untuk LCKB, mis. 'Dokumen dan Laporan'.",
+    "Kolom 'output_url' opsional, diisi tautan dokumen/data bukti capaian (mis. Google Drive).",
+]
+
+
+def rhk_template() -> bytes:
+    """Template kosong untuk menambahkan RHK baru secara massal via Excel."""
+    examples = [[
+        '', 2026, 'Waka Kurikulum', 'Meningkatnya mutu pembelajaran',
+        'IKSK. 1.1 - Persentase guru menerapkan kurikulum merdeka',
+        'Menyusun perangkat ajar kurikulum merdeka', 'Tersusunnya 100% perangkat ajar',
+        'Dokumen dan Laporan', '', '', '', '', 'Komitmen,Inisiatif Kerja', 'Januari,Februari,Maret',
+        'https://drive.google.com/...'
+    ]]
+    instructions = [
+        "Sheet 'RHK' mulai baris ke-2 isi data RHK baru yang ingin ditambahkan.",
+        "",
+        "Kolom 'id' DIKOSONGKAN untuk baris baru (sistem akan membuat ID otomatis).",
+        "",
+    ] + RHK_INSTRUCTIONS_COMMON
+    wb = _make_workbook_with_data(
+        sheet_name="RHK",
+        headers=RHK_HEADERS,
+        examples=examples,
+        col_widths=RHK_COL_WIDTHS,
+        instructions=instructions,
+    )
+    return workbook_to_bytes(wb)
+
+
+def rhk_filled_template(rhk_list: List[Dict[str, Any]]) -> bytes:
+    """Template berisi data RHK yang sudah ada (untuk tahun aktif), agar bisa
+    diedit massal dan diupload kembali untuk update."""
+    examples = []
+    for r in rhk_list:
+        examples.append([
+            r.get('id', ''),
+            r.get('year', ''),
+            r.get('leading_sektor', ''),
+            r.get('rhk_atasan', ''),
+            r.get('aspek', '') or '',
+            r.get('indikator_kinerja_individu', ''),
+            r.get('target', '') or '',
+            r.get('satuan_hasil', '') or '',
+            r.get('target_kuantitas', '') or '',
+            r.get('target_kualitas', '') or '',
+            r.get('target_waktu', '') or '',
+            r.get('target_biaya', '') or '',
+            ','.join(r.get('perilaku_kerja') or []),
+            ','.join(r.get('bulan_berlaku') or []),
+            r.get('output_url', '') or '',
+        ])
+    instructions = [
+        "Sheet 'RHK' berisi data RHK tahun aktif yang sudah ada di sistem.",
+        "",
+        "Cara Penggunaan:",
+        "1. Edit baris yang sudah ada untuk memperbarui data (JANGAN UBAH kolom 'id').",
+        "2. Tambahkan baris baru di bawah dengan kolom 'id' DIKOSONGKAN untuk RHK baru.",
+        "3. Upload kembali file ini untuk menyimpan perubahan.",
+        "",
+    ] + RHK_INSTRUCTIONS_COMMON
+    wb = _make_workbook_with_data(
+        sheet_name="RHK",
+        headers=RHK_HEADERS,
+        examples=examples,
+        col_widths=RHK_COL_WIDTHS,
+        instructions=instructions,
+    )
+    return workbook_to_bytes(wb)
+
+
+def parse_rhk_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """Parse Excel RHK (blank or filled template) into row dicts.
+    Returns dicts with keys matching RHK_HEADERS plus '_row'; rows with no
+    'id' are treated as new records, rows with an 'id' as updates."""
+    wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    rows = []
+
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or not any(row):
+            continue
+
+        def cell(i):
+            v = row[i] if i < len(row) else None
+            if v is None:
+                return ''
+            return str(v).strip()
+
+        rhk_id = cell(0) or None
+        year_raw = cell(1)
+        leading_sektor = cell(2)
+        rhk_atasan = cell(3)
+        aspek = cell(4)
+        indikator = cell(5)
+        target = cell(6)
+        satuan_hasil = cell(7)
+        target_kuantitas = cell(8)
+        target_kualitas = cell(9)
+        target_waktu = cell(10)
+        target_biaya = cell(11)
+        perilaku_raw = cell(12)
+        bulan_raw = cell(13)
+        output_url = cell(14)
+
+        if not leading_sektor or not rhk_atasan or not indikator or not year_raw:
+            continue  # skip incomplete rows silently; required fields missing
+
+        try:
+            year = int(float(year_raw))
+        except ValueError:
+            continue
+
+        rows.append({
+            'id': rhk_id,
+            'year': year,
+            'leading_sektor': leading_sektor,
+            'rhk_atasan': rhk_atasan,
+            'aspek': aspek or None,
+            'indikator_kinerja_individu': indikator,
+            'target': target or None,
+            'satuan_hasil': satuan_hasil or None,
+            'target_kuantitas': target_kuantitas or None,
+            'target_kualitas': target_kualitas or None,
+            'target_waktu': target_waktu or None,
+            'target_biaya': target_biaya or None,
+            'perilaku_kerja': [p.strip() for p in perilaku_raw.split(',') if p.strip()],
+            'bulan_berlaku': [b.strip() for b in bulan_raw.split(',') if b.strip()],
+            'output_url': output_url or None,
+            '_row': idx,
+        })
+
+    return rows
+
+
+# ============================================================
 # TEMPLATE AKUN SISWA BELUM MEMILIKI AKUN LOGIN
 # ============================================================
 def student_account_bulk_template(students: List[Dict[str, Any]]) -> bytes:

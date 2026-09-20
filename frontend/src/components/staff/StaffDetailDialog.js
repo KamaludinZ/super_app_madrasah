@@ -17,7 +17,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
 const PENDIDIKAN_OPTIONS = ['SMA/Sederajat', 'D1', 'D2', 'D3', 'D4/S1', 'S2', 'S3', 'Lainnya'];
-const STATUS_KEPEGAWAIAN = ['PNS', 'PPPK', 'Honorer', 'Tetap Yayasan', 'GTT', 'PTT', 'Lainnya'];
+const STATUS_KEPEGAWAIAN = ['PNS', 'PPPK', 'Non ASN'];
 const AGAMA_OPTIONS = ['Islam', 'Kristen Protestan', 'Katolik', 'Hindu', 'Buddha', 'Kong hu cu'];
 
 export default function StaffDetailDialog({ user: staffUser, open, onClose, autoEdit = false }) {

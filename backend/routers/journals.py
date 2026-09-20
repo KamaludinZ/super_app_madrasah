@@ -17,7 +17,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import now_wib
+from journal_core import now_wib, WIB_TZ
 from fastapi.responses import StreamingResponse
 from journal_exports import (
     export_monthly_teacher_journal_excel,
@@ -446,6 +446,78 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
 
         enriched.append(serialize_doc(j))
     return enriched
+
+
+@router.get("/jurnal/my-timeliness")
+async def my_journal_timeliness(user: Dict = Depends(get_current_user)):
+    """Ketepatan waktu pengisian jurnal guru: bandingkan started_at (WIB) dengan
+    scheduled_start jadwal, dalam batas grace_minutes sekolah. Untuk dashboard
+    guru — grafik ketepatan waktu mengisi jurnal sesuai jadwal, 14 hari terakhir."""
+    ctx = await get_active_context(user)
+    semester_id = ctx.get('semester_id')
+    settings = await get_settings()
+    grace = settings.get('grace_minutes', 15)
+
+    query = {'teacher_id': user['id']}
+    if semester_id:
+        query['semester_id'] = semester_id
+
+    items = await db.journals.find(query, {'_id': 0, 'started_at': 1, 'scheduled_start': 1}).sort('started_at', -1).to_list(500)
+
+    rows = []
+    for j in items:
+        started_at = j.get('started_at')
+        scheduled_start = j.get('scheduled_start')
+        if not started_at or not scheduled_start:
+            continue
+        if isinstance(started_at, str):
+            try:
+                started_at = datetime.fromisoformat(started_at)
+            except ValueError:
+                continue
+        if started_at.tzinfo is None:
+            # started_at is written via now_wib().isoformat() (already WIB) at
+            # journal-creation time; a small number of legacy rows are naive
+            # with no offset — treat those as already-WIB too, not UTC.
+            started_wib = started_at.replace(tzinfo=WIB_TZ)
+        else:
+            started_wib = started_at.astimezone(WIB_TZ)
+        try:
+            sched_h, sched_m = (int(x) for x in scheduled_start.split(':')[:2])
+        except (ValueError, AttributeError):
+            continue
+        scheduled_minutes = sched_h * 60 + sched_m
+        actual_minutes = started_wib.hour * 60 + started_wib.minute
+        delta = actual_minutes - scheduled_minutes
+        rows.append({
+            'date': started_wib.date().isoformat(),
+            'delta_minutes': delta,
+            'on_time': delta <= grace,
+        })
+
+    # Group by date (14 most recent distinct days with journal entries)
+    by_date = {}
+    for r in rows:
+        d = r['date']
+        by_date.setdefault(d, {'date': d, 'on_time': 0, 'late': 0})
+        if r['on_time']:
+            by_date[d]['on_time'] += 1
+        else:
+            by_date[d]['late'] += 1
+
+    daily = sorted(by_date.values(), key=lambda x: x['date'])[-14:]
+    total_on_time = sum(1 for r in rows if r['on_time'])
+    total_late = sum(1 for r in rows if not r['on_time'])
+    total = len(rows)
+
+    return {
+        'grace_minutes': grace,
+        'total_jurnal': total,
+        'total_on_time': total_on_time,
+        'total_late': total_late,
+        'on_time_percentage': round((total_on_time / total) * 100, 1) if total else 0,
+        'daily': daily,
+    }
 
 
 @router.get("/jurnal/by-class/{class_id}")

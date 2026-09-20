@@ -7,12 +7,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, Eye, Clock, AlertCircle, Users } from 'lucide-react';
+import { CheckCircle, XCircle, Eye, Clock, AlertCircle, Users, ListChecks, Ban } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function AdminVervalGTKPage() {
   const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]); // unfiltered, for the stats overview
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -31,6 +32,12 @@ export default function AdminVervalGTKPage() {
       // Filter on frontend for GTK
       const gtkRequests = data.filter(r => r.user_type === 'guru' || r.user_type === 'tenaga_kependidikan');
       setRequests(gtkRequests);
+      if (statusFilter === 'all') {
+        setAllRequests(gtkRequests);
+      } else {
+        const { data: all } = await api.get('/verval-requests', { params: {} });
+        setAllRequests(all.filter((r) => r.user_type === 'guru' || r.user_type === 'tenaga_kependidikan'));
+      }
     } catch (e) {
       toast.error('Gagal memuat data');
     } finally {
@@ -141,7 +148,14 @@ export default function AdminVervalGTKPage() {
     );
   };
 
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const stats = {
+    total: allRequests.length,
+    pending: allRequests.filter((r) => r.status === 'pending').length,
+    approved: allRequests.filter((r) => r.status === 'approved').length,
+    rejected: allRequests.filter((r) => r.status === 'rejected').length,
+    cancelled: allRequests.filter((r) => r.status === 'cancelled').length,
+  };
+  const pendingCount = stats.pending;
   const filteredRequests = requests.filter((r) => {
     const keyword = searchName.trim().toLowerCase();
     if (!keyword) return true;
@@ -183,6 +197,14 @@ export default function AdminVervalGTKPage() {
             Refresh
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <StatBox icon={ListChecks} label="Total" value={stats.total} color="bg-slate-50 border-slate-200 text-slate-700" />
+        <StatBox icon={Clock} label="Menunggu" value={stats.pending} color="bg-amber-50 border-amber-200 text-amber-700" />
+        <StatBox icon={CheckCircle} label="Disetujui" value={stats.approved} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+        <StatBox icon={XCircle} label="Ditolak" value={stats.rejected} color="bg-rose-50 border-rose-200 text-rose-700" />
+        <StatBox icon={Ban} label="Dibatalkan" value={stats.cancelled} color="bg-slate-50 border-slate-200 text-slate-500" />
       </div>
 
       {pendingCount > 0 && (
@@ -335,6 +357,18 @@ export default function AdminVervalGTKPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function StatBox({ icon: Icon, label, value, color }) {
+  return (
+    <div className={`rounded-xl border p-4 ${color}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{label}</span>
+        <Icon className="h-4 w-4 opacity-70" />
+      </div>
+      <div className="text-2xl font-extrabold tabular-nums mt-1">{value}</div>
     </div>
   );
 }

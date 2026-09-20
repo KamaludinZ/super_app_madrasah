@@ -1,121 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, Award, BookOpen, Search, Upload, Download } from 'lucide-react';
+import { Award, BookOpen, Search, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { PengumpulanPanel } from '@/pages/admin/AdminEKinerjaPage';
 
-const EMPTY_FORM = {
-  gtk_id: '',
-  jenis_kegiatan: 'pelatihan',
-  nama_kegiatan: '',
-  penyelenggara: '',
-  tanggal_mulai: '',
-  tanggal_selesai: '',
-  jumlah_jam: '',
-  sertifikat_no: '',
-  sertifikat_file: null,
-  keterangan: '',
+const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
+const CURRENT_QUARTER = `TW${Math.floor(new Date().getMonth() / 3) + 1}`;
+
+const SERTIFIKASI_EMPTY_FORM = {
+  nama_kegiatan: '', penyelenggara: '', tanggal_mulai: '', tanggal_selesai: '', jumlah_jam: '',
 };
 
-const JENIS_KEGIATAN = [
-  { value: 'pelatihan', label: 'Pelatihan/Workshop' },
-  { value: 'seminar', label: 'Seminar/Webinar' },
-  { value: 'diklat', label: 'Diklat' },
-  { value: 'bimtek', label: 'Bimbingan Teknis' },
-  { value: 'sertifikasi', label: 'Sertifikasi' },
-  { value: 'penelitian', label: 'Penelitian' },
-  { value: 'publikasi', label: 'Publikasi Ilmiah' },
-  { value: 'lainnya', label: 'Lainnya' },
-];
-
 export default function AdminProfesionalitasGTKPage() {
-  const [data, setData] = useState([]);
-  const [gtkList, setGtkList] = useState([]);
-  const [search, setSearch] = useState('');
-  const [filterJenis, setFilterJenis] = useState('all');
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [loading, setLoading] = useState(true);
+  const { activeRole } = useAuth();
+  const isAuthor = EKINERJA_AUTHOR_ROLES.includes(activeRole);
+  const [activeTab, setActiveTab] = useState('profesionalitas');
+  const [activeTahunTakwim, setActiveTahunTakwim] = useState(null);
+  const activeYear = activeTahunTakwim?.year || new Date().getFullYear();
 
   useEffect(() => {
-    loadData();
+    api.get('/tahun-takwim/active').then(({ data }) => setActiveTahunTakwim(data)).catch(() => {});
   }, []);
-
-  const loadData = async () => {
-    try {
-      const { data: usersData } = await api.get('/users');
-      const gtk = usersData.filter(u =>
-        u.roles?.some(r => ['guru', 'wali_kelas', 'tenaga_kependidikan'].includes(r))
-      );
-      setGtkList(gtk);
-
-      // TODO: Load profesionalitas data from API
-      setData([]);
-    } catch (e) {
-      toast.error('Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm(EMPTY_FORM);
-    setOpen(true);
-  };
-
-  const openEdit = (item) => {
-    setEditing(item);
-    setForm({ ...item, sertifikat_file: null });
-    setOpen(true);
-  };
-
-  const handleSubmit = () => {
-    if (!form.gtk_id || !form.nama_kegiatan || !form.tanggal_mulai) {
-      toast.error('GTK, nama kegiatan, dan tanggal mulai wajib diisi');
-      return;
-    }
-    toast.info('Fitur simpan data profesionalitas sedang dalam pengembangan');
-    setOpen(false);
-  };
-
-  const handleDelete = (item) => {
-    if (!window.confirm('Hapus data ini?')) return;
-    toast.info('Fitur hapus sedang dalam pengembangan');
-  };
-
-  const handleExport = () => {
-    toast.info('Fitur export sedang dalam pengembangan');
-  };
-
-  const filteredData = data.filter(d => {
-    if (filterJenis !== 'all' && d.jenis_kegiatan !== filterJenis) return false;
-    if (!search) return true;
-    const gtk = gtkList.find(g => g.id === d.gtk_id);
-    const name = gtk?.full_name?.toLowerCase() || '';
-    const kegiatan = d.nama_kegiatan?.toLowerCase() || '';
-    return name.includes(search.toLowerCase()) || kegiatan.includes(search.toLowerCase());
-  });
-
-  // Group data by GTK for summary
-  const summaryByGTK = gtkList.map(gtk => {
-    const items = data.filter(d => d.gtk_id === gtk.id);
-    const totalJam = items.reduce((sum, item) => sum + (parseInt(item.jumlah_jam) || 0), 0);
-    return {
-      gtk,
-      totalKegiatan: items.length,
-      totalJam,
-    };
-  }).filter(s => s.totalKegiatan > 0);
 
   return (
     <div className="space-y-6">
@@ -125,187 +40,223 @@ export default function AdminProfesionalitasGTKPage() {
             <Award className="h-3 w-3 mr-1" /> Profesionalitas GTK
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Profesionalitas GTK</h1>
-          <p className="text-sm text-slate-600 mt-1">Pengembangan Kompetensi dan Profesionalitas</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handleExport} variant="outline" className="gap-2">
-            <Download className="h-4 w-4" /> Export
-          </Button>
-          <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
-            <Plus className="h-4 w-4" /> Tambah Data
-          </Button>
+          <p className="text-sm text-slate-600 mt-1">Pengembangan Kompetensi dan Riwayat Sertifikasi</p>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      {summaryByGTK.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {summaryByGTK.slice(0, 6).map((summary) => (
-            <Card key={summary.gtk.id}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  {summary.gtk.full_name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-[#006837]">{summary.totalKegiatan}</div>
-                    <div className="text-xs text-slate-500">Kegiatan</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold text-slate-700">{summary.totalJam}</div>
-                    <div className="text-xs text-slate-500">Jam</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-white border border-slate-200 flex-wrap h-auto">
+          <TabsTrigger value="profesionalitas" className="gap-2">
+            <Award className="h-4 w-4" /> Profesionalitas GTK
+          </TabsTrigger>
+          <TabsTrigger value="sertifikasi" className="gap-2">
+            <BookOpen className="h-4 w-4" /> Riwayat Sertifikasi
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="p-4 border-b border-slate-100">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Cari GTK atau kegiatan..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={filterJenis} onValueChange={setFilterJenis}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Jenis Kegiatan</SelectItem>
-                  {JENIS_KEGIATAN.map(j => (
-                    <SelectItem key={j.value} value={j.value}>{j.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <TabsContent value="profesionalitas" className="mt-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-500 mb-3">Pendataan upload dokumen pengembangan profesionalitas GTK (mis. sertifikat pelatihan/diklat/seminar).</p>
+              <PengumpulanPanel
+                type="profesionalitas_gtk"
+                year={activeYear}
+                isAuthor={isAuthor}
+                metaKey="quarterly_periods"
+                periodOptions={null}
+                label="Profesionalitas GTK"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>GTK</TableHead>
-                  <TableHead>Jenis</TableHead>
-                  <TableHead>Nama Kegiatan</TableHead>
-                  <TableHead>Penyelenggara</TableHead>
-                  <TableHead>Periode</TableHead>
-                  <TableHead>Jam</TableHead>
-                  <TableHead>Sertifikat</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
+        <TabsContent value="sertifikasi" className="mt-4">
+          <Card>
+            <CardContent className="p-4">
+              <SertifikasiPanel year={activeYear} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function SertifikasiPanel({ year }) {
+  const { activeRole } = useAuth();
+  const isAuthor = EKINERJA_AUTHOR_ROLES.includes(activeRole);
+  const [quarterOptions, setQuarterOptions] = useState([]);
+  const [period, setPeriod] = useState(CURRENT_QUARTER);
+
+  useEffect(() => {
+    api.get('/ekinerja/pengumpulan/meta').then(({ data }) => setQuarterOptions(data.quarterly_periods || [])).catch(() => {});
+  }, []);
+
+  const periodLabel = quarterOptions.find((p) => p.value === period)?.label || period;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="text-xs">Tahun Takwim Aktif: {year}</Badge>
+        <Select value={period} onValueChange={setPeriod}>
+          <SelectTrigger className="w-56"><SelectValue placeholder="Pilih periode..." /></SelectTrigger>
+          <SelectContent>
+            {quarterOptions.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <PengumpulanPanel
+        type="sertifikasi"
+        year={year}
+        isAuthor={isAuthor}
+        period={period}
+        onPeriodChange={setPeriod}
+        hidePeriodSelector
+        metaKey="quarterly_periods"
+        periodOptions={null}
+        label="Riwayat Sertifikasi"
+      />
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-900 mb-2">Rekaman Kegiatan/Sertifikat {periodLabel} {year}</h3>
+        {isAuthor ? (
+          <SertifikasiAdminTable year={year} period={period} />
+        ) : (
+          <SertifikasiOwnTable year={year} period={period} periodLabel={periodLabel} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SertifikasiOwnTable({ year, period, periodLabel }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(SERTIFIKASI_EMPTY_FORM);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/ekinerja/sertifikasi/my', { params: { year, period } });
+      setRecords(data || []);
+    } catch (e) {
+      toast.error('Gagal memuat riwayat sertifikasi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [year, period]);
+
+  const openCreate = () => { setEditing(null); setForm(SERTIFIKASI_EMPTY_FORM); setOpen(true); };
+  const openEdit = (r) => {
+    setEditing(r);
+    setForm({
+      nama_kegiatan: r.nama_kegiatan, penyelenggara: r.penyelenggara || '',
+      tanggal_mulai: r.tanggal_mulai || '', tanggal_selesai: r.tanggal_selesai || '', jumlah_jam: r.jumlah_jam || '',
+    });
+    setOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.nama_kegiatan.trim()) {
+      toast.error('Nama kegiatan wajib diisi');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = { ...form, year, period };
+      if (editing) {
+        await api.put(`/ekinerja/sertifikasi/${editing.id}`, payload);
+        toast.success('Data berhasil diperbarui');
+      } else {
+        await api.post('/ekinerja/sertifikasi', payload);
+        toast.success('Data berhasil ditambahkan');
+      }
+      setOpen(false);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menyimpan data');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (r) => {
+    if (!window.confirm(`Hapus data "${r.nama_kegiatan}"?`)) return;
+    try {
+      await api.delete(`/ekinerja/sertifikasi/${r.id}`);
+      toast.success('Data berhasil dihapus');
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menghapus data');
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button onClick={openCreate} className="bg-[#006837] hover:bg-[#0B7A3B] gap-2">
+          <Plus className="h-4 w-4" /> Tambah Rekaman
+        </Button>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nama Kegiatan</TableHead>
+              <TableHead>Penyelenggara</TableHead>
+              <TableHead>Periode Tanggal</TableHead>
+              <TableHead>Jam</TableHead>
+              <TableHead className="text-right">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
+            ) : records.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada rekaman untuk {periodLabel}. Anda bisa menambahkan lebih dari satu jika mengupload beberapa sertifikat.</TableCell></TableRow>
+            ) : (
+              records.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.nama_kegiatan}</TableCell>
+                  <TableCell className="text-sm">{r.penyelenggara || '-'}</TableCell>
+                  <TableCell className="text-xs">{r.tanggal_mulai}{r.tanggal_selesai && ` s/d ${r.tanggal_selesai}`}</TableCell>
+                  <TableCell>{r.jumlah_jam || '-'} jam</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(r)} className="text-rose-600"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">Memuat data...</TableCell>
-                  </TableRow>
-                ) : filteredData.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
-                      Belum ada data profesionalitas. Klik "Tambah Data" untuk membuat data baru.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredData.map((item) => {
-                    const gtk = gtkList.find(g => g.id === item.gtk_id);
-                    const jenisInfo = JENIS_KEGIATAN.find(j => j.value === item.jenis_kegiatan);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{gtk?.full_name || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{jenisInfo?.label || item.jenis_kegiatan}</Badge>
-                        </TableCell>
-                        <TableCell>{item.nama_kegiatan}</TableCell>
-                        <TableCell className="text-sm">{item.penyelenggara || '-'}</TableCell>
-                        <TableCell className="text-xs">
-                          {item.tanggal_mulai}
-                          {item.tanggal_selesai && ` s/d ${item.tanggal_selesai}`}
-                        </TableCell>
-                        <TableCell>{item.jumlah_jam || '-'} jam</TableCell>
-                        <TableCell>
-                          {item.sertifikat_no ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
-                              {item.sertifikat_no}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-slate-400">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" onClick={() => openEdit(item)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDelete(item)} className="text-rose-600">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Data Profesionalitas' : 'Tambah Data Profesionalitas'}</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Rekaman Sertifikasi' : 'Tambah Rekaman Sertifikasi'}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>GTK *</Label>
-                <Select value={form.gtk_id} onValueChange={(v) => setForm({ ...form, gtk_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Pilih GTK..." /></SelectTrigger>
-                  <SelectContent>
-                    {gtkList.map(g => (
-                      <SelectItem key={g.id} value={g.id}>{g.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Jenis Kegiatan</Label>
-                <Select value={form.jenis_kegiatan} onValueChange={(v) => setForm({ ...form, jenis_kegiatan: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {JENIS_KEGIATAN.map(j => (
-                      <SelectItem key={j.value} value={j.value}>{j.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             <div>
               <Label>Nama Kegiatan *</Label>
               <Input value={form.nama_kegiatan} onChange={(e) => setForm({ ...form, nama_kegiatan: e.target.value })} placeholder="Nama lengkap kegiatan..." />
             </div>
-
             <div>
               <Label>Penyelenggara</Label>
-              <Input value={form.penyelenggara} onChange={(e) => setForm({ ...form, penyelenggara: e.target.value })} placeholder="Nama lembaga/institusi penyelenggara..." />
+              <Input value={form.penyelenggara} onChange={(e) => setForm({ ...form, penyelenggara: e.target.value })} />
             </div>
-
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label>Tanggal Mulai *</Label>
+                <Label>Tanggal Mulai</Label>
                 <Input type="date" value={form.tanggal_mulai} onChange={(e) => setForm({ ...form, tanggal_mulai: e.target.value })} />
               </div>
               <div>
@@ -317,30 +268,74 @@ export default function AdminProfesionalitasGTKPage() {
                 <Input type="number" value={form.jumlah_jam} onChange={(e) => setForm({ ...form, jumlah_jam: e.target.value })} placeholder="JP/Jam" />
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Nomor Sertifikat</Label>
-                <Input value={form.sertifikat_no} onChange={(e) => setForm({ ...form, sertifikat_no: e.target.value })} placeholder="Nomor sertifikat (jika ada)" />
-              </div>
-              <div>
-                <Label>File Sertifikat</Label>
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setForm({ ...form, sertifikat_file: e.target.files[0] })} />
-                <p className="text-xs text-slate-500 mt-1">Format: PDF, JPG, PNG (Max 2MB)</p>
-              </div>
-            </div>
-
-            <div>
-              <Label>Keterangan</Label>
-              <Textarea value={form.keterangan} onChange={(e) => setForm({ ...form, keterangan: e.target.value })} rows={2} placeholder="Keterangan tambahan..." />
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={handleSubmit} className="bg-[#006837] hover:bg-[#0B7A3B]">Simpan</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={submitting}>Batal</Button>
+            <Button onClick={handleSubmit} disabled={submitting} className="bg-[#006837] hover:bg-[#0B7A3B]">
+              {submitting ? 'Menyimpan...' : 'Simpan'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SertifikasiAdminTable({ year, period }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    api.get('/ekinerja/sertifikasi', { params: { year, period } })
+      .then(({ data }) => setRecords(data || []))
+      .catch(() => toast.error('Gagal memuat data'))
+      .finally(() => setLoading(false));
+  }, [year, period]);
+
+  const filtered = records.filter((r) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (r.gtk_name || '').toLowerCase().includes(s) || (r.nama_kegiatan || '').toLowerCase().includes(s);
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input placeholder="Cari GTK atau kegiatan..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>GTK</TableHead>
+              <TableHead>Nama Kegiatan</TableHead>
+              <TableHead>Penyelenggara</TableHead>
+              <TableHead>Periode Tanggal</TableHead>
+              <TableHead>Jam</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada rekaman untuk periode ini.</TableCell></TableRow>
+            ) : (
+              filtered.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.gtk_name}</TableCell>
+                  <TableCell>{r.nama_kegiatan}</TableCell>
+                  <TableCell className="text-sm">{r.penyelenggara || '-'}</TableCell>
+                  <TableCell className="text-xs">{r.tanggal_mulai}{r.tanggal_selesai && ` s/d ${r.tanggal_selesai}`}</TableCell>
+                  <TableCell>{r.jumlah_jam || '-'} jam</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

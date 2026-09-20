@@ -62,6 +62,7 @@ import AdminCurriculumsPage from '@/pages/admin/AdminCurriculumsPage';
 import AdminGTKPage from '@/pages/admin/AdminGTKPage';
 import AdminGTKDetailPage from '@/pages/admin/AdminGTKDetailPage';
 import AdminLaporanAbsensiPage from '@/pages/admin/AdminLaporanAbsensiPage';
+import GTKAbsensiSayaPage from '@/pages/GTKAbsensiSayaPage';
 import AdminAgendaGuruPage from '@/pages/admin/AdminAgendaGuruPage';
 import AdminAgendaTendikPage from '@/pages/admin/AdminAgendaTendikPage';
 import AdminMadrasahEventsPage from '@/pages/admin/AdminMadrasahEventsPage';
@@ -301,6 +302,7 @@ function App() {
             <Route path="/admin/gtk" element={<AdminGTKPage />} />
             <Route path="/admin/gtk/:id" element={<AdminGTKDetailPage />} />
             <Route path="/admin/gtk/laporan-absensi" element={<AdminLaporanAbsensiPage />} />
+            <Route path="/gtk/absensi-saya" element={<GTKAbsensiSayaPage />} />
             <Route path="/admin/gtk/agenda-guru" element={<AdminAgendaGuruPage />} />
             <Route path="/admin/gtk/agenda-tendik" element={<AdminAgendaTendikPage />} />
             <Route path="/admin/kegiatan-madrasah" element={<AdminMadrasahEventsPage />} />

@@ -16,6 +16,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, logger
 from routers import (
+    absensi_gtk,
     academic,
     achievement_upload,
     admin,
@@ -26,6 +27,7 @@ from routers import (
     bk,
     classes,
     dokumen_siswa,
+    ekinerja,
     events,
     health,
     holidays_tasks,
@@ -99,6 +101,8 @@ api_router.include_router(student_records.router)
 api_router.include_router(semesters.router)
 api_router.include_router(verval.router)
 api_router.include_router(dokumen_siswa.router)
+api_router.include_router(ekinerja.router)
+api_router.include_router(absensi_gtk.router)
 api_router.include_router(indikator_materi.router)
 api_router.include_router(tatib.router)
 api_router.include_router(events.router)

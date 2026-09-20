@@ -7,12 +7,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck, FileText, Trophy } from 'lucide-react';
+import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck, FileText, Trophy, ListChecks, Ban } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function AdminVervalSiswaPage() {
   const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]); // unfiltered, for the stats overview
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -28,6 +29,12 @@ export default function AdminVervalSiswaPage() {
       if (statusFilter !== 'all') params.status = statusFilter;
       const { data } = await api.get('/verval-requests', { params });
       setRequests(data);
+      if (statusFilter === 'all') {
+        setAllRequests(data);
+      } else {
+        const { data: all } = await api.get('/verval-requests', { params: { user_type: 'siswa', reviewer_view: true } });
+        setAllRequests(all);
+      }
     } catch (e) {
       toast.error('Gagal memuat data');
     } finally {
@@ -253,7 +260,14 @@ export default function AdminVervalSiswaPage() {
     );
   };
 
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const stats = {
+    total: allRequests.length,
+    pending: allRequests.filter((r) => r.status === 'pending').length,
+    approved: allRequests.filter((r) => r.status === 'approved').length,
+    rejected: allRequests.filter((r) => r.status === 'rejected').length,
+    cancelled: allRequests.filter((r) => r.status === 'cancelled').length,
+  };
+  const pendingCount = stats.pending;
   const filteredRequests = requests.filter((r) => {
     const keyword = searchName.trim().toLowerCase();
     if (!keyword) return true;
@@ -295,6 +309,14 @@ export default function AdminVervalSiswaPage() {
             Refresh
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <StatBox icon={ListChecks} label="Total" value={stats.total} color="bg-slate-50 border-slate-200 text-slate-700" />
+        <StatBox icon={Clock} label="Menunggu" value={stats.pending} color="bg-amber-50 border-amber-200 text-amber-700" />
+        <StatBox icon={CheckCircle} label="Disetujui" value={stats.approved} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+        <StatBox icon={XCircle} label="Ditolak" value={stats.rejected} color="bg-rose-50 border-rose-200 text-rose-700" />
+        <StatBox icon={Ban} label="Dibatalkan" value={stats.cancelled} color="bg-slate-50 border-slate-200 text-slate-500" />
       </div>
 
       {pendingCount > 0 && (
@@ -447,6 +469,18 @@ export default function AdminVervalSiswaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function StatBox({ icon: Icon, label, value, color }) {
+  return (
+    <div className={`rounded-xl border p-4 ${color}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{label}</span>
+        <Icon className="h-4 w-4 opacity-70" />
+      </div>
+      <div className="text-2xl font-extrabold tabular-nums mt-1">{value}</div>
     </div>
   );
 }

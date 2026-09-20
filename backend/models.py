@@ -158,6 +158,8 @@ class UserModel(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = None
     jabatan_ids: List[str] = Field(default_factory=list)  # Array of jabatan IDs for guru/staff
+    status_kepegawaian: Optional[str] = None  # 'PNS' | 'PPPK' | 'Non ASN' — untuk guru/tenaga kependidikan
+    pangkat_golongan: Optional[str] = None  # mis. "Pengatur Muda (V)" — untuk cetak LCKB/dokumen kepegawaian
 
     # ==================== DATA SISWA (EMIS) ====================
     # Kewarganegaraan
@@ -859,6 +861,7 @@ class UserUpdateRequest(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     jabatan_ids: Optional[List[str]] = None
+    status_kepegawaian: Optional[str] = None
 
     # Data EMIS siswa yang bisa diupdate admin langsung (tanpa verval)
     agama: Optional[str] = None
