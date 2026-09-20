@@ -8,37 +8,42 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { HeartPulse, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
+import { HeartPulse, Plus, Pencil, Trash2, Loader2, Save, Search, Boxes, CheckCircle2, AlertTriangle, Package, Layers } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import LabKPI from '@/pages/lab/LabKPI';
 
-const KATEGORI_LIST = ['Alat Medis', 'Furniture', 'P3K', 'Obat & BMHP', 'Lainnya'];
-const KONDISI_LIST = ['Baik', 'Rusak Ringan', 'Rusak Berat'];
-
-const KONDISI_BADGE = {
-  Baik: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'Rusak Ringan': 'bg-amber-100 text-amber-700 border-amber-200',
-  'Rusak Berat': 'bg-rose-100 text-rose-700 border-rose-200',
-};
-
-const emptyForm = { nama_aset: '', kategori: '', jumlah: 1, kondisi: 'Baik', lokasi: '', tanggal_perolehan: '', keterangan: '' };
+const JENIS_LABELS = { tetap: 'Aset Tetap', lancar: 'Aset Lancar' };
+const EMPTY_FORM = { aset_tipe: 'tetap', nama: '', kategori: '', satuan: '', jumlah_baik: 0, jumlah_rusak: 0, lokasi_penyimpanan: '', ruangan_id: '', keterangan: '' };
 
 export default function AdminUKSAsetPage() {
-  const [list, setList] = useState([]);
+  const [items, setItems] = useState([]);
+  const [kategoriOptions, setKategoriOptions] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [uksRoomId, setUksRoomId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState(emptyForm);
+  const [filterJenis, setFilterJenis] = useState('all');
+  const [filterKategori, setFilterKategori] = useState('all');
+  const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/uks/aset');
-      setList(res.data || []);
+      const [{ data }, { data: metaData }, { data: roomsData }] = await Promise.all([
+        api.get('/uks/aset'),
+        api.get('/uks/aset/meta'),
+        api.get('/rooms'),
+      ]);
+      setItems(data.items || []);
+      setUksRoomId(data.room?.id || '');
+      setKategoriOptions(metaData.kategori_alat_bahan || []);
+      setRooms(roomsData || []);
     } catch (e) {
       toast.error('Gagal memuat data aset UKS');
     } finally {
@@ -50,24 +55,25 @@ export default function AdminUKSAsetPage() {
     if (item) {
       setEditing(item);
       setForm({
-        nama_aset: item.nama_aset || '', kategori: item.kategori || '', jumlah: item.jumlah ?? 1,
-        kondisi: item.kondisi || 'Baik', lokasi: item.lokasi || '', tanggal_perolehan: item.tanggal_perolehan || '',
+        aset_tipe: item.aset_tipe, nama: item.nama, kategori: item.kategori || '', satuan: item.satuan || '',
+        jumlah_baik: item.jumlah_baik || 0, jumlah_rusak: item.jumlah_rusak || 0,
+        lokasi_penyimpanan: item.lokasi_penyimpanan || '', ruangan_id: item.ruangan_id || uksRoomId,
         keterangan: item.keterangan || '',
       });
     } else {
       setEditing(null);
-      setForm(emptyForm);
+      setForm({ ...EMPTY_FORM, ruangan_id: uksRoomId });
     }
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.nama_aset) { toast.error('Nama aset wajib diisi'); return; }
+    if (!form.nama.trim()) { toast.error('Nama aset wajib diisi'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, jumlah: Number(form.jumlah) || 0 };
+      const payload = { ...form, jumlah_baik: Number(form.jumlah_baik) || 0, jumlah_rusak: Number(form.jumlah_rusak) || 0 };
       if (editing) {
-        await api.put(`/uks/aset/${editing.id}`, payload);
+        await api.put(`/uks/aset/${editing.aset_tipe}/${editing.id}`, payload);
         toast.success('Aset berhasil diperbarui');
       } else {
         await api.post('/uks/aset', payload);
@@ -82,10 +88,10 @@ export default function AdminUKSAsetPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus aset ini?')) return;
+  const handleDelete = async (item) => {
+    if (!window.confirm(`Hapus "${item.nama}"?`)) return;
     try {
-      await api.delete(`/uks/aset/${id}`);
+      await api.delete(`/uks/aset/${item.aset_tipe}/${item.id}`);
       toast.success('Aset dihapus');
       loadData();
     } catch (e) {
@@ -93,7 +99,20 @@ export default function AdminUKSAsetPage() {
     }
   };
 
-  const filtered = list.filter((item) => !search || (item.nama_aset || '').toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((item) => {
+    if (filterJenis !== 'all' && item.aset_tipe !== filterJenis) return false;
+    if (filterKategori !== 'all' && item.kategori !== filterKategori) return false;
+    if (!search) return true;
+    return (item.nama || '').toLowerCase().includes(search.toLowerCase());
+  });
+
+  const stats = {
+    totalItem: items.length,
+    totalBaik: items.reduce((sum, i) => sum + (i.jumlah_baik || 0), 0),
+    totalRusak: items.reduce((sum, i) => sum + (i.jumlah_rusak || 0), 0),
+    totalTetap: items.filter((i) => i.aset_tipe === 'tetap').length,
+    totalLancar: items.filter((i) => i.aset_tipe === 'lancar').length,
+  };
 
   return (
     <div className="space-y-6" data-testid="admin-uks-aset-page">
@@ -103,18 +122,45 @@ export default function AdminUKSAsetPage() {
             <HeartPulse className="h-3 w-3 mr-1" /> Menu UKS
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Aset UKS</h1>
-          <p className="text-sm text-slate-600 mt-1">Kelola peralatan dan aset milik UKS</p>
+          <p className="text-sm text-slate-600 mt-1">Kelola peralatan dan aset milik UKS (terintegrasi dengan data Sarpras)</p>
         </div>
         <Button onClick={() => openModal()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
           <Plus className="h-4 w-4" /> Tambah Aset
         </Button>
       </div>
 
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 grid-spacing-dense">
+          <LabKPI label="Total Item" value={stats.totalItem} icon={Boxes} color="slate" />
+          <LabKPI label="Jumlah Baik" value={stats.totalBaik} icon={CheckCircle2} color="emerald" />
+          <LabKPI label="Jumlah Rusak" value={stats.totalRusak} icon={AlertTriangle} color="rose" />
+          <LabKPI label="Aset Tetap" value={stats.totalTetap} icon={Package} color="blue" />
+          <LabKPI label="Aset Lancar" value={stats.totalLancar} icon={Layers} color="amber" />
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input placeholder="Cari nama aset..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input placeholder="Cari nama aset..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={filterJenis} onValueChange={setFilterJenis}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Jenis</SelectItem>
+                <SelectItem value="tetap">Aset Tetap</SelectItem>
+                <SelectItem value="lancar">Aset Lancar</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterKategori} onValueChange={setFilterKategori}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Kategori</SelectItem>
+                {kategoriOptions.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -131,37 +177,45 @@ export default function AdminUKSAsetPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nama Aset</TableHead>
-                    <TableHead>Kategori</TableHead>
-                    <TableHead className="text-center">Jumlah</TableHead>
-                    <TableHead>Kondisi</TableHead>
-                    <TableHead>Lokasi</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
+                    <TableHead className="w-10">NO</TableHead>
+                    <TableHead>NAMA ASET</TableHead>
+                    <TableHead>JENIS</TableHead>
+                    <TableHead>KATEGORI</TableHead>
+                    <TableHead className="text-center">JUMLAH BAIK</TableHead>
+                    <TableHead className="text-center">JUMLAH RUSAK</TableHead>
+                    <TableHead>SATUAN</TableHead>
+                    <TableHead>RUANG</TableHead>
+                    <TableHead>LOKASI PENYIMPANAN</TableHead>
+                    <TableHead className="text-right">AKSI</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12 text-slate-500">
+                      <TableCell colSpan={10} className="text-center py-12 text-slate-500">
                         <HeartPulse className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                         <div className="font-semibold">Belum ada data aset</div>
                         <div className="text-xs mt-1">Klik "Tambah Aset" untuk mulai mendata</div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-semibold">{item.nama_aset}</TableCell>
-                        <TableCell><Badge variant="outline">{item.kategori || '-'}</Badge></TableCell>
-                        <TableCell className="text-center font-mono">{item.jumlah}</TableCell>
-                        <TableCell><Badge className={KONDISI_BADGE[item.kondisi] || ''}>{item.kondisi}</Badge></TableCell>
-                        <TableCell>{item.lokasi || '-'}</TableCell>
+                    filtered.map((item, idx) => (
+                      <TableRow key={`${item.aset_tipe}-${item.id}`}>
+                        <TableCell className="text-sm text-slate-500">{idx + 1}</TableCell>
+                        <TableCell className="font-semibold">{item.nama}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{JENIS_LABELS[item.aset_tipe] || item.aset_tipe}</Badge></TableCell>
+                        <TableCell>{item.kategori ? <Badge variant="outline" className="text-xs">{item.kategori}</Badge> : '-'}</TableCell>
+                        <TableCell className="text-center font-mono text-emerald-700">{item.jumlah_baik}</TableCell>
+                        <TableCell className="text-center font-mono text-rose-600">{item.jumlah_rusak}</TableCell>
+                        <TableCell className="text-sm">{item.satuan || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.ruangan_nama || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.lokasi_penyimpanan || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="icon" variant="ghost" onClick={() => openModal(item)} className="text-blue-600 hover:text-blue-700">
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDelete(item.id)} className="text-rose-600 hover:text-rose-700">
+                            <Button size="icon" variant="ghost" onClick={() => handleDelete(item)} className="text-rose-600 hover:text-rose-700">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -177,14 +231,24 @@ export default function AdminUKSAsetPage() {
       </Card>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Aset' : 'Tambah Aset Baru'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Nama Aset <span className="text-rose-500">*</span></Label>
-              <Input value={form.nama_aset} onChange={(e) => setForm({ ...form, nama_aset: e.target.value })} />
+              <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Jenis</Label>
+              <Select value={form.aset_tipe} onValueChange={(v) => setForm({ ...form, aset_tipe: v })} disabled={!!editing}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tetap">Aset Tetap (alat)</SelectItem>
+                  <SelectItem value="lancar">Aset Lancar (bahan habis pakai)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -193,33 +257,38 @@ export default function AdminUKSAsetPage() {
                   <SelectTrigger><SelectValue placeholder="Pilih Kategori" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Pilih Kategori</SelectItem>
-                    {KATEGORI_LIST.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+                    {kategoriOptions.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Kondisi</Label>
-                <Select value={form.kondisi} onValueChange={(v) => setForm({ ...form, kondisi: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {KONDISI_LIST.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Satuan</Label>
+                <Input value={form.satuan} onChange={(e) => setForm({ ...form, satuan: e.target.value })} placeholder="unit, pcs, botol, box" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Jumlah</Label>
-                <Input type="number" min="0" value={form.jumlah} onChange={(e) => setForm({ ...form, jumlah: e.target.value })} />
+                <Label>Jumlah Kondisi Baik</Label>
+                <Input type="number" min="0" value={form.jumlah_baik} onChange={(e) => setForm({ ...form, jumlah_baik: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Lokasi</Label>
-                <Input value={form.lokasi} onChange={(e) => setForm({ ...form, lokasi: e.target.value })} />
+                <Label>Jumlah Rusak</Label>
+                <Input type="number" min="0" value={form.jumlah_rusak} onChange={(e) => setForm({ ...form, jumlah_rusak: e.target.value })} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Tanggal Perolehan</Label>
-              <Input type="date" value={form.tanggal_perolehan} onChange={(e) => setForm({ ...form, tanggal_perolehan: e.target.value })} />
+              <Label>Ruang</Label>
+              <Select value={form.ruangan_id || undefined} onValueChange={(v) => setForm({ ...form, ruangan_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Pilih ruangan..." /></SelectTrigger>
+                <SelectContent>
+                  {rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">Otomatis terpilih Ruang UKS. Ubah jika aset disimpan di ruangan lain.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Lokasi Penyimpanan</Label>
+              <Input value={form.lokasi_penyimpanan} onChange={(e) => setForm({ ...form, lokasi_penyimpanan: e.target.value })} placeholder="Lemari Obat, Rak P3K, dsb." />
             </div>
             <div className="space-y-2">
               <Label>Keterangan</Label>

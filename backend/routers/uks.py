@@ -139,14 +139,23 @@ class ImunisasiRequest(BaseModel):
     keterangan: Optional[str] = None
 
 
+UKS_ROOM_NAME = 'Ruang UKS'
+UKS_KATEGORI_ALAT_BAHAN = ['Alat Medis', 'Furniture', 'P3K', 'Obat & BMHP', 'Lainnya']
+
+
 class AsetUKSRequest(BaseModel):
-    """Request model for a UKS equipment/asset item."""
-    nama_aset: str
-    kategori: Optional[str] = None  # e.g., "Alat Medis", "Furniture", "P3K"
-    jumlah: int = 1
-    kondisi: Optional[str] = 'Baik'  # Baik, Rusak Ringan, Rusak Berat
-    lokasi: Optional[str] = None
-    tanggal_perolehan: Optional[str] = None
+    """Request model for a UKS equipment/asset item — sama seperti pola Lab
+    IPA/Komputer: disimpan di collection Sarpras (aset_tetap/aset_lancar)
+    yang sama, dipisahkan lewat lokasi_room_id, agar terintegrasi penuh
+    dengan /admin/sarpras/."""
+    aset_tipe: str  # 'tetap' or 'lancar'
+    nama: str
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
+    jumlah_baik: int = 0
+    jumlah_rusak: int = 0
+    lokasi_penyimpanan: Optional[str] = None
+    ruangan_id: Optional[str] = None  # default: Ruang UKS; bisa diganti ruangan lain
     keterangan: Optional[str] = None
 
 
@@ -1134,54 +1143,180 @@ async def import_imunisasi_excel(file: UploadFile = File(...), user: Dict = Depe
 
 
 # ============================================================
-# ASET UKS ENDPOINTS
+# ASET UKS ENDPOINTS (terintegrasi dengan Sarpras: aset_tetap/aset_lancar
+# yang sama, discope lewat ruangan "Ruang UKS" — sama seperti pola Lab IPA/
+# Komputer di backend/routers/lab.py)
 # ============================================================
 
+async def _get_uks_room() -> Dict:
+    """Ambil (atau buat otomatis jika belum ada) ruangan 'Ruang UKS' di
+    collection rooms — UKS tidak punya akses membuat ruangan sendiri lewat
+    menu Sarpras, jadi dibuat otomatis saat pertama kali dibutuhkan."""
+    room = await db.rooms.find_one({'name': UKS_ROOM_NAME})
+    if room:
+        return room
+    doc = {
+        'id': str(uuid.uuid4()),
+        'name': UKS_ROOM_NAME,
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.rooms.insert_one(doc)
+    return doc
+
+
+async def _resolve_uks_target_room(ruangan_id: Optional[str]) -> Dict:
+    if ruangan_id:
+        room = await db.rooms.find_one({'id': ruangan_id})
+        if not room:
+            raise HTTPException(404, "Ruangan tidak ditemukan")
+        return room
+    return await _get_uks_room()
+
+
+async def _resolve_uks_aset(aset_tipe: str, aset_id: str):
+    if aset_tipe == 'tetap':
+        doc = await db.sarpras_aset_tetap.find_one({'id': aset_id})
+        if not doc:
+            raise HTTPException(404, "Aset tidak ditemukan")
+        return doc, db.sarpras_aset_tetap
+    elif aset_tipe == 'lancar':
+        doc = await db.sarpras_aset_lancar.find_one({'id': aset_id})
+        if not doc:
+            raise HTTPException(404, "Aset tidak ditemukan")
+        return doc, db.sarpras_aset_lancar
+    raise HTTPException(400, "aset_tipe harus 'tetap' atau 'lancar'")
+
+
+async def _get_uks_asset_or_403(uks_room_id: str, aset_tipe: str, aset_id: str):
+    doc, collection = await _resolve_uks_aset(aset_tipe, aset_id)
+    if doc.get('lokasi_room_id') != uks_room_id:
+        raise HTTPException(403, "Aset ini bukan bagian dari UKS")
+    return doc, collection
+
+
+def _uks_aset_doc_to_row(doc: Dict, aset_tipe: str) -> Dict:
+    name_field = 'nama_aset' if aset_tipe == 'tetap' else 'nama_barang'
+    return {
+        'id': doc.get('id'),
+        'aset_tipe': aset_tipe,
+        'nama': doc.get(name_field),
+        'kategori': doc.get('kategori'),
+        'satuan': doc.get('satuan') or ('unit' if aset_tipe == 'tetap' else None),
+        'jumlah_baik': doc.get('jumlah_baik', doc.get('jumlah', 0) if aset_tipe == 'tetap' else doc.get('stok', 0)),
+        'jumlah_rusak': doc.get('jumlah_rusak', 0),
+        'lokasi_penyimpanan': doc.get('lokasi_penyimpanan'),
+        'ruangan_id': doc.get('lokasi_room_id'),
+        'ruangan_nama': doc.get('lokasi_room_nama'),
+        'keterangan': doc.get('keterangan'),
+    }
+
+
+@router.get("/uks/aset/meta")
+async def get_uks_aset_meta(user: Dict = Depends(get_current_user)):
+    return {'kategori_alat_bahan': UKS_KATEGORI_ALAT_BAHAN}
+
+
 @router.get("/uks/aset")
-async def list_aset(kategori: Optional[str] = None, user: Dict = Depends(get_current_user)):
-    query = {}
-    if kategori:
-        query['kategori'] = kategori
-    items = await db.uks_aset.find(query, {'_id': 0}).sort('nama_aset', 1).to_list(2000)
-    return [serialize_doc(i) for i in items]
+async def list_aset(user: Dict = Depends(get_current_user)):
+    room = await _get_uks_room()
+    tetap = await db.sarpras_aset_tetap.find({'lokasi_room_id': room['id']}, {'_id': 0}).sort('nama_aset', 1).to_list(2000)
+    lancar = await db.sarpras_aset_lancar.find({'lokasi_room_id': room['id']}, {'_id': 0}).sort('nama_barang', 1).to_list(2000)
+    rows = [_uks_aset_doc_to_row(a, 'tetap') for a in tetap] + [_uks_aset_doc_to_row(a, 'lancar') for a in lancar]
+    rows.sort(key=lambda r: (r['nama'] or '').lower())
+    return {
+        'room': serialize_doc(room),
+        'items': rows,
+    }
 
 
 @router.post("/uks/aset")
 async def create_aset(req: AsetUKSRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
-    doc = {
-        'id': str(uuid.uuid4()),
-        **req.model_dump(),
-        'created_by': user['id'],
-        'created_at': datetime.utcnow().isoformat(),
-        'updated_at': datetime.utcnow().isoformat(),
-    }
-    await db.uks_aset.insert_one(doc)
-    await log_audit(user, 'uks_aset_create', f"Created aset UKS: {req.nama_aset}")
-    return serialize_doc(doc)
+    room = await _resolve_uks_target_room(req.ruangan_id)
+    now = datetime.utcnow().isoformat()
+
+    if req.aset_tipe == 'tetap':
+        doc = {
+            'id': str(uuid.uuid4()),
+            'nama_aset': req.nama,
+            'kategori': req.kategori,
+            'jumlah': req.jumlah_baik + req.jumlah_rusak,
+            'jumlah_baik': req.jumlah_baik,
+            'jumlah_rusak': req.jumlah_rusak,
+            'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
+            'satuan': req.satuan,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': room['id'],
+            'lokasi_room_nama': room.get('name'),
+            'keterangan': req.keterangan,
+            'created_by': user['id'],
+            'created_at': now,
+            'updated_at': now,
+        }
+        await db.sarpras_aset_tetap.insert_one(doc)
+    elif req.aset_tipe == 'lancar':
+        doc = {
+            'id': str(uuid.uuid4()),
+            'nama_barang': req.nama,
+            'kategori': req.kategori,
+            'satuan': req.satuan or 'pcs',
+            'stok': req.jumlah_baik,
+            'jumlah_baik': req.jumlah_baik,
+            'jumlah_rusak': req.jumlah_rusak,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': room['id'],
+            'lokasi_room_nama': room.get('name'),
+            'keterangan': req.keterangan,
+            'created_by': user['id'],
+            'created_at': now,
+            'updated_at': now,
+        }
+        await db.sarpras_aset_lancar.insert_one(doc)
+    else:
+        raise HTTPException(400, "aset_tipe harus 'tetap' atau 'lancar'")
+
+    await log_audit(user, 'uks_aset_create', f"Created aset UKS: {req.nama}")
+    return _uks_aset_doc_to_row(doc, req.aset_tipe)
 
 
-@router.put("/uks/aset/{aset_id}")
-async def update_aset(aset_id: str, req: AsetUKSRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
-    existing = await db.uks_aset.find_one({'id': aset_id})
-    if not existing:
-        raise HTTPException(404, "Aset tidak ditemukan")
+@router.put("/uks/aset/{aset_tipe}/{aset_id}")
+async def update_aset(aset_tipe: str, aset_id: str, req: AsetUKSRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
+    uks_room = await _get_uks_room()
+    _, collection = await _get_uks_asset_or_403(uks_room['id'], aset_tipe, aset_id)
+    target_room = await _resolve_uks_target_room(req.ruangan_id)
+    now = datetime.utcnow().isoformat()
 
-    update_data = req.model_dump()
-    update_data['updated_at'] = datetime.utcnow().isoformat()
-    await db.uks_aset.update_one({'id': aset_id}, {'$set': update_data})
+    if aset_tipe == 'tetap':
+        update_data = {
+            'nama_aset': req.nama, 'kategori': req.kategori, 'satuan': req.satuan,
+            'jumlah': req.jumlah_baik + req.jumlah_rusak,
+            'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
+            'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': target_room['id'], 'lokasi_room_nama': target_room.get('name'),
+            'keterangan': req.keterangan, 'updated_at': now,
+        }
+    else:
+        update_data = {
+            'nama_barang': req.nama, 'kategori': req.kategori, 'satuan': req.satuan or 'pcs',
+            'stok': req.jumlah_baik, 'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': target_room['id'], 'lokasi_room_nama': target_room.get('name'),
+            'keterangan': req.keterangan, 'updated_at': now,
+        }
+
+    await collection.update_one({'id': aset_id}, {'$set': update_data})
     await log_audit(user, 'uks_aset_update', f"Updated aset UKS: {aset_id}")
 
-    updated = await db.uks_aset.find_one({'id': aset_id}, {'_id': 0})
-    return serialize_doc(updated)
+    updated = await collection.find_one({'id': aset_id}, {'_id': 0})
+    return _uks_aset_doc_to_row(updated, aset_tipe)
 
 
-@router.delete("/uks/aset/{aset_id}")
-async def delete_aset(aset_id: str, user: Dict = Depends(require_role(*UKS_ROLES))):
-    existing = await db.uks_aset.find_one({'id': aset_id})
-    if not existing:
-        raise HTTPException(404, "Aset tidak ditemukan")
+@router.delete("/uks/aset/{aset_tipe}/{aset_id}")
+async def delete_aset(aset_tipe: str, aset_id: str, user: Dict = Depends(require_role(*UKS_ROLES))):
+    uks_room = await _get_uks_room()
+    _, collection = await _get_uks_asset_or_403(uks_room['id'], aset_tipe, aset_id)
 
-    await db.uks_aset.delete_one({'id': aset_id})
+    await collection.delete_one({'id': aset_id})
     await log_audit(user, 'uks_aset_delete', f"Deleted aset UKS: {aset_id}")
     return {'message': 'Aset berhasil dihapus'}
 

@@ -12,31 +12,62 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import uuid
 
-from core import db, get_current_user, require_role, serialize_doc, log_audit
+from fastapi.responses import StreamingResponse
+import io
+
+from core import db, get_current_user, require_role, serialize_doc, log_audit, get_settings
 
 router = APIRouter()
 
 LAB_ROOM_NAMES = {
     'ipa': 'Lab IPA',
     'komputer': 'Lab Komputer',
+    'bahasa': 'Lab Bahasa',
+    'agama': 'Lab Agama',
+    'ips': 'Lab IPS',
+    'seni': 'Lab Seni',
 }
 LAB_ROLE_BY_KEY = {
     'ipa': ('admin', 'guru_ipa'),
     'komputer': ('admin', 'guru_tik'),
+    'bahasa': ('admin', 'guru_bahasa'),
+    'agama': ('admin', 'guru_agama'),
+    'ips': ('admin', 'guru_ips'),
+    'seni': ('admin', 'guru_seni'),
 }
+LAB_KATEGORI_ALAT_BAHAN = {
+    'ipa': ['Fisika', 'Biologi', 'Kimia', 'Bahan Kimia', 'Alat Gelas', 'Umum'],
+    'komputer': ['Hardware', 'Software', 'Jaringan', 'Peripheral', 'Umum'],
+    'bahasa': ['Audio Visual', 'Buku & Literatur', 'Alat Peraga', 'Umum'],
+    'agama': ['Alat Ibadah', 'Buku & Literatur', 'Alat Peraga', 'Umum'],
+    'ips': ['Peta & Globe', 'Alat Peraga', 'Buku & Literatur', 'Umum'],
+    'seni': ['Alat Musik', 'Alat Lukis/Rupa', 'Kostum & Properti', 'Umum'],
+}
+LAB_KERUSAKAN_STATUS = ['Diajukan', 'Proses Ganti', 'Selesai Diganti']
+LAB_JADWAL_HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
 
 def _require_lab_key(lab_key: str) -> str:
     if lab_key not in LAB_ROOM_NAMES:
-        raise HTTPException(400, "Lab tidak dikenal. Gunakan 'ipa' atau 'komputer'.")
+        raise HTTPException(400, f"Lab tidak dikenal. Gunakan salah satu: {', '.join(LAB_ROOM_NAMES.keys())}.")
     return lab_key
 
 
 async def _get_lab_room(lab_key: str) -> Dict:
-    room = await db.rooms.find_one({'name': LAB_ROOM_NAMES[lab_key]})
-    if not room:
-        raise HTTPException(404, f"Ruangan {LAB_ROOM_NAMES[lab_key]} belum terdaftar. Hubungi admin/Sarpras.")
-    return room
+    """Ambil (atau buat otomatis jika belum ada) ruangan lab ini di
+    collection rooms — guru mapel non-Sarpras tidak bisa membuat ruangan
+    sendiri lewat menu Sarpras, jadi dibuat otomatis saat pertama dibutuhkan."""
+    room_name = LAB_ROOM_NAMES[lab_key]
+    room = await db.rooms.find_one({'name': room_name})
+    if room:
+        return room
+    doc = {
+        'id': str(uuid.uuid4()),
+        'name': room_name,
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.rooms.insert_one(doc)
+    return doc
 
 
 def _check_lab_access(lab_key: str, user: Dict):
@@ -78,21 +109,40 @@ async def _resolve_aset(aset_tipe: str, aset_id: str):
 # REQUEST MODELS
 # ============================================================
 
-class LabPeminjamanRuanganRequest(BaseModel):
-    peminjam_id: str
-    tanggal: str
+class LabAlatBahanRequest(BaseModel):
+    aset_tipe: str  # 'tetap' or 'lancar'
+    nama: str
+    kategori: Optional[str] = None
+    satuan: Optional[str] = None
+    jumlah_baik: int = 0
+    jumlah_rusak: int = 0
+    lokasi_penyimpanan: Optional[str] = None
+    ruangan_id: Optional[str] = None  # default: ruangan lab ini sendiri; bisa diganti ruangan lain (mis. gudang)
+    keterangan: Optional[str] = None
+
+
+class LabJadwalMingguanRequest(BaseModel):
+    minggu_ke: int = 1  # 1-4
+    hari: str  # 'Senin'..'Sabtu'
     jam_mulai: Optional[str] = None
     jam_selesai: Optional[str] = None
-    keperluan: str
-    status: Optional[str] = 'Dipesan'
-    catatan: Optional[str] = None
+    jp_mulai: Optional[int] = None
+    jp_selesai: Optional[int] = None
+    kelas: str
+    guru_nama: str
+    keterangan: Optional[str] = None
 
 
 class LabJurnalRuanganRequest(BaseModel):
     tanggal: str
     jam_mulai: Optional[str] = None
     jam_selesai: Optional[str] = None
-    kegiatan: str
+    jp_mulai: Optional[int] = None
+    jp_selesai: Optional[int] = None
+    pengguna_id: Optional[str] = None
+    judul_percobaan: str
+    alat_bahan_digunakan: Optional[str] = None
+    kegiatan: Optional[str] = None
     penanggung_jawab_id: Optional[str] = None
     kondisi_setelah: Optional[str] = None
     keterangan: Optional[str] = None
@@ -101,6 +151,7 @@ class LabJurnalRuanganRequest(BaseModel):
 class LabJurnalPengelolaanRequest(BaseModel):
     aset_tipe: str  # 'tetap', 'lancar', or 'room'
     aset_id: str
+    tahun_ajaran: Optional[str] = None
     tanggal: str
     jenis_perawatan: str
     petugas_pelaksana: Optional[str] = None
@@ -127,9 +178,9 @@ class LabKerusakanRequest(BaseModel):
     aset_id: str
     tanggal_lapor: str
     pelapor_id: Optional[str] = None
+    jumlah_rusak: int = 1
     deskripsi_kerusakan: str
-    tingkat_kerusakan: Optional[str] = 'Ringan'
-    status: Optional[str] = 'Dilaporkan'
+    status: Optional[str] = 'Diajukan'  # 'Diajukan' | 'Proses Ganti' | 'Selesai Diganti'
     tanggal_perbaikan: Optional[str] = None
     biaya_perbaikan: Optional[float] = None
     hasil_perbaikan: Optional[str] = None
@@ -148,22 +199,94 @@ async def _get_lab_asset_or_403(lab_key: str, room_id: str, aset_tipe: str, aset
 # ============================================================
 
 @router.get("/lab/{lab_key}/warga-madrasah")
-async def list_warga_madrasah(lab_key: str, search: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_warga_madrasah(
+    lab_key: str,
+    search: Optional[str] = None,
+    peminjam_jenis: Optional[str] = None,  # 'siswa' | 'gtk'
+    gtk_jenis: Optional[str] = None,  # 'guru' | 'tenaga_kependidikan' (only when peminjam_jenis='gtk')
+    grade: Optional[int] = None,  # tingkat kelas (only when peminjam_jenis='siswa')
+    class_id: Optional[str] = None,  # kelas spesifik (only when peminjam_jenis='siswa')
+    user: Dict = Depends(get_current_user),
+):
     lab_key = _require_lab_key(lab_key)
     _check_lab_access(lab_key, user)
     query = {'is_active': {'$ne': False}}
     if search:
         query['full_name'] = {'$regex': search, '$options': 'i'}
+
+    if peminjam_jenis == 'siswa':
+        query['roles'] = 'siswa'
+        if class_id:
+            query['student_class_id'] = class_id
+        elif grade:
+            class_ids = [c['id'] for c in await db.classes.find({'grade': grade}, {'_id': 0, 'id': 1}).to_list(500)]
+            query['student_class_id'] = {'$in': class_ids}
+    elif peminjam_jenis == 'gtk':
+        GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler',
+                      'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik']
+        if gtk_jenis == 'tenaga_kependidikan':
+            query['roles'] = 'tenaga_kependidikan'
+        elif gtk_jenis == 'guru':
+            query['roles'] = {'$in': GURU_ROLES}
+        else:
+            query['roles'] = {'$in': GURU_ROLES + ['tenaga_kependidikan']}
+
     items = await db.users.find(
         query,
-        {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nip_nuptk': 1, 'username': 1, 'roles': 1}
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nip_nuptk': 1, 'username': 1, 'roles': 1, 'student_class_id': 1}
     ).sort('full_name', 1).to_list(3000)
     return [serialize_doc(i) for i in items]
 
 
+@router.get("/lab/{lab_key}/guru-lab")
+async def list_guru_lab(lab_key: str, user: Dict = Depends(get_current_user)):
+    """Daftar guru dengan role yang sesuai lab ini (mis. guru_ipa untuk Lab
+    IPA, guru_bahasa untuk Lab Bahasa) — untuk dropdown 'Guru' di Jadwal Lab."""
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    guru_role = LAB_ROLE_BY_KEY[lab_key][1]  # index 0 selalu 'admin', index 1 role guru spesifik lab ini
+    items = await db.users.find(
+        {'roles': guru_role, 'is_active': {'$ne': False}},
+        {'_id': 0, 'id': 1, 'full_name': 1}
+    ).sort('full_name', 1).to_list(500)
+    return [serialize_doc(i) for i in items]
+
+
 # ============================================================
-# ALAT DAN BAHAN LAB (read-only view onto Sarpras assets in this room)
+# META (dropdown option lists, per lab)
 # ============================================================
+
+@router.get("/lab/{lab_key}/meta")
+async def get_lab_meta(lab_key: str, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    return {
+        'kategori_alat_bahan': LAB_KATEGORI_ALAT_BAHAN.get(lab_key, ['Umum']),
+        'kerusakan_status': LAB_KERUSAKAN_STATUS,
+        'hari': LAB_JADWAL_HARI,
+    }
+
+
+# ============================================================
+# ALAT DAN BAHAN LAB (inventory: view + add/edit/delete, scoped to this room)
+# ============================================================
+
+def _alat_bahan_doc_to_row(doc: Dict, aset_tipe: str) -> Dict:
+    name_field = 'nama_aset' if aset_tipe == 'tetap' else 'nama_barang'
+    return {
+        'id': doc.get('id'),
+        'aset_tipe': aset_tipe,
+        'nama': doc.get(name_field),
+        'kategori': doc.get('kategori'),
+        'satuan': doc.get('satuan') or ('unit' if aset_tipe == 'tetap' else None),
+        'jumlah_baik': doc.get('jumlah_baik', doc.get('jumlah', 0) if aset_tipe == 'tetap' else doc.get('stok', 0)),
+        'jumlah_rusak': doc.get('jumlah_rusak', 0),
+        'lokasi_penyimpanan': doc.get('lokasi_penyimpanan'),
+        'ruangan_id': doc.get('lokasi_room_id'),
+        'ruangan_nama': doc.get('lokasi_room_nama'),
+        'keterangan': doc.get('keterangan'),
+    }
+
 
 @router.get("/lab/{lab_key}/alat-bahan")
 async def list_alat_bahan(lab_key: str, user: Dict = Depends(get_current_user)):
@@ -173,11 +296,122 @@ async def list_alat_bahan(lab_key: str, user: Dict = Depends(get_current_user)):
 
     tetap = await db.sarpras_aset_tetap.find({'lokasi_room_id': room['id']}, {'_id': 0}).sort('nama_aset', 1).to_list(2000)
     lancar = await db.sarpras_aset_lancar.find({'lokasi_room_id': room['id']}, {'_id': 0}).sort('nama_barang', 1).to_list(2000)
+    rows = [_alat_bahan_doc_to_row(a, 'tetap') for a in tetap] + [_alat_bahan_doc_to_row(a, 'lancar') for a in lancar]
+    rows.sort(key=lambda r: (r['nama'] or '').lower())
     return {
         'room': serialize_doc(room),
+        'items': rows,
         'aset_tetap': [serialize_doc(a) for a in tetap],
         'aset_lancar': [serialize_doc(a) for a in lancar],
     }
+
+
+async def _resolve_target_room(lab_key: str, ruangan_id: Optional[str]) -> Dict:
+    """Resolve which room an alat/bahan row belongs to: the room explicitly
+    picked in the form, or this lab's own room by default."""
+    if ruangan_id:
+        room = await db.rooms.find_one({'id': ruangan_id})
+        if not room:
+            raise HTTPException(404, "Ruangan tidak ditemukan")
+        return room
+    return await _get_lab_room(lab_key)
+
+
+@router.post("/lab/{lab_key}/alat-bahan")
+async def create_alat_bahan(lab_key: str, req: LabAlatBahanRequest, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    room = await _resolve_target_room(lab_key, req.ruangan_id)
+
+    now = datetime.utcnow().isoformat()
+    if req.aset_tipe == 'tetap':
+        doc = {
+            'id': str(uuid.uuid4()),
+            'nama_aset': req.nama,
+            'kategori': req.kategori,
+            'jumlah': req.jumlah_baik + req.jumlah_rusak,
+            'jumlah_baik': req.jumlah_baik,
+            'jumlah_rusak': req.jumlah_rusak,
+            'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
+            'satuan': req.satuan,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': room['id'],
+            'lokasi_room_nama': room.get('name'),
+            'keterangan': req.keterangan,
+            'created_at': now,
+            'updated_at': now,
+        }
+        await db.sarpras_aset_tetap.insert_one(doc)
+    elif req.aset_tipe == 'lancar':
+        doc = {
+            'id': str(uuid.uuid4()),
+            'nama_barang': req.nama,
+            'kategori': req.kategori,
+            'satuan': req.satuan or 'pcs',
+            'stok': req.jumlah_baik,
+            'jumlah_baik': req.jumlah_baik,
+            'jumlah_rusak': req.jumlah_rusak,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': room['id'],
+            'lokasi_room_nama': room.get('name'),
+            'keterangan': req.keterangan,
+            'created_at': now,
+            'updated_at': now,
+        }
+        await db.sarpras_aset_lancar.insert_one(doc)
+    else:
+        raise HTTPException(400, "aset_tipe harus 'tetap' atau 'lancar'")
+
+    await log_audit(user, f'lab_{lab_key}_alat_bahan_create', f"Tambah alat/bahan: {req.nama}")
+    return _alat_bahan_doc_to_row(doc, req.aset_tipe)
+
+
+@router.put("/lab/{lab_key}/alat-bahan/{aset_tipe}/{item_id}")
+async def update_alat_bahan(lab_key: str, aset_tipe: str, item_id: str, req: LabAlatBahanRequest, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    lab_room = await _get_lab_room(lab_key)
+
+    _, collection, _ = await _get_lab_asset_or_403(lab_key, lab_room['id'], aset_tipe, item_id)
+    target_room = await _resolve_target_room(lab_key, req.ruangan_id)
+    now = datetime.utcnow().isoformat()
+
+    if aset_tipe == 'tetap':
+        update_data = {
+            'nama_aset': req.nama, 'kategori': req.kategori, 'satuan': req.satuan,
+            'jumlah': req.jumlah_baik + req.jumlah_rusak,
+            'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
+            'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': target_room['id'], 'lokasi_room_nama': target_room.get('name'),
+            'keterangan': req.keterangan, 'updated_at': now,
+        }
+    else:
+        update_data = {
+            'nama_barang': req.nama, 'kategori': req.kategori, 'satuan': req.satuan or 'pcs',
+            'stok': req.jumlah_baik, 'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
+            'lokasi_penyimpanan': req.lokasi_penyimpanan,
+            'lokasi_room_id': target_room['id'], 'lokasi_room_nama': target_room.get('name'),
+            'keterangan': req.keterangan, 'updated_at': now,
+        }
+
+    await collection.update_one({'id': item_id}, {'$set': update_data})
+    await log_audit(user, f'lab_{lab_key}_alat_bahan_update', f"Update alat/bahan: {item_id}")
+
+    updated = await collection.find_one({'id': item_id}, {'_id': 0})
+    return _alat_bahan_doc_to_row(updated, aset_tipe)
+
+
+@router.delete("/lab/{lab_key}/alat-bahan/{aset_tipe}/{item_id}")
+async def delete_alat_bahan(lab_key: str, aset_tipe: str, item_id: str, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    room = await _get_lab_room(lab_key)
+
+    _, collection, _ = await _get_lab_asset_or_403(lab_key, room['id'], aset_tipe, item_id)
+    await collection.delete_one({'id': item_id})
+    await log_audit(user, f'lab_{lab_key}_alat_bahan_delete', f"Hapus alat/bahan: {item_id}")
+    return {'message': 'Data alat/bahan berhasil dihapus'}
 
 
 # ============================================================
@@ -185,60 +419,62 @@ async def list_alat_bahan(lab_key: str, user: Dict = Depends(get_current_user)):
 # ============================================================
 
 @router.get("/lab/{lab_key}/jadwal")
-async def list_jadwal(lab_key: str, status: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_jadwal(lab_key: str, minggu_ke: Optional[int] = None, user: Dict = Depends(get_current_user)):
     lab_key = _require_lab_key(lab_key)
     _check_lab_access(lab_key, user)
-    room = await _get_lab_room(lab_key)
 
-    query = {'room_id': room['id']}
-    if status:
-        query['status'] = status
-    items = await db.sarpras_peminjaman_ruangan.find(query, {'_id': 0}).sort('tanggal', -1).to_list(2000)
+    query = {'lab_key': lab_key}
+    if minggu_ke:
+        query['minggu_ke'] = minggu_ke
+    items = await db.lab_jadwal_mingguan.find(query, {'_id': 0}).to_list(2000)
+    hari_order = {h: i for i, h in enumerate(LAB_JADWAL_HARI)}
+    items.sort(key=lambda i: (hari_order.get(i.get('hari'), 99), i.get('jam_mulai') or ''))
     return [serialize_doc(i) for i in items]
 
 
 @router.post("/lab/{lab_key}/jadwal")
-async def create_jadwal(lab_key: str, req: LabPeminjamanRuanganRequest, user: Dict = Depends(get_current_user)):
+async def create_jadwal(lab_key: str, req: LabJadwalMingguanRequest, user: Dict = Depends(get_current_user)):
     lab_key = _require_lab_key(lab_key)
     _check_lab_access(lab_key, user)
-    room = await _get_lab_room(lab_key)
-    peminjam = await _get_user_or_404(req.peminjam_id)
+
+    if req.hari not in LAB_JADWAL_HARI:
+        raise HTTPException(400, "Hari tidak valid")
+    if req.minggu_ke not in (1, 2, 3, 4):
+        raise HTTPException(400, "Minggu ke- harus 1-4")
 
     doc = {
         'id': str(uuid.uuid4()),
-        'room_id': room['id'],
-        'room_nama': room.get('name'),
+        'lab_key': lab_key,
         **req.model_dump(),
-        **_user_fields('peminjam', peminjam),
         'petugas_id': user['id'],
         'created_at': datetime.utcnow().isoformat(),
         'updated_at': datetime.utcnow().isoformat(),
     }
-    await db.sarpras_peminjaman_ruangan.insert_one(doc)
-    await log_audit(user, f'lab_{lab_key}_jadwal_create', f"{peminjam.get('full_name')} memesan {room.get('name')}")
+    await db.lab_jadwal_mingguan.insert_one(doc)
+    await log_audit(user, f'lab_{lab_key}_jadwal_create', f"Jadwal {req.hari} kelas {req.kelas}")
     return serialize_doc(doc)
 
 
 @router.put("/lab/{lab_key}/jadwal/{item_id}")
-async def update_jadwal(lab_key: str, item_id: str, req: LabPeminjamanRuanganRequest, user: Dict = Depends(get_current_user)):
+async def update_jadwal(lab_key: str, item_id: str, req: LabJadwalMingguanRequest, user: Dict = Depends(get_current_user)):
     lab_key = _require_lab_key(lab_key)
     _check_lab_access(lab_key, user)
-    room = await _get_lab_room(lab_key)
 
-    existing = await db.sarpras_peminjaman_ruangan.find_one({'id': item_id, 'room_id': room['id']})
+    existing = await db.lab_jadwal_mingguan.find_one({'id': item_id, 'lab_key': lab_key})
     if not existing:
         raise HTTPException(404, "Data jadwal tidak ditemukan")
+    if req.hari not in LAB_JADWAL_HARI:
+        raise HTTPException(400, "Hari tidak valid")
+    if req.minggu_ke not in (1, 2, 3, 4):
+        raise HTTPException(400, "Minggu ke- harus 1-4")
 
     update_data = req.model_dump()
-    if req.peminjam_id != existing.get('peminjam_id'):
-        peminjam = await _get_user_or_404(req.peminjam_id)
-        update_data.update(_user_fields('peminjam', peminjam))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
-    await db.sarpras_peminjaman_ruangan.update_one({'id': item_id}, {'$set': update_data})
+    await db.lab_jadwal_mingguan.update_one({'id': item_id}, {'$set': update_data})
     await log_audit(user, f'lab_{lab_key}_jadwal_update', f"Updated jadwal: {item_id}")
 
-    updated = await db.sarpras_peminjaman_ruangan.find_one({'id': item_id}, {'_id': 0})
+    updated = await db.lab_jadwal_mingguan.find_one({'id': item_id}, {'_id': 0})
     return serialize_doc(updated)
 
 
@@ -246,13 +482,12 @@ async def update_jadwal(lab_key: str, item_id: str, req: LabPeminjamanRuanganReq
 async def delete_jadwal(lab_key: str, item_id: str, user: Dict = Depends(get_current_user)):
     lab_key = _require_lab_key(lab_key)
     _check_lab_access(lab_key, user)
-    room = await _get_lab_room(lab_key)
 
-    existing = await db.sarpras_peminjaman_ruangan.find_one({'id': item_id, 'room_id': room['id']})
+    existing = await db.lab_jadwal_mingguan.find_one({'id': item_id, 'lab_key': lab_key})
     if not existing:
         raise HTTPException(404, "Data jadwal tidak ditemukan")
 
-    await db.sarpras_peminjaman_ruangan.delete_one({'id': item_id})
+    await db.lab_jadwal_mingguan.delete_one({'id': item_id})
     await log_audit(user, f'lab_{lab_key}_jadwal_delete', f"Deleted jadwal: {item_id}")
     return {'message': 'Data jadwal berhasil dihapus'}
 
@@ -277,11 +512,16 @@ async def create_jurnal_penggunaan(lab_key: str, req: LabJurnalRuanganRequest, u
     _check_lab_access(lab_key, user)
     room = await _get_lab_room(lab_key)
 
+    pengguna_id = req.pengguna_id or user['id']
+    pengguna = await _get_user_or_404(pengguna_id)
+
     doc = {
         'id': str(uuid.uuid4()),
         'room_id': room['id'],
         'room_nama': room.get('name'),
         **req.model_dump(),
+        'pengguna_id': pengguna_id,
+        **_user_fields('pengguna', pengguna),
         'petugas_id': user['id'],
         'created_at': datetime.utcnow().isoformat(),
     }
@@ -292,6 +532,34 @@ async def create_jurnal_penggunaan(lab_key: str, req: LabJurnalRuanganRequest, u
     await db.sarpras_jurnal_ruangan.insert_one(doc)
     await log_audit(user, f'lab_{lab_key}_jurnal_penggunaan_create', f"Jurnal penggunaan {room.get('name')}")
     return serialize_doc(doc)
+
+
+@router.get("/lab/{lab_key}/jurnal-penggunaan/pdf")
+async def export_jurnal_penggunaan_pdf_endpoint(lab_key: str, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    room = await _get_lab_room(lab_key)
+
+    rows = await db.sarpras_jurnal_ruangan.find({'room_id': room['id']}, {'_id': 0}).sort('tanggal', -1).to_list(2000)
+    settings = await get_settings()
+
+    kepala_madrasah = {'name': '-', 'nip': '-'}
+    for item in (settings.get('leadership') or []):
+        if (item.get('position') or '').strip().lower() == 'kepala_madrasah':
+            kepala_madrasah = {'name': item.get('name') or '-', 'nip': item.get('nip') or '-'}
+            break
+    penyusun = {'name': user.get('full_name', user.get('username')), 'nip': user.get('nip_nuptk') or '-'}
+
+    from lab_export import export_jurnal_penggunaan_pdf
+    content = export_jurnal_penggunaan_pdf(
+        settings=settings, lab_name=LAB_ROOM_NAMES[lab_key].replace('Lab ', ''),
+        rows=rows, penyusun=penyusun, kepala_madrasah=kepala_madrasah,
+    )
+    filename = f"Jurnal_Penggunaan_{LAB_ROOM_NAMES[lab_key].replace(' ', '_')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(content), media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.delete("/lab/{lab_key}/jurnal-penggunaan/{item_id}")
@@ -366,6 +634,37 @@ async def delete_jurnal_pengelolaan(lab_key: str, item_id: str, user: Dict = Dep
     await db.sarpras_jurnal_perawatan.delete_one({'id': item_id})
     await log_audit(user, f'lab_{lab_key}_jurnal_pengelolaan_delete', f"Deleted jurnal pengelolaan: {item_id}")
     return {'message': 'Data jurnal pengelolaan berhasil dihapus'}
+
+
+@router.get("/lab/{lab_key}/jurnal-pengelolaan/pdf")
+async def export_jurnal_pengelolaan_pdf_endpoint(lab_key: str, user: Dict = Depends(get_current_user)):
+    lab_key = _require_lab_key(lab_key)
+    _check_lab_access(lab_key, user)
+    room = await _get_lab_room(lab_key)
+
+    tetap_ids = [a['id'] for a in await db.sarpras_aset_tetap.find({'lokasi_room_id': room['id']}, {'_id': 0, 'id': 1}).to_list(2000)]
+    lancar_ids = [a['id'] for a in await db.sarpras_aset_lancar.find({'lokasi_room_id': room['id']}, {'_id': 0, 'id': 1}).to_list(2000)]
+    all_ids = tetap_ids + lancar_ids + [room['id']]
+    rows = await db.sarpras_jurnal_perawatan.find({'aset_id': {'$in': all_ids}}, {'_id': 0}).sort('tanggal', -1).to_list(2000)
+    settings = await get_settings()
+
+    kepala_madrasah = {'name': '-', 'nip': '-'}
+    for item in (settings.get('leadership') or []):
+        if (item.get('position') or '').strip().lower() == 'kepala_madrasah':
+            kepala_madrasah = {'name': item.get('name') or '-', 'nip': item.get('nip') or '-'}
+            break
+    penyusun = {'name': user.get('full_name', user.get('username')), 'nip': user.get('nip_nuptk') or '-'}
+
+    from lab_export import export_jurnal_pengelolaan_pdf
+    content = export_jurnal_pengelolaan_pdf(
+        settings=settings, lab_name=LAB_ROOM_NAMES[lab_key].replace('Lab ', ''),
+        rows=rows, penyusun=penyusun, kepala_madrasah=kepala_madrasah,
+    )
+    filename = f"Jurnal_Pengelolaan_{LAB_ROOM_NAMES[lab_key].replace(' ', '_')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(content), media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ============================================================

@@ -48,6 +48,10 @@ const SUBJECT_TEACHER_ROLES = ['guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'g
 const LAB_GROUP_BY_ROLE = {
   guru_ipa: { title: 'Menu Lab IPA', labKey: 'ipa', testidPrefix: 'lab-ipa' },
   guru_tik: { title: 'Menu Lab Komputer', labKey: 'komputer', testidPrefix: 'lab-komputer' },
+  guru_bahasa: { title: 'Menu Lab Bahasa', labKey: 'bahasa', testidPrefix: 'lab-bahasa' },
+  guru_agama: { title: 'Menu Lab Agama', labKey: 'agama', testidPrefix: 'lab-agama' },
+  guru_ips: { title: 'Menu Lab IPS', labKey: 'ips', testidPrefix: 'lab-ips' },
+  guru_seni: { title: 'Menu Lab Seni', labKey: 'seni', testidPrefix: 'lab-seni' },
 };
 
 function buildLabGroupItems(labKey, testidPrefix) {
