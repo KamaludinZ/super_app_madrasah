@@ -12,7 +12,8 @@ import { Package, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-rea
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
-const emptyForm = { nama_barang: '', kategori: '', satuan: 'pcs', stok: 0, stok_minimum: 0, lokasi_room_id: '', keterangan: '' };
+const SUMBER_DANA_LIST = ['Komite', 'BMN'];
+const emptyForm = { nama_barang: '', sumber_dana: 'Komite', kategori: '', satuan: 'pcs', stok: 0, stok_minimum: 0, lokasi_room_id: '', lokasi_penyimpanan: '', keterangan: '' };
 
 export default function AdminSarprasAsetLancarPage() {
   const [list, setList] = useState([]);
@@ -22,6 +23,7 @@ export default function AdminSarprasAsetLancarPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
+  const [filterSumber, setFilterSumber] = useState('');
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => { loadData(); }, []);
@@ -43,9 +45,9 @@ export default function AdminSarprasAsetLancarPage() {
     if (item) {
       setEditing(item);
       setForm({
-        nama_barang: item.nama_barang || '', kategori: item.kategori || '', satuan: item.satuan || 'pcs',
+        nama_barang: item.nama_barang || '', sumber_dana: item.sumber_dana || 'Komite', kategori: item.kategori || '', satuan: item.satuan || 'pcs',
         stok: item.stok ?? 0, stok_minimum: item.stok_minimum ?? 0, lokasi_room_id: item.lokasi_room_id || '',
-        keterangan: item.keterangan || '',
+        lokasi_penyimpanan: item.lokasi_penyimpanan || '', keterangan: item.keterangan || '',
       });
     } else {
       setEditing(null);
@@ -89,7 +91,11 @@ export default function AdminSarprasAsetLancarPage() {
     }
   };
 
-  const filtered = list.filter((item) => !search || (item.nama_barang || '').toLowerCase().includes(search.toLowerCase()));
+  const filtered = list.filter((item) => {
+    if (filterSumber && item.sumber_dana !== filterSumber) return false;
+    if (!search) return true;
+    return (item.nama_barang || '').toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="space-y-6" data-testid="admin-sarpras-aset-lancar-page">
@@ -107,11 +113,18 @@ export default function AdminSarprasAsetLancarPage() {
       </div>
 
       <Card>
-        <CardContent className="p-4">
-          <div className="relative max-w-sm">
+        <CardContent className="p-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input placeholder="Cari nama barang..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
+          <Select value={filterSumber || 'all'} onValueChange={(v) => setFilterSumber(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Semua Sumber Dana" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Sumber Dana</SelectItem>
+              {SUMBER_DANA_LIST.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
@@ -125,15 +138,17 @@ export default function AdminSarprasAsetLancarPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama Barang</TableHead>
+                    <TableHead>Sumber Dana</TableHead>
                     <TableHead>Kategori</TableHead>
                     <TableHead className="text-center">Stok</TableHead>
-                    <TableHead>Lokasi</TableHead>
+                    <TableHead>Ruang</TableHead>
+                    <TableHead>Lokasi Penyimpanan</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-slate-500">
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
                       <Package className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                       <div className="font-semibold">Belum ada data aset lancar</div>
                     </TableCell></TableRow>
@@ -141,13 +156,15 @@ export default function AdminSarprasAsetLancarPage() {
                     filtered.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-semibold">{item.nama_barang}</TableCell>
+                        <TableCell><Badge variant="outline">{item.sumber_dana || 'Komite'}</Badge></TableCell>
                         <TableCell>{item.kategori || '-'}</TableCell>
                         <TableCell className="text-center">
                           <Badge className={item.stok <= (item.stok_minimum || 0) ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}>
                             {item.stok} {item.satuan}
                           </Badge>
                         </TableCell>
-                        <TableCell>{item.lokasi_room_nama || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.lokasi_room_nama || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.lokasi_penyimpanan || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="icon" variant="ghost" onClick={() => openModal(item)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></Button>
@@ -174,33 +191,46 @@ export default function AdminSarprasAsetLancarPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Kategori</Label>
-                <Input value={form.kategori} onChange={(e) => setForm({ ...form, kategori: e.target.value })} placeholder="ATK, Bahan Habis Pakai" />
+                <Label>Sumber Dana</Label>
+                <Select value={form.sumber_dana} onValueChange={(v) => setForm({ ...form, sumber_dana: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{SUMBER_DANA_LIST.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Satuan</Label>
-                <Input value={form.satuan} onChange={(e) => setForm({ ...form, satuan: e.target.value })} />
+                <Label>Kategori</Label>
+                <Input value={form.kategori} onChange={(e) => setForm({ ...form, kategori: e.target.value })} placeholder="ATK, Bahan Habis Pakai" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label>Satuan</Label>
+                <Input value={form.satuan} onChange={(e) => setForm({ ...form, satuan: e.target.value })} />
+              </div>
+              <div className="space-y-2">
                 <Label>Stok</Label>
                 <Input type="number" min="0" value={form.stok} onChange={(e) => setForm({ ...form, stok: e.target.value })} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Stok Minimum</Label>
                 <Input type="number" min="0" value={form.stok_minimum} onChange={(e) => setForm({ ...form, stok_minimum: e.target.value })} />
               </div>
+              <div className="space-y-2">
+                <Label>Lokasi Ruangan</Label>
+                <Select value={form.lokasi_room_id || 'none'} onValueChange={(v) => setForm({ ...form, lokasi_room_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="Pilih Ruangan" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tidak ada</SelectItem>
+                    {rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Lokasi Ruangan</Label>
-              <Select value={form.lokasi_room_id || 'none'} onValueChange={(v) => setForm({ ...form, lokasi_room_id: v === 'none' ? '' : v })}>
-                <SelectTrigger><SelectValue placeholder="Pilih Ruangan" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Tidak ada</SelectItem>
-                  {rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Lokasi Penyimpanan</Label>
+              <Input value={form.lokasi_penyimpanan} onChange={(e) => setForm({ ...form, lokasi_penyimpanan: e.target.value })} placeholder="Lemari A1, Rak B, dsb." />
             </div>
             <div className="space-y-2">
               <Label>Keterangan</Label>

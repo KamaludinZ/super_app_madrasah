@@ -13,17 +13,10 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
 const SUMBER_DANA_LIST = ['Komite', 'BMN'];
-const KONDISI_LIST = ['Baik', 'Rusak Ringan', 'Rusak Berat'];
-
-const KONDISI_BADGE = {
-  Baik: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'Rusak Ringan': 'bg-amber-100 text-amber-700 border-amber-200',
-  'Rusak Berat': 'bg-rose-100 text-rose-700 border-rose-200',
-};
 
 const emptyForm = {
-  nama_aset: '', sumber_dana: 'Komite', kode_aset: '', kategori: '', tanggal_perolehan: '',
-  nilai_perolehan: '', jumlah: 1, kondisi: 'Baik', lokasi_room_id: '', keterangan: '',
+  nama_aset: '', sumber_dana: 'Komite', kode_aset: '', kategori: '', satuan: '', tanggal_perolehan: '',
+  nilai_perolehan: '', jumlah_baik: 1, jumlah_rusak: 0, lokasi_room_id: '', lokasi_penyimpanan: '', keterangan: '',
 };
 
 export default function AdminSarprasAsetTetapPage() {
@@ -60,9 +53,11 @@ export default function AdminSarprasAsetTetapPage() {
       setEditing(item);
       setForm({
         nama_aset: item.nama_aset || '', sumber_dana: item.sumber_dana || 'Komite', kode_aset: item.kode_aset || '',
-        kategori: item.kategori || '', tanggal_perolehan: item.tanggal_perolehan || '',
-        nilai_perolehan: item.nilai_perolehan ?? '', jumlah: item.jumlah ?? 1, kondisi: item.kondisi || 'Baik',
-        lokasi_room_id: item.lokasi_room_id || '', keterangan: item.keterangan || '',
+        kategori: item.kategori || '', satuan: item.satuan || '', tanggal_perolehan: item.tanggal_perolehan || '',
+        nilai_perolehan: item.nilai_perolehan ?? '',
+        jumlah_baik: item.jumlah_baik ?? item.jumlah ?? 1, jumlah_rusak: item.jumlah_rusak ?? 0,
+        lokasi_room_id: item.lokasi_room_id || '', lokasi_penyimpanan: item.lokasi_penyimpanan || '',
+        keterangan: item.keterangan || '',
       });
     } else {
       setEditing(null);
@@ -77,7 +72,8 @@ export default function AdminSarprasAsetTetapPage() {
     try {
       const payload = {
         ...form,
-        jumlah: Number(form.jumlah) || 0,
+        jumlah_baik: Number(form.jumlah_baik) || 0,
+        jumlah_rusak: Number(form.jumlah_rusak) || 0,
         nilai_perolehan: form.nilai_perolehan === '' ? null : Number(form.nilai_perolehan),
         lokasi_room_id: form.lokasi_room_id || null,
       };
@@ -158,15 +154,17 @@ export default function AdminSarprasAsetTetapPage() {
                     <TableHead>Nama Aset</TableHead>
                     <TableHead>Sumber Dana</TableHead>
                     <TableHead>Kategori</TableHead>
-                    <TableHead className="text-center">Jumlah</TableHead>
-                    <TableHead>Kondisi</TableHead>
-                    <TableHead>Lokasi</TableHead>
+                    <TableHead className="text-center">Baik</TableHead>
+                    <TableHead className="text-center">Rusak</TableHead>
+                    <TableHead>Satuan</TableHead>
+                    <TableHead>Ruang</TableHead>
+                    <TableHead>Lokasi Penyimpanan</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">
+                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-slate-500">
                       <Building2 className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                       <div className="font-semibold">Belum ada data aset tetap</div>
                     </TableCell></TableRow>
@@ -176,9 +174,11 @@ export default function AdminSarprasAsetTetapPage() {
                         <TableCell className="font-semibold">{item.nama_aset}<div className="text-xs text-slate-500 font-normal">{item.kode_aset}</div></TableCell>
                         <TableCell><Badge variant="outline">{item.sumber_dana}</Badge></TableCell>
                         <TableCell>{item.kategori || '-'}</TableCell>
-                        <TableCell className="text-center font-mono">{item.jumlah}</TableCell>
-                        <TableCell><Badge className={KONDISI_BADGE[item.kondisi] || ''}>{item.kondisi}</Badge></TableCell>
-                        <TableCell>{item.lokasi_room_nama || '-'}</TableCell>
+                        <TableCell className="text-center font-mono text-emerald-700">{item.jumlah_baik ?? item.jumlah ?? 0}</TableCell>
+                        <TableCell className="text-center font-mono text-rose-600">{item.jumlah_rusak ?? 0}</TableCell>
+                        <TableCell className="text-sm">{item.satuan || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.lokasi_room_nama || '-'}</TableCell>
+                        <TableCell className="text-sm">{item.lokasi_penyimpanan || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="icon" variant="ghost" onClick={() => openModal(item)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></Button>
@@ -222,11 +222,8 @@ export default function AdminSarprasAsetTetapPage() {
                 <Input value={form.kategori} onChange={(e) => setForm({ ...form, kategori: e.target.value })} placeholder="Elektronik, Furniture, dsb" />
               </div>
               <div className="space-y-2">
-                <Label>Kondisi</Label>
-                <Select value={form.kondisi} onValueChange={(v) => setForm({ ...form, kondisi: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{KONDISI_LIST.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>Satuan</Label>
+                <Input value={form.satuan} onChange={(e) => setForm({ ...form, satuan: e.target.value })} placeholder="unit, set, buah" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -241,19 +238,27 @@ export default function AdminSarprasAsetTetapPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Jumlah</Label>
-                <Input type="number" min="0" value={form.jumlah} onChange={(e) => setForm({ ...form, jumlah: e.target.value })} />
+                <Label>Jumlah Kondisi Baik</Label>
+                <Input type="number" min="0" value={form.jumlah_baik} onChange={(e) => setForm({ ...form, jumlah_baik: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Lokasi Ruangan</Label>
-                <Select value={form.lokasi_room_id || 'none'} onValueChange={(v) => setForm({ ...form, lokasi_room_id: v === 'none' ? '' : v })}>
-                  <SelectTrigger><SelectValue placeholder="Pilih Ruangan" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Tidak ada</SelectItem>
-                    {rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Jumlah Rusak</Label>
+                <Input type="number" min="0" value={form.jumlah_rusak} onChange={(e) => setForm({ ...form, jumlah_rusak: e.target.value })} />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Lokasi Ruangan</Label>
+              <Select value={form.lokasi_room_id || 'none'} onValueChange={(v) => setForm({ ...form, lokasi_room_id: v === 'none' ? '' : v })}>
+                <SelectTrigger><SelectValue placeholder="Pilih Ruangan" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tidak ada</SelectItem>
+                  {rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Lokasi Penyimpanan</Label>
+              <Input value={form.lokasi_penyimpanan} onChange={(e) => setForm({ ...form, lokasi_penyimpanan: e.target.value })} placeholder="Lemari A1, Rak B, dsb." />
             </div>
             <div className="space-y-2">
               <Label>Keterangan</Label>

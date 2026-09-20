@@ -22,22 +22,28 @@ class AsetTetapRequest(BaseModel):
     sumber_dana: str = 'Komite'  # 'Komite' or 'BMN'
     kode_aset: Optional[str] = None
     kategori: Optional[str] = None
+    satuan: Optional[str] = None
     tanggal_perolehan: Optional[str] = None
     nilai_perolehan: Optional[float] = None
-    jumlah: int = 1
-    kondisi: Optional[str] = 'Baik'  # Baik, Rusak Ringan, Rusak Berat
+    jumlah_baik: int = 1
+    jumlah_rusak: int = 0
     lokasi_room_id: Optional[str] = None
+    lokasi_penyimpanan: Optional[str] = None
     keterangan: Optional[str] = None
 
 
 class AsetLancarRequest(BaseModel):
-    """Request model for a current/consumable asset."""
+    """Request model for a current/consumable asset. Aset lancar (bahan
+    habis pakai seperti spidol, tinta, obat) tidak punya konsep baik/rusak
+    seperti aset tetap — hanya satu angka stok yang berkurang saat dipakai."""
     nama_barang: str
+    sumber_dana: str = 'Komite'  # 'Komite' or 'BMN'
     kategori: Optional[str] = None  # e.g., "ATK", "Bahan Habis Pakai"
     satuan: Optional[str] = 'pcs'
     stok: int = 0
     stok_minimum: Optional[int] = 0
     lokasi_room_id: Optional[str] = None
+    lokasi_penyimpanan: Optional[str] = None
     keterangan: Optional[str] = None
 
 
@@ -211,6 +217,8 @@ async def create_aset_tetap(req: AsetTetapRequest, user: Dict = Depends(require_
     doc = {
         'id': str(uuid.uuid4()),
         **data,
+        'jumlah': req.jumlah_baik + req.jumlah_rusak,
+        'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
         'lokasi_room_nama': room_name,
         'created_by': user['id'],
         'created_at': datetime.utcnow().isoformat(),
@@ -228,6 +236,8 @@ async def update_aset_tetap(aset_id: str, req: AsetTetapRequest, user: Dict = De
         raise HTTPException(404, "Aset tetap tidak ditemukan")
 
     update_data = req.model_dump()
+    update_data['jumlah'] = req.jumlah_baik + req.jumlah_rusak
+    update_data['kondisi'] = 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan'
     if update_data.get('lokasi_room_id'):
         room = await _get_room_or_404(update_data['lokasi_room_id'])
         update_data['lokasi_room_nama'] = room.get('name')
@@ -257,8 +267,10 @@ async def delete_aset_tetap(aset_id: str, user: Dict = Depends(require_role(*SAR
 # ============================================================
 
 @router.get("/sarpras/aset-lancar")
-async def list_aset_lancar(search: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_aset_lancar(sumber_dana: Optional[str] = None, search: Optional[str] = None, user: Dict = Depends(get_current_user)):
     query = {}
+    if sumber_dana:
+        query['sumber_dana'] = sumber_dana
     if search:
         query['nama_barang'] = {'$regex': search, '$options': 'i'}
     items = await db.sarpras_aset_lancar.find(query, {'_id': 0}).sort('nama_barang', 1).to_list(5000)

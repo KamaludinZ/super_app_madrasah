@@ -14,7 +14,12 @@ import { toast } from 'sonner';
 import LabKPI from '@/pages/lab/LabKPI';
 
 const JENIS_LABELS = { tetap: 'Aset Tetap', lancar: 'Aset Lancar' };
-const EMPTY_FORM = { aset_tipe: 'tetap', nama: '', kategori: '', satuan: '', jumlah_baik: 0, jumlah_rusak: 0, lokasi_penyimpanan: '', ruangan_id: '', keterangan: '' };
+const SUMBER_DANA_LIST = ['Komite', 'BMN'];
+const EMPTY_FORM = {
+  aset_tipe: 'tetap', nama: '', sumber_dana: 'Komite', kategori: '', satuan: '',
+  jumlah_baik: 0, jumlah_rusak: 0, stok: 0, stok_minimum: 0,
+  lokasi_penyimpanan: '', ruangan_id: '', keterangan: '',
+};
 
 export default function AdminUKSAsetPage() {
   const [items, setItems] = useState([]);
@@ -55,8 +60,10 @@ export default function AdminUKSAsetPage() {
     if (item) {
       setEditing(item);
       setForm({
-        aset_tipe: item.aset_tipe, nama: item.nama, kategori: item.kategori || '', satuan: item.satuan || '',
+        aset_tipe: item.aset_tipe, nama: item.nama, sumber_dana: item.sumber_dana || 'Komite',
+        kategori: item.kategori || '', satuan: item.satuan || '',
         jumlah_baik: item.jumlah_baik || 0, jumlah_rusak: item.jumlah_rusak || 0,
+        stok: item.stok || 0, stok_minimum: item.stok_minimum || 0,
         lokasi_penyimpanan: item.lokasi_penyimpanan || '', ruangan_id: item.ruangan_id || uksRoomId,
         keterangan: item.keterangan || '',
       });
@@ -71,7 +78,11 @@ export default function AdminUKSAsetPage() {
     if (!form.nama.trim()) { toast.error('Nama aset wajib diisi'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, jumlah_baik: Number(form.jumlah_baik) || 0, jumlah_rusak: Number(form.jumlah_rusak) || 0 };
+      const payload = {
+        ...form,
+        jumlah_baik: Number(form.jumlah_baik) || 0, jumlah_rusak: Number(form.jumlah_rusak) || 0,
+        stok: Number(form.stok) || 0, stok_minimum: Number(form.stok_minimum) || 0,
+      };
       if (editing) {
         await api.put(`/uks/aset/${editing.aset_tipe}/${editing.id}`, payload);
         toast.success('Aset berhasil diperbarui');
@@ -110,6 +121,7 @@ export default function AdminUKSAsetPage() {
     totalItem: items.length,
     totalBaik: items.reduce((sum, i) => sum + (i.jumlah_baik || 0), 0),
     totalRusak: items.reduce((sum, i) => sum + (i.jumlah_rusak || 0), 0),
+    totalStokRendah: items.filter((i) => i.aset_tipe === 'lancar' && (i.stok || 0) <= (i.stok_minimum || 0)).length,
     totalTetap: items.filter((i) => i.aset_tipe === 'tetap').length,
     totalLancar: items.filter((i) => i.aset_tipe === 'lancar').length,
   };
@@ -130,12 +142,13 @@ export default function AdminUKSAsetPage() {
       </div>
 
       {!loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 grid-spacing-dense">
+        <div className="grid grid-cols-2 sm:grid-cols-6 grid-spacing-dense">
           <LabKPI label="Total Item" value={stats.totalItem} icon={Boxes} color="slate" />
           <LabKPI label="Jumlah Baik" value={stats.totalBaik} icon={CheckCircle2} color="emerald" />
           <LabKPI label="Jumlah Rusak" value={stats.totalRusak} icon={AlertTriangle} color="rose" />
           <LabKPI label="Aset Tetap" value={stats.totalTetap} icon={Package} color="blue" />
           <LabKPI label="Aset Lancar" value={stats.totalLancar} icon={Layers} color="amber" />
+          <LabKPI label="Stok Rendah" value={stats.totalStokRendah} icon={AlertTriangle} color="rose" />
         </div>
       )}
 
@@ -180,9 +193,9 @@ export default function AdminUKSAsetPage() {
                     <TableHead className="w-10">NO</TableHead>
                     <TableHead>NAMA ASET</TableHead>
                     <TableHead>JENIS</TableHead>
+                    <TableHead>SUMBER DANA</TableHead>
                     <TableHead>KATEGORI</TableHead>
-                    <TableHead className="text-center">JUMLAH BAIK</TableHead>
-                    <TableHead className="text-center">JUMLAH RUSAK</TableHead>
+                    <TableHead className="text-center">JUMLAH / STOK</TableHead>
                     <TableHead>SATUAN</TableHead>
                     <TableHead>RUANG</TableHead>
                     <TableHead>LOKASI PENYIMPANAN</TableHead>
@@ -204,9 +217,21 @@ export default function AdminUKSAsetPage() {
                         <TableCell className="text-sm text-slate-500">{idx + 1}</TableCell>
                         <TableCell className="font-semibold">{item.nama}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs">{JENIS_LABELS[item.aset_tipe] || item.aset_tipe}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs">{item.sumber_dana || 'Komite'}</Badge></TableCell>
                         <TableCell>{item.kategori ? <Badge variant="outline" className="text-xs">{item.kategori}</Badge> : '-'}</TableCell>
-                        <TableCell className="text-center font-mono text-emerald-700">{item.jumlah_baik}</TableCell>
-                        <TableCell className="text-center font-mono text-rose-600">{item.jumlah_rusak}</TableCell>
+                        <TableCell className="text-center">
+                          {item.aset_tipe === 'lancar' ? (
+                            <Badge className={(item.stok || 0) <= (item.stok_minimum || 0) ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}>
+                              {item.stok || 0}
+                            </Badge>
+                          ) : (
+                            <span className="font-mono">
+                              <span className="text-emerald-700">{item.jumlah_baik || 0}</span>
+                              {' / '}
+                              <span className="text-rose-600">{item.jumlah_rusak || 0}</span>
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">{item.satuan || '-'}</TableCell>
                         <TableCell className="text-sm">{item.ruangan_nama || '-'}</TableCell>
                         <TableCell className="text-sm">{item.lokasi_penyimpanan || '-'}</TableCell>
@@ -240,15 +265,24 @@ export default function AdminUKSAsetPage() {
               <Label>Nama Aset <span className="text-rose-500">*</span></Label>
               <Input value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} />
             </div>
-            <div className="space-y-2">
-              <Label>Jenis</Label>
-              <Select value={form.aset_tipe} onValueChange={(v) => setForm({ ...form, aset_tipe: v })} disabled={!!editing}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tetap">Aset Tetap (alat)</SelectItem>
-                  <SelectItem value="lancar">Aset Lancar (bahan habis pakai)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Jenis</Label>
+                <Select value={form.aset_tipe} onValueChange={(v) => setForm({ ...form, aset_tipe: v })} disabled={!!editing}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tetap">Aset Tetap (alat)</SelectItem>
+                    <SelectItem value="lancar">Aset Lancar (bahan habis pakai)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Sumber Dana</Label>
+                <Select value={form.sumber_dana} onValueChange={(v) => setForm({ ...form, sumber_dana: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{SUMBER_DANA_LIST.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -266,16 +300,29 @@ export default function AdminUKSAsetPage() {
                 <Input value={form.satuan} onChange={(e) => setForm({ ...form, satuan: e.target.value })} placeholder="unit, pcs, botol, box" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Jumlah Kondisi Baik</Label>
-                <Input type="number" min="0" value={form.jumlah_baik} onChange={(e) => setForm({ ...form, jumlah_baik: e.target.value })} />
+            {form.aset_tipe === 'tetap' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Jumlah Kondisi Baik</Label>
+                  <Input type="number" min="0" value={form.jumlah_baik} onChange={(e) => setForm({ ...form, jumlah_baik: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Jumlah Rusak</Label>
+                  <Input type="number" min="0" value={form.jumlah_rusak} onChange={(e) => setForm({ ...form, jumlah_rusak: e.target.value })} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Jumlah Rusak</Label>
-                <Input type="number" min="0" value={form.jumlah_rusak} onChange={(e) => setForm({ ...form, jumlah_rusak: e.target.value })} />
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Stok</Label>
+                  <Input type="number" min="0" value={form.stok} onChange={(e) => setForm({ ...form, stok: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stok Minimum</Label>
+                  <Input type="number" min="0" value={form.stok_minimum} onChange={(e) => setForm({ ...form, stok_minimum: e.target.value })} />
+                </div>
               </div>
-            </div>
+            )}
             <div className="space-y-2">
               <Label>Ruang</Label>
               <Select value={form.ruangan_id || undefined} onValueChange={(v) => setForm({ ...form, ruangan_id: v })}>

@@ -147,13 +147,17 @@ class AsetUKSRequest(BaseModel):
     """Request model for a UKS equipment/asset item — sama seperti pola Lab
     IPA/Komputer: disimpan di collection Sarpras (aset_tetap/aset_lancar)
     yang sama, dipisahkan lewat lokasi_room_id, agar terintegrasi penuh
-    dengan /admin/sarpras/."""
+    dengan /admin/sarpras/. Aset lancar (mis. obat, BMHP) pakai stok, bukan
+    baik/rusak seperti aset tetap."""
     aset_tipe: str  # 'tetap' or 'lancar'
     nama: str
+    sumber_dana: str = 'Komite'  # 'Komite' or 'BMN'
     kategori: Optional[str] = None
     satuan: Optional[str] = None
     jumlah_baik: int = 0
     jumlah_rusak: int = 0
+    stok: int = 0
+    stok_minimum: int = 0
     lokasi_penyimpanan: Optional[str] = None
     ruangan_id: Optional[str] = None  # default: Ruang UKS; bisa diganti ruangan lain
     keterangan: Optional[str] = None
@@ -1196,19 +1200,25 @@ async def _get_uks_asset_or_403(uks_room_id: str, aset_tipe: str, aset_id: str):
 
 def _uks_aset_doc_to_row(doc: Dict, aset_tipe: str) -> Dict:
     name_field = 'nama_aset' if aset_tipe == 'tetap' else 'nama_barang'
-    return {
+    row = {
         'id': doc.get('id'),
         'aset_tipe': aset_tipe,
         'nama': doc.get(name_field),
+        'sumber_dana': doc.get('sumber_dana', 'Komite'),
         'kategori': doc.get('kategori'),
         'satuan': doc.get('satuan') or ('unit' if aset_tipe == 'tetap' else None),
-        'jumlah_baik': doc.get('jumlah_baik', doc.get('jumlah', 0) if aset_tipe == 'tetap' else doc.get('stok', 0)),
-        'jumlah_rusak': doc.get('jumlah_rusak', 0),
         'lokasi_penyimpanan': doc.get('lokasi_penyimpanan'),
         'ruangan_id': doc.get('lokasi_room_id'),
         'ruangan_nama': doc.get('lokasi_room_nama'),
         'keterangan': doc.get('keterangan'),
     }
+    if aset_tipe == 'tetap':
+        row['jumlah_baik'] = doc.get('jumlah_baik', doc.get('jumlah', 0))
+        row['jumlah_rusak'] = doc.get('jumlah_rusak', 0)
+    else:
+        row['stok'] = doc.get('stok', 0)
+        row['stok_minimum'] = doc.get('stok_minimum', 0)
+    return row
 
 
 @router.get("/uks/aset/meta")
@@ -1238,6 +1248,7 @@ async def create_aset(req: AsetUKSRequest, user: Dict = Depends(require_role(*UK
         doc = {
             'id': str(uuid.uuid4()),
             'nama_aset': req.nama,
+            'sumber_dana': req.sumber_dana,
             'kategori': req.kategori,
             'jumlah': req.jumlah_baik + req.jumlah_rusak,
             'jumlah_baik': req.jumlah_baik,
@@ -1257,11 +1268,11 @@ async def create_aset(req: AsetUKSRequest, user: Dict = Depends(require_role(*UK
         doc = {
             'id': str(uuid.uuid4()),
             'nama_barang': req.nama,
+            'sumber_dana': req.sumber_dana,
             'kategori': req.kategori,
             'satuan': req.satuan or 'pcs',
-            'stok': req.jumlah_baik,
-            'jumlah_baik': req.jumlah_baik,
-            'jumlah_rusak': req.jumlah_rusak,
+            'stok': req.stok,
+            'stok_minimum': req.stok_minimum,
             'lokasi_penyimpanan': req.lokasi_penyimpanan,
             'lokasi_room_id': room['id'],
             'lokasi_room_nama': room.get('name'),
@@ -1287,7 +1298,7 @@ async def update_aset(aset_tipe: str, aset_id: str, req: AsetUKSRequest, user: D
 
     if aset_tipe == 'tetap':
         update_data = {
-            'nama_aset': req.nama, 'kategori': req.kategori, 'satuan': req.satuan,
+            'nama_aset': req.nama, 'sumber_dana': req.sumber_dana, 'kategori': req.kategori, 'satuan': req.satuan,
             'jumlah': req.jumlah_baik + req.jumlah_rusak,
             'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
             'kondisi': 'Baik' if req.jumlah_rusak == 0 else 'Rusak Ringan',
@@ -1297,8 +1308,8 @@ async def update_aset(aset_tipe: str, aset_id: str, req: AsetUKSRequest, user: D
         }
     else:
         update_data = {
-            'nama_barang': req.nama, 'kategori': req.kategori, 'satuan': req.satuan or 'pcs',
-            'stok': req.jumlah_baik, 'jumlah_baik': req.jumlah_baik, 'jumlah_rusak': req.jumlah_rusak,
+            'nama_barang': req.nama, 'sumber_dana': req.sumber_dana, 'kategori': req.kategori, 'satuan': req.satuan or 'pcs',
+            'stok': req.stok, 'stok_minimum': req.stok_minimum,
             'lokasi_penyimpanan': req.lokasi_penyimpanan,
             'lokasi_room_id': target_room['id'], 'lokasi_room_nama': target_room.get('name'),
             'keterangan': req.keterangan, 'updated_at': now,
