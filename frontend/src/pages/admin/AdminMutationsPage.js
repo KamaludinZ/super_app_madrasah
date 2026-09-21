@@ -88,17 +88,33 @@ export default function AdminMutationsPage() {
   useEffect(() => {
     api.get('/academic-years/active').then(({ data }) => setActiveAY(data)).catch(() => {});
     loadClasses();
+    loadAllTabs();
   }, []);
 
-  useEffect(() => {
-    const cur = TABS.find((t) => t.value === tab);
-    if (!cur) return;
+  const loadAllTabs = async () => {
     setLoading(true);
-    api.get('/admin/mutations', { params: { mutation_type: cur.mutation_type, role_group: cur.role_group } })
-      .then(({ data: rows }) => setData((prev) => ({ ...prev, [tab]: rows })))
-      .catch(() => setData((prev) => ({ ...prev, [tab]: [] })))
-      .finally(() => setLoading(false));
-  }, [tab]);
+    try {
+      const results = await Promise.all(
+        TABS.map((t) =>
+          api.get('/admin/mutations', { params: { mutation_type: t.mutation_type, role_group: t.role_group } })
+            .then(({ data: rows }) => rows)
+            .catch(() => [])
+        )
+      );
+      setData(TABS.reduce((acc, t, i) => ({ ...acc, [t.value]: results[i] }), {}));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reloadTab = async (tabValue) => {
+    const cur = TABS.find((t) => t.value === tabValue);
+    if (!cur) return;
+    const { data: rows } = await api.get('/admin/mutations', {
+      params: { mutation_type: cur.mutation_type, role_group: cur.role_group }
+    });
+    setData((prev) => ({ ...prev, [tabValue]: rows }));
+  };
 
   const loadClasses = async () => {
     try {
@@ -207,13 +223,7 @@ export default function AdminMutationsPage() {
       toast.success('Mutasi masuk berhasil diproses');
       setMasukDialogOpen(false);
       // Reload data
-      const cur = TABS.find((t) => t.value === tab);
-      if (cur) {
-        const { data: rows } = await api.get('/admin/mutations', {
-          params: { mutation_type: cur.mutation_type, role_group: cur.role_group }
-        });
-        setData((prev) => ({ ...prev, [tab]: rows }));
-      }
+      await reloadTab(tab);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal memproses mutasi masuk');
     } finally {
@@ -245,13 +255,7 @@ export default function AdminMutationsPage() {
       toast.success('Mutasi keluar berhasil diproses. User telah di-nonaktifkan.');
       setKeluarDialogOpen(false);
       // Reload data
-      const cur = TABS.find((t) => t.value === tab);
-      if (cur) {
-        const { data: rows } = await api.get('/admin/mutations', {
-          params: { mutation_type: cur.mutation_type, role_group: cur.role_group }
-        });
-        setData((prev) => ({ ...prev, [tab]: rows }));
-      }
+      await reloadTab(tab);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal memproses mutasi keluar');
     } finally {
@@ -283,13 +287,7 @@ export default function AdminMutationsPage() {
       setDetailDialogOpen(false);
 
       // Reload data
-      const cur = TABS.find((t) => t.value === tab);
-      if (cur) {
-        const { data: rows } = await api.get('/admin/mutations', {
-          params: { mutation_type: cur.mutation_type, role_group: cur.role_group }
-        });
-        setData((prev) => ({ ...prev, [tab]: rows }));
-      }
+      await reloadTab(tab);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Gagal menyimpan perubahan');
     } finally {

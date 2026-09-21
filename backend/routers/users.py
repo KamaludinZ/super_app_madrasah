@@ -948,7 +948,7 @@ async def get_eligible_users_for_keluar(role_group: str = 'siswa',
         q['roles'] = {'$in': staff_roles}
 
     items = await db.users.find(q, {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'nip_nuptk': 1,
-                                      'student_class_id': 1, 'roles': 1}).sort('full_name', 1).to_list(500)
+                                      'student_class_id': 1, 'roles': 1}).sort('full_name', 1).to_list(None)
 
     # Enrich with class name for siswa
     enriched = []
