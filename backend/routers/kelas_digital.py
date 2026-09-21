@@ -344,8 +344,8 @@ async def get_materi_list(
         if class_id:
             filter_query['target_kelas_ids'] = class_id
 
-    elif active_role == 'admin':
-        # Admin can see all
+    elif active_role in ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas', 'penjamin_mutu'):
+        # Admin and management-oversight roles can see all (used by /admin/materi, linked from their sidebars)
         if class_id:
             filter_query['target_kelas_ids'] = class_id
     else:
@@ -589,7 +589,8 @@ async def get_tugas_list(
         if class_id:
             filter_query['target_kelas_ids'] = class_id
 
-    elif active_role == 'admin':
+    elif active_role in ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas', 'penjamin_mutu'):
+        # Admin and management-oversight roles can see all (used by /admin/tugas, linked from their sidebars)
         if class_id:
             filter_query['target_kelas_ids'] = class_id
     else:

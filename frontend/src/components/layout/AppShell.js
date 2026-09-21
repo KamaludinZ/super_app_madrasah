@@ -107,18 +107,74 @@ function navForRole(role, userRoles = []) {
         },
       ];
     }
+
+    // Plain "guru mata pelajaran" (no lab group): group the otherwise-flat
+    // menu into logical sections instead of one long ungrouped list.
+    if (role === 'guru') {
+      return [
+        { to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true },
+        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+        { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-guru' },
+        { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda' },
+        {
+          title: 'Jadwal & Jurnal',
+          items: [
+            { to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' },
+            { to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' },
+            { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-guru' },
+            { to: '/jurnal/riwayat', label: 'Riwayat Jurnal', icon: History, testid: 'nav-jurnal-history' },
+            { to: '/piket/tugas', label: 'Titipkan Tugas', icon: FileText, testid: 'nav-titipan-tugas' },
+          ],
+        },
+        {
+          title: 'Akademik Kelas',
+          items: [
+            { to: '/guru/indikator-materi', label: 'Input Indikator & Materi', icon: BookOpen, testid: 'nav-guru-indikator-materi' },
+            { to: '/guru/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-guru-materi' },
+            { to: '/guru/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-guru-tugas' },
+            { to: '/nilai/input', label: 'Input Nilai', icon: ClipboardEdit, testid: 'nav-grades-input' },
+            { to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-guru-kebersihan' },
+            { to: '/guru/laporan', label: 'Laporan', icon: FileText, testid: 'nav-guru-laporan' },
+            { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-guru' },
+          ],
+        },
+        {
+          title: 'Kepegawaian',
+          items: [
+            { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-guru-ekinerja' },
+            { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-guru-profesionalitas' },
+            { to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-guru-absensi-saya' },
+            { to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-guru' },
+          ],
+        },
+      ];
+    }
   } else if (role === 'wali_kelas') {
-    items.push({ to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' });
-    items.push({ to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' });
-    items.push({ to: '/wali-kelas/jurnal-kelas', label: 'Jurnal Kelas', icon: ClipboardList, testid: 'nav-wk-jurnal' });
-    items.push({ to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' });
-    items.push({ to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' });
-    items.push({ to: '/wali-kelas/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-wk-laporan' });
-    items.push({ to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' });
-    items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Kelas', icon: ClipboardEdit, testid: 'nav-wk-my-schedule' });
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' });
-    items.push({ to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-wk-verval-siswa' });
-    items.push({ to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' });
+    // Wali Kelas uses grouped menu structure: ringkasan kelas terpisah dari jadwal/administrasi.
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/wali-kelas', label: 'Dashboard Kelas', icon: BookMarked, testid: 'nav-wali-kelas' },
+      {
+        title: 'Data Kelas',
+        items: [
+          { to: '/wali-kelas/siswa', label: 'Data Siswa', icon: Users, testid: 'nav-wk-siswa' },
+          { to: '/wali-kelas/jurnal-kelas', label: 'Jurnal Kelas', icon: ClipboardList, testid: 'nav-wk-jurnal' },
+          { to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' },
+          { to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' },
+          { to: '/wali-kelas/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-wk-laporan' },
+          { to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' },
+        ],
+      },
+      {
+        title: 'Jadwal & Administrasi',
+        items: [
+          { to: '/jadwal', label: 'Jadwal Kelas', icon: Calendar, testid: 'nav-wk-jadwal' },
+          { to: '/jadwal/atur', label: 'Atur Jadwal Kelas', icon: ClipboardEdit, testid: 'nav-wk-my-schedule' },
+          { to: '/admin/verval-siswa', label: 'Verval Data Siswa', icon: CheckCircle2, testid: 'nav-wk-verval-siswa' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-wk' },
+        ],
+      },
+    ];
   } else if (role === 'guru_piket') {
     items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket' });
@@ -185,13 +241,23 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler Saya', icon: Sparkles, testid: 'nav-ekstra-coach' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-ekskul' });
   } else if (role === 'tenaga_kependidikan') {
-    items.push({ to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-tendik' });
-    items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-tendik' });
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' });
-    items.push({ to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' });
-    items.push({ to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-tendik-ekinerja' });
-    items.push({ to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-tendik-profesionalitas' });
-    items.push({ to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-tendik-absensi-saya' });
+    // Tenaga Kependidikan uses grouped menu structure: ringkasan pribadi terpisah dari kepegawaian.
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-tendik' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-tendik' },
+      { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-tendik' },
+      {
+        title: 'Kepegawaian',
+        items: [
+          { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-tendik-ekinerja' },
+          { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-tendik-profesionalitas' },
+          { to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-tendik-absensi-saya' },
+          { to: '/verval/ajuan-saya', label: 'Ajuan Verval Saya', icon: CheckCircle2, testid: 'nav-verval-tendik' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-tendik' },
+        ],
+      },
+    ];
   } else if (role === 'kepala_tata_usaha') {
     // Kepala Tata Usaha: grup Manajemen GTK yang sama seperti admin.
     return [
@@ -208,6 +274,7 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-ktu-agenda-tendik' },
           { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-ktu-ekinerja' },
           { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-ktu-profesionalitas' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-ktu-rkam' },
         ],
       },
     ];
@@ -242,32 +309,71 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/admin/pip/penerima', label: 'Data Penerima PIP', icon: DollarSign, testid: 'nav-bendahara-pip-penerima' });
     items.push({ to: '/admin/pip/ajuan', label: 'Daftar Ajuan PIP', icon: FileText, testid: 'nav-bendahara-pip-ajuan' });
   } else if (role === 'kepala_sekolah') {
-    items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-kepsek' });
-    items.push({ to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-kepsek-agenda' });
-    items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-kepsek-siswa' });
-    items.push({ to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-kepsek-gtk' });
-    items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' });
-    items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-kepsek-agenda-guru' });
-    items.push({ to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-kepsek-agenda-tendik' });
-    items.push({ to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-kepsek-ekinerja' });
-    items.push({ to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-kepsek-profesionalitas' });
-    items.push({ to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi GTK', icon: UserCheck, testid: 'nav-kepsek-laporan-absensi-gtk' });
-    items.push({ to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' });
-    items.push({ to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' });
-    items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' });
-    items.push({ to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-kepsek-rkam' });
-    items.push({ to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-kepsek-tatib-data' });
-    items.push({ to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-kepsek-bk-kunjungan' });
-    items.push({ to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-kepsek-bk-laporan' });
-    items.push({ to: '/admin/uks/kunjungan', label: 'Data Kunjungan UKS', icon: Stethoscope, testid: 'nav-kepsek-uks-kunjungan' });
-    items.push({ to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-kepsek-uks-laporan' });
-    items.push({ to: '/admin/perpus/kunjungan', label: 'Data Kunjungan Perpus', icon: Users, testid: 'nav-kepsek-perpus-kunjungan' });
-    items.push({ to: '/admin/perpus/peminjaman', label: 'Data Peminjaman Perpus', icon: BookOpen, testid: 'nav-kepsek-perpus-peminjaman' });
-    items.push({ to: '/admin/perpus/laporan', label: 'Laporan Perpus', icon: FileBarChart, testid: 'nav-kepsek-perpus-laporan' });
-    items.push({ to: '/admin/sarpras/kerusakan', label: 'Laporan Kerusakan & Perbaikan', icon: AlertOctagon, testid: 'nav-kepsek-sarpras-kerusakan' });
-    items.push({ to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-kepsek-kebersihan' });
-    items.push({ to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-kepsek-alumni' });
-    items.push({ to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-kepsek-sekolah-lanjutan' });
+    // Kepala Sekolah uses grouped menu structure, mirroring admin's group layout (view-only).
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-kepsek' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-kepsek-agenda' },
+      {
+        title: 'Manajemen Siswa & GTK',
+        items: [
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-kepsek-siswa' },
+          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-kepsek-gtk' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-kepsek-kehadiran' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-kepsek-alumni' },
+        ],
+      },
+      {
+        title: 'Kepegawaian',
+        items: [
+          { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-kepsek-agenda-guru' },
+          { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-kepsek-agenda-tendik' },
+          { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-kepsek-ekinerja' },
+          { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-kepsek-profesionalitas' },
+          { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi GTK', icon: UserCheck, testid: 'nav-kepsek-laporan-absensi-gtk' },
+        ],
+      },
+      {
+        title: 'Akademik & Aktivitas',
+        items: [
+          { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-kepsek-jurnal' },
+          { to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-kepsek-kegiatan' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-kepsek' },
+          { to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-kepsek-kebersihan' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-kepsek-rkam' },
+        ],
+      },
+      {
+        title: 'Tatib & BK',
+        items: [
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-kepsek-tatib-data' },
+          { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-kepsek-bk-kunjungan' },
+          { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-kepsek-bk-laporan' },
+          { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-kepsek-sekolah-lanjutan' },
+        ],
+      },
+      {
+        title: 'Menu UKS',
+        items: [
+          { to: '/admin/uks/kunjungan', label: 'Data Kunjungan UKS', icon: Stethoscope, testid: 'nav-kepsek-uks-kunjungan' },
+          { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-kepsek-uks-laporan' },
+        ],
+      },
+      {
+        title: 'Menu Perpus',
+        items: [
+          { to: '/admin/perpus/kunjungan', label: 'Data Kunjungan Perpus', icon: Users, testid: 'nav-kepsek-perpus-kunjungan' },
+          { to: '/admin/perpus/peminjaman', label: 'Data Peminjaman Perpus', icon: BookOpen, testid: 'nav-kepsek-perpus-peminjaman' },
+          { to: '/admin/perpus/laporan', label: 'Laporan Perpus', icon: FileBarChart, testid: 'nav-kepsek-perpus-laporan' },
+        ],
+      },
+      {
+        title: 'Menu Sarpras',
+        items: [
+          { to: '/admin/sarpras/kerusakan', label: 'Laporan Kerusakan & Perbaikan', icon: AlertOctagon, testid: 'nav-kepsek-sarpras-kerusakan' },
+        ],
+      },
+    ];
   } else if (role === 'unit_pelayanan') {
     items.push({ to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-unitpel-kegiatan' });
     items.push({ to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-unitpel-agenda-guru' });
@@ -477,6 +583,135 @@ function navForRole(role, userRoles = []) {
           { to: '/wakakur/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-wakakur-prestasi' },
           { to: '/wakakur/piket', label: 'Tugas & Piket', icon: ListChecks, testid: 'nav-wakakur-piket-tasks' },
           { to: '/wakakur/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-wakakur-pengumuman' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-wakakur-rkam' },
+        ],
+      },
+    ];
+  } else if (role === 'waka_sarpras') {
+    // Waka Sarana Prasarana: grup Sarpras yang sama seperti admin (view + kelola aset/ruangan/peminjaman).
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-waka-sarpras' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-waka-sarpras-agenda' },
+      {
+        title: 'Menu Sarpras',
+        items: [
+          { to: '/admin/sarpras/aset-tetap', label: 'Data Aset Tetap Komite & BMN', icon: Building2, testid: 'nav-waka-sarpras-aset-tetap' },
+          { to: '/admin/sarpras/aset-lancar', label: 'Aset Lancar', icon: Package, testid: 'nav-waka-sarpras-aset-lancar' },
+          { to: '/admin/sarpras/ruangan-aset', label: 'Data Ruangan dan Aset', icon: DoorOpen, testid: 'nav-waka-sarpras-ruangan-aset' },
+          { to: '/admin/sarpras/penghapusan', label: 'Penghapusan Barang', icon: Trash, testid: 'nav-waka-sarpras-penghapusan' },
+          { to: '/admin/sarpras/peminjaman-barang', label: 'Peminjaman Barang', icon: Handshake, testid: 'nav-waka-sarpras-peminjaman-barang' },
+          { to: '/admin/sarpras/peminjaman-ruangan', label: 'Peminjaman Ruangan', icon: CalendarClock, testid: 'nav-waka-sarpras-peminjaman-ruangan' },
+          { to: '/admin/sarpras/jurnal-ruangan', label: 'Jurnal Penggunaan Ruangan', icon: BookOpenCheck, testid: 'nav-waka-sarpras-jurnal-ruangan' },
+          { to: '/admin/sarpras/jurnal-alat', label: 'Jurnal Penggunaan Alat', icon: Wrench, testid: 'nav-waka-sarpras-jurnal-alat' },
+          { to: '/admin/sarpras/jurnal-perawatan', label: 'Jurnal Perawatan Aset', icon: ClipboardList, testid: 'nav-waka-sarpras-jurnal-perawatan' },
+          { to: '/admin/sarpras/kerusakan', label: 'Laporan Kerusakan & Perbaikan', icon: AlertOctagon, testid: 'nav-waka-sarpras-kerusakan' },
+        ],
+      },
+      {
+        title: 'Aktivitas & Program',
+        items: [
+          { to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-waka-sarpras-kegiatan' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-waka-sarpras-rkam' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-waka-sarpras' },
+        ],
+      },
+    ];
+  } else if (role === 'waka_kesiswaan') {
+    // Waka Kesiswaan: grup Manajemen Siswa, Aktivitas & Program, dan Tatib & BK (view-only untuk Tatib/BK).
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-waka-kesiswaan' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-waka-kesiswaan-agenda' },
+      {
+        title: 'Manajemen Siswa',
+        items: [
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-waka-kesiswaan-siswa' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-waka-kesiswaan-kehadiran' },
+          { to: '/admin/mutasi', label: 'Data Mutasi', icon: ArrowRightLeft, testid: 'nav-waka-kesiswaan-mutasi' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-waka-kesiswaan-alumni' },
+        ],
+      },
+      {
+        title: 'Aktivitas & Program',
+        items: [
+          { to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-waka-kesiswaan-kegiatan' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-waka-kesiswaan' },
+          { to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-waka-kesiswaan-ekstra' },
+          { to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-waka-kesiswaan-kebersihan' },
+          { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-waka-kesiswaan-pengumuman' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-waka-kesiswaan-rkam' },
+        ],
+      },
+      {
+        title: 'Tatib & BK',
+        items: [
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-waka-kesiswaan-tatib-data' },
+          { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-waka-kesiswaan-bk-kunjungan' },
+          { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-waka-kesiswaan-bk-laporan' },
+          { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-waka-kesiswaan-sekolah-lanjutan' },
+        ],
+      },
+    ];
+  } else if (role === 'penjamin_mutu') {
+    // Penjamin Mutu uses grouped menu structure, mirroring admin's groups (view-only oversight).
+    return [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+      { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-mutu' },
+      { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-mutu-agenda' },
+      {
+        title: 'Manajemen GTK',
+        items: [
+          { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-mutu-gtk' },
+          { to: '/admin/buku-induk-kepegawaian', label: 'Buku Induk Kepegawaian', icon: BookMarked, testid: 'nav-mutu-buku-induk-kepegawaian' },
+          { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi', icon: UserCheck, testid: 'nav-mutu-gtk-absensi' },
+          { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-mutu-gtk-agenda-guru' },
+          { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-mutu-gtk-agenda-tendik' },
+          { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-mutu-gtk-ekinerja' },
+          { to: '/admin/gtk/profesionalitas', label: 'Profesionalitas GTK', icon: Award, testid: 'nav-mutu-gtk-profesionalitas' },
+        ],
+      },
+      {
+        title: 'Manajemen Siswa',
+        items: [
+          { to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-mutu-siswa' },
+          { to: '/admin/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-mutu-kehadiran' },
+          { to: '/admin/buku-induk', label: 'Buku Induk Siswa', icon: FileText, testid: 'nav-mutu-buku-induk' },
+          { to: '/admin/cetak-absensi-manual', label: 'Cetak Format Absensi Siswa Manual', icon: FileText, testid: 'nav-mutu-cetak-absensi-manual' },
+          { to: '/admin/alumni', label: 'Data Alumni', icon: GraduationCap, testid: 'nav-mutu-alumni' },
+          { to: '/admin/naik-kelas', label: 'Naik Kelas & Kelulusan', icon: ArrowRightLeft, testid: 'nav-mutu-promotions' },
+        ],
+      },
+      {
+        title: 'Akademik',
+        items: [
+          { to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-mutu-schedules' },
+          { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-mutu-piket' },
+          { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-mutu-jurnal' },
+          { to: '/admin/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-mutu-indikator-materi' },
+          { to: '/admin/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-mutu-materi' },
+          { to: '/admin/tugas', label: 'Tugas Mapel', icon: ClipboardList, testid: 'nav-mutu-tugas' },
+          { to: '/rapor', label: 'E-Rapor Digital', icon: FileText, testid: 'nav-mutu-rapor' },
+        ],
+      },
+      {
+        title: 'Aktivitas & Program',
+        items: [
+          { to: '/admin/kegiatan-madrasah', label: 'Kegiatan Madrasah', icon: CalendarDays, testid: 'nav-mutu-kegiatan' },
+          { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-mutu-rkam' },
+          { to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-mutu' },
+          { to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-mutu-ekstra' },
+          { to: '/admin/kebersihan', label: 'Rekapitulasi Kebersihan', icon: Sparkles, testid: 'nav-mutu-kebersihan' },
+          { to: '/admin/pengumuman', label: 'Pengumuman', icon: Megaphone, testid: 'nav-mutu-pengumuman' },
+        ],
+      },
+      {
+        title: 'Manajemen Tatib & BK',
+        items: [
+          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-mutu-tatib-data' },
+          { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-mutu-bk-kunjungan' },
+          { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-mutu-bk-laporan' },
+          { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-mutu-sekolah-lanjutan' },
         ],
       },
     ];

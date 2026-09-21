@@ -32,6 +32,7 @@ export default function GuruInputIndikatorMateriPage() {
   // Import states
   const [indikatorImportFile, setIndikatorImportFile] = useState(null);
   const [materiImportFile, setMateriImportFile] = useState(null);
+  const [combinedImportFile, setCombinedImportFile] = useState(null);
 
   // Form states for Indikator
   const [indikatorForm, setIndikatorForm] = useState({
@@ -115,13 +116,13 @@ export default function GuruInputIndikatorMateriPage() {
   // Get subject name by ID
   const getSubjectName = (id) => {
     const subject = subjectList.find(s => s.id === id);
-    return subject ? subject.nama_pelajaran : '-';
+    return subject ? subject.name : '-';
   };
 
   // Get semester name by ID
   const getSemesterName = (id) => {
     const semester = semesterList.find(s => s.id === id);
-    return semester ? semester.semester_name : '-';
+    return semester ? semester.name : '-';
   };
 
   // Indikator handlers
@@ -269,6 +270,33 @@ export default function GuruInputIndikatorMateriPage() {
     }
   };
 
+  const handleCombinedImport = async () => {
+    if (!combinedImportFile) {
+      toast.error('Pilih file Excel terlebih dahulu');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', combinedImportFile);
+
+    setUploading(true);
+    try {
+      const res = await api.post('/indikator-materi/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success(`Berhasil mengimpor ${res.data.imported_indikator || 0} KD/Indikator dan ${res.data.imported_materi || 0} Materi`);
+      if (res.data.errors?.length) {
+        toast.warning(`${res.data.errors.length} baris dilewati, periksa kembali data`);
+      }
+      setCombinedImportFile(null);
+      loadData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal mengimpor data');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleMateriImport = async () => {
     if (!materiImportFile) {
       toast.error('Pilih file Excel terlebih dahulu');
@@ -294,6 +322,24 @@ export default function GuruInputIndikatorMateriPage() {
   };
 
   // Download template handlers
+  const handleDownloadCombinedTemplate = () => {
+    // Create CSV template: satu baris = satu KD/Indikator + satu Materi terkait.
+    const headers = ['kode', 'indikator_nama', 'mapel_id', 'tingkat_kelas', 'semester_id', 'materi_nama', 'materi_deskripsi'];
+    const example1 = ['3.1', 'Menjelaskan dan melakukan operasi hitung bilangan bulat dan pecahan', 'subject_id_here', 'VII', 'semester_id_here', 'Operasi Penjumlahan dan Pengurangan Bilangan Bulat', 'Memahami konsep penjumlahan dan pengurangan'];
+    const csvContent = [
+      headers.join(','),
+      example1.join(','),
+      '3.2,"Menjelaskan himpunan, himpunan bagian, komplemen himpunan",subject_id_here,VII,semester_id_here,Operasi Himpunan,"Memahami konsep himpunan dan operasinya"'
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'template_indikator_materi.csv';
+    link.click();
+    toast.success('Template berhasil diunduh');
+  };
+
   const handleDownloadIndikatorTemplate = () => {
     // Create CSV template
     const headers = ['kode', 'nama', 'mapel_id', 'tingkat_kelas', 'semester_id'];
@@ -354,12 +400,47 @@ export default function GuruInputIndikatorMateriPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-sm">
               <Badge variant="outline" className="bg-white">Semester Aktif</Badge>
-              <span className="font-semibold text-blue-900">{activeSemester.semester_name}</span>
-              <span className="text-blue-600">({activeSemester.tahun_takwim})</span>
+              <span className="font-semibold text-blue-900">{activeSemester.name}</span>
+              {activeSemester.tahun_takwim_name && (
+                <span className="text-blue-600">({activeSemester.tahun_takwim_name})</span>
+              )}
             </div>
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-[#006837]/30">
+        <CardContent className="p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Upload className="h-4 w-4 text-[#006837]" /> Import Gabungan KD/Indikator + Materi
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Satu file untuk mengisi KD/Indikator dan Materi/Pokok Bahasan sekaligus — tidak perlu import dua kali secara terpisah.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center flex-wrap">
+            <Button onClick={handleDownloadCombinedTemplate} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Download Template Gabungan
+            </Button>
+            <Input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => setCombinedImportFile(e.target.files[0])}
+              className="max-w-xs"
+            />
+            <Button
+              onClick={handleCombinedImport}
+              disabled={!combinedImportFile || uploading}
+              className="gap-2 bg-[#006837] hover:bg-[#005830]"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Import Gabungan
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-white border border-slate-200">
@@ -619,7 +700,7 @@ export default function GuruInputIndikatorMateriPage() {
                   <SelectContent>
                     <SelectItem value="none">Pilih Mata Pelajaran</SelectItem>
                     {subjectList.map((mp) => (
-                      <SelectItem key={mp.id} value={mp.id}>{mp.nama_pelajaran}</SelectItem>
+                      <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -655,7 +736,7 @@ export default function GuruInputIndikatorMateriPage() {
                   <SelectItem value="none">Pilih Semester</SelectItem>
                   {semesterList.map((sem) => (
                     <SelectItem key={sem.id} value={sem.id}>
-                      {sem.semester_name} ({sem.tahun_takwim})
+                      {sem.name}{sem.tahun_takwim_name ? ` (${sem.tahun_takwim_name})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -713,7 +794,7 @@ export default function GuruInputIndikatorMateriPage() {
                   <SelectContent>
                     <SelectItem value="none">Pilih Mata Pelajaran</SelectItem>
                     {subjectList.map((mp) => (
-                      <SelectItem key={mp.id} value={mp.id}>{mp.nama_pelajaran}</SelectItem>
+                      <SelectItem key={mp.id} value={mp.id}>{mp.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -749,7 +830,7 @@ export default function GuruInputIndikatorMateriPage() {
                   <SelectItem value="none">Pilih Semester</SelectItem>
                   {semesterList.map((sem) => (
                     <SelectItem key={sem.id} value={sem.id}>
-                      {sem.semester_name} ({sem.tahun_takwim})
+                      {sem.name}{sem.tahun_takwim_name ? ` (${sem.tahun_takwim_name})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

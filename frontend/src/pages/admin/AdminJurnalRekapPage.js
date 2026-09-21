@@ -9,7 +9,7 @@ import { ClipboardList, Filter, RefreshCw, BarChart3, Loader2, Eye, Edit, User, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -92,12 +92,29 @@ export default function AdminJurnalRekapPage() {
     loadAttendanceDetail(journal.id);
   };
 
+  // Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
+  // "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
+  const formatAttendanceDetail = (j) => {
+    const details = j.attendance_details || [];
+    if (details.length === 0) return '-';
+    const byStatus = { hadir: [], sakit: [], izin: [], alpa: [] };
+    details.forEach((d) => {
+      const status = d.status === 'alpha' ? 'alpa' : d.status;
+      if (byStatus[status]) byStatus[status].push(d.student_name);
+    });
+    const labels = { hadir: 'Hadir', sakit: 'Sakit', izin: 'Izin', alpa: 'Alpa' };
+    return Object.entries(byStatus)
+      .map(([status, names]) => `${labels[status]}: ${names.length > 0 ? names.join(', ') : '-'}`)
+      .join(' | ');
+  };
+
   const exportCSV = () => {
     if (!data.items.length) return;
-    const headers = ['Tanggal', 'JTM', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa'];
+    const headers = ['Tanggal', 'JTM', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'KD/Indikator', 'Materi/Pokok Bahasan (Terdaftar)', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Detail Kehadiran Siswa'];
     const rows = data.items.map((j) => [
       new Date(j.started_at).toLocaleString('id-ID'), j.jtm_count || 1, j.class_name, j.subject_name, j.teacher_name, j.room_name,
-      JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
+      JSON.stringify(j.kd_indikator || ''), JSON.stringify(j.materi_nama || ''), JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
+      JSON.stringify(formatAttendanceDetail(j)),
     ]);
     const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -117,12 +134,15 @@ export default function AdminJurnalRekapPage() {
       'Mapel': j.subject_name || '-',
       'Guru': j.teacher_name || '-',
       'Ruang': j.room_name || '-',
+      'KD/Indikator': j.kd_indikator || '-',
+      'Materi/Pokok Bahasan (Terdaftar)': j.materi_nama || '-',
       'Materi': j.materi || '-',
       'Catatan': j.catatan || '-',
       'Hadir': j.siswa_hadir || 0,
       'Sakit': j.siswa_sakit || 0,
       'Izin': j.siswa_izin || 0,
       'Alpa': j.siswa_tidak_hadir || 0,
+      'Detail Kehadiran Siswa': formatAttendanceDetail(j),
     }));
 
     // Create workbook and worksheet
@@ -138,12 +158,15 @@ export default function AdminJurnalRekapPage() {
       { wch: 25 }, // Mapel
       { wch: 25 }, // Guru
       { wch: 15 }, // Ruang
+      { wch: 25 }, // KD/Indikator
+      { wch: 30 }, // Materi/Pokok Bahasan (Terdaftar)
       { wch: 40 }, // Materi
       { wch: 40 }, // Catatan
       { wch: 8 },  // Hadir
       { wch: 8 },  // Sakit
       { wch: 8 },  // Izin
       { wch: 8 },  // Alpa
+      { wch: 60 }, // Detail Kehadiran Siswa
     ];
     ws['!cols'] = colWidths;
 
@@ -308,7 +331,15 @@ export default function AdminJurnalRekapPage() {
                       <TableCell><span className="text-xs font-mono bg-slate-100 rounded px-1">{j.subject_code}</span> {j.subject_name}</TableCell>
                       <TableCell className="text-sm">{j.teacher_name}</TableCell>
                       <TableCell className="font-mono text-xs">{j.room_name}</TableCell>
-                      <TableCell className="text-sm max-w-xs truncate" title={j.materi}>{j.materi}</TableCell>
+                      <TableCell className="text-sm max-w-xs" title={j.materi}>
+                        {j.kd_indikator && (
+                          <div className="text-[11px] font-semibold text-[#006837] truncate">{j.kd_indikator}</div>
+                        )}
+                        {j.materi_nama && (
+                          <div className="text-[11px] font-medium text-blue-700 truncate">{j.materi_nama}</div>
+                        )}
+                        <div className="truncate">{j.materi}</div>
+                      </TableCell>
                       <TableCell className="text-sm">
                         {j.jenis_izin ? (
                           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 text-xs">
@@ -400,6 +431,7 @@ export default function AdminJurnalRekapPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detail Jurnal Mengajar</DialogTitle>
+            <DialogDescription>Rincian jurnal mengajar termasuk KD/Indikator, materi, dan kehadiran siswa</DialogDescription>
           </DialogHeader>
           {detailDialog.journal && (
             <div className="space-y-4">
@@ -462,8 +494,30 @@ export default function AdminJurnalRekapPage() {
                 </div>
               </div>
 
+              {detailDialog.journal.kd_indikator && (
+                <div>
+                  <Label className="text-xs text-slate-500">KD/Indikator</Label>
+                  <Card className="mt-1 border-[#006837]/20 bg-[#006837]/5">
+                    <CardContent className="p-3">
+                      <div className="text-sm font-medium text-[#006837]">{detailDialog.journal.kd_indikator}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {detailDialog.journal.materi_nama && (
+                <div>
+                  <Label className="text-xs text-slate-500">Materi/Pokok Bahasan (Terdaftar)</Label>
+                  <Card className="mt-1 border-blue-200 bg-blue-50">
+                    <CardContent className="p-3">
+                      <div className="text-sm font-medium text-blue-700">{detailDialog.journal.materi_nama}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
               <div>
-                <Label className="text-xs text-slate-500">Materi Pembelajaran</Label>
+                <Label className="text-xs text-slate-500">Materi yang Diajarkan</Label>
                 <Card className="mt-1">
                   <CardContent className="p-3">
                     <div className="text-sm whitespace-pre-wrap">{detailDialog.journal.materi || '-'}</div>
@@ -641,6 +695,7 @@ export default function AdminJurnalRekapPage() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Jurnal Mengajar</DialogTitle>
+            <DialogDescription>Ubah materi, catatan, dan data kehadiran siswa pada jurnal ini</DialogDescription>
           </DialogHeader>
           {editDialog.journal && (
             <div className="space-y-4">

@@ -341,6 +341,121 @@ async def import_indikator(
         raise HTTPException(400, f"Gagal memproses file: {str(e)}")
 
 
+@router.post("/indikator-materi/import")
+async def import_indikator_materi(
+    file: UploadFile = File(...),
+    user: Dict = Depends(get_current_user)
+):
+    """
+    Import KD/Indikator dan Materi/Pokok Bahasan sekaligus dari satu file.
+    Setiap baris berisi satu KD/Indikator dan satu Materi terkait — kolom
+    materi_nama kosong berarti baris tersebut hanya membuat KD/Indikator saja.
+    Expected columns: kode, indikator_nama, mapel_id, tingkat_kelas, semester_id,
+    materi_nama (optional), materi_deskripsi (optional)
+    """
+    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+        raise HTTPException(403, "Hanya guru atau admin yang dapat mengimpor data")
+
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(400, "File harus berformat Excel (.xlsx, .xls) atau CSV (.csv)")
+
+    try:
+        contents = await file.read()
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+
+        required_cols = ['kode', 'indikator_nama', 'mapel_id', 'semester_id']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise HTTPException(400, f"Kolom yang hilang: {', '.join(missing_cols)}")
+
+        imported_indikator = 0
+        imported_materi = 0
+        errors = []
+
+        for idx, row in df.iterrows():
+            try:
+                mapel = await db.subjects.find_one({'id': row['mapel_id']})
+                if not mapel:
+                    errors.append(f"Baris {idx + 2}: Mata Pelajaran ID '{row['mapel_id']}' tidak ditemukan")
+                    continue
+
+                semester = await db.semesters.find_one({'id': row['semester_id']})
+                if not semester:
+                    errors.append(f"Baris {idx + 2}: Semester ID '{row['semester_id']}' tidak ditemukan")
+                    continue
+
+                tingkat_kelas = str(row.get('tingkat_kelas', '')) if pd.notna(row.get('tingkat_kelas')) else ''
+
+                # Reuse existing indikator (same kode/mapel/semester/owner) instead of duplicating.
+                indikator_doc = await db.indikator.find_one({
+                    'kode': str(row['kode']),
+                    'created_by': user['id'],
+                    'mapel_id': str(row['mapel_id']),
+                    'semester_id': str(row['semester_id']),
+                })
+                if not indikator_doc:
+                    indikator_doc = {
+                        'id': str(uuid.uuid4()),
+                        'kode': str(row['kode']),
+                        'nama': str(row['indikator_nama']),
+                        'mapel_id': str(row['mapel_id']),
+                        'semester_id': str(row['semester_id']),
+                        'tingkat_kelas': tingkat_kelas,
+                        'created_by': user['id'],
+                        'created_by_name': user.get('full_name', user.get('username')),
+                        'created_at': datetime.utcnow().isoformat(),
+                        'updated_at': datetime.utcnow().isoformat(),
+                    }
+                    await db.indikator.insert_one(indikator_doc)
+                    imported_indikator += 1
+
+                materi_nama = row.get('materi_nama')
+                if pd.notna(materi_nama) and str(materi_nama).strip():
+                    existing_materi = await db.materi.find_one({
+                        'nama': str(materi_nama),
+                        'created_by': user['id'],
+                        'mapel_id': str(row['mapel_id']),
+                        'semester_id': str(row['semester_id']),
+                    })
+                    if existing_materi:
+                        errors.append(f"Baris {idx + 2}: Materi dengan nama '{materi_nama}' sudah ada")
+                        continue
+                    materi_deskripsi = row.get('materi_deskripsi')
+                    materi_doc = {
+                        'id': str(uuid.uuid4()),
+                        'nama': str(materi_nama),
+                        'deskripsi': str(materi_deskripsi) if pd.notna(materi_deskripsi) else '',
+                        'mapel_id': str(row['mapel_id']),
+                        'semester_id': str(row['semester_id']),
+                        'tingkat_kelas': tingkat_kelas,
+                        'indikator_id': indikator_doc['id'],
+                        'created_by': user['id'],
+                        'created_by_name': user.get('full_name', user.get('username')),
+                        'created_at': datetime.utcnow().isoformat(),
+                        'updated_at': datetime.utcnow().isoformat(),
+                    }
+                    await db.materi.insert_one(materi_doc)
+                    imported_materi += 1
+
+            except Exception as e:
+                errors.append(f"Baris {idx + 2}: {str(e)}")
+
+        return {
+            'imported_indikator': imported_indikator,
+            'imported_materi': imported_materi,
+            'errors': errors,
+            'total_rows': len(df),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Gagal memproses file: {str(e)}")
+
+
 @router.post("/materi/import")
 async def import_materi(
     file: UploadFile = File(...),

@@ -12,7 +12,7 @@ async def list_alumni(
     academic_year_id: Optional[str] = Query(None),
     grade: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'penjamin_mutu'))
 ):
     """List all alumni (graduated students) with optional filters."""
     query = {'graduation_status': 'lulus', 'is_active': True}
@@ -49,7 +49,7 @@ async def list_alumni(
 
 
 @router.get("/alumni/stats")
-async def alumni_stats(user: Dict = Depends(require_role('admin', 'kepala_sekolah'))):
+async def alumni_stats(user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'penjamin_mutu'))):
     """Get alumni statistics by graduation year and grade."""
     pipeline = [
         {'$match': {'graduation_status': 'lulus', 'is_active': True}},
@@ -100,7 +100,7 @@ async def alumni_stats(user: Dict = Depends(require_role('admin', 'kepala_sekola
 @router.get("/alumni/{student_id}")
 async def get_alumni_detail(
     student_id: str,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'penjamin_mutu'))
 ):
     """Get detailed info for one alumni."""
     student = await db.users.find_one(

@@ -296,7 +296,7 @@ async def graduate_students(
 async def preview_promotion(
     from_class_id: str,
     type: str,
-    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
+    user: Dict = Depends(require_role('admin', 'waka_kurikulum', 'penjamin_mutu'))
 ):
     """
     Preview siswa yang akan diproses untuk naik kelas/semester/lulus.

@@ -200,7 +200,7 @@ async def get_current_user(
 
 
 # Helper constants for common role groups
-MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarana_prasarana', 'waka_humas')
+MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas')
 ACADEMIC_MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'waka_kurikulum')
 
 

@@ -22,7 +22,7 @@ export default function DataSiswaPage() {
   const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
   // These roles see the same all-students admin-style view/filters, but
   // without any create/edit/delete/account actions (view-only).
-  const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk', 'kepala_sekolah'];
+  const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'];
   const hasAdminView = isAdmin || VIEW_ONLY_BROAD_ROLES.includes(activeRole);
   const homeroomClassId = user?.homeroom_class_id;
   const canEdit = isAdmin; // Only admin can edit/delete students

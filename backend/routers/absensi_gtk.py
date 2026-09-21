@@ -27,7 +27,7 @@ from journal_core import now_wib, DAY_MAP_EN_ID
 
 router = APIRouter()
 
-EKINERJA_AUTHOR_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha')
+EKINERJA_AUTHOR_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'penjamin_mutu')
 SUBJECT_TEACHER_ROLES = ('guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik')
 GTK_ROLES = SUBJECT_TEACHER_ROLES + ('wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
                                        'guru_ekstrakurikuler', 'tenaga_kependidikan')

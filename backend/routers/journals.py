@@ -113,6 +113,22 @@ async def validate_qr(req: QRValidateRequest, user: Dict = Depends(get_current_u
     return await _validate_qr_full(req.qr_token, req.user_lat, req.user_lon, user['id'])
 
 
+async def _resolve_indikator_materi(indikator_id: Optional[str], materi_id: Optional[str]) -> Dict[str, Optional[str]]:
+    """Resolve KD/Indikator dan Materi opsional ke bentuk denormalized agar tetap
+    tampil di jurnal/rekap/export walau data indikator/materi asal diubah atau dihapus."""
+    kd_indikator = None
+    materi_nama = None
+    if indikator_id:
+        ind = await db.indikator.find_one({'id': indikator_id}, {'_id': 0, 'kode': 1, 'nama': 1})
+        if ind:
+            kd_indikator = f"{ind.get('kode', '')} - {ind.get('nama', '')}".strip(' -')
+    if materi_id:
+        mat = await db.materi.find_one({'id': materi_id}, {'_id': 0, 'nama': 1})
+        if mat:
+            materi_nama = mat.get('nama')
+    return {'kd_indikator': kd_indikator, 'materi_nama': materi_nama}
+
+
 @router.post("/jurnal")
 async def create_journal(req: JournalCreateRequest, request: Request, user: Dict = Depends(get_current_user)):
     validation = await _validate_qr_full(req.qr_token, req.user_lat, req.user_lon, user['id'])
@@ -134,10 +150,13 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
     if existing:
         raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
 
+    resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
+
     journal = JournalModel(
         schedule_id=sched['id'], teacher_id=user['id'], class_id=sched['class_id'],
         subject_id=sched['subject_id'], room_id=room['id'], semester_id=semester_id,
-        materi=req.materi, catatan=req.catatan,
+        materi=req.materi, indikator_id=req.indikator_id, kd_indikator=resolved['kd_indikator'],
+        materi_id=req.materi_id, materi_nama=resolved['materi_nama'], catatan=req.catatan,
         siswa_hadir=req.siswa_hadir, siswa_tidak_hadir=req.siswa_tidak_hadir,
         siswa_izin=req.siswa_izin, siswa_sakit=req.siswa_sakit,
         attendance_details=req.attendance_details,
@@ -285,6 +304,8 @@ class ClassTokenJournalRequest(BaseModel):
     user_lat: Optional[float] = None
     user_lon: Optional[float] = None
     materi: str
+    indikator_id: Optional[str] = None
+    materi_id: Optional[str] = None
     catatan: Optional[str] = None
     siswa_hadir: int = 0
     siswa_tidak_hadir: int = 0
@@ -315,12 +336,16 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
     existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
     if existing:
         raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+
+    resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
+
     j_id = str(uuid.uuid4())
     doc = {
         'id': j_id, 'schedule_id': sched['id'], 'teacher_id': user['id'],
         'class_id': sched['class_id'], 'subject_id': sched['subject_id'],
         'room_id': room['id'], 'semester_id': semester_id,
-        'materi': req.materi, 'catatan': req.catatan,
+        'materi': req.materi, 'indikator_id': req.indikator_id, 'kd_indikator': resolved['kd_indikator'],
+        'materi_id': req.materi_id, 'materi_nama': resolved['materi_nama'], 'catatan': req.catatan,
         'siswa_hadir': req.siswa_hadir, 'siswa_tidak_hadir': req.siswa_tidak_hadir,
         'siswa_izin': req.siswa_izin, 'siswa_sakit': req.siswa_sakit,
         'attendance_details': [a.model_dump() for a in req.attendance_details],
@@ -433,16 +458,16 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
         else:
             j['filled_by_name'] = None
 
-        # Get attendance details
+        # Get attendance details, with placeholder fallback for journals that only
+        # stored aggregate counts (e.g. submitted via /jurnal/scan).
         journal_id = j.get('id')
-        if journal_id:
-            attendance_records = await db.attendances.find(
-                {'journal_id': journal_id},
-                {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
-            ).to_list(1000)
-            j['attendance_details'] = attendance_records
-        else:
-            j['attendance_details'] = []
+        attendance_records = await db.attendances.find(
+            {'journal_id': journal_id},
+            {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+        ).to_list(1000) if journal_id else []
+        if not attendance_records:
+            attendance_records = await _placeholder_attendance_records(j)
+        j['attendance_details'] = attendance_records
 
         enriched.append(serialize_doc(j))
     return enriched
@@ -627,16 +652,16 @@ async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 
         j['teacher_name'] = teacher.get('full_name') if teacher else None
         j['filled_by_name'] = filled_by.get('full_name') if filled_by else None
 
-        # Get attendance details
+        # Get attendance details, with placeholder fallback for journals that only
+        # stored aggregate counts (e.g. submitted via /jurnal/scan).
         journal_id = j.get('id')
-        if journal_id:
-            attendance_records = await db.attendances.find(
-                {'journal_id': journal_id},
-                {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
-            ).to_list(1000)
-            j['attendance_details'] = attendance_records
-        else:
-            j['attendance_details'] = []
+        attendance_records = await db.attendances.find(
+            {'journal_id': journal_id},
+            {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+        ).to_list(1000) if journal_id else []
+        if not attendance_records:
+            attendance_records = await _placeholder_attendance_records(j)
+        j['attendance_details'] = attendance_records
 
         enriched.append(serialize_doc(j))
     return enriched
@@ -654,7 +679,7 @@ async def admin_jurnal_rekap(
     subject_id: Optional[str] = None,
     semester_id: Optional[str] = None,
     limit: int = 500,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'penjamin_mutu'))
 ):
     """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id"""
     # Use user's view context semester if no semester_id provided in query
@@ -728,6 +753,17 @@ async def admin_jurnal_rekap(
             j['jam_ke'] = '-'
             j['jtm_count'] = 1
 
+        # Attendance details (per-student), with placeholder fallback for journals
+        # that only stored aggregate counts (e.g. submitted via /jurnal/scan).
+        journal_id = j.get('id')
+        attendance_records = await db.attendances.find(
+            {'journal_id': journal_id},
+            {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+        ).to_list(1000) if journal_id else []
+        if not attendance_records:
+            attendance_records = await _placeholder_attendance_records(j)
+        j['attendance_details'] = attendance_records
+
         enriched.append(serialize_doc(j))
 
     total_hadir = sum(j.get('siswa_hadir', 0) for j in enriched)
@@ -748,7 +784,7 @@ async def admin_jurnal_rekap(
 @router.get("/admin/jurnal/stats-by-teacher")
 async def admin_jurnal_stats_teacher(
     class_id: Optional[str] = None,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'penjamin_mutu'))
 ):
     """Aggregate jurnal count and attendance stats per guru, filtered by user's view context (semester) and optionally by class_id"""
     ctx = await get_active_context(user)
@@ -881,6 +917,11 @@ async def get_journal_by_id(journal_id: str, user: Dict = Depends(get_current_us
         {'journal_id': journal_id},
         {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
     ).to_list(1000)
+    if not attendance_records:
+        # No individual records saved (e.g. journal submitted via /jurnal/scan, which
+        # only sends aggregate counts) — build placeholders from class roster + counts
+        # so the Edit dialog isn't left with an empty attendance list.
+        attendance_records = await _placeholder_attendance_records(journal)
     journal['attendance_details'] = attendance_records
 
     # Get settings
@@ -1050,6 +1091,18 @@ async def export_jurnal_excel(
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
         j['class_name'] = cls.get('name') if cls else '-'
 
+        # Attendance details, with placeholder fallback for journals that only
+        # stored aggregate counts (e.g. submitted via /jurnal/scan) and never
+        # wrote individual records to db.attendances.
+        journal_id = j.get('id')
+        attendance_records = await db.attendances.find(
+            {'journal_id': journal_id},
+            {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+        ).to_list(1000) if journal_id else []
+        if not attendance_records:
+            attendance_records = await _placeholder_attendance_records(j)
+        j['attendance_details'] = attendance_records
+
     student_map = await _collect_student_names_from_journals(journals)
     payload = export_monthly_teacher_journal_excel(
         journals=journals,
@@ -1109,6 +1162,18 @@ async def export_jurnal_pdf(
     for j in journals:
         cls = await db.classes.find_one({'id': j.get('class_id')}, {'_id': 0, 'name': 1})
         j['class_name'] = cls.get('name') if cls else '-'
+
+        # Attendance details, with placeholder fallback for journals that only
+        # stored aggregate counts (e.g. submitted via /jurnal/scan) and never
+        # wrote individual records to db.attendances.
+        journal_id = j.get('id')
+        attendance_records = await db.attendances.find(
+            {'journal_id': journal_id},
+            {'_id': 0, 'student_id': 1, 'student_name': 1, 'status': 1}
+        ).to_list(1000) if journal_id else []
+        if not attendance_records:
+            attendance_records = await _placeholder_attendance_records(j)
+        j['attendance_details'] = attendance_records
 
     settings = await get_settings()
     head = _extract_leadership(settings, 'kepala_madrasah')
@@ -1221,10 +1286,13 @@ async def submit_offline_journal(req: JournalCreateRequest, request: Request, us
         raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
 
     # Create journal with offline metadata
+    resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
+
     journal = JournalModel(
         schedule_id=sched['id'], teacher_id=user['id'], class_id=sched['class_id'],
         subject_id=sched['subject_id'], room_id=room['id'], semester_id=semester_id,
-        materi=req.materi, catatan=req.catatan,
+        materi=req.materi, indikator_id=req.indikator_id, kd_indikator=resolved['kd_indikator'],
+        materi_id=req.materi_id, materi_nama=resolved['materi_nama'], catatan=req.catatan,
         siswa_hadir=req.siswa_hadir, siswa_tidak_hadir=req.siswa_tidak_hadir,
         siswa_izin=req.siswa_izin, siswa_sakit=req.siswa_sakit,
         attendance_details=req.attendance_details,
@@ -1289,6 +1357,49 @@ async def submit_offline_journal(req: JournalCreateRequest, request: Request, us
     return response_data
 
 
+async def _placeholder_attendance_records(journal: Dict) -> List[Dict[str, Any]]:
+    """Build placeholder per-student attendance records (student_id, student_name, status)
+    for a journal that only stored aggregate counts (siswa_hadir/sakit/izin/siswa_tidak_hadir)
+    and never wrote individual records to db.attendances — e.g. journals submitted via
+    /jurnal/scan, which only sends counts, not attendance_details.
+
+    Students are pulled from db.users (roles contains 'siswa', keyed by student_class_id) —
+    NOT the legacy/stale db.students collection — and distributed to match the stored counts.
+    This is placeholder logic: it does not know which specific student had which status,
+    only that N students in the class were hadir/sakit/izin/alpa.
+    """
+    class_id = journal.get('class_id')
+    if not class_id:
+        return []
+
+    students = await db.users.find(
+        {'student_class_id': class_id, 'roles': 'siswa', 'is_active': True},
+        {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}
+    ).sort('full_name', 1).to_list(1000)
+    if not students:
+        students = await db.users.find(
+            {'student_class_id': class_id, 'roles': 'siswa'},
+            {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}
+        ).sort('full_name', 1).to_list(1000)
+
+    counts = [
+        ('hadir', journal.get('siswa_hadir', 0)),
+        ('sakit', journal.get('siswa_sakit', 0)),
+        ('izin', journal.get('siswa_izin', 0)),
+        ('alpa', journal.get('siswa_tidak_hadir', 0)),
+    ]
+    records = []
+    idx = 0
+    for status, count in counts:
+        for _ in range(count):
+            if idx >= len(students):
+                break
+            student_name = students[idx].get('full_name') or students[idx].get('username') or 'Unknown'
+            records.append({'student_id': students[idx]['id'], 'student_name': student_name, 'status': status})
+            idx += 1
+    return records
+
+
 # ============================================================
 # JOURNAL ATTENDANCE DETAILS - Get student names by status
 # ============================================================
@@ -1313,7 +1424,7 @@ async def get_journal_attendance_details(
     from core import logger
     logger.info(f'[ATTENDANCE-PERMISSION] User role: {role}, User ID: {user.get("id")}')
     logger.info(f'[ATTENDANCE-PERMISSION] Journal teacher_id: {journal.get("teacher_id")}, class_id: {journal.get("class_id")}')
-    logger.info(f'[ATTENDANCE-PERMISSION] Journal filled_by_piket_id: {journal.get("filled_by_piket_id")}')
+    logger.info(f'[ATTENDANCE-PERMISSION] Journal filled_by_user_id: {journal.get("filled_by_user_id")}')
 
     # Admin, kepala sekolah, and all guru roles can access all journal attendance
     if role in ['admin', 'kepala_sekolah', 'guru', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler', 'wali_kelas']:
@@ -1346,56 +1457,31 @@ async def get_journal_attendance_details(
     }
     
     if attendances:
-        # Use data from attendances collection
+        # Use data from attendances collection. Status values are stored as
+        # 'hadir'/'sakit'/'izin'/'alpa' (see JournalAttendanceDetail), but this
+        # response groups under 'alpha' for backward compatibility with the
+        # frontend — normalize here instead of assuming an exact key match,
+        # so an unexpected/legacy status value never causes a 500.
+        status_key_map = {'alpa': 'alpha', 'alpha': 'alpha', 'hadir': 'hadir', 'sakit': 'sakit', 'izin': 'izin'}
         for att in attendances:
-            status = att.get('status', 'alpha')
+            raw_status = att.get('status', 'alpa')
+            status = status_key_map.get(raw_status, 'alpha')
             student_name = att.get('student_name', 'Unknown')
             student_id = att.get('student_id')
-            
+
             grouped[status].append({
                 'student_id': student_id,
                 'student_name': student_name
             })
     else:
-        # Fallback: Get students from class and create placeholders
-        class_id = journal.get('class_id')
-        logger.info(f'[ATTENDANCE-DETAIL] No attendance records, using fallback for class: {class_id}')
-        if class_id:
-            # Try with is_active first, then without
-            students = await db.students.find({'class_id': class_id, 'is_active': True}, {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}).to_list(1000)
-            if not students:
-                logger.info(f'[ATTENDANCE-DETAIL] No active students found, trying without is_active filter')
-                students = await db.students.find({'class_id': class_id}, {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}).to_list(1000)
-            logger.info(f'[ATTENDANCE-DETAIL] Found {len(students)} students in class')
-            
-            # Get counts from journal
-            hadir_count = journal.get('siswa_hadir', 0)
-            sakit_count = journal.get('siswa_sakit', 0)
-            izin_count = journal.get('siswa_izin', 0)
-            alpha_count = journal.get('siswa_tidak_hadir', 0)
-            
-            # Distribute students to match counts (this is just placeholder logic)
-            idx = 0
-            for i in range(hadir_count):
-                if idx < len(students):
-                    student_name = students[idx].get('full_name') or students[idx].get('username') or 'Unknown'
-                    grouped['hadir'].append({'student_id': students[idx]['id'], 'student_name': student_name})
-                    idx += 1
-            for i in range(sakit_count):
-                if idx < len(students):
-                    student_name = students[idx].get('full_name') or students[idx].get('username') or 'Unknown'
-                    grouped['sakit'].append({'student_id': students[idx]['id'], 'student_name': student_name})
-                    idx += 1
-            for i in range(izin_count):
-                if idx < len(students):
-                    student_name = students[idx].get('full_name') or students[idx].get('username') or 'Unknown'
-                    grouped['izin'].append({'student_id': students[idx]['id'], 'student_name': student_name})
-                    idx += 1
-            for i in range(alpha_count):
-                if idx < len(students):
-                    student_name = students[idx].get('full_name') or students[idx].get('username') or 'Unknown'
-                    grouped['alpha'].append({'student_id': students[idx]['id'], 'student_name': student_name})
-                    idx += 1
+        # Fallback: build placeholder records from class roster + stored counts
+        logger.info(f"[ATTENDANCE-DETAIL] No attendance records, using fallback for class: {journal.get('class_id')}")
+        placeholder_records = await _placeholder_attendance_records(journal)
+        logger.info(f'[ATTENDANCE-DETAIL] Built {len(placeholder_records)} placeholder records')
+        status_key_map = {'alpa': 'alpha', 'alpha': 'alpha', 'hadir': 'hadir', 'sakit': 'sakit', 'izin': 'izin'}
+        for rec in placeholder_records:
+            status = status_key_map.get(rec['status'], 'alpha')
+            grouped[status].append({'student_id': rec['student_id'], 'student_name': rec['student_name']})
     
     # Get additional journal info
     subject = None

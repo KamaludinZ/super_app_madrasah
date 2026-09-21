@@ -372,7 +372,7 @@ async def get_attendance_by_class(
     class_id: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk', 'penjamin_mutu'))
 ):
     """Get attendance records for a specific class.
 
@@ -533,7 +533,7 @@ async def get_attendance_by_grade(
     grade_level: str,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk', 'penjamin_mutu'))
 ):
     """Get attendance statistics aggregated by grade level (tingkat).
 
@@ -693,7 +693,7 @@ async def get_attendance_by_grade(
 async def get_attendance_overall(
     month: Optional[int] = None,
     year: Optional[int] = None,
-    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk'))
+    user: Dict = Depends(require_role(*ACADEMIC_MANAGEMENT_ROLES, 'waka_kesiswaan', 'guru_tata_tertib', 'guru_bk', 'penjamin_mutu'))
 ):
     """Get overall school-wide attendance statistics.
 

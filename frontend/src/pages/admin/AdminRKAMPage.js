@@ -59,7 +59,9 @@ const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 
 export default function AdminRKAMPage() {
   const { activeRole } = useAuth();
-  const canEdit = activeRole !== 'kepala_sekolah';
+  // Backend hanya mengizinkan admin/bendahara menulis data RKAM (lihat routers/rkam.py);
+  // role lain (waka, kepsek, KTU, penjamin mutu, dst.) hanya bisa melihat.
+  const canEdit = activeRole === 'admin' || activeRole === 'bendahara';
 
   const [activeTab, setActiveTab] = useState('budget');
 

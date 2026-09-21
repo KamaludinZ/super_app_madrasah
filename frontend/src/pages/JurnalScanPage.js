@@ -51,7 +51,6 @@ export default function JurnalScanPage() {
   const [materiList, setMateriList] = useState([]);
   const [selectedIndikator, setSelectedIndikator] = useState('');
   const [selectedMateri, setSelectedMateri] = useState('');
-  const [materiInputMode, setMateriInputMode] = useState('select'); // 'select' or 'manual'
 
   // Offline functionality
   const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
@@ -109,8 +108,8 @@ export default function JurnalScanPage() {
           loadStudents(data.context.schedule.class_id);
         }
         // Load indikator & materi options
-        if (data.context?.schedule?.subject_name) {
-          loadIndikatorMateri(data.context.schedule.subject_name, data.context?.schedule?.semester);
+        if (data.context?.schedule?.subject_id) {
+          loadIndikatorMateri(data.context.schedule.subject_id, data.context?.schedule?.semester_id);
         }
       } else {
         setPhase('error');
@@ -176,8 +175,8 @@ export default function JurnalScanPage() {
           loadStudents(data.context.schedule.class_id);
         }
         // Load indikator & materi options
-        if (data.context?.schedule?.subject_name) {
-          loadIndikatorMateri(data.context.schedule.subject_name, data.context?.schedule?.semester);
+        if (data.context?.schedule?.subject_id) {
+          loadIndikatorMateri(data.context.schedule.subject_id, data.context?.schedule?.semester_id);
         }
       } else {
         setPhase('error');
@@ -213,10 +212,10 @@ export default function JurnalScanPage() {
     }
   };
 
-  const loadIndikatorMateri = async (mataPelajaran, semester) => {
+  const loadIndikatorMateri = async (mapelId, semesterId) => {
     try {
-      const params = { mata_pelajaran: mataPelajaran };
-      if (semester) params.semester = semester;
+      const params = { mapel_id: mapelId };
+      if (semesterId) params.semester_id = semesterId;
 
       const [indikatorRes, materiRes] = await Promise.all([
         api.get('/indikator', { params }),
@@ -310,6 +309,8 @@ export default function JurnalScanPage() {
           user_lat: gps?.lat ?? null,
           user_lon: gps?.lon ?? null,
           materi: form.materi,
+          indikator_id: selectedIndikator || null,
+          materi_id: selectedMateri || null,
           catatan: form.catatan,
           siswa_hadir: attendanceSummary.hadir,
           siswa_tidak_hadir: attendanceSummary.alpa,
@@ -321,6 +322,8 @@ export default function JurnalScanPage() {
           user_lat: gps?.lat ?? null,
           user_lon: gps?.lon ?? null,
           materi: form.materi,
+          indikator_id: selectedIndikator || null,
+          materi_id: selectedMateri || null,
           catatan: form.catatan,
           siswa_hadir: attendanceSummary.hadir,
           siswa_tidak_hadir: attendanceSummary.alpa,
@@ -379,6 +382,11 @@ export default function JurnalScanPage() {
     setClassToken('');
     setStudents([]);
     setAttendanceRecords({});
+    setIndikatorList([]);
+    setMateriList([]);
+    setSelectedIndikator('');
+    setSelectedMateri('');
+    setForm({ materi: '', catatan: '', siswa_hadir: 0, siswa_tidak_hadir: 0, siswa_izin: 0, siswa_sakit: 0 });
   };
 
   return (
@@ -558,19 +566,19 @@ export default function JurnalScanPage() {
               <CardContent className="p-5">
                 <h2 className="text-base font-semibold text-slate-900 mb-4">Form Jurnal Mengajar</h2>
                 <form onSubmit={handleSubmitJurnal} className="space-y-4" data-testid="jurnal-form">
-                  {/* KD/Indikator Selection (Optional) */}
+                  {/* KD/Indikator Selection (Optional) - hanya muncul jika guru sudah menambahkan di /guru/indikator-materi */}
                   {indikatorList.length > 0 && (
                     <div>
                       <Label htmlFor="indikator">KD/Indikator (Opsional)</Label>
                       <Select value={selectedIndikator || "none"} onValueChange={(v) => setSelectedIndikator(v === "none" ? "" : v)}>
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger className="mt-1" data-testid="jurnal-indikator-select">
                           <SelectValue placeholder="Pilih KD/Indikator (opsional)" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Tidak memilih</SelectItem>
                           {indikatorList.map((ind) => (
                             <SelectItem key={ind.id} value={ind.id}>
-                              {ind.kode_kd} - {ind.deskripsi.substring(0, 60)}...
+                              {ind.kode} - {(ind.nama || '').substring(0, 60)}{(ind.nama || '').length > 60 ? '...' : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -578,77 +586,44 @@ export default function JurnalScanPage() {
                     </div>
                   )}
 
-                  {/* Materi Input - with options from database or manual */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label htmlFor="materi">Materi yang Diajarkan <span className="text-rose-600">*</span></Label>
-                      {materiList.length > 0 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setMateriInputMode(materiInputMode === 'select' ? 'manual' : 'select')}
-                          className="h-6 text-xs"
-                        >
-                          {materiInputMode === 'select' ? 'Input Manual' : 'Pilih dari Daftar'}
-                        </Button>
+                  {/* Materi/Pokok Bahasan Selection (Optional) - daftar terdaftar, terpisah dari penjelasan manual di bawah */}
+                  {materiList.length > 0 && (
+                    <div>
+                      <Label htmlFor="materi_select">Materi/Pokok Bahasan (Opsional)</Label>
+                      <Select value={selectedMateri || "none"} onValueChange={(v) => setSelectedMateri(v === "none" ? "" : v)}>
+                        <SelectTrigger className="mt-1" data-testid="jurnal-materi-select">
+                          <SelectValue placeholder="Pilih materi/pokok bahasan (opsional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Tidak memilih</SelectItem>
+                          {materiList.map((mat) => (
+                            <SelectItem key={mat.id} value={mat.id}>
+                              {mat.nama}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedMateri && (
+                        <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded mt-2">
+                          {materiList.find((m) => m.id === selectedMateri)?.deskripsi || 'Tidak ada deskripsi'}
+                        </div>
                       )}
                     </div>
+                  )}
 
-                    {materiInputMode === 'select' && materiList.length > 0 ? (
-                      <div className="space-y-2">
-                        <Select
-                          value={selectedMateri || "none"}
-                          onValueChange={(val) => {
-                            const realVal = val === "none" ? "" : val;
-                            setSelectedMateri(realVal);
-                            if (val === 'lainnya') {
-                              setMateriInputMode('manual');
-                              setForm({ ...form, materi: '' });
-                            } else if (realVal) {
-                              const materi = materiList.find((m) => m.id === realVal);
-                              setForm({ ...form, materi: materi?.judul || '' });
-                            } else {
-                              setForm({ ...form, materi: '' });
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Pilih materi dari daftar..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="lainnya" className="font-semibold text-blue-600">
-                              + Lainnya (Input Manual)
-                            </SelectItem>
-                            <SelectItem value="none">Tidak memilih</SelectItem>
-                            {materiList.map((mat) => (
-                              <SelectItem key={mat.id} value={mat.id}>
-                                {mat.judul}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedMateri && selectedMateri !== 'lainnya' && (
-                          <div className="text-xs text-slate-600 bg-slate-50 p-2 rounded">
-                            {materiList.find((m) => m.id === selectedMateri)?.deskripsi || 'Tidak ada deskripsi'}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <Textarea
+                  {/* Materi Input - penjelasan lebih lanjut, selalu berupa input manual */}
+                  <div>
+                    <Label htmlFor="materi">Materi yang Diajarkan <span className="text-rose-600">*</span></Label>
+                    <Textarea
                         id="materi"
                         value={form.materi}
-                        onChange={(e) => {
-                          setForm({ ...form, materi: e.target.value });
-                          setSelectedMateri('');
-                        }}
+                        onChange={(e) => setForm({ ...form, materi: e.target.value })}
                         placeholder="Contoh: Bab 3 - Bilangan Bulat Positif dan Negatif"
                         rows={3}
                         className="mt-1"
                         data-testid="jurnal-materi-input"
                         required
                       />
-                    )}
                   </div>
                   <div>
                     <Label htmlFor="catatan">Catatan (Opsional)</Label>

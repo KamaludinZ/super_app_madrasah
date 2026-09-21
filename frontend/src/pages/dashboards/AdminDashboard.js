@@ -31,7 +31,7 @@ export default function AdminDashboard() {
       'admin': 'Dashboard Admin',
       'kepala_sekolah': 'Dashboard Kepala Sekolah',
       'kepala_tata_usaha': 'Dashboard Kepala Tata Usaha',
-      'waka_sarana_prasarana': 'Dashboard Waka Sarana Prasarana',
+      'waka_sarpras': 'Dashboard Waka Sarana Prasarana',
       'waka_kesiswaan': 'Dashboard Waka Kesiswaan',
       'waka_kurikulum': 'Dashboard Waka Kurikulum',
       'waka_humas': 'Dashboard Waka Humas'
@@ -60,10 +60,12 @@ export default function AdminDashboard() {
           { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
           { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
         ];
-      case 'waka_sarana_prasarana':
+      case 'waka_sarpras':
         return [
-          { to: '/admin/rooms', icon: Building2, label: 'Data Ruangan', testid: 'qa-rooms' },
-          { to: '/admin/schedules', icon: Calendar, label: 'Jadwal Pelajaran', testid: 'qa-schedules' },
+          { to: '/admin/sarpras/aset-tetap', icon: Building2, label: 'Data Aset Tetap', testid: 'qa-sarpras-aset-tetap' },
+          { to: '/admin/sarpras/ruangan-aset', icon: Building2, label: 'Ruangan & Aset', testid: 'qa-sarpras-ruangan' },
+          { to: '/admin/sarpras/kerusakan', icon: ShieldCheck, label: 'Laporan Kerusakan', testid: 'qa-sarpras-kerusakan' },
+          { to: '/admin/dana-rkam', icon: Calendar, label: 'DANA RKAM', testid: 'qa-rkam' },
           { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
           { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
         ];

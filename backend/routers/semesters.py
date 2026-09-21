@@ -43,6 +43,12 @@ async def list_semesters(
                 sem['curriculum_name'] = cur.get('name')
                 sem['curriculum_code'] = cur.get('code')
 
+        # Enrich tahun takwim
+        if sem.get('tahun_takwim_id'):
+            tt = await db.tahun_takwim.find_one({'id': sem.get('tahun_takwim_id')}, {'_id': 0, 'name': 1, 'year': 1})
+            if tt:
+                sem['tahun_takwim_name'] = tt.get('name')
+
         enriched.append(serialize_doc(sem))
 
     return enriched

@@ -5,6 +5,7 @@ import GuruDashboard from './dashboards/GuruDashboard';
 import GuruBkDashboard from './dashboards/GuruBkDashboard';
 import GuruTatibDashboard from './dashboards/GuruTatibDashboard';
 import KepsekDashboard from './dashboards/KepsekDashboard';
+import PenjaminMutuDashboard from './dashboards/PenjaminMutuDashboard';
 import SiswaDashboard from './dashboards/SiswaDashboard';
 import StaffDashboard from './dashboards/StaffDashboard';
 import UnitKesehatanDashboard from './dashboards/UnitKesehatanDashboard';
@@ -26,10 +27,11 @@ export default function DashboardRouter() {
     'admin',
     'kepala_sekolah',
     'kepala_tata_usaha',
-    'waka_sarana_prasarana',
+    'waka_sarpras',
     'waka_kesiswaan',
     'waka_kurikulum',
-    'waka_humas'
+    'waka_humas',
+    'penjamin_mutu',
   ];
 
   const isAdmin = adminLikeRoles.includes(activeRole);
@@ -54,13 +56,15 @@ export default function DashboardRouter() {
   switch (activeRole) {
     case 'admin':
     case 'kepala_tata_usaha':
-    case 'waka_sarana_prasarana':
+    case 'waka_sarpras':
     case 'waka_kesiswaan':
     case 'waka_kurikulum':
     case 'waka_humas':
       DashboardComponent = AdminDashboard; break;
     case 'kepala_sekolah':
       DashboardComponent = KepsekDashboard; break;
+    case 'penjamin_mutu':
+      DashboardComponent = PenjaminMutuDashboard; break;
     case 'siswa':
       DashboardComponent = SiswaDashboard; break;
     case 'tenaga_kependidikan':

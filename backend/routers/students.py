@@ -48,7 +48,7 @@ async def list_students(
         me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
         return [serialize_doc(me)] if me else []
     # Roles with broad (all-class) read visibility, matching user_can_view_class's overlap set.
-    BROAD_VISIBILITY_ROLES = {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan', 'unit_kesehatan', 'unit_pelayanan', 'kepala_sekolah'}
+    BROAD_VISIBILITY_ROLES = {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan', 'unit_kesehatan', 'unit_pelayanan', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'}
     has_broad_visibility = 'admin' in user.get('roles', []) or bool(set(user.get('roles', [])) & BROAD_VISIBILITY_ROLES)
 
     q = {'roles': 'siswa'}
@@ -169,7 +169,7 @@ async def submit_class_attendance(req: ClassAttendanceSubmit, request: Request,
 # CLASS CLEANLINESS (Kebersihan Kelas)
 # ============================================================
 @router.get("/cleanliness/admin/recap")
-async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk', 'kepala_sekolah'))):
+async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru_bk', 'kepala_sekolah', 'penjamin_mutu'))):
     """Admin & Guru BK: rekapitulasi penilaian kebersihan semua kelas, filtered by user's view context (semester)."""
     # Get all classes for active semester
     ctx = await get_active_context(user)

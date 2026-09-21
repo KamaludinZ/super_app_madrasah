@@ -7,13 +7,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/lib/AuthContext';
 import { useSearchParams } from 'react-router-dom';
+
+// Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
+// "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
+function formatAttendanceDetail(j) {
+  const details = j.attendance_details || [];
+  if (details.length === 0) return '-';
+  const byStatus = { hadir: [], sakit: [], izin: [], alpa: [] };
+  details.forEach((d) => {
+    const status = d.status === 'alpha' ? 'alpa' : d.status;
+    if (byStatus[status]) byStatus[status].push(d.student_name);
+  });
+  const labels = { hadir: 'Hadir', sakit: 'Sakit', izin: 'Izin', alpa: 'Alpa' };
+  return Object.entries(byStatus)
+    .map(([status, names]) => `${labels[status]}: ${names.length > 0 ? names.join(', ') : '-'}`)
+    .join(' | ');
+}
 
 export default function JurnalHistoryPage() {
   const { user, activeRole } = useAuth();
@@ -173,6 +189,8 @@ export default function JurnalHistoryPage() {
           'Guru Pengajar': j.teacher_name || '-',
           'Ruangan': j.room_name || '-',
           'Mode QR': j.qr_mode || 'static',
+          'KD/Indikator': j.kd_indikator || '-',
+          'Materi/Pokok Bahasan (Terdaftar)': j.materi_nama || '-',
           'Materi': j.materi,
           'Catatan': j.catatan || '-',
         };
@@ -188,6 +206,7 @@ export default function JurnalHistoryPage() {
         base['Izin'] = j.siswa_izin || 0;
         base['Alpa'] = j.siswa_tidak_hadir || 0;
         base['Total Siswa'] = (j.siswa_hadir || 0) + (j.siswa_sakit || 0) + (j.siswa_izin || 0) + (j.siswa_tidak_hadir || 0);
+        base['Detail Kehadiran Siswa'] = formatAttendanceDetail(j);
 
         return base;
       });
@@ -208,6 +227,8 @@ export default function JurnalHistoryPage() {
         { wch: 20 }, // Guru Pengajar
         { wch: 15 }, // Ruangan
         { wch: 12 }, // Mode QR
+        { wch: 25 }, // KD/Indikator
+        { wch: 30 }, // Materi/Pokok Bahasan (Terdaftar)
         { wch: 40 }, // Materi
         { wch: 30 }, // Catatan
         { wch: 8 },  // Hadir
@@ -215,6 +236,7 @@ export default function JurnalHistoryPage() {
         { wch: 8 },  // Izin
         { wch: 8 },  // Alpa
         { wch: 12 }, // Total Siswa
+        { wch: 60 }, // Detail Kehadiran Siswa
       ];
 
       // Generate filename with timestamp
@@ -528,6 +550,12 @@ export default function JurnalHistoryPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-slate-900 max-w-xs">
+                          {j.kd_indikator && (
+                            <div className="text-[11px] font-semibold text-[#006837] mb-0.5">{j.kd_indikator}</div>
+                          )}
+                          {j.materi_nama && (
+                            <div className="text-[11px] font-medium text-blue-700 mb-0.5">{j.materi_nama}</div>
+                          )}
                           {j.materi}
                         </div>
                       </TableCell>
@@ -601,6 +629,7 @@ export default function JurnalHistoryPage() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">Detail Jurnal Mengajar</DialogTitle>
+            <DialogDescription>Rincian jurnal mengajar termasuk KD/Indikator, materi, dan kehadiran siswa</DialogDescription>
           </DialogHeader>
           {selectedJournal && (
             <div className="space-y-6">
@@ -657,8 +686,24 @@ export default function JurnalHistoryPage() {
                       {getQrModeBadge(selectedJournal.qr_mode)}
                     </div>
                   </div>
+                  {selectedJournal.kd_indikator && (
+                    <div className="mt-4">
+                      <div className="text-xs text-slate-500 mb-1">KD/Indikator</div>
+                      <div className="p-3 bg-[#006837]/5 rounded border border-[#006837]/20 text-sm font-medium text-[#006837]">
+                        {selectedJournal.kd_indikator}
+                      </div>
+                    </div>
+                  )}
+                  {selectedJournal.materi_nama && (
+                    <div className="mt-4">
+                      <div className="text-xs text-slate-500 mb-1">Materi/Pokok Bahasan (Terdaftar)</div>
+                      <div className="p-3 bg-blue-50 rounded border border-blue-200 text-sm font-medium text-blue-700">
+                        {selectedJournal.materi_nama}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-4">
-                    <div className="text-xs text-slate-500 mb-1">Materi</div>
+                    <div className="text-xs text-slate-500 mb-1">Materi yang Diajarkan</div>
                     <div className="p-3 bg-slate-50 rounded border text-sm">
                       {selectedJournal.materi}
                     </div>
@@ -828,6 +873,7 @@ export default function JurnalHistoryPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Jurnal Mengajar</DialogTitle>
+            <DialogDescription>Ubah materi dan catatan pada jurnal ini</DialogDescription>
           </DialogHeader>
           {editJournal && (
             <div className="space-y-4">

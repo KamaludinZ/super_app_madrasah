@@ -15,6 +15,8 @@ export default function AdminIndikatorMateriPage() {
   const [indikatorList, setIndikatorList] = useState([]);
   const [materiList, setMateriList] = useState([]);
   const [guruList, setGuruList] = useState([]);
+  const [semesterList, setSemesterList] = useState([]);
+  const [subjectList, setSubjectList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [filterGuru, setFilterGuru] = useState('all');
@@ -23,8 +25,9 @@ export default function AdminIndikatorMateriPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    loadData();
     loadGuru();
+    loadSemesters();
+    loadSubjects();
   }, []);
 
   const loadGuru = async () => {
@@ -37,13 +40,31 @@ export default function AdminIndikatorMateriPage() {
     }
   };
 
+  const loadSemesters = async () => {
+    try {
+      const { data } = await api.get('/semesters');
+      setSemesterList(data || []);
+    } catch (e) {
+      console.error('Failed to load semesters:', e);
+    }
+  };
+
+  const loadSubjects = async () => {
+    try {
+      const { data } = await api.get('/subjects');
+      setSubjectList(data || []);
+    } catch (e) {
+      console.error('Failed to load subjects:', e);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
       const params = {};
       if (filterGuru && filterGuru !== 'all') params.guru_id = filterGuru;
-      if (filterSemester) params.semester = filterSemester;
-      if (filterMapel) params.mata_pelajaran = filterMapel;
+      if (filterSemester) params.semester_id = filterSemester;
+      if (filterMapel) params.mapel_id = filterMapel;
 
       const [indikatorRes, materiRes] = await Promise.all([
         api.get('/indikator', { params }),
@@ -62,6 +83,17 @@ export default function AdminIndikatorMateriPage() {
   useEffect(() => {
     loadData();
   }, [filterGuru, filterSemester, filterMapel]);
+
+  const getSubjectName = (id) => {
+    const subject = subjectList.find(s => s.id === id);
+    return subject ? subject.name : '-';
+  };
+
+  const getSemesterName = (id) => {
+    const semester = semesterList.find(s => s.id === id);
+    if (!semester) return '-';
+    return semester.tahun_takwim_name ? `${semester.name} (${semester.tahun_takwim_name})` : semester.name;
+  };
 
   const handleDeleteIndikator = async (id) => {
     if (!confirm('Yakin ingin menghapus indikator ini?')) return;
@@ -88,22 +120,18 @@ export default function AdminIndikatorMateriPage() {
   const filteredIndikator = indikatorList.filter(item => {
     if (!search) return true;
     const s = search.toLowerCase();
-    return (item.kode_kd || '').toLowerCase().includes(s) ||
-           (item.deskripsi || '').toLowerCase().includes(s) ||
-           (item.mata_pelajaran || '').toLowerCase().includes(s);
+    return (item.kode || '').toLowerCase().includes(s) ||
+           (item.nama || '').toLowerCase().includes(s) ||
+           getSubjectName(item.mapel_id).toLowerCase().includes(s);
   });
 
   const filteredMateri = materiList.filter(item => {
     if (!search) return true;
     const s = search.toLowerCase();
-    return (item.judul || '').toLowerCase().includes(s) ||
+    return (item.nama || '').toLowerCase().includes(s) ||
            (item.deskripsi || '').toLowerCase().includes(s) ||
-           (item.mata_pelajaran || '').toLowerCase().includes(s);
+           getSubjectName(item.mapel_id).toLowerCase().includes(s);
   });
-
-  // Get unique semesters and mapel for filters
-  const allSemesters = [...new Set([...indikatorList, ...materiList].map(i => i.semester).filter(Boolean))];
-  const allMapel = [...new Set([...indikatorList, ...materiList].map(i => i.mata_pelajaran).filter(Boolean))];
 
   return (
     <div className="space-y-6" data-testid="admin-indikator-materi-page">
@@ -149,8 +177,8 @@ export default function AdminIndikatorMateriPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Semester</SelectItem>
-                {allSemesters.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                {semesterList.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}{s.tahun_takwim_name ? ` (${s.tahun_takwim_name})` : ''}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -161,8 +189,8 @@ export default function AdminIndikatorMateriPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Mapel</SelectItem>
-                {allMapel.map(m => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                {subjectList.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -217,12 +245,12 @@ export default function AdminIndikatorMateriPage() {
                         filteredIndikator.map((item, idx) => (
                           <TableRow key={item.id}>
                             <TableCell className="text-center text-slate-500 font-mono">{idx + 1}</TableCell>
-                            <TableCell className="font-mono font-semibold">{item.kode_kd}</TableCell>
+                            <TableCell className="font-mono font-semibold">{item.kode}</TableCell>
                             <TableCell className="max-w-md">
-                              <div className="line-clamp-2">{item.deskripsi}</div>
+                              <div className="line-clamp-2">{item.nama}</div>
                             </TableCell>
-                            <TableCell>{item.mata_pelajaran}</TableCell>
-                            <TableCell><Badge variant="outline" className="font-mono text-xs">{item.semester}</Badge></TableCell>
+                            <TableCell>{getSubjectName(item.mapel_id)}</TableCell>
+                            <TableCell><Badge variant="outline" className="font-mono text-xs">{getSemesterName(item.semester_id)}</Badge></TableCell>
                             <TableCell>{item.tingkat_kelas || '-'}</TableCell>
                             <TableCell className="text-sm">{item.created_by_name || '-'}</TableCell>
                             <TableCell className="text-right">
@@ -281,12 +309,12 @@ export default function AdminIndikatorMateriPage() {
                         filteredMateri.map((item, idx) => (
                           <TableRow key={item.id}>
                             <TableCell className="text-center text-slate-500 font-mono">{idx + 1}</TableCell>
-                            <TableCell className="font-semibold">{item.judul}</TableCell>
+                            <TableCell className="font-semibold">{item.nama}</TableCell>
                             <TableCell className="max-w-md">
                               <div className="line-clamp-2">{item.deskripsi || '-'}</div>
                             </TableCell>
-                            <TableCell>{item.mata_pelajaran}</TableCell>
-                            <TableCell><Badge variant="outline" className="font-mono text-xs">{item.semester}</Badge></TableCell>
+                            <TableCell>{getSubjectName(item.mapel_id)}</TableCell>
+                            <TableCell><Badge variant="outline" className="font-mono text-xs">{getSemesterName(item.semester_id)}</Badge></TableCell>
                             <TableCell>{item.tingkat_kelas || '-'}</TableCell>
                             <TableCell className="text-sm">{item.created_by_name || '-'}</TableCell>
                             <TableCell className="text-right">

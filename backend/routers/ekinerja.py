@@ -21,7 +21,7 @@ from journal_core import now_wib
 
 router = APIRouter()
 
-EKINERJA_AUTHOR_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha')
+EKINERJA_AUTHOR_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'penjamin_mutu')
 
 LEADING_SEKTOR_LIST = [
     'Kepala Tata Usaha',

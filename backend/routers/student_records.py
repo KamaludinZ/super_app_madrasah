@@ -20,7 +20,7 @@ async def list_student_records(
     status: Optional[str] = Query('active'),  # 'active' | 'graduated' | 'mutated' | 'all'
     limit: int = Query(100, le=500),
     offset: int = Query(0),
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'))
 ):
     """
     List buku induk siswa dengan filter.
@@ -244,7 +244,7 @@ async def export_all_records_excel(
 
 
 @router.get("/student-records/stats/summary")
-async def get_records_stats(user: Dict = Depends(require_role('admin'))):
+async def get_records_stats(user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'))):
     """Get statistik buku induk siswa."""
     # Count total records
     total_students = await db.users.count_documents({'roles': {'$in': ['siswa']}, 'is_active': True})

@@ -100,7 +100,8 @@ def export_monthly_teacher_journal_excel(
         "JAM KE",
         "KELAS",
         "KD/INDIKATOR",
-        "MATERI/POKOK BAHASAN",
+        "MATERI/POKOK BAHASAN (TERDAFTAR)",
+        "MATERI YANG DIAJARKAN",
         "ABSENSI SISWA",
     ]
     ws.append(headers)
@@ -111,6 +112,7 @@ def export_monthly_teacher_journal_excel(
         jam_ke = j.get("slot_index")
         jam_ke_label = f"Ke-{jam_ke + 1}" if isinstance(jam_ke, int) else f"{j.get('scheduled_start', '-')}-{j.get('scheduled_end', '-')}"
         kd = j.get("kd_indikator") or "-"
+        materi_terdaftar = j.get("materi_nama") or "-"
         materi = j.get("materi") or "-"
         absensi = _format_absensi_text(j, student_name_map)
 
@@ -120,17 +122,18 @@ def export_monthly_teacher_journal_excel(
             jam_ke_label,
             j.get("class_name") or "-",
             kd,
+            materi_terdaftar,
             materi,
             absensi,
         ])
 
-    widths = [6, 22, 14, 12, 20, 34, 44]
+    widths = [6, 22, 14, 12, 20, 28, 34, 44]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
     for r in range(2, ws.max_row + 1):
         ws.row_dimensions[r].height = 34
-        for c in range(1, 8):
+        for c in range(1, 9):
             ws.cell(row=r, column=c).alignment = Alignment(vertical="top", wrap_text=True)
 
     ws.freeze_panes = "A2"
@@ -175,7 +178,8 @@ def export_monthly_teacher_journal_pdf(
         "JAM KE",
         "KELAS",
         "KD/INDIKATOR",
-        "MATERI/POKOK BAHASAN",
+        "MATERI/POKOK BAHASAN (TERDAFTAR)",
+        "MATERI YANG DIAJARKAN",
         "ABSENSI SISWA",
     ]]
 
@@ -184,6 +188,7 @@ def export_monthly_teacher_journal_pdf(
         jam_ke = j.get("slot_index")
         jam_ke_label = f"Ke-{jam_ke + 1}" if isinstance(jam_ke, int) else f"{j.get('scheduled_start', '-')}-{j.get('scheduled_end', '-')}"
         kd = j.get("kd_indikator") or "-"
+        materi_terdaftar = j.get("materi_nama") or "-"
         materi = j.get("materi") or "-"
         absensi = _format_absensi_text(j, student_name_map)
         table_data.append([
@@ -192,11 +197,12 @@ def export_monthly_teacher_journal_pdf(
             jam_ke_label,
             j.get("class_name") or "-",
             kd,
+            materi_terdaftar,
             materi,
             absensi,
         ])
 
-    col_widths = [28, 95, 62, 58, 86, 150, 220]
+    col_widths = [26, 90, 58, 52, 76, 110, 130, 190]
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#006837")),

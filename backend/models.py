@@ -510,6 +510,10 @@ class JournalModel(BaseModel):
     room_id: str
     semester_id: str  # NEW: references semesters.id (contains academic_year_id + curriculum)
     materi: str
+    indikator_id: Optional[str] = None  # Link ke KD/Indikator (opsional, dari /indikator milik guru)
+    kd_indikator: Optional[str] = None  # Denormalized "kode - nama" agar tetap tampil walau indikator diubah/dihapus
+    materi_id: Optional[str] = None  # Link ke Materi/Pokok Bahasan (opsional, dipilih dari daftar milik guru)
+    materi_nama: Optional[str] = None  # Denormalized nama Materi/Pokok Bahasan yang dipilih dari daftar — beda dari field `materi` (penjelasan manual guru)
     catatan: Optional[str] = None
     siswa_hadir: int = 0
     siswa_tidak_hadir: int = 0
@@ -876,6 +880,8 @@ class JournalCreateRequest(BaseModel):
     user_lat: Optional[float] = None
     user_lon: Optional[float] = None
     materi: str
+    indikator_id: Optional[str] = None
+    materi_id: Optional[str] = None
     catatan: Optional[str] = None
     siswa_hadir: int = 0
     siswa_tidak_hadir: int = 0

@@ -909,7 +909,7 @@ async def get_laporan_summary(
     semester: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah'))
+    user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah', 'penjamin_mutu'))
 ):
     """Aggregate BK activity counts across kunjungan, CLKB, PCL, and home visit."""
     base_query = {}
@@ -963,7 +963,7 @@ async def get_laporan_summary(
 
 
 @router.get("/bk/laporan/kehadiran-summary")
-async def get_kehadiran_summary(user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah'))):
+async def get_kehadiran_summary(user: Dict = Depends(require_role(*BK_ROLES, 'kepala_sekolah', 'penjamin_mutu'))):
     """School-wide attendance aggregate for the active semester (from daily
     class_attendance submissions), plus a top-alpa student ranking — used by
     the Guru BK and Kepala Sekolah dashboards to spot attendance trends."""

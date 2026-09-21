@@ -1042,3 +1042,97 @@ async def delete_piket(pid: str, request: Request, user: Dict = Depends(require_
     return {'message': 'Dihapus'}
 
 
+# ============================================================
+# IBADAH SCHEDULES (Jadwal Piket Salaman/Ibadah, Keputrian, Imam Shalat)
+# ============================================================
+# kategori: 'salaman_putri' | 'salaman_putra' | 'keputrian' | 'imam_shalat'
+# hari: 'senin'..'sabtu' — dipakai untuk salaman_putri/salaman_putra/keputrian (mingguan).
+# jenis_ibadah: 'dhuha' | 'dhuhur' | 'jumat' | 'ashar' — dipakai untuk kategori 'imam_shalat'
+#   ('jumat' = Khotib Shalat Jumat, otomatis hari Jumat saja; lainnya berlaku setiap hari).
+IBADAH_KATEGORI = ('salaman_putri', 'salaman_putra', 'keputrian', 'imam_shalat')
+IMAM_JENIS = ('dhuha', 'dhuhur', 'jumat', 'ashar')
+
+
+@router.get("/ibadah-schedules")
+async def list_ibadah_schedules(kategori: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    q = {}
+    if kategori:
+        q['kategori'] = kategori
+    items = await db.ibadah_schedules.find(q, {'_id': 0}).sort([('kategori', 1), ('hari', 1)]).to_list(500)
+    enriched = []
+    for s in items:
+        petugas_id = s.get('petugas_id')
+        if petugas_id:
+            petugas = await db.users.find_one({'id': petugas_id}, {'_id': 0, 'full_name': 1})
+            s['petugas_name'] = petugas.get('full_name') if petugas else None
+        else:
+            s['petugas_name'] = None
+        enriched.append(serialize_doc(s))
+    return enriched
+
+
+@router.post("/ibadah-schedules")
+async def create_ibadah_schedule(payload: Dict, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
+    kategori = payload.get('kategori')
+    if kategori not in IBADAH_KATEGORI:
+        raise HTTPException(400, f"kategori harus salah satu dari: {', '.join(IBADAH_KATEGORI)}")
+    jenis_ibadah = payload.get('jenis_ibadah')
+    if kategori == 'imam_shalat' and jenis_ibadah not in IMAM_JENIS:
+        raise HTTPException(400, f"jenis_ibadah harus salah satu dari: {', '.join(IMAM_JENIS)}")
+    doc = {
+        'id': str(uuid.uuid4()),
+        'kategori': kategori,
+        'hari': payload.get('hari') if kategori != 'imam_shalat' else ('jumat' if jenis_ibadah == 'jumat' else None),
+        'jenis_ibadah': jenis_ibadah if kategori == 'imam_shalat' else None,
+        'waktu': payload.get('waktu', ''),
+        'petugas_id': payload.get('petugas_id'),
+        'notes': payload.get('notes', ''),
+        'is_active': payload.get('is_active', True),
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.ibadah_schedules.insert_one(doc)
+    await log_audit(user, 'create', 'ibadah_schedule', doc['id'],
+                    details={'kategori': doc['kategori'], 'petugas_id': doc['petugas_id']}, request=request)
+    return serialize_doc(doc)
+
+
+@router.get("/ibadah-schedules/today")
+async def ibadah_schedules_today(user: Dict = Depends(get_current_user)):
+    day = current_day_id()
+    # Dhuha/Dhuhur/Ashar berlaku setiap hari; Khotib Jumat hanya hari Jumat;
+    # salaman/keputrian mengikuti field hari masing-masing.
+    q = {
+        'is_active': True,
+        '$or': [
+            {'hari': day},
+            {'kategori': 'imam_shalat', 'jenis_ibadah': {'$in': ['dhuha', 'dhuhur', 'ashar']}},
+        ],
+    }
+    items = await db.ibadah_schedules.find(q, {'_id': 0}).sort('kategori', 1).to_list(50)
+    enriched = []
+    for s in items:
+        petugas = await db.users.find_one({'id': s.get('petugas_id')}, {'_id': 0, 'full_name': 1})
+        s['petugas_name'] = petugas.get('full_name') if petugas else None
+        enriched.append(serialize_doc(s))
+    return enriched
+
+
+@router.put("/ibadah-schedules/{sid}")
+async def update_ibadah_schedule(sid: str, payload: Dict, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
+    payload.pop('_id', None)
+    payload.pop('id', None)
+    res = await db.ibadah_schedules.update_one({'id': sid}, {'$set': payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Jadwal ibadah tidak ditemukan")
+    await log_audit(user, 'update', 'ibadah_schedule', sid, details=payload, request=request)
+    doc = await db.ibadah_schedules.find_one({'id': sid}, {'_id': 0})
+    return serialize_doc(doc)
+
+
+@router.delete("/ibadah-schedules/{sid}")
+async def delete_ibadah_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
+    await db.ibadah_schedules.delete_one({'id': sid})
+    await log_audit(user, 'delete', 'ibadah_schedule', sid, request=request)
+    return {'message': 'Dihapus'}
+
+
