@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Users, Search, GraduationCap, Eye, KeyRound, Pencil, QrCode,
-  UserCheck, UserX, ShieldAlert, History, Loader2, Hash, Trash2,
+  UserCheck, UserX, ShieldAlert, History, Loader2, Hash, Trash2, Home, ClipboardCheck,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
@@ -22,7 +22,7 @@ export default function DataSiswaPage() {
   const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
   // These roles see the same all-students admin-style view/filters, but
   // without any create/edit/delete/account actions (view-only).
-  const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk'];
+  const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk', 'kepala_sekolah'];
   const hasAdminView = isAdmin || VIEW_ONLY_BROAD_ROLES.includes(activeRole);
   const homeroomClassId = user?.homeroom_class_id;
   const canEdit = isAdmin; // Only admin can edit/delete students
@@ -93,6 +93,20 @@ export default function DataSiswaPage() {
 
   const refresh = () => loadStudents(selectedClass);
 
+  // Per-grade (kelas 7/8/9) stat overview, based on all loaded students
+  // regardless of the table's active filters.
+  const gradeStats = tingkatOptions.map((grade) => {
+    const inGrade = students.filter((s) => String(classIdToGrade[s.student_class_id]) === String(grade));
+    const total = inGrade.length;
+    const laki = inGrade.filter((s) => s.gender === 'L').length;
+    const perempuan = inGrade.filter((s) => s.gender === 'P').length;
+    const mahad = inGrade.filter((s) => s.santri_mahad).length;
+    const avgCompleteness = total > 0
+      ? Math.round(inGrade.reduce((sum, s) => sum + (s.completeness_percentage ?? 0), 0) / total)
+      : 0;
+    return { grade, total, laki, perempuan, mahad, avgCompleteness };
+  });
+
   // Calculate age from date of birth
   const calculateAge = (birthDate) => {
     if (!birthDate) return '-';
@@ -142,6 +156,38 @@ export default function DataSiswaPage() {
         <StatBox icon={UserCheck} label="Perempuan" value={filtered.filter((s) => s.gender === 'P').length} color="bg-rose-50 border-rose-200 text-rose-700" />
         <StatBox icon={UserX} label="Mutasi" value={filtered.filter((s) => s.mutation_type).length} color="bg-amber-50 border-amber-200 text-amber-700" />
       </div>
+
+      {/* Per-grade stat overview */}
+      {hasAdminView && gradeStats.length > 0 && (
+        <div className="space-y-3">
+          {gradeStats.map(({ grade, total, laki, perempuan, mahad, avgCompleteness }) => (
+            <Card key={grade}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <GraduationCap className="h-4 w-4 text-[#006837]" />
+                  <h3 className="font-bold text-slate-900">Kelas {grade}</h3>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <StatBox icon={Users} label="Total Siswa" value={total} color="bg-slate-50 border-slate-200 text-slate-700" />
+                  <StatBox icon={UserCheck} label="Laki-laki" value={laki} color="bg-blue-50 border-blue-200 text-blue-700" />
+                  <StatBox icon={UserCheck} label="Perempuan" value={perempuan} color="bg-rose-50 border-rose-200 text-rose-700" />
+                  <StatBox icon={Home} label="Santri Mahad" value={mahad} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+                  <StatBox
+                    icon={ClipboardCheck}
+                    label="% Kelengkapan Data"
+                    value={`${avgCompleteness}%`}
+                    color={
+                      avgCompleteness >= 80 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                      avgCompleteness >= 50 ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                      'bg-rose-50 border-rose-200 text-rose-700'
+                    }
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <Card>

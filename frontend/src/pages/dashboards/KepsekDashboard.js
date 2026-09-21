@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, UserCheck, ClipboardList, ShieldAlert, Trophy, HeartHandshake,
-  Stethoscope, BookOpen, AlertOctagon, ArrowRight,
+  Stethoscope, BookOpen, AlertOctagon, ArrowRight, Users, UserX, Home, GraduationCap, ClipboardCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -34,6 +34,8 @@ export default function KepsekDashboard() {
   const [tatibSummary, setTatibSummary] = useState(null);
   const [bkSummary, setBkSummary] = useState(null);
   const [uksRekap, setUksRekap] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [classes, setClasses] = useState([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -41,18 +43,22 @@ export default function KepsekDashboard() {
     setLoading(true);
     try {
       const bulan = new Date().toISOString().slice(0, 7);
-      const [kehadiranRes, jurnalRes, tatibRes, bkRes, uksRes] = await Promise.all([
+      const [kehadiranRes, jurnalRes, tatibRes, bkRes, uksRes, studentsRes, classesRes] = await Promise.all([
         api.get('/bk/laporan/kehadiran-summary'),
         api.get('/admin/jurnal/stats-by-teacher'),
         api.get('/tatib/stats/summary'),
         api.get('/bk/laporan/summary'),
         api.get('/uks/laporan/rekap-kunjungan', { params: { period: 'bulan', bulan } }),
+        api.get('/students'),
+        api.get('/classes'),
       ]);
       setKehadiran(kehadiranRes.data);
       setJurnalStats(jurnalRes.data || []);
       setTatibSummary(tatibRes.data);
       setBkSummary(bkRes.data);
       setUksRekap(uksRes.data);
+      setStudents(studentsRes.data || []);
+      setClasses(classesRes.data || []);
     } catch (e) {
       // silent — dashboard degrades gracefully
     } finally {
@@ -79,6 +85,21 @@ export default function KepsekDashboard() {
     .sort((a, b) => a.fill_rate_pct - b.fill_rate_pct)
     .slice(0, 10)
     .map((t) => ({ nama: t.teacher_name?.split(' ').slice(0, 2).join(' '), 'Pengisian (%)': t.fill_rate_pct }));
+
+  // Per-grade (kelas 7/8/9) stat overview, same breakdown as /admin/siswa.
+  const classIdToGrade = classes.reduce((acc, c) => { acc[c.id] = c.grade; return acc; }, {});
+  const tingkatOptions = [...new Set(classes.map((c) => c.grade).filter((g) => g !== undefined && g !== null))].sort((a, b) => a - b);
+  const gradeStats = tingkatOptions.map((grade) => {
+    const inGrade = students.filter((s) => String(classIdToGrade[s.student_class_id]) === String(grade));
+    const total = inGrade.length;
+    const laki = inGrade.filter((s) => s.gender === 'L').length;
+    const perempuan = inGrade.filter((s) => s.gender === 'P').length;
+    const mahad = inGrade.filter((s) => s.santri_mahad).length;
+    const avgCompleteness = total > 0
+      ? Math.round(inGrade.reduce((sum, s) => sum + (s.completeness_percentage ?? 0), 0) / total)
+      : 0;
+    return { grade, total, laki, perempuan, mahad, avgCompleteness };
+  });
 
   return (
     <div className="space-y-6">
@@ -180,6 +201,42 @@ export default function KepsekDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {gradeStats.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-[#006837]" /> Statistik Siswa per Tingkat
+            </CardTitle>
+            <Link to="/admin/siswa" className="text-xs text-[#006837] font-semibold flex items-center gap-1 hover:underline">
+              Lihat Data Siswa <ArrowRight className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {gradeStats.map(({ grade, total, laki, perempuan, mahad, avgCompleteness }) => (
+              <div key={grade} className="rounded-xl border border-slate-200 p-4">
+                <h3 className="font-bold text-slate-900 mb-3">Kelas {grade}</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <StatCard icon={Users} label="Total Siswa" value={total} color="bg-slate-50 border-slate-200 text-slate-700" />
+                  <StatCard icon={UserCheck} label="Laki-laki" value={laki} color="bg-blue-50 border-blue-200 text-blue-700" />
+                  <StatCard icon={UserX} label="Perempuan" value={perempuan} color="bg-rose-50 border-rose-200 text-rose-700" />
+                  <StatCard icon={Home} label="Santri Mahad" value={mahad} color="bg-emerald-50 border-emerald-200 text-emerald-700" />
+                  <StatCard
+                    icon={ClipboardCheck}
+                    label="% Kelengkapan Data"
+                    value={`${avgCompleteness}%`}
+                    color={
+                      avgCompleteness >= 80 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                      avgCompleteness >= 50 ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                      'bg-rose-50 border-rose-200 text-rose-700'
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

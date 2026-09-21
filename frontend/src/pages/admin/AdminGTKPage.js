@@ -14,15 +14,21 @@ import {
 } from 'lucide-react';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 import StaffDetailDialog from '@/components/staff/StaffDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
 
 const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
 const TENDIK_ROLES = ['tenaga_kependidikan'];
 const STATUS_KEPEGAWAIAN_LIST = ['PNS', 'PPPK', 'Non ASN'];
+// Roles that see the same all-GTK admin-style view/filters, but without any
+// account/edit/delete actions (view-only) — only the Detail button remains.
+const VIEW_ONLY_BROAD_ROLES = ['kepala_sekolah'];
 
 export default function AdminGTKPage() {
   const navigate = useNavigate();
+  const { activeRole } = useAuth();
+  const canManage = !VIEW_ONLY_BROAD_ROLES.includes(activeRole);
   const [tab, setTab] = useState('guru');
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
@@ -290,23 +296,29 @@ export default function AdminGTKPage() {
                                 data-testid={`gtk-detail-${u.id}`}>
                                 <Eye className="h-3.5 w-3.5" /> Detail
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => setAccountUser(u)}
-                                className="gap-1" data-testid={`gtk-account-${u.id}`}>
-                                <KeyRound className="h-3.5 w-3.5" /> Info Akun
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setDetailUser({ ...u, _autoEdit: true })}
-                                className="gap-1 text-amber-700 hover:bg-amber-50" data-testid={`gtk-edit-${u.id}`}>
-                                <Pencil className="h-3.5 w-3.5" /> Edit
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(u)}
-                                className="gap-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                                data-testid={`gtk-delete-${u.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Hapus
-                              </Button>
+                              {canManage && (
+                                <Button size="sm" variant="outline" onClick={() => setAccountUser(u)}
+                                  className="gap-1" data-testid={`gtk-account-${u.id}`}>
+                                  <KeyRound className="h-3.5 w-3.5" /> Info Akun
+                                </Button>
+                              )}
+                              {canManage && (
+                                <Button size="sm" variant="ghost" onClick={() => setDetailUser({ ...u, _autoEdit: true })}
+                                  className="gap-1 text-amber-700 hover:bg-amber-50" data-testid={`gtk-edit-${u.id}`}>
+                                  <Pencil className="h-3.5 w-3.5" /> Edit
+                                </Button>
+                              )}
+                              {canManage && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDelete(u)}
+                                  className="gap-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                  data-testid={`gtk-delete-${u.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Hapus
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
