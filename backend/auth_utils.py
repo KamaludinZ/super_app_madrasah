@@ -51,6 +51,27 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
+PASSWORD_MIN_LENGTH = 8
+_COMMON_PASSWORDS = {
+    '12345678', '123456789', '1234567890', '87654321', '11111111', '00000000', '12341234',
+    'password', 'password1', 'password123', 'passw0rd', 'qwerty123', 'qwertyuiop', 'asdfghjkl',
+    'iloveyou', 'bismillah', 'bismillah123', 'indonesia', 'indonesia123', 'admin123', 'admin1234',
+    'guru1234', 'siswa1234', 'madrasah', 'madrasah123', 'matsandatama', 'mtsn2malang', 'rahasia123',
+}
+
+
+def password_policy_error(password: str, username: Optional[str] = None) -> Optional[str]:
+    """Kembalikan pesan error bila password lemah, atau None bila memenuhi aturan."""
+    pw = password or ''
+    if len(pw) < PASSWORD_MIN_LENGTH:
+        return f"Password minimal {PASSWORD_MIN_LENGTH} karakter"
+    if pw.lower() in _COMMON_PASSWORDS or len(set(pw)) <= 2:
+        return "Password terlalu mudah ditebak. Gunakan kombinasi huruf dan angka yang tidak umum."
+    if username and pw.lower() == username.lower():
+        return "Password tidak boleh sama dengan username"
+    return None
+
+
 def create_access_token(payload: Dict[str, Any], expires_minutes: int = JWT_EXPIRY_MINUTES) -> str:
     to_encode = payload.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)

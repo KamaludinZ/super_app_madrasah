@@ -1,4 +1,5 @@
 """Alumni management - menampung data siswa yang sudah lulus."""
+import re
 from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -23,9 +24,9 @@ async def list_alumni(
     if search:
         # Search by name, NISN, or NIS
         query['$or'] = [
-            {'full_name': {'$regex': search, '$options': 'i'}},
-            {'nisn': {'$regex': search, '$options': 'i'}},
-            {'nis': {'$regex': search, '$options': 'i'}},
+            {'full_name': {'$regex': re.escape(search), '$options': 'i'}},
+            {'nisn': {'$regex': re.escape(search), '$options': 'i'}},
+            {'nis': {'$regex': re.escape(search), '$options': 'i'}},
         ]
 
     items = await db.users.find(query, {'_id': 0, 'password_hash': 0}).sort('graduation_date', -1).to_list(1000)

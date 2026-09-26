@@ -1,4 +1,5 @@
 """API endpoints for Perpustakaan (Library) Management."""
+import re
 from typing import Dict, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -83,7 +84,7 @@ async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends
     """Minimal lookup of all active users (siswa, guru, tendik) for the borrower/visitor picker."""
     query = {'is_active': {'$ne': False}}
     if search:
-        query['full_name'] = {'$regex': search, '$options': 'i'}
+        query['full_name'] = {'$regex': re.escape(search), '$options': 'i'}
 
     items = await db.users.find(
         query,
@@ -112,7 +113,7 @@ async def list_koleksi(
     if kondisi:
         query['kondisi'] = kondisi
     if search:
-        query['judul'] = {'$regex': search, '$options': 'i'}
+        query['judul'] = {'$regex': re.escape(search), '$options': 'i'}
 
     items = await db.perpus_koleksi.find(query, {'_id': 0}).sort('judul', 1).to_list(5000)
     return [serialize_doc(i) for i in items]

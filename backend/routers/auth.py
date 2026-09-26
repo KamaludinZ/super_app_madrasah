@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from auth_utils import create_access_token, hash_password, verify_password
+from auth_utils import create_access_token, hash_password, password_policy_error, verify_password
 from captcha_utils import (
     create_captcha,
     is_locked,
@@ -69,9 +69,10 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
     if not target_user.get('is_active', True):
         raise HTTPException(status_code=403, detail="Akun target dinonaktifkan")
 
-    # SECURITY: Prevent impersonating another admin (optional, uncomment if needed)
-    # if 'admin' in target_user.get('roles', []):
-    #     raise HTTPException(status_code=403, detail="Tidak dapat impersonate admin lain")
+    # SECURITY: admin tidak boleh masuk sebagai admin lain (jejak audit jadi kabur
+    # dan bisa dipakai untuk menyamar sebagai admin lain)
+    if 'admin' in target_user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Tidak dapat impersonate admin lain")
 
     # Create token with impersonation info
     active_role = target_user['roles'][0] if target_user.get('roles') else 'guru'
@@ -348,8 +349,9 @@ class ChangePasswordRequest(BaseModel):
 async def change_password(req: ChangePasswordRequest, request: Request,
                           user: Dict = Depends(get_current_user)):
     """User mengubah password sendiri. Wajib verifikasi password lama dulu."""
-    if len(req.new_password) < 6:
-        raise HTTPException(400, "Password baru minimal 6 karakter")
+    policy_error = password_policy_error(req.new_password, user.get('username'))
+    if policy_error:
+        raise HTTPException(400, policy_error)
     if req.current_password == req.new_password:
         raise HTTPException(400, "Password baru tidak boleh sama dengan password lama")
     db_user = await db.users.find_one({'id': user['id']})
@@ -585,8 +587,9 @@ async def reset_password_validate(token: str):
 @router.post("/auth/reset-password")
 async def reset_password(req: ResetPasswordRequest, request: Request):
     # Validasi password dulu agar token tidak hangus hanya karena password terlalu pendek
-    if len(req.new_password) < 6:
-        raise HTTPException(400, "Password minimal 6 karakter")
+    policy_error = password_policy_error(req.new_password)
+    if policy_error:
+        raise HTTPException(400, policy_error)
     item = await consume_reset_token(req.token)
     if not item:
         raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
