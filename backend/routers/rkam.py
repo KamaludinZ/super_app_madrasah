@@ -96,8 +96,8 @@ async def create_budget_item(
     Only Admin and Bendahara can create.
     """
     try:
-        logger.info(f"[RKAM POST] Received payload: {payload}")
-        logger.info(f"[RKAM POST] User: {user.get('id')} ({user.get('username')})")
+        logger.debug(f"[RKAM POST] Received payload: {payload}")
+        logger.debug(f"[RKAM POST] User: {user.get('id')} ({user.get('username')})")
 
         # Validate required fields
         if not payload.get('name'):
@@ -495,8 +495,8 @@ async def create_document(
     Note: File upload should be handled separately.
     """
     try:
-        logger.info(f"[RKAM DOC POST] Received payload: {payload}")
-        logger.info(f"[RKAM DOC POST] User: {user.get('id')} ({user.get('username')})")
+        logger.debug(f"[RKAM DOC POST] Received payload: {payload}")
+        logger.debug(f"[RKAM DOC POST] User: {user.get('id')} ({user.get('username')})")
 
         # Validate required fields
         if not payload.get('title'):

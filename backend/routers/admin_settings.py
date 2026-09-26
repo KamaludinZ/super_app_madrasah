@@ -1,9 +1,11 @@
 """Admin Settings, Logo upload, SMTP test."""
 import base64
+import io
 from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from PIL import Image
 
 from core import db, get_settings, log_audit, require_role
 from email_utils import send_email
@@ -39,15 +41,25 @@ async def update_settings(payload: Dict[str, Any], request: Request, user: Dict 
     return await get_settings()
 
 
+_IMAGE_MIME = {'PNG': 'image/png', 'JPEG': 'image/jpeg', 'WEBP': 'image/webp', 'GIF': 'image/gif', 'ICO': 'image/x-icon'}
+
+
 @router.post("/admin/settings/upload-logo")
 async def upload_logo(file: UploadFile = File(...), kind: str = Form('logo'),
                       request: Request = None, user: Dict = Depends(require_role('admin'))):
-    # DEBUG: Log the received kind parameter
-    print(f"[UPLOAD DEBUG] Received kind parameter: '{kind}'")
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File terlalu besar (max 5MB)")
-    mime = file.content_type or 'image/png'
+    # Tentukan jenis file dari isinya (bukan dari content_type kiriman browser yang bisa dipalsukan)
+    try:
+        with Image.open(io.BytesIO(contents)) as img:
+            img.verify()
+            fmt = (img.format or '').upper()
+    except Exception:
+        raise HTTPException(status_code=400, detail="File bukan gambar yang valid. Gunakan PNG, JPG, WEBP, GIF, atau ICO.")
+    mime = _IMAGE_MIME.get(fmt)
+    if not mime:
+        raise HTTPException(status_code=400, detail="Format gambar tidak didukung. Gunakan PNG, JPG, WEBP, GIF, atau ICO.")
     b64 = base64.b64encode(contents).decode('utf-8')
     data_url = f"data:{mime};base64,{b64}"
     field_map = {
@@ -57,12 +69,10 @@ async def upload_logo(file: UploadFile = File(...), kind: str = Form('logo'),
         'letterhead': 'letterhead_url'  # NEW: kop surat
     }
     field = field_map.get(kind, 'logo_url')
-    print(f"[UPLOAD DEBUG] Mapped to field: '{field}'")
     await db.settings.update_one({'id': 'global_config'},
                                  {'$set': {field: data_url, 'updated_at': datetime.utcnow().isoformat(),
                                            'updated_by': user['username']}}, upsert=True)
     await log_audit(user, 'upload', 'settings', field, request=request)
-    print(f"[UPLOAD DEBUG] Saved successfully to field: '{field}'")
     return {field: data_url}
 
 

@@ -147,7 +147,8 @@ BACKUP_COLLECTIONS = [
     'audit_logs', 'security_logs', 'piket_schedules', 'achievements',
     'extracurriculars', 'extra_members', 'extra_attendance', 'extra_grades',
     'student_grades', 'weekly_holidays', 'academic_holidays', 'teacher_tasks',
-    'password_reset_tokens',
+    # password_reset_tokens sengaja tidak dibackup: token sekali pakai & berumur
+    # 30 menit, tidak berguna saat restore dan hanya menambah data sensitif.
 ]
 
 
@@ -457,8 +458,8 @@ async def get_attendance_by_class(
         alpa = sum(1 for r in student_records if r.get('status') in ['alpa', 'alpha'])
 
         if len(student_records) > 0:
-            logger.info(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: total={total}, hadir={hadir}, sakit={sakit}, izin={izin}, alpa={alpa}")
-            logger.info(f"[ATTENDANCE-BY-CLASS] Sample statuses for {student['full_name']}: {[r.get('status') for r in student_records[:5]]}")
+            logger.debug(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: total={total}, hadir={hadir}, sakit={sakit}, izin={izin}, alpa={alpa}")
+            logger.debug(f"[ATTENDANCE-BY-CLASS] Sample statuses for {student['full_name']}: {[r.get('status') for r in student_records[:5]]}")
 
         percentage = (hadir / total * 100) if total > 0 else 0
 
@@ -488,8 +489,8 @@ async def get_attendance_by_class(
             serialized_records.append(serialized_record)
 
         if len(serialized_records) > 0:
-            logger.info(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: {len(serialized_records)} records prepared")
-            logger.info(f"[ATTENDANCE-BY-CLASS] Sample record: {serialized_records[0] if serialized_records else 'None'}")
+            logger.debug(f"[ATTENDANCE-BY-CLASS] Student {student['full_name']}: {len(serialized_records)} records prepared")
+            logger.debug(f"[ATTENDANCE-BY-CLASS] Sample record: {serialized_records[0] if serialized_records else 'None'}")
 
         student_summaries.append({
             'student_id': student_id,
@@ -639,7 +640,7 @@ async def get_attendance_by_grade(
             }
         }, {'_id': 0}).to_list(10000)
 
-        logger.info(f"[ATTENDANCE BY GRADE] Class {cls['name']}: {len(student_ids)} students, {len(attendance_records)} attendance records")
+        logger.debug(f"[ATTENDANCE BY GRADE] Class {cls['name']}: {len(student_ids)} students, {len(attendance_records)} attendance records")
 
         all_attendance_records.extend(attendance_records)
 
@@ -739,7 +740,7 @@ async def get_attendance_overall(
     ).to_list(5000)
     all_student_ids = [s['id'] for s in all_students]
 
-    logger.info(f"[ATTENDANCE] Active students: {len(all_student_ids)} students in active classes")
+    logger.debug(f"[ATTENDANCE] Active students: {len(all_student_ids)} students in active classes")
 
     # Get attendance records for active students in the month
     attendance_records = await db.attendances.find({
@@ -836,11 +837,11 @@ async def get_attendance_overall(
     # DEBUG: Log class data
     logger.info(f"[ATTENDANCE] Total classes found: {len(all_classes)}")
     if all_classes:
-        logger.info(f"[ATTENDANCE] Sample class data (full): {all_classes[0]}")
+        logger.debug(f"[ATTENDANCE] Sample class data (full): {all_classes[0]}")
         tingkat_sample = [cls.get('tingkat') for cls in all_classes[:5]]
         grade_level_sample = [cls.get('grade_level') for cls in all_classes[:5]]
-        logger.info(f"[ATTENDANCE] Sample tingkat values: {tingkat_sample}")
-        logger.info(f"[ATTENDANCE] Sample grade_level values: {grade_level_sample}")
+        logger.debug(f"[ATTENDANCE] Sample tingkat values: {tingkat_sample}")
+        logger.debug(f"[ATTENDANCE] Sample grade_level values: {grade_level_sample}")
 
     # Build breakdown by tingkat
     tingkat_levels = {}

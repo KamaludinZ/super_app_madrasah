@@ -341,9 +341,9 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
         last = group[-1]
 
         # DEBUG: Log group details
-        logger.info(f"[GROUP DEBUG] Processing group with {len(group)} schedule(s)")
+        logger.debug(f"[GROUP DEBUG] Processing group with {len(group)} schedule(s)")
         for idx, s in enumerate(group):
-            logger.info(f"[GROUP DEBUG]   Schedule {idx}: id={s.get('id')}, subject={s.get('subject_code')}, "
+            logger.debug(f"[GROUP DEBUG]   Schedule {idx}: id={s.get('id')}, subject={s.get('subject_code')}, "
                        f"slot_indexes={s.get('slot_indexes')}, slot_index={s.get('slot_index')}, "
                        f"start_time={s.get('start_time')}")
 
@@ -354,7 +354,7 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
 
         # Get teaching slots for this day from settings
         teaching_slots = get_teaching_slots_for_day(settings, day)
-        logger.info(f"[GROUP DEBUG] Day '{day}' has {len(teaching_slots)} teaching slots")
+        logger.debug(f"[GROUP DEBUG] Day '{day}' has {len(teaching_slots)} teaching slots")
 
         # Helper function to extract hour number from slot name
         def extract_hour_from_slot_name(slot_name: str) -> Optional[int]:
@@ -376,7 +376,7 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
         for s in group:
             if s.get('slot_indexes') and len(s.get('slot_indexes')) > 0:
                 # Multi-slot schedule: use slot_indexes to look up slot names
-                logger.info(f"[GROUP DEBUG] Schedule {s.get('id')} has slot_indexes: {s.get('slot_indexes')}")
+                logger.debug(f"[GROUP DEBUG] Schedule {s.get('id')} has slot_indexes: {s.get('slot_indexes')}")
                 for idx in s['slot_indexes']:
                     # Look up actual slot name from settings
                     if 0 <= idx < len(teaching_slots):
@@ -385,7 +385,7 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
                         hour_num = extract_hour_from_slot_name(slot_name)
 
                         if hour_num is not None:
-                            logger.info(f"[GROUP DEBUG]   Slot index {idx} -> name '{slot_name}' -> hour {hour_num}")
+                            logger.debug(f"[GROUP DEBUG]   Slot index {idx} -> name '{slot_name}' -> hour {hour_num}")
                             if hour_num not in hours:
                                 hours.append(hour_num)
                         else:
@@ -409,7 +409,7 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
                     hour_num = extract_hour_from_slot_name(slot_name)
 
                     if hour_num is not None:
-                        logger.info(f"[GROUP DEBUG] Legacy slot_index {idx} -> name '{slot_name}' -> hour {hour_num}")
+                        logger.debug(f"[GROUP DEBUG] Legacy slot_index {idx} -> name '{slot_name}' -> hour {hour_num}")
                         if hour_num not in hours:
                             hours.append(hour_num)
                     else:
@@ -437,7 +437,7 @@ async def _group_schedules_by_jtm(schedules: List[Dict], settings: Dict) -> List
         jtm_count = len(hours)
 
         # DEBUG: Log final result
-        logger.info(f"[GROUP DEBUG] Final result: hours={hours}, jtm_count={jtm_count}, hour_range={hour_range}")
+        logger.debug(f"[GROUP DEBUG] Final result: hours={hours}, jtm_count={jtm_count}, hour_range={hour_range}")
 
         grouped_entry = {
             **first,  # Use first schedule as base
@@ -510,7 +510,7 @@ async def create_schedule(payload: Dict, request: Request, user: Dict = Depends(
     sched = ScheduleModel(**payload)
     # v1.1.1 FIX: Include all fields (including None) to preserve slot_indexes
     doc = sched.model_dump(exclude_none=False)
-    logger.info(f"[SCHEDULE POST] payload slot_indexes: {payload.get('slot_indexes')}")
+    logger.debug(f"[SCHEDULE POST] payload slot_indexes: {payload.get('slot_indexes')}")
     logger.info(f"[SCHEDULE POST] model_dump slot_indexes: {doc.get('slot_indexes')}")
     doc['created_at'] = doc['created_at'].isoformat()
     if doc.get('submitted_at'):
@@ -611,7 +611,7 @@ async def schedules_grid(class_id: Optional[str] = None, teacher_id: Optional[st
             continue
 
         # DEBUG: Log all schedules slot_indexes field
-        logger.info(f"[GRID DEBUG] Schedule {s.get('id')[:8]}: slot_indexes={s.get('slot_indexes')}, start_time={s.get('start_time')}")
+        logger.debug(f"[GRID DEBUG] Schedule {s.get('id')[:8]}: slot_indexes={s.get('slot_indexes')}, start_time={s.get('start_time')}")
 
         # Check if this is a multi-slot schedule
         if 'slot_indexes' in s and s['slot_indexes'] and len(s['slot_indexes']) > 0:
@@ -824,15 +824,15 @@ async def unsubmit_schedule(sid: str, request: Request, user: Dict = Depends(get
 @router.put("/schedules/{sid}/approve")
 async def approve_schedule(sid: str, request: Request, user: Dict = Depends(require_role('admin'))):
     """Admin menyetujui jadwal yang sudah di-submit oleh guru."""
-    print(f"[APPROVE] Mencari jadwal dengan id: {sid}")
+    logger.debug(f"[APPROVE] Mencari jadwal dengan id: {sid}")
     existing = await db.schedules.find_one({'id': sid})
-    print(f"[APPROVE] Hasil pencarian: {existing is not None}")
+    logger.debug(f"[APPROVE] Hasil pencarian: {existing is not None}")
     if existing:
-        print(f"[APPROVE] Status jadwal: {existing.get('status')}")
+        logger.debug(f"[APPROVE] Status jadwal: {existing.get('status')}")
     if not existing:
         # Coba cari dengan _id juga untuk debugging
         by_object_id = await db.schedules.find_one({'_id': sid})
-        print(f"[APPROVE] Coba cari dengan _id: {by_object_id is not None}")
+        logger.debug(f"[APPROVE] Coba cari dengan _id: {by_object_id is not None}")
         raise HTTPException(404, "Tidak ditemukan")
     if existing.get('status') not in ['submitted', 'draft']:
         raise HTTPException(400, f"Jadwal dengan status '{existing.get('status')}' tidak bisa disetujui")

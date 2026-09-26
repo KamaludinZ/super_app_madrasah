@@ -10,7 +10,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from core import db, get_current_user, log_audit, serialize_doc, require_role
+from core import db, get_current_user, log_audit, logger, serialize_doc, require_role
 
 router = APIRouter()
 
@@ -181,7 +181,7 @@ async def delete_dokumen(
             os.remove(file_path)
         except Exception as e:
             # Log error but continue to update DB
-            print(f"Error deleting file {file_path}: {e}")
+            logger.warning(f"Gagal menghapus file {file_path}: {e}")
 
     # Remove URL from database
     await db.users.update_one(

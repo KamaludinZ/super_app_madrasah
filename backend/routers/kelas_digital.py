@@ -104,7 +104,7 @@ async def login_kelas(req: KelasLoginRequest, request: Request):
 
     # Create token for kelas
     wali_kelas_id_value = kelas.get('homeroom_teacher_id')
-    logger.info(f"[LOGIN] Creating JWT for kelas {kelas['name']}, homeroom_teacher_id from DB: {wali_kelas_id_value}")
+    logger.debug(f"[LOGIN] Creating JWT for kelas {kelas['name']}, homeroom_teacher_id from DB: {wali_kelas_id_value}")
 
     access_token = create_access_token({
         'sub': kelas['id'],
@@ -205,8 +205,8 @@ async def get_siswa_kelas(user: Dict = Depends(get_current_user)):
 async def get_wali_kelas_info(user: Dict = Depends(get_current_user)):
     """Get wali kelas information for the class (untuk role kelas)."""
 
-    logger.info(f"[WALI-KELAS] Endpoint hit! User: {user.get('id')}, Role: {user.get('active_role')}")
-    logger.info(f"[WALI-KELAS] wali_kelas_id: {user.get('wali_kelas_id')}")
+    logger.debug(f"[WALI-KELAS] Endpoint hit! User: {user.get('id')}, Role: {user.get('active_role')}")
+    logger.debug(f"[WALI-KELAS] wali_kelas_id: {user.get('wali_kelas_id')}")
 
     # Only kelas role can access
     if user.get('active_role') != 'kelas':
@@ -294,7 +294,7 @@ async def get_materi_list(
         student_class_id = user.get('student_class_id')
         student_id = user['id']
 
-        logger.info(f"[MATERI-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
+        logger.debug(f"[MATERI-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
 
         # Fetch materi for kelas OR siswa that includes this student
         materi_list_kelas = []
@@ -320,7 +320,7 @@ async def get_materi_list(
             'is_active': True,
             'target_role': 'siswa'
         })
-        logger.info(f"[MATERI-SISWA] DEBUG: Total materi with target_role='siswa': {total_siswa_materi}")
+        logger.debug(f"[MATERI-SISWA] DEBUG: Total materi with target_role='siswa': {total_siswa_materi}")
 
         # Debug: Check if student_id exists in any target_siswa array
         sample_materi = await db.materi_mapel.find_one({
@@ -328,8 +328,8 @@ async def get_materi_list(
             'target_role': 'siswa'
         })
         if sample_materi:
-            logger.info(f"[MATERI-SISWA] DEBUG: Sample materi target_siswa: {sample_materi.get('target_siswa')}")
-            logger.info(f"[MATERI-SISWA] DEBUG: Looking for student_id: {student_id}")
+            logger.debug(f"[MATERI-SISWA] DEBUG: Sample materi target_siswa: {sample_materi.get('target_siswa')}")
+            logger.debug(f"[MATERI-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
         materi_list = materi_list_kelas + materi_list_siswa
@@ -534,7 +534,7 @@ async def get_tugas_list(
         student_class_id = user.get('student_class_id')
         student_id = user['id']
 
-        logger.info(f"[TUGAS-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
+        logger.debug(f"[TUGAS-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
 
         # Fetch tugas for kelas OR siswa that includes this student
         tugas_list_kelas = []
@@ -560,7 +560,7 @@ async def get_tugas_list(
             'is_active': True,
             'target_role': 'siswa'
         })
-        logger.info(f"[TUGAS-SISWA] DEBUG: Total tugas with target_role='siswa': {total_siswa_tugas}")
+        logger.debug(f"[TUGAS-SISWA] DEBUG: Total tugas with target_role='siswa': {total_siswa_tugas}")
 
         # Debug: Check if student_id exists in any target_siswa array
         sample_tugas = await db.tugas.find_one({
@@ -568,8 +568,8 @@ async def get_tugas_list(
             'target_role': 'siswa'
         })
         if sample_tugas:
-            logger.info(f"[TUGAS-SISWA] DEBUG: Sample tugas target_siswa: {sample_tugas.get('target_siswa')}")
-            logger.info(f"[TUGAS-SISWA] DEBUG: Looking for student_id: {student_id}")
+            logger.debug(f"[TUGAS-SISWA] DEBUG: Sample tugas target_siswa: {sample_tugas.get('target_siswa')}")
+            logger.debug(f"[TUGAS-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
         tugas_list = tugas_list_kelas + tugas_list_siswa
@@ -840,7 +840,7 @@ async def submit_tugas(
 @router.get("/jadwal")
 async def get_jadwal_kelas(user: Dict = Depends(get_current_user)):
     """Get jadwal mengajar untuk kelas dengan format grouped (seperti di walikelas)."""
-    logger.info(f"[JADWAL] NEW VERSION - Endpoint hit for class_id: {user.get('class_id')}")
+    logger.debug(f"[JADWAL] NEW VERSION - Endpoint hit for class_id: {user.get('class_id')}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -989,7 +989,7 @@ def _time_diff_minutes(start: str, end: str) -> int:
 @router.get("/jurnal")
 async def get_jurnal_kelas(user: Dict = Depends(get_current_user)):
     """Get jurnal mengajar untuk kelas ini."""
-    logger.info(f"[JURNAL] Endpoint hit for class_id: {user.get('class_id')}")
+    logger.debug(f"[JURNAL] Endpoint hit for class_id: {user.get('class_id')}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -1049,7 +1049,7 @@ async def get_kehadiran_kelas(
 ):
     """Get kehadiran siswa untuk kelas ini berdasarkan bulan dan tahun."""
 
-    logger.info(f"[KELAS-KEHADIRAN] Endpoint hit for class_id: {user.get('class_id')}, month: {month}, year: {year}")
+    logger.debug(f"[KELAS-KEHADIRAN] Endpoint hit for class_id: {user.get('class_id')}, month: {month}, year: {year}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -1093,7 +1093,7 @@ async def get_kehadiran_kelas(
 
     logger.info(f"[KELAS-KEHADIRAN] Found {len(attendance_records)} attendance records")
     if attendance_records:
-        logger.info(f"[KELAS-KEHADIRAN] Sample record: {attendance_records[0]}")
+        logger.debug(f"[KELAS-KEHADIRAN] Sample record: {attendance_records[0]}")
 
     # Calculate total unique days (from created_at dates)
     unique_days = set()

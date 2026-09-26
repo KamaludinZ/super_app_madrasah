@@ -816,7 +816,7 @@ async def admin_jurnal_stats_teacher(
     logger.info(f"[STATS-BY-TEACHER] Pipeline: {pipeline}")
     logger.info(f"[STATS-BY-TEACHER] Aggregation results count: {len(results)}")
     if results:
-        logger.info(f"[STATS-BY-TEACHER] Sample result: {results[0]}")
+        logger.debug(f"[STATS-BY-TEACHER] Sample result: {results[0]}")
 
     # Weekly scheduled slots per teacher (active semester), used as a rough
     # denominator for a fill-rate ratio — NOT a precise expected-vs-actual
@@ -854,7 +854,7 @@ async def admin_jurnal_stats_teacher(
 
     logger.info(f"[STATS-BY-TEACHER] Enriched results count: {len(enriched)}")
     if enriched:
-        logger.info(f"[STATS-BY-TEACHER] Sample enriched: {enriched[0]}")
+        logger.debug(f"[STATS-BY-TEACHER] Sample enriched: {enriched[0]}")
     return enriched
 
 

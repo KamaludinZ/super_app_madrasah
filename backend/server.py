@@ -115,46 +115,9 @@ api_router.include_router(uks.router)
 api_router.include_router(sarpras.router)
 api_router.include_router(lab.router)
 
-# Debug kelas_digital router
-logger.info(f"[DEBUG] About to include kelas_digital router")
-logger.info(f"[DEBUG] kelas_digital.router has {len(kelas_digital.router.routes)} routes")
-logger.info(f"[DEBUG] api_router has {len(api_router.routes)} routes before include")
-try:
-    api_router.include_router(kelas_digital.router)
-    logger.info(f"[DEBUG] Successfully included kelas_digital router")
-    logger.info(f"[DEBUG] api_router has {len(api_router.routes)} routes AFTER include")
-
-    # Check what routes are in api_router
-    kelas_in_api = [r.path for r in api_router.routes if hasattr(r, 'path') and '/kelas' in r.path]
-    logger.info(f"[DEBUG] Kelas routes in api_router: {len(kelas_in_api)}")
-    for kr in kelas_in_api[:5]:  # Show first 5
-        logger.info(f"[DEBUG]   - {kr}")
-
-    # Show the last added route
-    last_route = api_router.routes[-1]
-    logger.info(f"[DEBUG] Last added route type: {type(last_route)}")
-    logger.info(f"[DEBUG] Last added route: {last_route}")
-    if hasattr(last_route, 'path'):
-        logger.info(f"[DEBUG] Last route path: {last_route.path}")
-    if hasattr(last_route, 'prefix'):
-        logger.info(f"[DEBUG] Last route prefix: {last_route.prefix}")
-except Exception as e:
-    logger.error(f"[DEBUG] Failed to include kelas_digital router: {e}", exc_info=True)
+api_router.include_router(kelas_digital.router)
 
 app.include_router(api_router)
-
-# Debug: Check routes immediately after including api_router
-logger.info("=" * 60)
-logger.info("IMMEDIATE ROUTE CHECK (after app.include_router):")
-kelas_check = []
-for route in app.routes:
-    if hasattr(route, 'path'):
-        if '/kelas' in route.path:
-            kelas_check.append(route.path)
-            logger.info(f"  [KELAS] {route.path}")
-logger.info(f"Kelas routes found: {len(kelas_check)}")
-logger.info(f"Total app routes: {len(app.routes)}")
-logger.info("=" * 60)
 
 # ============================================================
 # MIDDLEWARE
@@ -164,37 +127,46 @@ logger.info("=" * 60)
 # EXCEPTION HANDLERS - Must be defined before middleware
 # ============================================================
 
+# Login memakai header Authorization (bukan cookie), jadi kredensial CORS tidak
+# diperlukan. Wildcard "*" + allow_credentials=True membuat Starlette memantulkan
+# Origin apa pun, sehingga kombinasi itu dihindari.
+CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()] or ['*']
+CORS_ALLOW_CREDENTIALS = '*' not in CORS_ORIGINS
+if not CORS_ALLOW_CREDENTIALS and os.environ.get('ENVIRONMENT', '').strip().lower() == 'production':
+    logger.warning("CORS_ORIGINS belum diisi (memakai '*'). Isi dengan domain resmi aplikasi, "
+                   "contoh: CORS_ORIGINS=https://super.mtsn2kotamalang.sch.id")
+
+
+def _add_cors_headers(response, origin: str):
+    """Header CORS manual untuk respons error 500 (dibuat di luar CORSMiddleware)."""
+    if not origin:
+        return
+    if '*' in CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    elif origin in CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler that ensures CORS headers are always present"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
-    # Get CORS origins from environment
-    origin = request.headers.get("origin", "")
-    allowed_origins = os.environ.get('CORS_ORIGINS', '*').split(',')
-
-    # Create error response
     response = JSONResponse(
         status_code=500,
         content={"detail": "Internal Server Error"}
     )
-
-    # Add CORS headers manually
-    if origin in allowed_origins or '*' in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin or allowed_origins[0]
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Vary"] = "Origin"
-
+    _add_cors_headers(response, request.headers.get("origin", ""))
     return response
 
 # CORS Middleware - MUST be added FIRST before other middleware
 # This ensures CORS headers are added before security headers
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -209,24 +181,11 @@ async def add_security_headers(request, call_next):
         # If an error occurs, create error response with CORS headers
         logger.error(f"Request failed: {exc}", exc_info=True)
 
-        # Get CORS origins from environment
-        origin = request.headers.get("origin", "")
-        allowed_origins = os.environ.get('CORS_ORIGINS', '*').split(',')
-
-        # Create error response
         response = JSONResponse(
             status_code=500,
             content={"detail": "Internal Server Error"}
         )
-
-        # Add CORS headers manually
-        if origin and (origin in allowed_origins or '*' in allowed_origins):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            response.headers["Vary"] = "Origin"
-
+        _add_cors_headers(response, request.headers.get("origin", ""))
         return response
 
     # Prevent clickjacking attacks
