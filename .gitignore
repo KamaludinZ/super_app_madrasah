@@ -133,3 +133,7 @@ testsprite_tests\tmp\config.json
 # Windows system files
 nul
 backend/nul
+
+# Log & file sementara
+*.log
+.blackbox/

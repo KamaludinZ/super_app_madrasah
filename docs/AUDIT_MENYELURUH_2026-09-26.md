@@ -2,7 +2,7 @@
 
 Audit ini membaca kode backend (FastAPI + MongoDB) dan frontend (React). Isinya
 dibagi menjadi tiga bagian: apa yang harus **Anda lakukan sendiri**, apa yang
-**sudah diperbaiki** di cabang ini, dan apa yang **disarankan untuk tahap berikutnya**.
+**sudah diperbaiki** di cabang ini, dan **tindak lanjut saran** yang juga sudah dikerjakan.
 
 Tingkat risiko: 🔴 Kritis · 🟠 Tinggi · 🟡 Sedang · ⚪ Rendah
 
@@ -12,7 +12,7 @@ Tingkat risiko: 🔴 Kritis · 🟠 Tinggi · 🟡 Sedang · ⚪ Rendah
 
 | # | Risiko | Temuan | Yang harus dilakukan |
 |---|---|---|---|
-| A1 | 🔴 | **Password MongoDB Atlas** (`kamaludinzuhri_db_user`) tertulis di repo: `AUDIT_REPORT.md`, `SECURITY_AUDIT_REPORT.md`, `MIGRASI_KE_MONGODB_LOKAL.md`, `backend/seed_atlas.py`, `backend/seed_all_data.py`. Sudah dihapus dari file, tetapi **masih tersimpan di riwayat git**. | Ganti password user database di MongoDB Atlas sekarang juga, lalu perbarui `MONGO_URL` di server. |
+| A1 | 🔴 | **Password MongoDB Atlas** (`kamaludinzuhri_db_user`) tertulis di repo: `AUDIT_REPORT.md`, `SECURITY_AUDIT_REPORT.md`, `MIGRASI_KE_MONGODB_LOKAL.md` (kini di `docs/`), `backend/seed_atlas.py`, `backend/seed_all_data.py`. Sudah dihapus dari file, tetapi **masih tersimpan di riwayat git**. | Ganti password user database di MongoDB Atlas sekarang juga, lalu perbarui `MONGO_URL` di server. |
 | A2 | 🔴 | Potongan **JWT_SECRET** lama ada di `SECURITY_AUDIT_REPORT.md`, dan `backend/run_local.bat` memuat JWT_SECRET lengkap. | Buat JWT_SECRET baru untuk server produksi: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Setelah diganti, semua pengguna perlu login ulang. |
 | A3 | 🟠 | **Private key VAPID** (notifikasi push) ada di `DEPLOYMENT_PUSH_NOTIFICATION.md`. Sudah dihapus dari file. | Buat kunci baru dengan `backend/scripts/generate_vapid_keys.py`. Pelanggan notifikasi perlu mendaftar ulang. |
 | A4 | 🟡 | Password MongoDB lokal `SuperStrongPassword2024!SecureMongo` muncul di banyak dokumen. | Jika password yang sama dipakai di server produksi, ganti. |
@@ -98,43 +98,41 @@ password dicek lebih dulu.
 
 ---
 
-## C. Disarankan untuk tahap berikutnya (belum diubah)
+## C. Tindak lanjut saran (sudah dikerjakan)
+
+Semua saran di bagian ini dikerjakan berurutan, masing-masing dalam commit terpisah.
 
 ### Keamanan
-| Risiko | Temuan | Saran |
+| Risiko | Temuan | Status |
 |---|---|---|
-| 🟠 | **Token reset password** disimpan di memori (`email_utils._reset_tokens`). Masalahnya sama seperti B2: link reset dari email sering "tidak valid" dengan 2 worker, dan hilang setiap server restart. | Pindahkan ke MongoDB dengan TTL, seperti captcha. |
-| 🟠 | `GET /users` mengembalikan **seluruh data pribadi** (NIK, No. KK, alamat, data orang tua) ke banyak peran (wali kelas, unit pelayanan, dsb.). | Kirim hanya field yang dibutuhkan halaman (projection), sesuai peran. |
-| 🟠 | Token login disimpan di `localStorage` dan tidak bisa dicabut. Logout, ganti password, dan reset password tidak mematikan token lama, padahal "Ingat saya" berlaku 30 hari. | Tambahkan `token_version` di data user, lalu naikkan nilainya saat logout/ganti password. |
-| 🟡 | Admin bisa *impersonate* admin lain (baris pencegahnya dikomentari di `auth.py`). | Aktifkan kembali larangan tersebut. |
-| 🟡 | Password minimal hanya 6 karakter. | Naikkan menjadi minimal 8 karakter dan tolak password umum (`123456`, `password`, dll.). |
-| 🟡 | Pencarian `$regex` memakai input mentah tanpa `re.escape` di `alumni`, `lab`, `perpus`, `sarpras`, `student_records`, dan `uks`. Input tertentu bisa membuat query sangat lambat (ReDoS). | Bungkus dengan `re.escape(search)`. |
-| 🟡 | Default `CORS_ORIGINS='*'` dipakai bersama `allow_credentials=True`, dan CSP masih mengizinkan `'unsafe-inline' 'unsafe-eval'`. | Isi `CORS_ORIGINS` dengan domain resmi. |
-| 🟡 | Paket `xlsx@0.18.5` (SheetJS) punya celah yang sudah diketahui (CVE-2023-30533, CVE-2024-22363). | Ganti ke build resmi SheetJS 0.20.x dari `cdn.sheetjs.com`. |
-| ⚪ | File backup JSON berisi `password_hash` dan `password_reset_tokens`. | Simpan file backup di tempat yang aman, atau keluarkan kedua field itu dari ekspor. |
-| ⚪ | Upload logo mempercayai `content_type` dari browser. | Validasi file dengan Pillow sebelum disimpan. |
-| ⚪ | Log produksi mencetak data siswa (`[DASHBOARD-STATS] Sample record`, debug rute di `server.py`, `print` di upload logo). | Turunkan ke `logger.debug` atau hapus. |
+| 🟠 | **Token reset password** disimpan di memori, sehingga link reset dari email sering "tidak valid" saat server berjalan dengan 2 worker dan hilang saat restart. | ✅ Dipindah ke MongoDB (hash SHA-256, TTL 30 menit, sekali pakai). Password baru divalidasi **sebelum** token dipakai. Cek SMTP dilakukan sebelum mencari user agar tidak membocorkan akun. Pengiriman email dijalankan di thread terpisah. |
+| 🟠 | `GET /users` mengirim NIK, No. KK, dan data lain ke banyak peran. | ✅ Selain admin, kepala madrasah, dan kepala TU, peran lain tidak lagi menerima NIK, No. KK, nomor KIP/PKH/KKS, NIK & penghasilan orang tua, tautan dokumen, dan rekam didik. |
+| 🟠 | Token tidak bisa dicabut. | ✅ Logout mencabut token di perangkat itu saja (koleksi `revoked_tokens`). Ganti password, reset via email, password diganti admin, atau akun dinonaktifkan mencabut **semua** sesi lama (`token_version`). Sesi yang sedang dipakai saat ganti password langsung mendapat token baru. Token lama yang sudah beredar tetap berlaku, jadi tidak ada logout massal saat update dipasang. |
+| 🟡 | Admin bisa *impersonate* admin lain. | ✅ Ditolak server, dan tombol "Login Sebagai" disembunyikan untuk akun admin. |
+| 🟡 | Password minimal 6 karakter. | ✅ Password pilihan pengguna minimal 8 karakter, bukan password umum/berulang, dan tidak sama dengan username. Password yang di-set admin atau hasil impor tidak diubah aturannya. |
+| 🟡 | `$regex` memakai input mentah. | ✅ Dibungkus `re.escape` di alumni, lab, perpus, sarpras, buku induk, dan UKS. Pencarian berisi `(` sebelumnya menyebabkan error 500. |
+| 🟡 | CORS `*` dipasangkan dengan `allow_credentials=True`. | ✅ Kredensial CORS hanya aktif bila domain diisi eksplisit (aplikasi memakai header `Authorization`, bukan cookie). Server memberi peringatan bila `CORS_ORIGINS` kosong di produksi. **Tetap isi `CORS_ORIGINS` dengan domain resmi.** |
+| ⚪ | Paket `xlsx@0.18.5` punya CVE-2023-30533 dan CVE-2024-22363. | ℹ️ **Tidak berlaku di aplikasi ini.** Kedua celah hanya terpicu saat *membaca* file Excel berbahaya, sedangkan frontend hanya *membuat* file (`json_to_sheet`, `writeFile`). Impor Excel diproses backend dengan openpyxl. Upgrade tetap disarankan bila kelak frontend perlu membaca file Excel. |
+| ⚪ | Backup berisi `password_reset_tokens`. | ✅ Koleksi itu dikeluarkan dari backup. `password_hash` tetap disertakan agar restore bisa berjalan, jadi **simpan file backup di tempat aman**. |
+| ⚪ | Upload logo mempercayai `content_type` dari browser. | ✅ Jenis file dibaca dari isi gambar dengan Pillow; SVG/HTML ditolak. |
+| ⚪ | Log produksi mencetak data siswa. | ✅ 44 log berisi data siswa/sampel record diturunkan ke level debug, `print()` diganti logger, dan blok log `[DEBUG]` di `server.py` dihapus. |
 
 ### Fungsi & kualitas kode
-- 106 `console.log` dan sekitar 107 `alert()`/`confirm()` bawaan browser di frontend.
-  Disarankan diganti dengan `toast` (sonner) dan `AlertDialog`, yang sudah tersedia di proyek.
-- Beberapa halaman sangat besar (`ProfilePageEMIS.js` 2.486 baris, `AdminEKinerjaPage.js`
-  1.523 baris), sehingga sulit dirawat. Pecah menjadi beberapa komponen.
-- Kebersihan repo: ada 56 file `.md` di root, file berawalan `C…super_app_madrasah…`
-  (hasil salah path dari Windows), `server_debug.log`, `server_output.log`,
-  `.blackbox/tmp/*.log`, `GuruMateriPage.js.old`, `test_*.html`, dan `bulk_template_test.xlsx`.
-  Pindahkan dokumen ke `docs/` dan hapus file sisa.
-- Nama variabel lingkungan tidak konsisten: `seed_data.py` membaca `ENV`, sedangkan
-  `server.py` membaca `ENVIRONMENT`.
-- `backend_test.py` masih menjawab captcha hitungan secara otomatis, sehingga perlu
-  disesuaikan karena captcha kini berupa gambar.
+| Temuan | Status |
+|---|---|
+| Workflow CI `webpack.yml` selalu gagal (menjalankan npm di root). | ✅ Kini build dijalankan di `frontend/` dengan `npm ci` + `craco build`. Node 18 (EOL) dihapus dari matrix. |
+| 106 `console.log`. | ✅ Build produksi membuang `console.log/info/debug` otomatis (Terser), sedangkan `console.warn/error` tetap. Skrip lama `security_audit_fix.py` yang mengedit kode sumber dihapus. |
+| `alert()`/`confirm()` bawaan browser. | ✅ Koreksi angka: ternyata hanya ada **1** `alert()` (diganti toast) dan **106** `confirm()`. Semua `confirm()` diganti `confirmDialog()`, dialog bergaya aplikasi dengan tombol merah untuk aksi hapus. |
+| Kebersihan repo. | ✅ 49 dokumen dipindah ke `docs/deployment/` dan `docs/arsip/`; di root tersisa README, CHANGELOG, TODO, serta file milik tool pengembang (`test_result.md`, `plan.md`, `design_guidelines.md`). File hasil salah path Windows, log server, `.blackbox/`, dan `.old` dihapus. File uji manual dipindah ke `tests/manual/`, dan `*.log` ditambahkan ke `.gitignore`. |
+| `ENV` vs `ENVIRONMENT`. | ✅ Seeder dan info aplikasi kini membaca `ENVIRONMENT` (dengan `ENV` sebagai cadangan). |
+| `backend_test.py` menjawab captcha hitungan otomatis. | ✅ Memakai `TEST_ACCESS_TOKEN`, atau meminta penguji mengetik captcha secara manual. |
+| Halaman sangat besar (`ProfilePageEMIS.js` 2.486 baris, dll.). | ⏸️ **Belum dipecah.** Memecah halaman sebesar ini tanpa tes otomatis berisiko merusak form EMIS. Sebaiknya dikerjakan terpisah bersama pembuatan tes. |
 
 ### Tampilan
-- Tampilan captcha baru mengikuti gaya kartu yang sudah ada (latar krem, aksen hijau
-  `#006837`). Di layar kecil, gambar dan kolom isian tersusun atas-bawah; di layar
-  lebar, keduanya sejajar.
-- Sebagian `<img>` belum memiliki `alt`, dan dialog `alert()` bawaan browser terasa
-  kurang rapi. Keduanya bisa dibenahi bertahap.
+- Captcha: tampilan diperiksa di layar desktop dan HP (390px). Kolom isian yang
+  sebelumnya tertekan di HP sudah diperbaiki.
+- Koreksi: semua `<img>` ternyata sudah punya `alt`. Hitungan sebelumnya keliru
+  karena atribut `alt` ditulis di baris berikutnya dari tag.
 
 ---
 
@@ -148,3 +146,9 @@ password dicek lebih dulu.
 4. Ulangi pengujian di halaman **Login Kelas**.
 5. Di **Profil EMIS** siswa, upload lalu hapus dokumen. Keduanya tidak boleh error lagi.
 6. Di **Naik Kelas**, pilih kelas asal. Daftar siswa harus muncul.
+7. Login di dua perangkat, lalu ganti password di perangkat pertama. Perangkat
+   kedua harus diminta login ulang, sedangkan perangkat pertama tetap masuk.
+8. Hapus data apa saja (misalnya Mata Pelajaran). Dialog konfirmasi bergaya
+   aplikasi harus muncul, bukan dialog bawaan browser.
+9. Uji **Lupa Password** lewat email. Link reset harus tetap valid walau server
+   di-restart (berlaku 30 menit).
