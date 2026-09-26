@@ -32,6 +32,7 @@ import {
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import { toast } from 'sonner';
 
 const AdminMateriPage = () => {
@@ -246,7 +247,7 @@ const AdminMateriPage = () => {
                               )}
                               <div
                                 className="prose prose-sm max-w-none p-4 bg-muted/30 rounded-lg border"
-                                dangerouslySetInnerHTML={{ __html: materi.konten || 'Tidak ada konten' }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(materi.konten) || 'Tidak ada konten' }}
                               />
                               <div className="flex gap-2">
                                 <Button
@@ -334,7 +335,7 @@ const AdminMateriPage = () => {
                 <h3 className="text-sm font-semibold mb-2">Konten Materi</h3>
                 <div
                   className="prose prose-sm max-w-none p-4 bg-white border rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: selectedMateri.konten || 'Tidak ada konten' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedMateri.konten) || 'Tidak ada konten' }}
                 />
               </div>
 

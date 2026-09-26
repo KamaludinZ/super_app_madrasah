@@ -1,13 +1,15 @@
 """
 Kelas Digital Router - Authentication, Materi Mapel, dan Tugas untuk Role Kelas, Siswa, Guru, dan Admin.
 """
+import hmac
 from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from auth_utils import create_access_token, verify_captcha, verify_password
+from auth_utils import create_access_token, verify_password
+from captcha_utils import is_locked, record_login_failure, reset_login_attempts, verify_captcha
 from core import (
     db,
     get_current_user,
@@ -62,10 +64,15 @@ async def get_public_classes():
 async def login_kelas(req: KelasLoginRequest, request: Request):
     """Login untuk akun kelas menggunakan tahun pelajaran, semester, nama kelas, dan token."""
 
+    lock_key = f"kelas:{req.academic_year_id}:{req.semester}:{req.class_name.strip().lower()}"
+    if await is_locked(lock_key):
+        await log_security('locked_attempt', f"kelas_{req.class_name}", request=request)
+        raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Login kelas ini terkunci 15 menit.")
+
     # Verify captcha
-    if not verify_captcha(req.captcha_id, req.captcha_answer):
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
         await log_security('captcha_failed', f"kelas_{req.class_name}", request=request)
-        raise HTTPException(status_code=400, detail="Captcha salah atau kedaluwarsa")
+        raise HTTPException(status_code=400, detail="Kode captcha salah atau kedaluwarsa")
 
     # Find semester
     semester = await db.semesters.find_one({
@@ -81,16 +88,19 @@ async def login_kelas(req: KelasLoginRequest, request: Request):
         'semester_id': semester['id']
     })
 
-    if not kelas:
+    # Verify token (perbandingan waktu-konstan agar token tidak bisa ditebak lewat selisih waktu)
+    token_ok = bool(kelas and kelas.get('token')) and hmac.compare_digest(
+        str(kelas['token']).encode('utf-8'), str(req.token).encode('utf-8'))
+    if not token_ok:
+        attempt_info = await record_login_failure(lock_key)
         await log_security('login_failed', f"kelas_{req.class_name}",
-                          {'reason': 'class_not_found'}, request)
+                          {'reason': 'class_not_found' if not kelas else 'wrong_token',
+                           'attempts': attempt_info.get('attempts', 0)}, request)
+        if attempt_info.get('locked'):
+            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Login kelas ini terkunci 15 menit.")
         raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
 
-    # Verify token
-    if not kelas.get('token') or kelas['token'] != req.token:
-        await log_security('login_failed', f"kelas_{req.class_name}",
-                          {'reason': 'wrong_token'}, request)
-        raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
+    await reset_login_attempts(lock_key)
 
     # Create token for kelas
     wali_kelas_id_value = kelas.get('homeroom_teacher_id')

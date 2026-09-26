@@ -2,6 +2,7 @@
 Comprehensive Data Seeder for MongoDB Atlas
 """
 import asyncio
+import os
 import sys
 sys.path.insert(0, '.')
 
@@ -10,7 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 async def main():
     # MongoDB Atlas connection string
-    MONGO_URL = "mongodb+srv://kamaludinzuhri_db_user:Mtsn2kotamalang*@cluster0.qougudd.mongodb.net/"
+    MONGO_URL = os.environ["MONGO_URL"]  # jangan tulis kredensial di kode
     DB_NAME = "super_app_madrasah"
 
     print(f"[SEED] Connecting to MongoDB Atlas...")

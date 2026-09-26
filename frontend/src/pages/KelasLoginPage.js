@@ -224,7 +224,7 @@ const KelasLoginPage = () => {
         class_name: formData.class_name,
         token: formData.token,
         captcha_id: formData.captcha_id,
-        captcha_answer: parseInt(formData.captcha_answer),
+        captcha_answer: formData.captcha_answer,
       });
 
       // Use AuthContext login function to update both localStorage AND React state
@@ -400,36 +400,44 @@ const KelasLoginPage = () => {
                 </p>
               </div>
 
-              {/* Captcha */}
-              {captcha && (
-                <div className="bg-[#FBF7EE] rounded-xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                      Verifikasi Keamanan
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={loadCaptcha}
-                      className="text-[#006837] hover:text-[#0B7A3B]"
-                      aria-label="Muat ulang captcha"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 font-mono text-lg font-semibold text-slate-900 bg-white px-3 py-2 rounded-lg border border-slate-200 select-none">
-                      {captcha.question}
-                    </div>
-                    <Input
-                      type="number"
-                      value={formData.captcha_answer}
-                      onChange={(e) => handleChange('captcha_answer', e.target.value)}
-                      placeholder="Jawaban"
-                      className="h-11 w-24"
-                    />
-                  </div>
+              {/* Captcha gambar angka */}
+              <div className="bg-[#FBF7EE] rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="kelas-captcha" className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    Verifikasi Keamanan
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={loadCaptcha}
+                    className="flex items-center gap-1 text-xs text-[#006837] hover:text-[#0B7A3B]"
+                    aria-label="Ganti gambar captcha"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Ganti gambar
+                  </button>
                 </div>
-              )}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="h-[60px] w-full sm:w-[172px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white flex items-center justify-center">
+                    {captcha?.image ? (
+                      <img src={captcha.image} alt="Kode captcha berupa angka" width={172} height={60}
+                        className="h-full w-full object-contain select-none pointer-events-none" draggable={false} />
+                    ) : (
+                      <span className="text-sm text-slate-400">Memuat...</span>
+                    )}
+                  </div>
+                  <Input
+                    id="kelas-captcha"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={captcha?.length || 5}
+                    value={formData.captcha_answer}
+                    onChange={(e) => handleChange('captcha_answer', e.target.value.replace(/\D/g, ''))}
+                    placeholder="Ketik angka"
+                    className="h-11 flex-1 font-mono tracking-[0.3em] text-center"
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">Ketik angka yang terlihat pada gambar.</p>
+              </div>
 
               <Button
                 type="submit"

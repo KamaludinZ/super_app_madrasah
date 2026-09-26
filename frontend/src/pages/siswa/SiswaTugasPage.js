@@ -24,6 +24,7 @@ import { Loader2, BookOpen, User, Calendar, Search, Eye, Send, CheckCircle, Cloc
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 const SiswaTugasPage = () => {
   const [loading, setLoading] = useState(true);
@@ -301,7 +302,7 @@ const SiswaTugasPage = () => {
                         )}
                         <div
                           className="prose prose-sm max-w-none p-4 bg-muted/30 rounded-lg border"
-                          dangerouslySetInnerHTML={{ __html: tugas.konten || 'Tidak ada instruksi' }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeHtml(tugas.konten) || 'Tidak ada instruksi' }}
                         />
                         <div className="flex gap-2">
                           <Button
@@ -459,7 +460,7 @@ const SiswaTugasPage = () => {
                 <p className="text-sm font-medium mb-2">Instruksi Tugas</p>
                 <div
                   className="border rounded-lg p-4 bg-muted/50"
-                  dangerouslySetInnerHTML={{ __html: selectedTugas.konten || 'Tidak ada instruksi' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedTugas.konten) || 'Tidak ada instruksi' }}
                 />
               </div>
 

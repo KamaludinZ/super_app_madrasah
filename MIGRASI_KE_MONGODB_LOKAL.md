@@ -195,7 +195,7 @@ Jika suatu saat perlu kembali ke Atlas atau deploy production:
 
 ```env
 # Production (MongoDB Atlas)
-MONGO_URL=mongodb+srv://kamaludinzuhri_db_user:Mtsn2kotamalang*@cluster0.qougudd.mongodb.net/?retryWrites=true&w=majority
+MONGO_URL=mongodb+srv://<USER>:<PASSWORD-DISENSOR>@<CLUSTER>.mongodb.net/?retryWrites=true&w=majority
 
 # Development (MongoDB Local)
 # MONGO_URL=mongodb://admin:SuperStrongPassword2024!SecureMongo@localhost:27017/super_app_madrasah?authSource=admin

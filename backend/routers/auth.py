@@ -5,14 +5,13 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from auth_utils import (
-    create_access_token,
-    generate_math_captcha,
-    hash_password,
+from auth_utils import create_access_token, hash_password, verify_password
+from captcha_utils import (
+    create_captcha,
     is_locked,
-    record_login_attempt,
+    record_login_failure,
+    reset_login_attempts,
     verify_captcha,
-    verify_password,
 )
 from core import (
     db,
@@ -236,39 +235,39 @@ def _password_change_status(user: Dict) -> Dict:
 
 @router.get("/auth/captcha", response_model=CaptchaResponse)
 async def get_captcha():
-    return generate_math_captcha()
+    """Captcha gambar berisi 5 angka acak (berlaku 5 menit, sekali pakai)."""
+    return await create_captcha()
 
 
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(req: LoginRequest, request: Request):
-    if is_locked(req.username):
+    lock_key = f"user:{req.username.strip().lower()}"
+    if await is_locked(lock_key):
         await log_security('locked_attempt', req.username, request=request)
         raise HTTPException(status_code=423, detail="Akun terkunci sementara. Coba lagi nanti.")
 
-    if not verify_captcha(req.captcha_id, req.captcha_answer):
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
         await log_security('captcha_failed', req.username, request=request)
-        raise HTTPException(status_code=400, detail="Captcha salah atau kedaluwarsa")
+        raise HTTPException(status_code=400, detail="Kode captcha salah atau kedaluwarsa")
 
-    user = await db.users.find_one({'username': req.username})
-    if not user:
-        record_login_attempt(req.username, success=False)
-        await log_security('login_failed', req.username, {'reason': 'user_not_found'}, request)
-        raise HTTPException(status_code=401, detail="Username atau password salah")
+    user = await db.users.find_one({'username': req.username}) if req.username else None
+    # Pesan & perlakuan disamakan untuk user tidak ada / nonaktif / password salah,
+    # supaya penyerang tidak bisa menebak username mana yang terdaftar.
+    if not user or not user.get('password_hash') or not verify_password(req.password, user['password_hash']):
+        attempt_info = await record_login_failure(lock_key)
+        await log_security('login_failed', req.username,
+                           {'reason': 'user_not_found' if not user else 'wrong_password',
+                            'attempts': attempt_info.get('attempts', 0)}, request)
+        if attempt_info.get('locked'):
+            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Akun terkunci 15 menit.")
+        raise HTTPException(status_code=401,
+                            detail=f"Username atau password salah. Sisa percobaan: {attempt_info.get('remaining', 0)}")
 
     if not user.get('is_active', True):
         await log_security('login_failed', req.username, {'reason': 'inactive'}, request)
         raise HTTPException(status_code=403, detail="Akun Anda dinonaktifkan")
 
-    if not verify_password(req.password, user['password_hash']):
-        attempt_info = record_login_attempt(req.username, success=False)
-        await log_security('login_failed', req.username,
-                           {'reason': 'wrong_password', 'attempts': attempt_info.get('attempts', 0)}, request)
-        if attempt_info.get('locked'):
-            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Akun terkunci 15 menit.")
-        raise HTTPException(status_code=401,
-                            detail=f"Username atau password salah. Sisa percobaan: {5 - attempt_info.get('attempts', 0)}")
-
-    record_login_attempt(req.username, success=True)
+    await reset_login_attempts(lock_key)
     active_role = user['roles'][0] if user.get('roles') else 'guru'
     # "Ingat saya": issue a long-lived token (30 days) so mobile/PWA users stay logged in.
     remember = getattr(req, 'remember', False)

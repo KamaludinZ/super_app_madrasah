@@ -15,6 +15,7 @@ import { Loader2, BookOpen, User, Calendar, Search, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 const SiswaMateriPage = () => {
   const [loading, setLoading] = useState(true);
@@ -215,7 +216,7 @@ const SiswaMateriPage = () => {
                 <p className="text-sm font-medium mb-2">Konten Materi</p>
                 <div
                   className="border rounded-lg p-4 bg-muted/50"
-                  dangerouslySetInnerHTML={{ __html: selectedMateri.konten || 'Tidak ada konten' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedMateri.konten) || 'Tidak ada konten' }}
                 />
               </div>
 

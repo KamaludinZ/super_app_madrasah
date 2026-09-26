@@ -152,7 +152,7 @@ export default function LoginPage() {
       const { data } = await api.post('/auth/login', {
         username, password,
         captcha_id: captcha.challenge_id,
-        captcha_answer: parseInt(captchaAnswer, 10),
+        captcha_answer: captchaAnswer,
         remember,
       });
       await login(data.access_token, data.user, data.active_role, {
@@ -293,31 +293,41 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Math Captcha */}
+                {/* Captcha gambar angka */}
                 <div className="bg-[#FBF7EE] rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    <Label htmlFor="login-captcha" className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                       Verifikasi Keamanan
                     </Label>
-                    <button type="button" onClick={loadCaptcha} className="text-[#006837] hover:text-[#0B7A3B]"
-                      data-testid="captcha-refresh" aria-label="Muat ulang captcha">
-                      <RefreshCw className="h-3.5 w-3.5" />
+                    <button type="button" onClick={loadCaptcha} className="flex items-center gap-1 text-xs text-[#006837] hover:text-[#0B7A3B]"
+                      data-testid="captcha-refresh" aria-label="Ganti gambar captcha">
+                      <RefreshCw className="h-3.5 w-3.5" /> Ganti gambar
                     </button>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 font-mono text-lg font-semibold text-slate-900 bg-white px-3 py-2 rounded-lg border border-slate-200 select-none"
-                      data-testid="captcha-question">
-                      {captcha?.question || 'Memuat...'}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="h-[60px] w-full sm:w-[172px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white flex items-center justify-center"
+                      data-testid="captcha-image">
+                      {captcha?.image ? (
+                        <img src={captcha.image} alt="Kode captcha berupa angka" width={172} height={60}
+                          className="h-full w-full object-contain select-none pointer-events-none" draggable={false} />
+                      ) : (
+                        <span className="text-sm text-slate-400">Memuat...</span>
+                      )}
                     </div>
                     <Input
-                      data-testid="login-math-captcha-input"
-                      type="number"
+                      id="login-captcha"
+                      data-testid="login-captcha-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={captcha?.length || 5}
                       value={captchaAnswer}
-                      onChange={(e) => setCaptchaAnswer(e.target.value)}
-                      placeholder="Jawaban"
-                      className="h-11 w-24"
+                      onChange={(e) => setCaptchaAnswer(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ketik angka"
+                      className="h-11 flex-1 font-mono tracking-[0.3em] text-center"
                     />
                   </div>
+                  <p className="mt-2 text-[11px] text-slate-500">Ketik angka yang terlihat pada gambar.</p>
                 </div>
 
                 <label className="flex items-center gap-2 cursor-pointer select-none" data-testid="login-remember">

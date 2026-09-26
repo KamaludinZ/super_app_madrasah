@@ -436,7 +436,10 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
     update = {}
 
     # Fields that users CANNOT change themselves (security/admin-only)
-    restricted_fields = {'roles', 'is_active', 'homeroom_class_id', 'student_class_id', 'parent_of', 'jabatan_ids'}
+    # new_password juga dilarang di sini: ganti password sendiri wajib lewat
+    # /auth/change-password yang memverifikasi password lama.
+    restricted_fields = {'roles', 'is_active', 'homeroom_class_id', 'student_class_id', 'parent_of', 'jabatan_ids',
+                         'new_password'}
 
     for k, v in raw_dump.items():
         # Skip restricted fields
@@ -484,15 +487,6 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
     return serialize_doc(doc)
 
 
-# GET /users/{uid} must be BEFORE GET /users to avoid path conflicts
-@router.get("/users/{uid}")
-async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
-    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
-    if not doc:
-        raise HTTPException(404, "User tidak ditemukan")
-    return serialize_doc(doc)
-
-
 @router.get("/users/teachers")
 async def list_teachers(user: Dict = Depends(get_current_user)):
     """Get list of all teachers (for dropdowns, accessible by all authenticated users).
@@ -510,6 +504,16 @@ async def list_teachers(user: Dict = Depends(get_current_user)):
         'roles': 1,
     }).to_list(2000)
     return [serialize_doc(i) for i in items]
+
+
+# GET /users/{uid} harus SETELAH rute statis /users/teachers, jika tidak
+# "teachers" akan tertangkap sebagai {uid}.
+@router.get("/users/{uid}")
+async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
+    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
+    if not doc:
+        raise HTTPException(404, "User tidak ditemukan")
+    return serialize_doc(doc)
 
 
 @router.get("/users")
