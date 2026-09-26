@@ -1,4 +1,5 @@
 """Authentication: captcha, login, role switch, me, logout, forgot/reset password."""
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
@@ -526,23 +527,26 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/auth/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest, request: Request):
     """Send password reset email. Always returns OK to prevent enumeration."""
+    settings = await get_settings()
+    # Cek SMTP lebih dulu: jika dicek setelah mencari user, pesan yang berbeda
+    # akan membocorkan apakah username/email tersebut terdaftar.
+    if not settings.get('smtp_host'):
+        return {'message': 'Fitur reset email belum tersedia. Hubungi admin.'}
     user = await db.users.find_one({'$or': [
         {'username': req.identifier},
         {'email': req.identifier},
     ]})
     if not user or not user.get('email') or not user.get('is_active', True):
         return {'message': 'Jika akun terdaftar dengan email, instruksi reset telah dikirim.'}
-    settings = await get_settings()
-    if not settings.get('smtp_host'):
-        return {'message': 'Fitur reset email belum tersedia. Hubungi admin.'}
-    token = create_reset_token(user['id'], user['email'])
+    token = await create_reset_token(user['id'], user['email'])
     base = settings.get('app_public_url') or str(request.base_url).rstrip('/')
     reset_link = f"{base}/reset-password?token={token}"
     body = build_reset_email(reset_link, user['username'],
                              settings.get('app_name', 'Super Apps MATSANDATAMA'),
                              settings.get('school_name', 'MTsN 2 Kota Malang'))
-    send_result = send_email(
-        settings, user['email'],
+    # SMTP bersifat blocking; jalankan di thread agar server tidak macet
+    send_result = await asyncio.to_thread(
+        send_email, settings, user['email'],
         subject=f"Reset Password - {settings.get('app_name', 'Super Apps MATSANDATAMA')}",
         body_text=body['text'], body_html=body['html'],
     )
@@ -555,7 +559,7 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 
 @router.get("/auth/reset-password/validate/{token}")
 async def reset_password_validate(token: str):
-    item = validate_reset_token(token)
+    item = await validate_reset_token(token)
     if not item:
         raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
     user = await db.users.find_one({'id': item['user_id']}, {'_id': 0, 'username': 1, 'email': 1})
@@ -564,11 +568,12 @@ async def reset_password_validate(token: str):
 
 @router.post("/auth/reset-password")
 async def reset_password(req: ResetPasswordRequest, request: Request):
-    item = consume_reset_token(req.token)
-    if not item:
-        raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
+    # Validasi password dulu agar token tidak hangus hanya karena password terlalu pendek
     if len(req.new_password) < 6:
         raise HTTPException(400, "Password minimal 6 karakter")
+    item = await consume_reset_token(req.token)
+    if not item:
+        raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
     user = await db.users.find_one({'id': item['user_id']})
     if not user:
         raise HTTPException(404, "User tidak ditemukan")

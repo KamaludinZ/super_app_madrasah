@@ -2,55 +2,74 @@
 Email utilities for SMTP password reset and notifications.
 Uses smtplib for sync (called from async via run_in_executor pattern if needed).
 """
-import os
+import hashlib
 import smtplib
 import ssl
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Dict, Any, Optional
 import secrets
-import time
 
-# In-memory token store: {token: {email, expires_at, used}}
-_reset_tokens: Dict[str, Dict[str, Any]] = {}
+from core import db, logger
+
+# Token reset disimpan di MongoDB (bukan dict di memori) agar tetap valid walau
+# server berjalan dengan beberapa worker atau di-restart. Yang disimpan hanya
+# hash SHA-256 token; token aslinya cuma ada di link email.
 RESET_TOKEN_TTL_SECONDS = 30 * 60  # 30 minutes
+_indexes_ready = False
 
 
-def _cleanup_tokens():
-    now = time.time()
-    expired = [k for k, v in _reset_tokens.items() if v.get('expires_at', 0) < now]
-    for k in expired:
-        _reset_tokens.pop(k, None)
+async def _ensure_indexes():
+    global _indexes_ready
+    if _indexes_ready:
+        return
+    try:
+        await db.password_reset_tokens.create_index('token_hash', unique=True)
+        await db.password_reset_tokens.create_index('expires_at', expireAfterSeconds=0)
+        _indexes_ready = True
+    except Exception as e:
+        logger.warning(f"[reset-token] Gagal membuat index: {e}")
 
 
-def create_reset_token(user_id: str, email: str) -> str:
-    _cleanup_tokens()
+def _hash_token(token: str) -> str:
+    return hashlib.sha256((token or '').encode('utf-8')).hexdigest()
+
+
+def _is_expired(item: Dict[str, Any]) -> bool:
+    expires_at = item.get('expires_at')
+    if not isinstance(expires_at, datetime):
+        return True
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < datetime.now(timezone.utc)
+
+
+async def create_reset_token(user_id: str, email: str) -> str:
+    await _ensure_indexes()
     token = secrets.token_urlsafe(32)
-    _reset_tokens[token] = {
+    # Satu user hanya punya satu link reset aktif
+    await db.password_reset_tokens.delete_many({'user_id': user_id})
+    await db.password_reset_tokens.insert_one({
+        'token_hash': _hash_token(token),
         'user_id': user_id,
         'email': email,
-        'expires_at': time.time() + RESET_TOKEN_TTL_SECONDS,
-        'used': False,
-    }
+        'expires_at': datetime.now(timezone.utc) + timedelta(seconds=RESET_TOKEN_TTL_SECONDS),
+    })
     return token
 
 
-def validate_reset_token(token: str) -> Optional[Dict[str, Any]]:
-    item = _reset_tokens.get(token)
-    if not item:
-        return None
-    if item.get('used'):
-        return None
-    if item.get('expires_at', 0) < time.time():
-        _reset_tokens.pop(token, None)
+async def validate_reset_token(token: str) -> Optional[Dict[str, Any]]:
+    item = await db.password_reset_tokens.find_one({'token_hash': _hash_token(token)}, {'_id': 0})
+    if not item or _is_expired(item):
         return None
     return item
 
 
-def consume_reset_token(token: str) -> Optional[Dict[str, Any]]:
-    item = validate_reset_token(token)
-    if not item:
+async def consume_reset_token(token: str) -> Optional[Dict[str, Any]]:
+    """Sekali pakai: dokumen langsung dihapus secara atomik."""
+    item = await db.password_reset_tokens.find_one_and_delete({'token_hash': _hash_token(token)})
+    if not item or _is_expired(item):
         return None
-    item['used'] = True
     return item
 
 
