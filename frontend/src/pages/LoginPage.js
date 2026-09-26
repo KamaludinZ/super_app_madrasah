@@ -324,7 +324,7 @@ export default function LoginPage() {
                       value={captchaAnswer}
                       onChange={(e) => setCaptchaAnswer(e.target.value.replace(/\D/g, ''))}
                       placeholder="Ketik angka"
-                      className="h-11 flex-1 font-mono tracking-[0.3em] text-center"
+                      className="h-11 w-full sm:flex-1 font-mono text-lg tracking-[0.3em] text-center placeholder:font-sans placeholder:text-sm placeholder:tracking-normal"
                     />
                   </div>
                   <p className="mt-2 text-[11px] text-slate-500">Ketik angka yang terlihat pada gambar.</p>
