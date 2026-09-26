@@ -516,6 +516,25 @@ async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
     return serialize_doc(doc)
 
 
+# Data identitas yang hanya boleh dilihat peran pengelola data (admin, kepala
+# madrasah, kepala TU). Peran lain memakai /users untuk dropdown & daftar nama,
+# jadi tidak perlu menerima NIK, No. KK, nomor bantuan sosial, penghasilan, dsb.
+FULL_IDENTITY_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha')
+SENSITIVE_IDENTITY_FIELDS = (
+    'nik', 'nomor_kk', 'nomor_kip', 'nomor_kks', 'nomor_pkh',
+    'ayah_nik', 'ibu_nik', 'wali_nik',
+    'nomor_izin_tinggal', 'ayah_nomor_izin_tinggal', 'ibu_nomor_izin_tinggal', 'wali_nomor_izin_tinggal',
+    'ayah_penghasilan', 'ibu_penghasilan', 'wali_penghasilan',
+    'dokumen_pas_foto', 'dokumen_akte_kelahiran', 'dokumen_ijazah_sd', 'dokumen_kartu_keluarga',
+    'dokumen_kip', 'dokumen_pkh', 'dokumen_kks', 'dokumen_ijazah_mts', 'rekam_didik',
+    'password_changed_at', 'password_change_dismissed_until',
+)
+
+
+def _can_view_full_identity(user: Dict) -> bool:
+    return 'admin' in user.get('roles', []) or user.get('active_role') in FULL_IDENTITY_ROLES
+
+
 @router.get("/users")
 async def list_users(
     role: Optional[str] = None,
@@ -532,7 +551,10 @@ async def list_users(
         # Exclude users with mutation_type 'keluar'
         q['mutation_type'] = {'$ne': 'keluar'}
 
-    items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).to_list(2000)
+    projection = {'_id': 0, 'password_hash': 0}
+    if not _can_view_full_identity(user):
+        projection.update({f: 0 for f in SENSITIVE_IDENTITY_FIELDS})
+    items = await db.users.find(q, projection).to_list(2000)
     return [serialize_doc(i) for i in items]
 
 
