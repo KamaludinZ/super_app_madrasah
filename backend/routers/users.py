@@ -9,6 +9,7 @@ import io
 
 from auth_utils import hash_password
 from core import (
+    bump_token_version,
     db,
     get_active_academic_year,
     get_current_user,
@@ -660,11 +661,15 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
             raise HTTPException(400, "Nomor KK harus 16 digit angka")
         update['nomor_kk'] = nomor_kk
 
-    if 'new_password' in update:
+    password_reset_by_admin = 'new_password' in update
+    if password_reset_by_admin:
         update['password_hash'] = hash_password(update.pop('new_password'))
     res = await db.users.update_one({'id': uid}, {'$set': update})
     if res.matched_count == 0:
         raise HTTPException(404, "User tidak ditemukan")
+    if password_reset_by_admin or update.get('is_active') is False:
+        # Password diganti admin / akun dinonaktifkan -> sesi lama user tidak berlaku
+        await bump_token_version(uid)
     await log_audit(user, 'update', 'user', uid, details={'keys': list(update.keys())}, request=request)
     doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
     return serialize_doc(doc)

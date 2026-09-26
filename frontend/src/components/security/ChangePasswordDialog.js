@@ -38,11 +38,13 @@ export function ChangePasswordDialog({ open, onOpenChange, reason, message, onSu
     }
     setLoading(true);
     try {
-      await api.post('/auth/change-password', {
+      const { data } = await api.post('/auth/change-password', {
         current_password: currentPw,
         new_password: newPw,
       });
-      toast.success('Password berhasil diubah. Gunakan password baru pada login berikutnya.');
+      // Server mencabut semua token lama; pakai token baru agar sesi ini tetap aktif
+      if (data?.access_token) localStorage.setItem('matsa_token', data.access_token);
+      toast.success('Password berhasil diubah. Sesi di perangkat lain telah dikeluarkan.');
       onSuccess?.();
       onOpenChange(false);
       setShowForm(false);

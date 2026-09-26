@@ -15,11 +15,13 @@ from captcha_utils import (
     verify_captcha,
 )
 from core import (
+    bump_token_version,
     db,
     get_current_user,
     get_settings,
     log_audit,
     log_security,
+    revoke_token,
     serialize_doc,
 )
 from email_utils import (
@@ -77,6 +79,7 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
         'sub': target_user['id'],
         'username': target_user['username'],
         'active_role': active_role,
+        'tv': target_user.get('token_version', 0),
         'impersonator_id': user['id'],  # Store admin's ID for reverting
         'impersonator_username': user['username'],
     })
@@ -171,6 +174,7 @@ async def stop_impersonating(request: Request, user: Dict = Depends(get_current_
         'sub': admin_user['id'],
         'username': admin_user['username'],
         'active_role': active_role,
+        'tv': admin_user.get('token_version', 0),
     })
 
     # Log stop impersonation
@@ -273,13 +277,12 @@ async def login(req: LoginRequest, request: Request):
     # "Ingat saya": issue a long-lived token (30 days) so mobile/PWA users stay logged in.
     remember = getattr(req, 'remember', False)
     token_minutes = (60 * 24 * 30) if remember else None
+    token_payload = {'sub': user['id'], 'username': user['username'], 'active_role': active_role,
+                     'tv': user.get('token_version', 0)}
     if token_minutes:
-        token = create_access_token(
-            {'sub': user['id'], 'username': user['username'], 'active_role': active_role},
-            expires_minutes=token_minutes,
-        )
+        token = create_access_token(token_payload, expires_minutes=token_minutes)
     else:
-        token = create_access_token({'sub': user['id'], 'username': user['username'], 'active_role': active_role})
+        token = create_access_token(token_payload)
     await db.users.update_one({'id': user['id']}, {'$set': {'last_login_at': datetime.utcnow().isoformat()}})
     await log_security('login_success', req.username, {'role': active_role, 'remember': remember}, request)
     user_clean = serialize_doc(user.copy())
@@ -302,7 +305,8 @@ async def switch_role(req: RoleSwitchRequest, request: Request, user: Dict = Dep
     token_payload = {
         'sub': user['id'],
         'username': user['username'],
-        'active_role': req.new_role
+        'active_role': req.new_role,
+        'tv': user.get('token_version', 0),
     }
 
     # If currently impersonating, preserve impersonator info in new token
@@ -326,6 +330,8 @@ async def me(user: Dict = Depends(get_current_user)):
 
 @router.post("/auth/logout")
 async def logout(request: Request, user: Dict = Depends(get_current_user)):
+    # Cabut token perangkat ini saja; sesi di perangkat lain tetap berjalan
+    await revoke_token(getattr(request.state, 'token_payload', None))
     await log_audit(user, 'logout', 'session', request=request)
     return {'message': 'Logged out'}
 
@@ -356,10 +362,20 @@ async def change_password(req: ChangePasswordRequest, request: Request,
         'password_changed_at': datetime.now(timezone.utc).isoformat(),
         'password_change_dismissed_until': None,
     }})
+    # Keluarkan semua sesi lain (mis. perangkat yang dicuri), lalu beri token baru
+    # untuk sesi ini agar pengguna tidak ikut ter-logout.
+    await bump_token_version(user['id'])
+    fresh = await db.users.find_one({'id': user['id']}, {'_id': 0, 'token_version': 1})
+    new_payload = {'sub': user['id'], 'username': user['username'],
+                   'active_role': user.get('active_role'), 'tv': (fresh or {}).get('token_version', 0)}
+    if user.get('is_impersonating'):
+        new_payload['impersonator_id'] = user.get('impersonator_id')
+        new_payload['impersonator_username'] = user.get('impersonator_username')
     await log_security('password_change_success', user.get('username'),
                        {'method': 'self_service'}, request)
     await log_audit(user, 'change_password', 'user', user['id'], request=request)
-    return {'message': 'Password berhasil diubah. Silakan gunakan password baru pada login berikutnya.'}
+    return {'message': 'Password berhasil diubah. Sesi di perangkat lain telah dikeluarkan.',
+            'access_token': create_access_token(new_payload)}
 
 
 @router.post("/auth/dismiss-password-reminder")
@@ -583,5 +599,6 @@ async def reset_password(req: ResetPasswordRequest, request: Request):
                                   'password_changed_at': datetime.now(timezone.utc).isoformat(),
                                   'password_change_dismissed_until': None,
                               }})
+    await bump_token_version(user['id'])
     await log_security('password_reset', user.get('username'), {'method': 'email_token'}, request)
     return {'message': 'Password berhasil direset. Silakan login.'}

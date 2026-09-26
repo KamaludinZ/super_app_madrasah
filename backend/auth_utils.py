@@ -4,6 +4,7 @@ Captcha gambar dan penguncian login ada di captcha_utils.py.
 """
 import logging
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -53,7 +54,8 @@ def verify_password(password: str, hashed: str) -> bool:
 def create_access_token(payload: Dict[str, Any], expires_minutes: int = JWT_EXPIRY_MINUTES) -> str:
     to_encode = payload.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode.update({'exp': expire})
+    # jti = ID unik token, dipakai untuk mencabut satu token saat logout
+    to_encode.update({'exp': expire, 'jti': secrets.token_urlsafe(16)})
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 

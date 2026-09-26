@@ -12,7 +12,7 @@ circular dependencies and keep server.py thin.
 """
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -158,6 +158,10 @@ async def get_current_user(
     if not payload:
         raise HTTPException(status_code=401, detail="Token tidak valid atau kedaluwarsa")
 
+    if payload.get('jti') and await db.revoked_tokens.find_one({'jti': payload['jti']}, {'_id': 1}):
+        raise HTTPException(status_code=401, detail="Sesi sudah berakhir. Silakan login kembali.")
+    request.state.token_payload = payload
+
     active_role = payload.get('active_role')
     user_id = payload.get('sub')
 
@@ -183,6 +187,10 @@ async def get_current_user(
     user = await db.users.find_one({'id': user_id})
     if not user or not user.get('is_active', True):
         raise HTTPException(status_code=401, detail="User tidak ditemukan atau dinonaktifkan")
+    # token_version naik setiap password diganti/direset -> semua token lama tidak berlaku.
+    # Token lama tanpa 'tv' dianggap versi 0 sehingga tidak ada logout massal saat update.
+    if payload.get('tv', 0) != user.get('token_version', 0):
+        raise HTTPException(status_code=401, detail="Sesi sudah berakhir karena password diubah. Silakan login kembali.")
     user['active_role'] = payload.get('active_role',
                                       user['roles'][0] if user.get('roles') else 'guru')
 
@@ -197,6 +205,33 @@ async def get_current_user(
         user['impersonator_username'] = impersonator_username
 
     return serialize_doc(user)
+
+
+_revoked_index_ready = False
+
+
+async def revoke_token(payload: Optional[Dict[str, Any]]):
+    """Cabut satu token (dipakai saat logout). Dihapus otomatis oleh MongoDB saat token kedaluwarsa."""
+    global _revoked_index_ready
+    if not payload or not payload.get('jti'):
+        return
+    if not _revoked_index_ready:
+        try:
+            await db.revoked_tokens.create_index('jti', unique=True)
+            await db.revoked_tokens.create_index('expires_at', expireAfterSeconds=0)
+            _revoked_index_ready = True
+        except Exception as e:
+            logger.warning(f"[revoke] Gagal membuat index: {e}")
+    exp = payload.get('exp')
+    expires_at = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else datetime.now(timezone.utc)
+    await db.revoked_tokens.update_one({'jti': payload['jti']},
+                                       {'$set': {'jti': payload['jti'], 'expires_at': expires_at}},
+                                       upsert=True)
+
+
+async def bump_token_version(user_id: str):
+    """Cabut SEMUA token milik user (dipakai saat password diganti/direset)."""
+    await db.users.update_one({'id': user_id}, {'$inc': {'token_version': 1}})
 
 
 # Helper constants for common role groups
