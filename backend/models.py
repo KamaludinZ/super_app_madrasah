@@ -2,7 +2,7 @@
 Pydantic models for Super Apps MATSANDATAMA.
 """
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Union
 import uuid
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -804,7 +804,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     captcha_id: str
-    captcha_answer: int
+    captcha_answer: Union[str, int]
     remember: bool = False
 
 
@@ -819,7 +819,8 @@ class LoginResponse(BaseModel):
 
 class CaptchaResponse(BaseModel):
     challenge_id: str
-    question: str
+    image: str  # data URL PNG berisi angka acak
+    length: int
     expires_in: int
 
 
@@ -1523,7 +1524,7 @@ class KelasLoginRequest(BaseModel):
     class_name: str  # Nama kelas (misal: 7A, 8B, 9C)
     token: str  # Token kelas (password)
     captcha_id: str
-    captcha_answer: int
+    captcha_answer: Union[str, int]
 
 
 class MateriTugasCreateRequest(BaseModel):

@@ -34,7 +34,7 @@ Perbaikan major untuk Web Push Notification yang sebelumnya tidak berfungsi kare
 ```bash
 # Backend .env (or production environment variables)
 VAPID_PUBLIC_KEY=BPA-D3RAAuzVbRyRPYjd6m3cyK0ZJX-qII7k4pHE2qvC3LfPc9coJLmKr5ptym_Yu9fS-ZxDtU3UmxIVIiStutw=
-VAPID_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgK173v1CQFa9uhWX+\noi61TDwikgLYq6pRACsafVIAOWehRANCAATwPg90QALs1W0ckT2I3ept3MitGSV/\nqiCO5OKRxNqrwty3z3PXKCS5iq+abcpv2LvX0vmcQ7VN1JsSFSIkrbrc\n-----END PRIVATE KEY-----\n
+VAPID_PRIVATE_KEY=<DISENSOR - generate ulang dengan backend/scripts/generate_vapid_keys.py>
 VAPID_SUBJECT=mailto:admyt.mtsn2kotamalang@gmail.com
 ```
 

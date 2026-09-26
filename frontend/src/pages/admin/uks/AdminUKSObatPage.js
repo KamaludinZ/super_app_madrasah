@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Pill, ArrowDownCircle, ArrowUpCircle, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyObatForm = { nama_obat: '', jenis: '', satuan: 'pcs', untuk_penanganan: '', dosis: '', stok_minimum: 0, keterangan: '' };
 const emptyMasukForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, tanggal_kadaluarsa: '', sumber: '', keterangan: '' };
@@ -94,7 +95,7 @@ export default function AdminUKSObatPage() {
   };
 
   const handleDeleteObat = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus obat ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus obat ini?'))) return;
     try {
       await api.delete(`/uks/obat/${id}`);
       toast.success('Data obat dihapus');
@@ -123,7 +124,7 @@ export default function AdminUKSObatPage() {
   };
 
   const handleDeleteMasuk = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data ini? Stok akan disesuaikan kembali.')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data ini? Stok akan disesuaikan kembali.'))) return;
     try {
       await api.delete(`/uks/obat-masuk/${id}`);
       toast.success('Data obat masuk dihapus');
@@ -152,7 +153,7 @@ export default function AdminUKSObatPage() {
   };
 
   const handleDeleteKeluar = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data ini? Stok akan disesuaikan kembali.')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data ini? Stok akan disesuaikan kembali.'))) return;
     try {
       await api.delete(`/uks/obat-keluar/${id}`);
       toast.success('Data obat keluar dihapus');

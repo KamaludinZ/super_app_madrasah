@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import StaffDetailDialog from '@/components/staff/StaffDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
 const TENDIK_ROLES = ['tenaga_kependidikan'];
@@ -90,7 +91,7 @@ export default function AdminGTKPage() {
   const tendikKepegawaian = kepegawaianStats(tendikUsers);
 
   const handleDelete = async (u) => {
-    if (!window.confirm(`Hapus data GTK ${u.full_name} (${u.username})?`)) return;
+    if (!(await confirmDialog(`Hapus data GTK ${u.full_name} (${u.username})?`))) return;
     try {
       await api.delete(`/users/${u.id}`);
       toast.success('Data GTK berhasil dihapus');

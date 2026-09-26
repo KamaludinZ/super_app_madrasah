@@ -1,25 +1,27 @@
 """Authentication: captcha, login, role switch, me, logout, forgot/reset password."""
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from auth_utils import (
-    create_access_token,
-    generate_math_captcha,
-    hash_password,
+from auth_utils import create_access_token, hash_password, password_policy_error, verify_password
+from captcha_utils import (
+    create_captcha,
     is_locked,
-    record_login_attempt,
+    record_login_failure,
+    reset_login_attempts,
     verify_captcha,
-    verify_password,
 )
 from core import (
+    bump_token_version,
     db,
     get_current_user,
     get_settings,
     log_audit,
     log_security,
+    revoke_token,
     serialize_doc,
 )
 from email_utils import (
@@ -67,9 +69,10 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
     if not target_user.get('is_active', True):
         raise HTTPException(status_code=403, detail="Akun target dinonaktifkan")
 
-    # SECURITY: Prevent impersonating another admin (optional, uncomment if needed)
-    # if 'admin' in target_user.get('roles', []):
-    #     raise HTTPException(status_code=403, detail="Tidak dapat impersonate admin lain")
+    # SECURITY: admin tidak boleh masuk sebagai admin lain (jejak audit jadi kabur
+    # dan bisa dipakai untuk menyamar sebagai admin lain)
+    if 'admin' in target_user.get('roles', []):
+        raise HTTPException(status_code=403, detail="Tidak dapat impersonate admin lain")
 
     # Create token with impersonation info
     active_role = target_user['roles'][0] if target_user.get('roles') else 'guru'
@@ -77,6 +80,7 @@ async def impersonate_user(req: ImpersonateRequest, request: Request, user: Dict
         'sub': target_user['id'],
         'username': target_user['username'],
         'active_role': active_role,
+        'tv': target_user.get('token_version', 0),
         'impersonator_id': user['id'],  # Store admin's ID for reverting
         'impersonator_username': user['username'],
     })
@@ -171,6 +175,7 @@ async def stop_impersonating(request: Request, user: Dict = Depends(get_current_
         'sub': admin_user['id'],
         'username': admin_user['username'],
         'active_role': active_role,
+        'tv': admin_user.get('token_version', 0),
     })
 
     # Log stop impersonation
@@ -236,50 +241,49 @@ def _password_change_status(user: Dict) -> Dict:
 
 @router.get("/auth/captcha", response_model=CaptchaResponse)
 async def get_captcha():
-    return generate_math_captcha()
+    """Captcha gambar berisi 5 angka acak (berlaku 5 menit, sekali pakai)."""
+    return await create_captcha()
 
 
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(req: LoginRequest, request: Request):
-    if is_locked(req.username):
+    lock_key = f"user:{req.username.strip().lower()}"
+    if await is_locked(lock_key):
         await log_security('locked_attempt', req.username, request=request)
         raise HTTPException(status_code=423, detail="Akun terkunci sementara. Coba lagi nanti.")
 
-    if not verify_captcha(req.captcha_id, req.captcha_answer):
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
         await log_security('captcha_failed', req.username, request=request)
-        raise HTTPException(status_code=400, detail="Captcha salah atau kedaluwarsa")
+        raise HTTPException(status_code=400, detail="Kode captcha salah atau kedaluwarsa")
 
-    user = await db.users.find_one({'username': req.username})
-    if not user:
-        record_login_attempt(req.username, success=False)
-        await log_security('login_failed', req.username, {'reason': 'user_not_found'}, request)
-        raise HTTPException(status_code=401, detail="Username atau password salah")
+    user = await db.users.find_one({'username': req.username}) if req.username else None
+    # Pesan & perlakuan disamakan untuk user tidak ada / nonaktif / password salah,
+    # supaya penyerang tidak bisa menebak username mana yang terdaftar.
+    if not user or not user.get('password_hash') or not verify_password(req.password, user['password_hash']):
+        attempt_info = await record_login_failure(lock_key)
+        await log_security('login_failed', req.username,
+                           {'reason': 'user_not_found' if not user else 'wrong_password',
+                            'attempts': attempt_info.get('attempts', 0)}, request)
+        if attempt_info.get('locked'):
+            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Akun terkunci 15 menit.")
+        raise HTTPException(status_code=401,
+                            detail=f"Username atau password salah. Sisa percobaan: {attempt_info.get('remaining', 0)}")
 
     if not user.get('is_active', True):
         await log_security('login_failed', req.username, {'reason': 'inactive'}, request)
         raise HTTPException(status_code=403, detail="Akun Anda dinonaktifkan")
 
-    if not verify_password(req.password, user['password_hash']):
-        attempt_info = record_login_attempt(req.username, success=False)
-        await log_security('login_failed', req.username,
-                           {'reason': 'wrong_password', 'attempts': attempt_info.get('attempts', 0)}, request)
-        if attempt_info.get('locked'):
-            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Akun terkunci 15 menit.")
-        raise HTTPException(status_code=401,
-                            detail=f"Username atau password salah. Sisa percobaan: {5 - attempt_info.get('attempts', 0)}")
-
-    record_login_attempt(req.username, success=True)
+    await reset_login_attempts(lock_key)
     active_role = user['roles'][0] if user.get('roles') else 'guru'
     # "Ingat saya": issue a long-lived token (30 days) so mobile/PWA users stay logged in.
     remember = getattr(req, 'remember', False)
     token_minutes = (60 * 24 * 30) if remember else None
+    token_payload = {'sub': user['id'], 'username': user['username'], 'active_role': active_role,
+                     'tv': user.get('token_version', 0)}
     if token_minutes:
-        token = create_access_token(
-            {'sub': user['id'], 'username': user['username'], 'active_role': active_role},
-            expires_minutes=token_minutes,
-        )
+        token = create_access_token(token_payload, expires_minutes=token_minutes)
     else:
-        token = create_access_token({'sub': user['id'], 'username': user['username'], 'active_role': active_role})
+        token = create_access_token(token_payload)
     await db.users.update_one({'id': user['id']}, {'$set': {'last_login_at': datetime.utcnow().isoformat()}})
     await log_security('login_success', req.username, {'role': active_role, 'remember': remember}, request)
     user_clean = serialize_doc(user.copy())
@@ -302,7 +306,8 @@ async def switch_role(req: RoleSwitchRequest, request: Request, user: Dict = Dep
     token_payload = {
         'sub': user['id'],
         'username': user['username'],
-        'active_role': req.new_role
+        'active_role': req.new_role,
+        'tv': user.get('token_version', 0),
     }
 
     # If currently impersonating, preserve impersonator info in new token
@@ -326,6 +331,8 @@ async def me(user: Dict = Depends(get_current_user)):
 
 @router.post("/auth/logout")
 async def logout(request: Request, user: Dict = Depends(get_current_user)):
+    # Cabut token perangkat ini saja; sesi di perangkat lain tetap berjalan
+    await revoke_token(getattr(request.state, 'token_payload', None))
     await log_audit(user, 'logout', 'session', request=request)
     return {'message': 'Logged out'}
 
@@ -342,8 +349,9 @@ class ChangePasswordRequest(BaseModel):
 async def change_password(req: ChangePasswordRequest, request: Request,
                           user: Dict = Depends(get_current_user)):
     """User mengubah password sendiri. Wajib verifikasi password lama dulu."""
-    if len(req.new_password) < 6:
-        raise HTTPException(400, "Password baru minimal 6 karakter")
+    policy_error = password_policy_error(req.new_password, user.get('username'))
+    if policy_error:
+        raise HTTPException(400, policy_error)
     if req.current_password == req.new_password:
         raise HTTPException(400, "Password baru tidak boleh sama dengan password lama")
     db_user = await db.users.find_one({'id': user['id']})
@@ -356,10 +364,20 @@ async def change_password(req: ChangePasswordRequest, request: Request,
         'password_changed_at': datetime.now(timezone.utc).isoformat(),
         'password_change_dismissed_until': None,
     }})
+    # Keluarkan semua sesi lain (mis. perangkat yang dicuri), lalu beri token baru
+    # untuk sesi ini agar pengguna tidak ikut ter-logout.
+    await bump_token_version(user['id'])
+    fresh = await db.users.find_one({'id': user['id']}, {'_id': 0, 'token_version': 1})
+    new_payload = {'sub': user['id'], 'username': user['username'],
+                   'active_role': user.get('active_role'), 'tv': (fresh or {}).get('token_version', 0)}
+    if user.get('is_impersonating'):
+        new_payload['impersonator_id'] = user.get('impersonator_id')
+        new_payload['impersonator_username'] = user.get('impersonator_username')
     await log_security('password_change_success', user.get('username'),
                        {'method': 'self_service'}, request)
     await log_audit(user, 'change_password', 'user', user['id'], request=request)
-    return {'message': 'Password berhasil diubah. Silakan gunakan password baru pada login berikutnya.'}
+    return {'message': 'Password berhasil diubah. Sesi di perangkat lain telah dikeluarkan.',
+            'access_token': create_access_token(new_payload)}
 
 
 @router.post("/auth/dismiss-password-reminder")
@@ -527,23 +545,26 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/auth/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest, request: Request):
     """Send password reset email. Always returns OK to prevent enumeration."""
+    settings = await get_settings()
+    # Cek SMTP lebih dulu: jika dicek setelah mencari user, pesan yang berbeda
+    # akan membocorkan apakah username/email tersebut terdaftar.
+    if not settings.get('smtp_host'):
+        return {'message': 'Fitur reset email belum tersedia. Hubungi admin.'}
     user = await db.users.find_one({'$or': [
         {'username': req.identifier},
         {'email': req.identifier},
     ]})
     if not user or not user.get('email') or not user.get('is_active', True):
         return {'message': 'Jika akun terdaftar dengan email, instruksi reset telah dikirim.'}
-    settings = await get_settings()
-    if not settings.get('smtp_host'):
-        return {'message': 'Fitur reset email belum tersedia. Hubungi admin.'}
-    token = create_reset_token(user['id'], user['email'])
+    token = await create_reset_token(user['id'], user['email'])
     base = settings.get('app_public_url') or str(request.base_url).rstrip('/')
     reset_link = f"{base}/reset-password?token={token}"
     body = build_reset_email(reset_link, user['username'],
                              settings.get('app_name', 'Super Apps MATSANDATAMA'),
                              settings.get('school_name', 'MTsN 2 Kota Malang'))
-    send_result = send_email(
-        settings, user['email'],
+    # SMTP bersifat blocking; jalankan di thread agar server tidak macet
+    send_result = await asyncio.to_thread(
+        send_email, settings, user['email'],
         subject=f"Reset Password - {settings.get('app_name', 'Super Apps MATSANDATAMA')}",
         body_text=body['text'], body_html=body['html'],
     )
@@ -556,7 +577,7 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 
 @router.get("/auth/reset-password/validate/{token}")
 async def reset_password_validate(token: str):
-    item = validate_reset_token(token)
+    item = await validate_reset_token(token)
     if not item:
         raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
     user = await db.users.find_one({'id': item['user_id']}, {'_id': 0, 'username': 1, 'email': 1})
@@ -565,11 +586,13 @@ async def reset_password_validate(token: str):
 
 @router.post("/auth/reset-password")
 async def reset_password(req: ResetPasswordRequest, request: Request):
-    item = consume_reset_token(req.token)
+    # Validasi password dulu agar token tidak hangus hanya karena password terlalu pendek
+    policy_error = password_policy_error(req.new_password)
+    if policy_error:
+        raise HTTPException(400, policy_error)
+    item = await consume_reset_token(req.token)
     if not item:
         raise HTTPException(400, "Token tidak valid atau kedaluwarsa")
-    if len(req.new_password) < 6:
-        raise HTTPException(400, "Password minimal 6 karakter")
     user = await db.users.find_one({'id': item['user_id']})
     if not user:
         raise HTTPException(404, "User tidak ditemukan")
@@ -579,5 +602,6 @@ async def reset_password(req: ResetPasswordRequest, request: Request):
                                   'password_changed_at': datetime.now(timezone.utc).isoformat(),
                                   'password_change_dismissed_until': None,
                               }})
+    await bump_token_version(user['id'])
     await log_security('password_reset', user.get('username'), {'method': 'email_token'}, request)
     return {'message': 'Password berhasil direset. Silakan login.'}

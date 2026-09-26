@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminSubjectsPage() {
   const [items, setItems] = useState([]);
@@ -28,7 +29,7 @@ export default function AdminSubjectsPage() {
       toast.success('Berhasil disimpan'); setOpen(false); refresh();
     } catch (e) { toast.error('Gagal'); }
   };
-  const handleDelete = async (s) => { if (!window.confirm(`Hapus ${s.name}?`)) return; await api.delete(`/subjects/${s.id}`); toast.success('Dihapus'); refresh(); };
+  const handleDelete = async (s) => { if (!(await confirmDialog(`Hapus ${s.name}?`))) return; await api.delete(`/subjects/${s.id}`); toast.success('Dihapus'); refresh(); };
 
   return (
     <div className="space-y-6">

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Handshake, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang/Rusak'];
 const STATUS_BADGE = {
@@ -101,7 +102,7 @@ export default function AdminSarprasPeminjamanBarangPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data ini?'))) return;
     try {
       await api.delete(`/sarpras/peminjaman-barang/${id}`);
       toast.success('Data dihapus');

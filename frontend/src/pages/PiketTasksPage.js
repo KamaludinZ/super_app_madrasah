@@ -17,6 +17,7 @@ import {
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const ATTENDANCE_DEFAULT = { siswa_hadir: 0, siswa_tidak_hadir: 0, siswa_izin: 0, siswa_sakit: 0 };
 
@@ -82,13 +83,13 @@ export default function PiketTasksPage() {
     } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const deleteTask = async (t) => {
-    if (!window.confirm(`Hapus tugas titipan?`)) return;
+    if (!(await confirmDialog(`Hapus tugas titipan?`))) return;
     try { await api.delete(`/teacher-tasks/${t.id}`); toast.success('Dihapus'); await refresh(); }
     catch (e) { toast.error('Gagal hapus'); }
   };
 
   const acceptTask = async (t) => {
-    if (!window.confirm(`Terima tugas titipan dari ${t.teacher_name}?`)) return;
+    if (!(await confirmDialog(`Terima tugas titipan dari ${t.teacher_name}?`))) return;
     try {
       await api.put(`/teacher-tasks/${t.id}/accept`);
       toast.success('Tugas diterima');

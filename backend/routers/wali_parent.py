@@ -82,7 +82,7 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
     month_pattern = today.strftime('%Y-%m')  # e.g., "2026-09"
 
     logger.info(f"[DASHBOARD-STATS] Class: {class_id}, Month pattern: {month_pattern}")
-    logger.info(f"[DASHBOARD-STATS] Student IDs count: {len(student_ids)}")
+    logger.debug(f"[DASHBOARD-STATS] Student IDs count: {len(student_ids)}")
 
     # Use 'attendances' collection (with 's') and 'created_at' field - same as attendance-report endpoint
     attendance_records = await db.attendances.find({
@@ -95,7 +95,7 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
 
     logger.info(f"[DASHBOARD-STATS] Total attendance records found: {len(attendance_records)}")
     if attendance_records:
-        logger.info(f"[DASHBOARD-STATS] Sample record: {attendance_records[0]}")
+        logger.debug(f"[DASHBOARD-STATS] Sample record: {attendance_records[0]}")
 
     # Calculate attendance percentage
     total_records = len(attendance_records)
@@ -225,7 +225,7 @@ async def wali_kelas_attendance_report(
     logger.info(f"[WALI-KELAS-ATTENDANCE] Class: {class_id}, Month: {month}")
     logger.info(f"[WALI-KELAS-ATTENDANCE] Students count: {len(students)}, Attendance records: {len(attendance_records)}")
     if attendance_records:
-        logger.info(f"[WALI-KELAS-ATTENDANCE] Sample attendance record: {attendance_records[0]}")
+        logger.debug(f"[WALI-KELAS-ATTENDANCE] Sample attendance record: {attendance_records[0]}")
 
     # Build report for each student
     report = []
@@ -242,7 +242,7 @@ async def wali_kelas_attendance_report(
         alpa = sum(1 for r in student_records if r.get('status') in ['alpa', 'alpha'])
 
         if len(student_records) > 0:
-            logger.info(f"[WALI-KELAS-ATTENDANCE] {student['full_name']}: H={hadir}, S={sakit}, I={izin}, A={alpa}, Total={len(student_records)}")
+            logger.debug(f"[WALI-KELAS-ATTENDANCE] {student['full_name']}: H={hadir}, S={sakit}, I={izin}, A={alpa}, Total={len(student_records)}")
 
         report.append({
             'student_id': student_id,

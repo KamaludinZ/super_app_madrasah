@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Plus, Pencil, Trash2, ExternalLink, Globe, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 function emptyForm() {
   return {
@@ -98,7 +99,7 @@ export default function AdminAplikasiMadrasahPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Hapus aplikasi ini?')) return;
+    if (!(await confirmDialog('Hapus aplikasi ini?'))) return;
     try {
       await api.delete(`/admin/school-apps/${id}`);
       toast.success('Aplikasi dihapus');

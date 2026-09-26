@@ -24,8 +24,8 @@ export function ChangePasswordDialog({ open, onOpenChange, reason, message, onSu
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (newPw.length < 6) {
-      toast.error('Password baru minimal 6 karakter');
+    if (newPw.length < 8) {
+      toast.error('Password baru minimal 8 karakter');
       return;
     }
     if (newPw !== confirmPw) {
@@ -38,11 +38,13 @@ export function ChangePasswordDialog({ open, onOpenChange, reason, message, onSu
     }
     setLoading(true);
     try {
-      await api.post('/auth/change-password', {
+      const { data } = await api.post('/auth/change-password', {
         current_password: currentPw,
         new_password: newPw,
       });
-      toast.success('Password berhasil diubah. Gunakan password baru pada login berikutnya.');
+      // Server mencabut semua token lama; pakai token baru agar sesi ini tetap aktif
+      if (data?.access_token) localStorage.setItem('matsa_token', data.access_token);
+      toast.success('Password berhasil diubah. Sesi di perangkat lain telah dikeluarkan.');
       onSuccess?.();
       onOpenChange(false);
       setShowForm(false);
@@ -88,7 +90,7 @@ export function ChangePasswordDialog({ open, onOpenChange, reason, message, onSu
             <Alert className="bg-emerald-50 border-emerald-200">
               <Lock className="h-4 w-4 text-emerald-700" />
               <AlertDescription className="text-emerald-900 text-sm">
-                Password yang aman: minimal 6 karakter, hindari tanggal lahir atau nama akrab.
+                Password yang aman: minimal 8 karakter, gabungan huruf dan angka, hindari tanggal lahir atau nama akrab.
               </AlertDescription>
             </Alert>
             <div className="flex flex-col gap-2 pt-2">
@@ -115,10 +117,10 @@ export function ChangePasswordDialog({ open, onOpenChange, reason, message, onSu
               </div>
             </div>
             <div>
-              <Label htmlFor="np">Password Baru (min. 6 karakter)</Label>
+              <Label htmlFor="np">Password Baru (min. 8 karakter)</Label>
               <div className="relative">
                 <Input id="np" type={showNew ? 'text' : 'password'} value={newPw}
-                       onChange={(e) => setNewPw(e.target.value)} required minLength={6}
+                       onChange={(e) => setNewPw(e.target.value)} required minLength={8}
                        data-testid="input-new-password" autoComplete="new-password" />
                 <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
                         onClick={() => setShowNew((v) => !v)} tabIndex={-1}>

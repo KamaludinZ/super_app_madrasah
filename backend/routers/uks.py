@@ -1,4 +1,5 @@
 """API endpoints for UKS (Unit Kesehatan Sekolah / School Health Unit) Management."""
+import re
 import calendar
 import io
 from typing import Dict, List, Optional
@@ -308,7 +309,7 @@ async def list_warga_madrasah(search: Optional[str] = None, role: Optional[str] 
     if role:
         query['roles'] = role
     if search:
-        query['full_name'] = {'$regex': search, '$options': 'i'}
+        query['full_name'] = {'$regex': re.escape(search), '$options': 'i'}
 
     items = await db.users.find(
         query,
@@ -461,7 +462,7 @@ async def list_obat(search: Optional[str] = None, user: Dict = Depends(get_curre
     nearest expiry, and low-stock flag)."""
     query = {}
     if search:
-        query['nama_obat'] = {'$regex': search, '$options': 'i'}
+        query['nama_obat'] = {'$regex': re.escape(search), '$options': 'i'}
     items = await db.uks_obat.find(query, {'_id': 0}).sort('nama_obat', 1).to_list(2000)
 
     enriched = []

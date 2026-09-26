@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import { ConfirmDialogHost } from '@/components/ui/confirm-dialog';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import BootScreen from '@/components/BootScreen';
 import LoginPage from '@/pages/LoginPage';
@@ -265,6 +266,7 @@ function App() {
       <NotificationManager />
       <BrowserRouter>
         <Toaster richColors position="top-right" />
+        <ConfirmDialogHost />
         <InstallPWA />
         <Routes>
           <Route path="/login" element={<LoginPage />} />

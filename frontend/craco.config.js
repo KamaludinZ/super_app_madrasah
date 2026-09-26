@@ -66,6 +66,19 @@ let webpackConfig = {
         },
       ];
 
+      // Build produksi: buang console.log/info/debug agar data tidak bocor ke
+      // DevTools pengguna. console.warn & console.error tetap dipertahankan.
+      const minimizers = webpackConfig.optimization?.minimizer || [];
+      minimizers.forEach((plugin) => {
+        if (plugin?.constructor?.name === "TerserPlugin" && plugin.options?.minimizer?.options) {
+          const terserOptions = plugin.options.minimizer.options;
+          terserOptions.compress = {
+            ...(terserOptions.compress || {}),
+            pure_funcs: ["console.log", "console.info", "console.debug"],
+          };
+        }
+      });
+
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);

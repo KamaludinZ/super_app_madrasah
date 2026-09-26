@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Building2, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const SUMBER_DANA_LIST = ['Komite', 'BMN'];
 
@@ -94,7 +95,7 @@ export default function AdminSarprasAsetTetapPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus aset ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus aset ini?'))) return;
     try {
       await api.delete(`/sarpras/aset-tetap/${id}`);
       toast.success('Aset dihapus');

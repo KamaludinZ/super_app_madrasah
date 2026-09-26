@@ -26,7 +26,7 @@
 ✅ Update `.env` di root project untuk menggunakan MongoDB Atlas:
 ```env
 DB_NAME=super_app_madrasah
-MONGO_URL=mongodb+srv://kamaludinzuhri_db_user:Mtsn2kotamalang*@cluster0.qougudd.mongodb.net/?retryWrites=true&w=majority
+MONGO_URL=mongodb+srv://<USER>:<PASSWORD-DISENSOR>@<CLUSTER>.mongodb.net/?retryWrites=true&w=majority
 ```
 
 ✅ Update `backend/.env` dengan configuration yang sama

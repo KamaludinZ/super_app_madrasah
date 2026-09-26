@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Plus, Pencil, Trash2, Megaphone, Pin, Eye, EyeOff } from 'lucide-react';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const SEVERITIES = [
   { v: 'info', label: 'Info', color: 'bg-sky-100 text-sky-800' },
@@ -113,7 +114,7 @@ export default function AdminAnnouncementsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Hapus pengumuman ini?')) return;
+    if (!(await confirmDialog('Hapus pengumuman ini?'))) return;
     try {
       await api.delete(`/admin/announcements/${id}`);
       toast.success('Dihapus');

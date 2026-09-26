@@ -14,6 +14,7 @@ import { Stethoscope, History, Plus, Trash2, Loader2, Save, Search, Eye, Clipboa
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const KONDISI_PULANG_LIST = ['Membaik', 'Dirujuk', 'Dijemput Orang Tua', 'Istirahat di UKS', 'Istirahat di Mahad'];
 
@@ -238,7 +239,7 @@ export default function AdminUKSKunjunganPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data kunjungan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data kunjungan ini?'))) return;
     try {
       await api.delete(`/uks/kunjungan/${id}`);
       toast.success('Data kunjungan dihapus');

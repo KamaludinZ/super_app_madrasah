@@ -16,6 +16,7 @@ import { Loader2, History, Calendar, Eye, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 const KelasJurnalPage = () => {
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,7 @@ const KelasJurnalPage = () => {
       console.error('[KELAS-ATTENDANCE] Error loading attendance detail:', err);
       console.error('[KELAS-ATTENDANCE] Error response:', err.response?.data);
       setLoadingDetail(false);
-      alert('Gagal memuat detail kehadiran');
+      toast.error('Gagal memuat detail kehadiran');
     }
   };
 

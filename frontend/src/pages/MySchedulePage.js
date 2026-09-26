@@ -16,6 +16,7 @@ import {
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const ALL_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const EMPTY = { day: 'senin', start_time: '07:00', end_time: '08:00', class_id: '', subject_id: '', room_id: '', semester: 'ganjil', academic_year_id: '' };
@@ -274,19 +275,19 @@ export default function MySchedulePage() {
   };
   const handleDelete = async (s) => {
     if (s.status === 'locked') { toast.error('Jadwal terkunci tidak bisa dihapus'); return; }
-    if (!window.confirm('Hapus jadwal ini?')) return;
+    if (!(await confirmDialog('Hapus jadwal ini?'))) return;
     try { await api.delete(`/schedules/${s.id}`); toast.success('Dihapus'); await refresh(); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleSubmitDraft = async (s) => {
-    if (!window.confirm(`Kirim jadwal "${s.subject_name} - ${s.class_name}" ke Admin? Setelah dikirim Anda tidak bisa edit lagi.`)) return;
+    if (!(await confirmDialog(`Kirim jadwal "${s.subject_name} - ${s.class_name}" ke Admin? Setelah dikirim Anda tidak bisa edit lagi.`))) return;
     try { await api.put(`/schedules/${s.id}/submit`); toast.success('Jadwal terkirim ke Admin'); await refresh(); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleSubmitAllDrafts = async () => {
     const drafts = items.filter((s) => s.status === 'draft');
     if (drafts.length === 0) { toast.error('Tidak ada draft untuk dikirim'); return; }
-    if (!window.confirm(`Kirim ${drafts.length} jadwal draft ke Admin sekaligus?`)) return;
+    if (!(await confirmDialog(`Kirim ${drafts.length} jadwal draft ke Admin sekaligus?`))) return;
     try {
       for (const d of drafts) {
         await api.put(`/schedules/${d.id}/submit`);

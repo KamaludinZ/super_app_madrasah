@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const MONTH_LABELS = {
   1: 'Januari', 2: 'Februari', 3: 'Maret', 4: 'April',
@@ -154,7 +155,7 @@ export default function AdminMadrasahEventsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus kegiatan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus kegiatan ini?'))) return;
 
     try {
       await api.delete(`/madrasah-events/${id}`);

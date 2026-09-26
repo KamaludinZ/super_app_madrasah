@@ -44,6 +44,8 @@ import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Editor } from '@tinymce/tinymce-react';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const GuruMateriPage = () => {
   const [loading, setLoading] = useState(true);
@@ -254,7 +256,7 @@ const GuruMateriPage = () => {
   };
 
   const handleDelete = async (materiId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus materi ini?')) {
+    if (!(await confirmDialog('Apakah Anda yakin ingin menghapus materi ini?'))) {
       return;
     }
 
@@ -470,7 +472,7 @@ const GuruMateriPage = () => {
               <div className="space-y-4">
                 <div
                   className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: materi.konten }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(materi.konten) }}
                 />
                 <div className="flex gap-2">
                   <Button
@@ -847,7 +849,7 @@ const GuruMateriPage = () => {
                 <h3 className="text-sm font-semibold mb-2">Konten Materi</h3>
                 <div
                   className="prose prose-sm max-w-none p-4 bg-white border rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: selectedMateri.konten || 'Tidak ada konten' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedMateri.konten) || 'Tidak ada konten' }}
                 />
               </div>
 

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck, FileText, Trophy, ListChecks, Ban } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminVervalSiswaPage() {
   const [requests, setRequests] = useState([]);
@@ -51,7 +52,7 @@ export default function AdminVervalSiswaPage() {
   };
 
   const handleApprove = async () => {
-    if (!window.confirm('Setujui perubahan data ini?')) return;
+    if (!(await confirmDialog('Setujui perubahan data ini?'))) return;
     setActionLoading(true);
     try {
       await api.post(`/verval-requests/${selectedRequest.id}/approve`, { admin_notes: adminNotes });
@@ -70,7 +71,7 @@ export default function AdminVervalSiswaPage() {
       toast.error('Catatan penolakan wajib diisi');
       return;
     }
-    if (!window.confirm('Tolak perubahan data ini? Siswa akan menerima catatan penolakan.')) return;
+    if (!(await confirmDialog('Tolak perubahan data ini? Siswa akan menerima catatan penolakan.'))) return;
     setActionLoading(true);
     try {
       await api.post(`/verval-requests/${selectedRequest.id}/reject`, { admin_notes: adminNotes });

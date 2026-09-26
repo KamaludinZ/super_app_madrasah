@@ -307,7 +307,7 @@ async def preview_promotion(
 
     # Get students in the class
     students = await db.users.find(
-        {'student_class_id': from_class_id, 'siswa': {'$in': ['roles']}, 'is_active': True},
+        {'student_class_id': from_class_id, 'roles': 'siswa', 'is_active': True},
         {'_id': 0, 'password_hash': 0}
     ).to_list(500)
 

@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { PengumpulanPanel } from '@/pages/admin/AdminEKinerjaPage';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
 const CURRENT_QUARTER = `TW${Math.floor(new Date().getMonth() / 3) + 1}`;
@@ -187,7 +188,7 @@ function SertifikasiOwnTable({ year, period, periodLabel }) {
   };
 
   const handleDelete = async (r) => {
-    if (!window.confirm(`Hapus data "${r.nama_kegiatan}"?`)) return;
+    if (!(await confirmDialog(`Hapus data "${r.nama_kegiatan}"?`))) return;
     try {
       await api.delete(`/ekinerja/sertifikasi/${r.id}`);
       toast.success('Data berhasil dihapus');

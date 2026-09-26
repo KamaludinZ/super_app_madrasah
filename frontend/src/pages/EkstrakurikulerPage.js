@@ -17,6 +17,7 @@ import {
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const ATTENDANCE_STATUSES = [
@@ -94,7 +95,7 @@ export default function EkstrakurikulerPage() {
   };
 
   const handleDelete = async (e) => {
-    if (!window.confirm(`Hapus ekstra "${e.name}"?`)) return;
+    if (!(await confirmDialog(`Hapus ekstra "${e.name}"?`))) return;
     try {
       await api.delete(`/extracurriculars/${e.id}`);
       toast.success('Dihapus');
@@ -352,7 +353,7 @@ function MembersTab({ extra, canManage }) {
   };
 
   const removeMember = async (m) => {
-    if (!window.confirm(`Keluarkan ${m.student_name} dari ekstra ini?`)) return;
+    if (!(await confirmDialog(`Keluarkan ${m.student_name} dari ekstra ini?`))) return;
     try {
       await api.delete(`/extracurriculars/${extra.id}/members/${m.id}`);
       toast.success('Anggota dikeluarkan');

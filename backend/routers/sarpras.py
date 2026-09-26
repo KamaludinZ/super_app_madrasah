@@ -1,4 +1,5 @@
 """API endpoints for Sarpras (Sarana & Prasarana / Facilities Management)."""
+import re
 from typing import Dict, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -181,7 +182,7 @@ async def _resolve_aset(aset_tipe: str, aset_id: str):
 async def list_warga_madrasah(search: Optional[str] = None, user: Dict = Depends(require_role(*SARPRAS_ROLES, 'kepala_sekolah'))):
     query = {'is_active': {'$ne': False}}
     if search:
-        query['full_name'] = {'$regex': search, '$options': 'i'}
+        query['full_name'] = {'$regex': re.escape(search), '$options': 'i'}
     items = await db.users.find(
         query,
         {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nip_nuptk': 1, 'username': 1, 'roles': 1}
@@ -201,7 +202,7 @@ async def list_aset_tetap(sumber_dana: Optional[str] = None, kondisi: Optional[s
     if kondisi:
         query['kondisi'] = kondisi
     if search:
-        query['nama_aset'] = {'$regex': search, '$options': 'i'}
+        query['nama_aset'] = {'$regex': re.escape(search), '$options': 'i'}
     items = await db.sarpras_aset_tetap.find(query, {'_id': 0}).sort('nama_aset', 1).to_list(5000)
     return [serialize_doc(i) for i in items]
 
@@ -272,7 +273,7 @@ async def list_aset_lancar(sumber_dana: Optional[str] = None, search: Optional[s
     if sumber_dana:
         query['sumber_dana'] = sumber_dana
     if search:
-        query['nama_barang'] = {'$regex': search, '$options': 'i'}
+        query['nama_barang'] = {'$regex': re.escape(search), '$options': 'i'}
     items = await db.sarpras_aset_lancar.find(query, {'_id': 0}).sort('nama_barang', 1).to_list(5000)
     return [serialize_doc(i) for i in items]
 

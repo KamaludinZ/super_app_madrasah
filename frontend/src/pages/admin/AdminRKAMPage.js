@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 // v1.1.1: Updated for dual budget system (BOS & Komite)
 const EMPTY_BUDGET_FORM = {
@@ -175,7 +176,7 @@ export default function AdminRKAMPage() {
   };
 
   const handleBudgetDelete = async (id) => {
-    if (!window.confirm('Hapus item anggaran ini?')) return;
+    if (!(await confirmDialog('Hapus item anggaran ini?'))) return;
 
     try {
       await api.delete(`/rkam/budget-items/${id}`);
@@ -285,7 +286,7 @@ export default function AdminRKAMPage() {
   };
 
   const handleDocumentDelete = async (id) => {
-    if (!window.confirm('Hapus dokumen ini?')) return;
+    if (!(await confirmDialog('Hapus dokumen ini?'))) return;
 
     try {
       await api.delete(`/rkam/documents/${id}`);

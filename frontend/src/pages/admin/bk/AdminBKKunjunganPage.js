@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { HeartHandshake, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const JENIS_LAYANAN = ['Konseling Individu', 'Konseling Kelompok', 'Konsultasi', 'Bimbingan Klasikal', 'Mediasi'];
 
@@ -112,7 +113,7 @@ export default function AdminBKKunjunganPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data kunjungan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data kunjungan ini?'))) return;
     try {
       await api.delete(`/bk/kunjungan/${id}`);
       toast.success('Data kunjungan dihapus');

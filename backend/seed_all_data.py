@@ -3,6 +3,7 @@ Complete Data Seeder for All Features
 Includes: Users, Siswa, Guru, Tendik, Jadwal, Jurnal, Kehadiran, RKAM, Holidays, etc.
 """
 import asyncio
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -719,7 +720,7 @@ async def seed_all_data(db: Any):
 
 async def main():
     # MongoDB Atlas connection
-    MONGO_URL = "mongodb+srv://kamaludinzuhri_db_user:Mtsn2kotamalang*@cluster0.qougudd.mongodb.net/"
+    MONGO_URL = os.environ["MONGO_URL"]  # jangan tulis kredensial di kode
     DB_NAME = "super_app_madrasah"
 
     print(f"\nConnecting to MongoDB Atlas...")

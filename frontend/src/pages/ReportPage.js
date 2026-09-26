@@ -11,6 +11,7 @@ import { FileText, Plus, Trash2, Eye, AlertTriangle, Loader2 } from 'lucide-reac
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const TYPE_OPTIONS = [
   { value: 'sarana_prasarana', label: 'Sarana & Prasarana', color: 'bg-orange-100 text-orange-700 border-orange-300' },
@@ -122,7 +123,7 @@ export default function ReportPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Hapus laporan ini?')) return;
+    if (!(await confirmDialog('Hapus laporan ini?'))) return;
     try {
       await api.delete(`/reports/${id}`);
       toast.success('Laporan dihapus');

@@ -362,14 +362,16 @@ export default function AdminUsersPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button size="sm" variant="outline" onClick={() => handleImpersonate(u)}
-                                disabled={impersonatingUserId !== null}
-                                className="gap-1 border-blue-400 text-blue-700 hover:bg-blue-50"
-                                data-testid={`impersonate-user-${u.username}`}
-                                title="Login sebagai user ini">
-                                {impersonatingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-                                Login Sebagai
-                              </Button>
+                              {!(u.roles || []).includes('admin') && (
+                                <Button size="sm" variant="outline" onClick={() => handleImpersonate(u)}
+                                  disabled={impersonatingUserId !== null}
+                                  className="gap-1 border-blue-400 text-blue-700 hover:bg-blue-50"
+                                  data-testid={`impersonate-user-${u.username}`}
+                                  title="Login sebagai user ini">
+                                  {impersonatingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                                  Login Sebagai
+                                </Button>
+                              )}
                               <Button size="icon" variant="ghost" onClick={() => openEdit(u)} data-testid={`edit-user-${u.username}`}><Pencil className="h-4 w-4" /></Button>
                               <Button size="icon" variant="ghost" onClick={() => openDeleteDialog(u)} className="text-rose-600 hover:text-rose-700" data-testid={`delete-user-${u.username}`}><Trash2 className="h-4 w-4" /></Button>
                             </div>

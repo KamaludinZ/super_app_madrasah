@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminJabatanPage() {
   const [items, setItems] = useState([]);
@@ -75,7 +76,7 @@ export default function AdminJabatanPage() {
   };
 
   const handleDelete = async (j) => {
-    if (!window.confirm(`Hapus jabatan "${j.name}"? Pastikan tidak ada pengguna yang memiliki jabatan ini.`)) return;
+    if (!(await confirmDialog(`Hapus jabatan "${j.name}"? Pastikan tidak ada pengguna yang memiliki jabatan ini.`))) return;
     try {
       await api.delete(`/jabatan/${j.id}`);
       toast.success('Jabatan berhasil dihapus');

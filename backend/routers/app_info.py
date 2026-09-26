@@ -52,7 +52,7 @@ async def get_app_info():
         "description": APP_DESCRIPTION,
         "current_version": CURRENT_VERSION,
         "release_date": RELEASE_DATE,
-        "environment": os.environ.get("ENV", "development"),
+        "environment": (os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "development"),
         "python_version": os.environ.get("PYTHON_VERSION", "3.11+"),
         "database": "MongoDB",
         "features": [
@@ -378,7 +378,7 @@ async def get_system_health(user: Dict = Depends(require_role("admin"))):
         },
         "server": {
             "uptime": "running",
-            "environment": os.environ.get("ENV", "development")
+            "environment": (os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "development")
         },
         "checked_at": datetime.utcnow().isoformat()
     }

@@ -33,6 +33,8 @@ import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Editor } from '@tinymce/tinymce-react';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const GuruTugasPage = () => {
   const [loading, setLoading] = useState(true);
@@ -272,7 +274,7 @@ const GuruTugasPage = () => {
   };
 
   const handleDelete = async (tugasId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus tugas ini?')) {
+    if (!(await confirmDialog('Apakah Anda yakin ingin menghapus tugas ini?'))) {
       return;
     }
 
@@ -500,7 +502,7 @@ const GuruTugasPage = () => {
               <div className="space-y-4">
                 <div
                   className="prose prose-sm max-w-none p-4 bg-gray-50 rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: tugas.konten }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(tugas.konten) }}
                 />
                 <div className="flex gap-2">
                   <Button
@@ -889,7 +891,7 @@ const GuruTugasPage = () => {
                 <h3 className="text-sm font-semibold mb-2">Instruksi Tugas</h3>
                 <div
                   className="prose prose-sm max-w-none p-4 bg-white border rounded-lg"
-                  dangerouslySetInnerHTML={{ __html: selectedTugas.konten || 'Tidak ada instruksi' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedTugas.konten) || 'Tidak ada instruksi' }}
                 />
               </div>
 

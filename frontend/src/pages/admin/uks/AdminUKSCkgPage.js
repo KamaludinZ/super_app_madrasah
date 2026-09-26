@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { HeartPulse, Syringe, Plus, Trash2, Loader2, Save, Search, Pencil, Eye, Upload, Download, FileSpreadsheet, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyPatientPicker = {
   jenis_pasien: 'siswa', // 'siswa' or 'gtk'
@@ -253,7 +254,7 @@ export default function AdminUKSCkgPage() {
   };
 
   const handleDeleteCkg = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data CKG ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data CKG ini?'))) return;
     try {
       await api.delete(`/uks/ckg/${id}`);
       toast.success('Data CKG dihapus');
@@ -325,7 +326,7 @@ export default function AdminUKSCkgPage() {
   };
 
   const handleDeleteImunisasi = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data imunisasi ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data imunisasi ini?'))) return;
     try {
       await api.delete(`/uks/imunisasi/${id}`);
       toast.success('Data imunisasi dihapus');

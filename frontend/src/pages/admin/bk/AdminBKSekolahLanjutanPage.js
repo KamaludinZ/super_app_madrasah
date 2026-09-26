@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { School, Plus, Pencil, Trash2, Loader2, Save, Search, Settings2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const JENJANG_LIST = ['SMA', 'SMK', 'MA', 'Pondok Pesantren', 'Tidak Melanjutkan', 'Lainnya'];
 const STATUS_LIST = ['Rencana', 'Mendaftar', 'Diterima', 'Tidak Diterima'];
@@ -124,7 +125,7 @@ export default function AdminBKSekolahLanjutanPage() {
   };
 
   const handleDeleteSekolahTujuan = async (item) => {
-    if (!window.confirm(`Yakin ingin menghapus "${item.nama}" dari daftar sekolah tujuan?`)) return;
+    if (!(await confirmDialog(`Yakin ingin menghapus "${item.nama}" dari daftar sekolah tujuan?`))) return;
     try {
       await api.delete(`/bk/sekolah-tujuan/${item.id}`);
       setSekolahTujuan((prev) => prev.filter((s) => s.id !== item.id));
@@ -158,7 +159,7 @@ export default function AdminBKSekolahLanjutanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data ini?'))) return;
     try {
       await api.delete(`/bk/sekolah-lanjutan/${id}`);
       toast.success('Data dihapus');

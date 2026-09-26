@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Wrench, Plus, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyForm = { aset_id: '', tanggal: new Date().toISOString().split('T')[0], pengguna_id: '', kegiatan: '', kondisi_setelah: '', keterangan: '' };
 
@@ -66,7 +67,7 @@ export default function AdminSarprasJurnalAlatPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jurnal ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jurnal ini?'))) return;
     try {
       await api.delete(`/sarpras/jurnal-alat/${id}`);
       toast.success('Jurnal dihapus');

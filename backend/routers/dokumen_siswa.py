@@ -10,7 +10,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from core import db, get_current_user, log_audit, serialize_doc, require_role
+from core import db, get_current_user, log_audit, logger, serialize_doc, require_role
 
 router = APIRouter()
 
@@ -32,6 +32,7 @@ DOKUMEN_FIELDS = {
 
 # Allowed file extensions
 ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 def allowed_file(filename: str) -> bool:
@@ -72,9 +73,12 @@ async def upload_dokumen(
     new_filename = f"{student_id}_{jenis_dokumen}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = os.path.join(UPLOAD_DIR, new_filename)
 
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Ukuran file maksimal 5MB")
+
     # Save file
     try:
-        content = await file.read()
         with open(file_path, 'wb') as f:
             f.write(content)
     except Exception as e:
@@ -99,8 +103,7 @@ async def upload_dokumen(
         {'$set': {field_name: file_url}}
     )
 
-    await log_audit(user['id'], 'upload_dokumen', {
-        'student_id': student_id,
+    await log_audit(user, 'upload_dokumen', 'student_document', student_id, details={
         'jenis_dokumen': jenis_dokumen,
         'filename': new_filename
     })
@@ -131,9 +134,12 @@ async def get_dokumen_file(
        user['id'] != student_id:
         raise HTTPException(403, "Tidak diizinkan melihat dokumen siswa lain")
 
-    # Cek file exists
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(file_path):
+    # File harus milik siswa & jenis dokumen yang diminta (cegah membuka file siswa lain)
+    safe_name = os.path.basename(filename)
+    if not safe_name.startswith(f"{student_id}_{jenis_dokumen}_"):
+        raise HTTPException(404, "File tidak ditemukan")
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+    if not os.path.isfile(file_path):
         raise HTTPException(404, "File tidak ditemukan")
 
     # Return file
@@ -175,7 +181,7 @@ async def delete_dokumen(
             os.remove(file_path)
         except Exception as e:
             # Log error but continue to update DB
-            print(f"Error deleting file {file_path}: {e}")
+            logger.warning(f"Gagal menghapus file {file_path}: {e}")
 
     # Remove URL from database
     await db.users.update_one(
@@ -183,8 +189,7 @@ async def delete_dokumen(
         {'$unset': {field_name: ""}}
     )
 
-    await log_audit(user['id'], 'delete_dokumen', {
-        'student_id': student_id,
+    await log_audit(user, 'delete_dokumen', 'student_document', student_id, details={
         'jenis_dokumen': jenis_dokumen
     })
 

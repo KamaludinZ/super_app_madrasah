@@ -127,7 +127,7 @@ async def public_monitoring(day: Optional[str] = None):
 
     # DEBUG: Log sample of final items with class_level
     if grouped:
-        logger.info(f"[PUBLIC MONITORING] Sample grouped items with class_level:")
+        logger.debug(f"[PUBLIC MONITORING] Sample grouped items with class_level:")
         for idx, item in enumerate(grouped[:3]):
             logger.info(f"  [{idx}] class_name={item.get('class_name')}, class_level={item.get('class_level')}, jtm_count={item.get('jtm_count')}")
 

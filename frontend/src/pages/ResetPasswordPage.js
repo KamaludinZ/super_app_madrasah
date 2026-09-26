@@ -45,8 +45,8 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (pwd.length < 6) {
-      toast.error('Password minimal 6 karakter');
+    if (pwd.length < 8) {
+      toast.error('Password minimal 8 karakter');
       return;
     }
     if (pwd !== confirm) {
@@ -127,7 +127,7 @@ export default function ResetPasswordPage() {
                     <Label htmlFor="new-pwd" className="text-sm font-medium">Password Baru</Label>
                     <div className="relative mt-1">
                       <Input id="new-pwd" type={show ? 'text' : 'password'} value={pwd}
-                        onChange={(e) => setPwd(e.target.value)} placeholder="Minimal 6 karakter"
+                        onChange={(e) => setPwd(e.target.value)} placeholder="Minimal 8 karakter"
                         className="h-11 pr-10" autoComplete="new-password" data-testid="new-password-input" />
                       <button type="button" onClick={() => setShow(!show)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-slate-900">

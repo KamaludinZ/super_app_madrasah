@@ -6,6 +6,7 @@ Sarpras keep full visibility and control from the Sarpras menus, while
 Guru IPA / Guru TIK get a narrowed view+write surface limited to their own
 lab's room, assets, loans, journals, and damage reports.
 """
+import re
 from typing import Dict, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -217,7 +218,7 @@ async def list_warga_madrasah(
     _check_lab_access(lab_key, user)
     query = {'is_active': {'$ne': False}}
     if search:
-        query['full_name'] = {'$regex': search, '$options': 'i'}
+        query['full_name'] = {'$regex': re.escape(search), '$options': 'i'}
 
     if peminjam_jenis == 'siswa':
         query['roles'] = 'siswa'

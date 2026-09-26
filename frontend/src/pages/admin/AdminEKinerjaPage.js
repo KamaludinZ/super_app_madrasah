@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
 
@@ -267,7 +268,7 @@ export default function AdminEKinerjaPage() {
   }
 
   const handleDeleteRhk = async (rhk) => {
-    if (!window.confirm(`Hapus RHK "${rhk.indikator_kinerja_individu}"?`)) return;
+    if (!(await confirmDialog(`Hapus RHK "${rhk.indikator_kinerja_individu}"?`))) return;
     try {
       await api.delete(`/ekinerja/rhk/${rhk.id}`);
       toast.success('RHK berhasil dihapus');
@@ -298,7 +299,7 @@ export default function AdminEKinerjaPage() {
   };
 
   const handleUnclaimRhk = async (rhk) => {
-    if (!window.confirm('Lepaskan RHK ini?')) return;
+    if (!(await confirmDialog('Lepaskan RHK ini?'))) return;
     try {
       await api.put(`/ekinerja/rhk/${rhk.id}/unclaim`);
       toast.success('RHK berhasil dilepaskan');
@@ -1210,7 +1211,7 @@ function JurnalLinkManager() {
   };
 
   const handleDelete = async (l) => {
-    if (!window.confirm(`Hapus link "${l.label}"?`)) return;
+    if (!(await confirmDialog(`Hapus link "${l.label}"?`))) return;
     try {
       await api.delete(`/ekinerja/jurnal-harian/link/${l.id}`);
       toast.success('Link berhasil dihapus');
@@ -1345,7 +1346,7 @@ function JurnalHarianForm() {
   };
 
   const handleDelete = async (e) => {
-    if (!window.confirm('Hapus entri jurnal ini?')) return;
+    if (!(await confirmDialog('Hapus entri jurnal ini?'))) return;
     try {
       await api.delete(`/ekinerja/jurnal-harian/${e.id}`);
       toast.success('Jurnal berhasil dihapus');

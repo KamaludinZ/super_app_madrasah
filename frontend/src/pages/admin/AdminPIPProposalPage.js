@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 
 const EMPTY_FORM = {
@@ -103,8 +104,8 @@ export default function AdminPIPProposalPage() {
     setVerifyOpen(false);
   };
 
-  const handleDelete = (item) => {
-    if (!window.confirm('Hapus ajuan PIP ini?')) return;
+  const handleDelete = async (item) => {
+    if (!(await confirmDialog('Hapus ajuan PIP ini?'))) return;
     toast.info('Fitur hapus sedang dalam pengembangan');
   };
 

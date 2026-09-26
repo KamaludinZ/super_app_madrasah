@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import ClassDetailDialog from '@/components/classes/ClassDetailDialog';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminClassesPage() {
   const { user } = useAuth();
@@ -108,7 +109,7 @@ export default function AdminClassesPage() {
   };
 
   const handleDelete = async (c) => {
-    if (!window.confirm(`Hapus kelas ${c.name}?`)) return;
+    if (!(await confirmDialog(`Hapus kelas ${c.name}?`))) return;
     await api.delete(`/classes/${c.id}`); toast.success('Dihapus'); refresh();
   };
 
@@ -118,7 +119,7 @@ export default function AdminClassesPage() {
   };
 
   const handleRegenerate = async (c) => {
-    if (!window.confirm(`Generate ulang token kelas ${c.name}? Token lama tidak berlaku lagi.`)) return;
+    if (!(await confirmDialog(`Generate ulang token kelas ${c.name}? Token lama tidak berlaku lagi.`))) return;
     try {
       const { data } = await api.post(`/classes/${c.id}/regenerate-token`);
       toast.success(`Token baru: ${data.token}`);
@@ -127,7 +128,7 @@ export default function AdminClassesPage() {
   };
 
   const handleBackfill = async () => {
-    if (!window.confirm('Generate token untuk semua kelas yang belum punya?')) return;
+    if (!(await confirmDialog('Generate token untuk semua kelas yang belum punya?'))) return;
     try {
       const { data } = await api.post('/classes/backfill-tokens');
       toast.success(`${data.updated} token dibuat`);

@@ -5,8 +5,8 @@ Super Apps MATSANDATAMA - MTsN 2 Kota Malang
 
 Tests all 8 required scenarios for Web Push backend functionality.
 """
+import base64
 import os
-import re
 import sys
 import requests
 from typing import Dict, Optional, Tuple
@@ -16,8 +16,8 @@ BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://android-ios-launc
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
+ADMIN_USERNAME = os.environ.get("TEST_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 # Test data
 FAKE_SUBSCRIPTION = {
@@ -45,52 +45,44 @@ def log_test(test_num: int, name: str, passed: bool, details: str = ""):
     return passed
 
 
-def solve_captcha(question: str) -> Optional[int]:
-    """Parse and solve simple math captcha like 'Berapa 18 - 14 = ?'"""
-    try:
-        # Extract numbers and operator
-        match = re.search(r'(\d+)\s*([\+\-\*\/])\s*(\d+)', question)
-        if not match:
-            return None
-        
-        num1 = int(match.group(1))
-        operator = match.group(2)
-        num2 = int(match.group(3))
-        
-        if operator == '+':
-            return num1 + num2
-        elif operator == '-':
-            return num1 - num2
-        elif operator == '*':
-            return num1 * num2
-        elif operator == '/':
-            return int(num1 / num2)
+def solve_captcha(captcha_data: Dict) -> Optional[str]:
+    """Captcha berupa gambar angka dan sengaja tidak bisa diselesaikan otomatis.
+
+    Gambar disimpan ke file lalu penguji diminta mengetik angkanya (hanya bila
+    dijalankan di terminal interaktif).
+    """
+    image = captcha_data.get("image") or ""
+    if not image.startswith("data:image/png;base64,") or not sys.stdin.isatty():
         return None
-    except Exception as e:
-        print(f"Error solving captcha: {e}")
-        return None
+    path = os.path.abspath("captcha_test.png")
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(image.split(",", 1)[1]))
+    return input(f"Buka {path} lalu ketik angka captcha: ").strip() or None
 
 
 def get_auth_token() -> Tuple[Optional[str], str]:
-    """Get authentication token by solving captcha and logging in"""
+    """Ambil token login.
+
+    Cara paling mudah: login di browser, salin nilai localStorage 'matsa_token',
+    lalu jalankan:  TEST_ACCESS_TOKEN=<token> python backend_test.py
+    """
+    env_token = os.environ.get("TEST_ACCESS_TOKEN")
+    if env_token:
+        return env_token, "Menggunakan TEST_ACCESS_TOKEN"
     try:
         # Step 1: Get captcha
         captcha_resp = requests.get(f"{API_BASE}/auth/captcha", timeout=10)
         if captcha_resp.status_code != 200:
             return None, f"Captcha endpoint failed: {captcha_resp.status_code}"
-        
+
         captcha_data = captcha_resp.json()
         challenge_id = captcha_data.get("challenge_id")
-        question = captcha_data.get("question")
-        
-        if not challenge_id or not question:
-            return None, f"Invalid captcha response: {captcha_data}"
-        
-        # Step 2: Solve captcha
-        answer = solve_captcha(question)
-        if answer is None:
-            return None, f"Could not solve captcha: {question}"
-        
+
+        # Step 2: Solve captcha (manual)
+        answer = solve_captcha(captcha_data)
+        if not challenge_id or answer is None:
+            return None, "Captcha gambar perlu diisi manual. Set TEST_ACCESS_TOKEN atau jalankan di terminal interaktif."
+
         # Step 3: Login
         login_payload = {
             "username": ADMIN_USERNAME,

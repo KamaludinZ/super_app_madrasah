@@ -12,6 +12,7 @@ import { HeartPulse, Plus, Pencil, Trash2, Loader2, Save, Search, Boxes, CheckCi
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import LabKPI from '@/pages/lab/LabKPI';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const JENIS_LABELS = { tetap: 'Aset Tetap', lancar: 'Aset Lancar' };
 const SUMBER_DANA_LIST = ['Komite', 'BMN'];
@@ -100,7 +101,7 @@ export default function AdminUKSAsetPage() {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Hapus "${item.nama}"?`)) return;
+    if (!(await confirmDialog(`Hapus "${item.nama}"?`))) return;
     try {
       await api.delete(`/uks/aset/${item.aset_tipe}/${item.id}`);
       toast.success('Aset dihapus');

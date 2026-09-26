@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import StudentDetailDialog from '@/components/students/StudentDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
@@ -125,7 +126,7 @@ export default function DataSiswaPage() {
   };
 
   const handleDelete = async (student) => {
-    if (!window.confirm(`Hapus data siswa ${student.full_name} (${student.nisn || student.id})?`)) return;
+    if (!(await confirmDialog(`Hapus data siswa ${student.full_name} (${student.nisn || student.id})?`))) return;
     try {
       await api.delete(`/users/${student.id}`);
       toast.success('Data siswa berhasil dihapus');

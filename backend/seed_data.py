@@ -16,7 +16,9 @@ WIB_TZ = timezone(timedelta(hours=7))
 
 
 def is_production_env() -> bool:
-    return os.environ.get("ENV", "development").strip().lower() == "production"
+    # server.py memakai ENVIRONMENT; ENV dipertahankan untuk kompatibilitas lama
+    env = os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "development"
+    return env.strip().lower() == "production"
 
 
 def make_user(username, password, full_name, roles, **kw):

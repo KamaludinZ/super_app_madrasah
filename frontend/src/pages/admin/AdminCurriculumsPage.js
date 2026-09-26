@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Plus, Pencil, Trash2, BookOpen } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 function emptyForm() {
   return { id: null, code: '', name: '', description: '' };
@@ -58,7 +59,7 @@ export default function AdminCurriculumsPage() {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Hapus kurikulum "${name}"?`)) return;
+    if (!(await confirmDialog(`Hapus kurikulum "${name}"?`))) return;
     try {
       await api.delete(`/curriculums/${id}`);
       toast.success('Dihapus');

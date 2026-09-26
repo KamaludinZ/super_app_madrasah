@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Users, UserPlus, UserMinus, Search, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function ClassDetailDialog({ classData, open, onOpenChange, onRefresh }) {
   const [students, setStudents] = useState([]);
@@ -72,7 +73,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
   };
 
   const handleRemoveStudent = async (studentId, studentName) => {
-    if (!window.confirm(`Hapus ${studentName} dari kelas ${classData.name}?`)) return;
+    if (!(await confirmDialog(`Hapus ${studentName} dari kelas ${classData.name}?`))) return;
     try {
       await api.delete(`/classes/${classData.id}/students/${studentId}`, {
         data: { end_date: new Date().toISOString().split('T')[0] }

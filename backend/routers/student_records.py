@@ -2,6 +2,7 @@
 Student Master Records (Buku Induk Siswa) - Router
 Mengelola data lengkap buku induk siswa sesuai standar Kemenag.
 """
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -44,9 +45,9 @@ async def list_student_records(
 
     if search:
         student_query['$or'] = [
-            {'full_name': {'$regex': search, '$options': 'i'}},
-            {'nisn': {'$regex': search, '$options': 'i'}},
-            {'nis': {'$regex': search, '$options': 'i'}},
+            {'full_name': {'$regex': re.escape(search), '$options': 'i'}},
+            {'nisn': {'$regex': re.escape(search), '$options': 'i'}},
+            {'nis': {'$regex': re.escape(search), '$options': 'i'}},
         ]
 
     if class_id:

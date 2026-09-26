@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function JadwalPage() {
   const { user, activeRole } = useAuth();
@@ -76,7 +77,7 @@ export default function JadwalPage() {
   }, [user.id, activeRole]);
 
   const handleUnsubmit = async (s) => {
-    if (!window.confirm('Batalkan pengiriman jadwal ini? Jadwal akan kembali ke status draft.')) return;
+    if (!(await confirmDialog('Batalkan pengiriman jadwal ini? Jadwal akan kembali ke status draft.'))) return;
     try {
       await api.put(`/schedules/${s.id}/unsubmit`);
       toast.success('Jadwal dibatalkan dan kembali ke draft');
@@ -87,7 +88,7 @@ export default function JadwalPage() {
   };
 
   const handleDelete = async (s) => {
-    if (!window.confirm('Hapus jadwal ini?')) return;
+    if (!(await confirmDialog('Hapus jadwal ini?'))) return;
     try {
       await api.delete(`/schedules/${s.id}`);
       toast.success('Jadwal dihapus');

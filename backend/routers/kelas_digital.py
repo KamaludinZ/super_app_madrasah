@@ -1,13 +1,15 @@
 """
 Kelas Digital Router - Authentication, Materi Mapel, dan Tugas untuk Role Kelas, Siswa, Guru, dan Admin.
 """
+import hmac
 from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from auth_utils import create_access_token, verify_captcha, verify_password
+from auth_utils import create_access_token, verify_password
+from captcha_utils import is_locked, record_login_failure, reset_login_attempts, verify_captcha
 from core import (
     db,
     get_current_user,
@@ -62,10 +64,15 @@ async def get_public_classes():
 async def login_kelas(req: KelasLoginRequest, request: Request):
     """Login untuk akun kelas menggunakan tahun pelajaran, semester, nama kelas, dan token."""
 
+    lock_key = f"kelas:{req.academic_year_id}:{req.semester}:{req.class_name.strip().lower()}"
+    if await is_locked(lock_key):
+        await log_security('locked_attempt', f"kelas_{req.class_name}", request=request)
+        raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Login kelas ini terkunci 15 menit.")
+
     # Verify captcha
-    if not verify_captcha(req.captcha_id, req.captcha_answer):
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
         await log_security('captcha_failed', f"kelas_{req.class_name}", request=request)
-        raise HTTPException(status_code=400, detail="Captcha salah atau kedaluwarsa")
+        raise HTTPException(status_code=400, detail="Kode captcha salah atau kedaluwarsa")
 
     # Find semester
     semester = await db.semesters.find_one({
@@ -81,20 +88,23 @@ async def login_kelas(req: KelasLoginRequest, request: Request):
         'semester_id': semester['id']
     })
 
-    if not kelas:
+    # Verify token (perbandingan waktu-konstan agar token tidak bisa ditebak lewat selisih waktu)
+    token_ok = bool(kelas and kelas.get('token')) and hmac.compare_digest(
+        str(kelas['token']).encode('utf-8'), str(req.token).encode('utf-8'))
+    if not token_ok:
+        attempt_info = await record_login_failure(lock_key)
         await log_security('login_failed', f"kelas_{req.class_name}",
-                          {'reason': 'class_not_found'}, request)
+                          {'reason': 'class_not_found' if not kelas else 'wrong_token',
+                           'attempts': attempt_info.get('attempts', 0)}, request)
+        if attempt_info.get('locked'):
+            raise HTTPException(status_code=423, detail="Terlalu banyak percobaan gagal. Login kelas ini terkunci 15 menit.")
         raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
 
-    # Verify token
-    if not kelas.get('token') or kelas['token'] != req.token:
-        await log_security('login_failed', f"kelas_{req.class_name}",
-                          {'reason': 'wrong_token'}, request)
-        raise HTTPException(status_code=401, detail="Kelas tidak ditemukan atau token salah")
+    await reset_login_attempts(lock_key)
 
     # Create token for kelas
     wali_kelas_id_value = kelas.get('homeroom_teacher_id')
-    logger.info(f"[LOGIN] Creating JWT for kelas {kelas['name']}, homeroom_teacher_id from DB: {wali_kelas_id_value}")
+    logger.debug(f"[LOGIN] Creating JWT for kelas {kelas['name']}, homeroom_teacher_id from DB: {wali_kelas_id_value}")
 
     access_token = create_access_token({
         'sub': kelas['id'],
@@ -195,8 +205,8 @@ async def get_siswa_kelas(user: Dict = Depends(get_current_user)):
 async def get_wali_kelas_info(user: Dict = Depends(get_current_user)):
     """Get wali kelas information for the class (untuk role kelas)."""
 
-    logger.info(f"[WALI-KELAS] Endpoint hit! User: {user.get('id')}, Role: {user.get('active_role')}")
-    logger.info(f"[WALI-KELAS] wali_kelas_id: {user.get('wali_kelas_id')}")
+    logger.debug(f"[WALI-KELAS] Endpoint hit! User: {user.get('id')}, Role: {user.get('active_role')}")
+    logger.debug(f"[WALI-KELAS] wali_kelas_id: {user.get('wali_kelas_id')}")
 
     # Only kelas role can access
     if user.get('active_role') != 'kelas':
@@ -284,7 +294,7 @@ async def get_materi_list(
         student_class_id = user.get('student_class_id')
         student_id = user['id']
 
-        logger.info(f"[MATERI-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
+        logger.debug(f"[MATERI-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
 
         # Fetch materi for kelas OR siswa that includes this student
         materi_list_kelas = []
@@ -310,7 +320,7 @@ async def get_materi_list(
             'is_active': True,
             'target_role': 'siswa'
         })
-        logger.info(f"[MATERI-SISWA] DEBUG: Total materi with target_role='siswa': {total_siswa_materi}")
+        logger.debug(f"[MATERI-SISWA] DEBUG: Total materi with target_role='siswa': {total_siswa_materi}")
 
         # Debug: Check if student_id exists in any target_siswa array
         sample_materi = await db.materi_mapel.find_one({
@@ -318,8 +328,8 @@ async def get_materi_list(
             'target_role': 'siswa'
         })
         if sample_materi:
-            logger.info(f"[MATERI-SISWA] DEBUG: Sample materi target_siswa: {sample_materi.get('target_siswa')}")
-            logger.info(f"[MATERI-SISWA] DEBUG: Looking for student_id: {student_id}")
+            logger.debug(f"[MATERI-SISWA] DEBUG: Sample materi target_siswa: {sample_materi.get('target_siswa')}")
+            logger.debug(f"[MATERI-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
         materi_list = materi_list_kelas + materi_list_siswa
@@ -524,7 +534,7 @@ async def get_tugas_list(
         student_class_id = user.get('student_class_id')
         student_id = user['id']
 
-        logger.info(f"[TUGAS-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
+        logger.debug(f"[TUGAS-SISWA] student_id: {student_id}, student_class_id: {student_class_id}")
 
         # Fetch tugas for kelas OR siswa that includes this student
         tugas_list_kelas = []
@@ -550,7 +560,7 @@ async def get_tugas_list(
             'is_active': True,
             'target_role': 'siswa'
         })
-        logger.info(f"[TUGAS-SISWA] DEBUG: Total tugas with target_role='siswa': {total_siswa_tugas}")
+        logger.debug(f"[TUGAS-SISWA] DEBUG: Total tugas with target_role='siswa': {total_siswa_tugas}")
 
         # Debug: Check if student_id exists in any target_siswa array
         sample_tugas = await db.tugas.find_one({
@@ -558,8 +568,8 @@ async def get_tugas_list(
             'target_role': 'siswa'
         })
         if sample_tugas:
-            logger.info(f"[TUGAS-SISWA] DEBUG: Sample tugas target_siswa: {sample_tugas.get('target_siswa')}")
-            logger.info(f"[TUGAS-SISWA] DEBUG: Looking for student_id: {student_id}")
+            logger.debug(f"[TUGAS-SISWA] DEBUG: Sample tugas target_siswa: {sample_tugas.get('target_siswa')}")
+            logger.debug(f"[TUGAS-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
         tugas_list = tugas_list_kelas + tugas_list_siswa
@@ -830,7 +840,7 @@ async def submit_tugas(
 @router.get("/jadwal")
 async def get_jadwal_kelas(user: Dict = Depends(get_current_user)):
     """Get jadwal mengajar untuk kelas dengan format grouped (seperti di walikelas)."""
-    logger.info(f"[JADWAL] NEW VERSION - Endpoint hit for class_id: {user.get('class_id')}")
+    logger.debug(f"[JADWAL] NEW VERSION - Endpoint hit for class_id: {user.get('class_id')}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -979,7 +989,7 @@ def _time_diff_minutes(start: str, end: str) -> int:
 @router.get("/jurnal")
 async def get_jurnal_kelas(user: Dict = Depends(get_current_user)):
     """Get jurnal mengajar untuk kelas ini."""
-    logger.info(f"[JURNAL] Endpoint hit for class_id: {user.get('class_id')}")
+    logger.debug(f"[JURNAL] Endpoint hit for class_id: {user.get('class_id')}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -1039,7 +1049,7 @@ async def get_kehadiran_kelas(
 ):
     """Get kehadiran siswa untuk kelas ini berdasarkan bulan dan tahun."""
 
-    logger.info(f"[KELAS-KEHADIRAN] Endpoint hit for class_id: {user.get('class_id')}, month: {month}, year: {year}")
+    logger.debug(f"[KELAS-KEHADIRAN] Endpoint hit for class_id: {user.get('class_id')}, month: {month}, year: {year}")
 
     if user.get('active_role') != 'kelas':
         raise HTTPException(status_code=403, detail="Hanya akun kelas yang dapat mengakses")
@@ -1083,7 +1093,7 @@ async def get_kehadiran_kelas(
 
     logger.info(f"[KELAS-KEHADIRAN] Found {len(attendance_records)} attendance records")
     if attendance_records:
-        logger.info(f"[KELAS-KEHADIRAN] Sample record: {attendance_records[0]}")
+        logger.debug(f"[KELAS-KEHADIRAN] Sample record: {attendance_records[0]}")
 
     # Calculate total unique days (from created_at dates)
     unique_days = set()

@@ -9,6 +9,7 @@ import io
 
 from auth_utils import hash_password
 from core import (
+    bump_token_version,
     db,
     get_active_academic_year,
     get_current_user,
@@ -436,7 +437,10 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
     update = {}
 
     # Fields that users CANNOT change themselves (security/admin-only)
-    restricted_fields = {'roles', 'is_active', 'homeroom_class_id', 'student_class_id', 'parent_of', 'jabatan_ids'}
+    # new_password juga dilarang di sini: ganti password sendiri wajib lewat
+    # /auth/change-password yang memverifikasi password lama.
+    restricted_fields = {'roles', 'is_active', 'homeroom_class_id', 'student_class_id', 'parent_of', 'jabatan_ids',
+                         'new_password'}
 
     for k, v in raw_dump.items():
         # Skip restricted fields
@@ -484,15 +488,6 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
     return serialize_doc(doc)
 
 
-# GET /users/{uid} must be BEFORE GET /users to avoid path conflicts
-@router.get("/users/{uid}")
-async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
-    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
-    if not doc:
-        raise HTTPException(404, "User tidak ditemukan")
-    return serialize_doc(doc)
-
-
 @router.get("/users/teachers")
 async def list_teachers(user: Dict = Depends(get_current_user)):
     """Get list of all teachers (for dropdowns, accessible by all authenticated users).
@@ -512,6 +507,35 @@ async def list_teachers(user: Dict = Depends(get_current_user)):
     return [serialize_doc(i) for i in items]
 
 
+# GET /users/{uid} harus SETELAH rute statis /users/teachers, jika tidak
+# "teachers" akan tertangkap sebagai {uid}.
+@router.get("/users/{uid}")
+async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
+    doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
+    if not doc:
+        raise HTTPException(404, "User tidak ditemukan")
+    return serialize_doc(doc)
+
+
+# Data identitas yang hanya boleh dilihat peran pengelola data (admin, kepala
+# madrasah, kepala TU). Peran lain memakai /users untuk dropdown & daftar nama,
+# jadi tidak perlu menerima NIK, No. KK, nomor bantuan sosial, penghasilan, dsb.
+FULL_IDENTITY_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha')
+SENSITIVE_IDENTITY_FIELDS = (
+    'nik', 'nomor_kk', 'nomor_kip', 'nomor_kks', 'nomor_pkh',
+    'ayah_nik', 'ibu_nik', 'wali_nik',
+    'nomor_izin_tinggal', 'ayah_nomor_izin_tinggal', 'ibu_nomor_izin_tinggal', 'wali_nomor_izin_tinggal',
+    'ayah_penghasilan', 'ibu_penghasilan', 'wali_penghasilan',
+    'dokumen_pas_foto', 'dokumen_akte_kelahiran', 'dokumen_ijazah_sd', 'dokumen_kartu_keluarga',
+    'dokumen_kip', 'dokumen_pkh', 'dokumen_kks', 'dokumen_ijazah_mts', 'rekam_didik',
+    'password_changed_at', 'password_change_dismissed_until',
+)
+
+
+def _can_view_full_identity(user: Dict) -> bool:
+    return 'admin' in user.get('roles', []) or user.get('active_role') in FULL_IDENTITY_ROLES
+
+
 @router.get("/users")
 async def list_users(
     role: Optional[str] = None,
@@ -528,7 +552,10 @@ async def list_users(
         # Exclude users with mutation_type 'keluar'
         q['mutation_type'] = {'$ne': 'keluar'}
 
-    items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).to_list(2000)
+    projection = {'_id': 0, 'password_hash': 0}
+    if not _can_view_full_identity(user):
+        projection.update({f: 0 for f in SENSITIVE_IDENTITY_FIELDS})
+    items = await db.users.find(q, projection).to_list(2000)
     return [serialize_doc(i) for i in items]
 
 
@@ -634,11 +661,15 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
             raise HTTPException(400, "Nomor KK harus 16 digit angka")
         update['nomor_kk'] = nomor_kk
 
-    if 'new_password' in update:
+    password_reset_by_admin = 'new_password' in update
+    if password_reset_by_admin:
         update['password_hash'] = hash_password(update.pop('new_password'))
     res = await db.users.update_one({'id': uid}, {'$set': update})
     if res.matched_count == 0:
         raise HTTPException(404, "User tidak ditemukan")
+    if password_reset_by_admin or update.get('is_active') is False:
+        # Password diganti admin / akun dinonaktifkan -> sesi lama user tidak berlaku
+        await bump_token_version(uid)
     await log_audit(user, 'update', 'user', uid, details={'keys': list(update.keys())}, request=request)
     doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
     return serialize_doc(doc)
