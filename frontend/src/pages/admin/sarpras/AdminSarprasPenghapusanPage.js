@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash, Plus, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyForm = { aset_tipe: 'tetap', aset_id: '', tanggal: new Date().toISOString().split('T')[0], alasan: '', jumlah_dihapus: 1, nomor_berita_acara: '', keterangan: '' };
 
@@ -65,7 +66,7 @@ export default function AdminSarprasPenghapusanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus catatan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus catatan ini?'))) return;
     try {
       await api.delete(`/sarpras/penghapusan/${id}`);
       toast.success('Catatan dihapus');

@@ -20,6 +20,7 @@ import {
 import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -368,7 +369,7 @@ export default function AchievementsPage() {
 
   const handleDelete = async (a) => {
     if (a._isPendingRequest) {
-      if (!window.confirm(`Batalkan pengajuan prestasi "${a.name}"?`)) return;
+      if (!(await confirmDialog(`Batalkan pengajuan prestasi "${a.name}"?`))) return;
       try {
         await api.delete(`/verval-requests/${a._vervalRequestId}`);
         toast.success('Pengajuan prestasi dibatalkan');
@@ -376,7 +377,7 @@ export default function AchievementsPage() {
       } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal membatalkan pengajuan'); }
       return;
     }
-    if (!window.confirm(`Hapus prestasi "${a.name}"?`)) return;
+    if (!(await confirmDialog(`Hapus prestasi "${a.name}"?`))) return;
     try {
       await api.delete(`/achievements/${a.id}`);
       toast.success('Prestasi dihapus');

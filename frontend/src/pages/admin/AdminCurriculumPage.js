@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { BookMarked, Plus, Pencil, Trash2, CheckCircle2, Info } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY = { name: '', code: '', description: '', is_active: true };
 
@@ -40,7 +41,7 @@ export default function AdminCurriculumPage() {
     } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleDelete = async (c) => {
-    if (!window.confirm(`Hapus kurikulum ${c.name}?`)) return;
+    if (!(await confirmDialog(`Hapus kurikulum ${c.name}?`))) return;
     try { await api.delete(`/curriculums/${c.id}`); toast.success('Dihapus'); await refresh(); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };

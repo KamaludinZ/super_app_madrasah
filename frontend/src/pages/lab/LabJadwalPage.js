@@ -12,6 +12,7 @@ import { CalendarClock, Plus, Pencil, Trash2, Loader2, Save, Search } from 'luci
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const MINGGU_LIST = [1, 2, 3, 4];
 const emptyForm = { minggu_ke: 1, hari: 'Senin', jam_mulai: '', jam_selesai: '', jp_mulai: '', jp_selesai: '', kelas: '', guru_nama: '', keterangan: '' };
@@ -93,7 +94,7 @@ export default function LabJadwalPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jadwal ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jadwal ini?'))) return;
     try {
       await api.delete(`/lab/${labKey}/jadwal/${id}`);
       toast.success('Jadwal dihapus');

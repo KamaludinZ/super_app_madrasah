@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { ClipboardCheck, Loader2, Save, Search, Eye, Sparkles, ThumbsUp, ThumbsDown, MessageSquareText, CheckCircle2, CalendarClock, Settings2, Check, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 // submitted_at/ditanggapi_pada are stored as naive UTC ISO strings (no timezone
 // suffix). Appending 'Z' tells the browser to parse them as UTC so they convert
@@ -218,7 +219,7 @@ export default function AdminBKClkbPage() {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Yakin ingin menghapus data CLKB milik ${item.siswa_nama}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (!(await confirmDialog(`Yakin ingin menghapus data CLKB milik ${item.siswa_nama}? Tindakan ini tidak dapat dibatalkan.`))) return;
     try {
       await api.delete(`/bk/clkb/${item.id}`);
       setList((prev) => prev.filter((x) => x.id !== item.id));

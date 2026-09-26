@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminRoomsPage() {
   const [items, setItems] = useState([]);
@@ -38,7 +39,7 @@ export default function AdminRoomsPage() {
   };
 
   const handleDelete = async (r) => {
-    if (!window.confirm(`Hapus ruangan ${r.name}?`)) return;
+    if (!(await confirmDialog(`Hapus ruangan ${r.name}?`))) return;
     await api.delete(`/rooms/${r.id}`); toast.success('Dihapus'); refresh();
   };
 

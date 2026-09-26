@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookMarked, FileText, Plus, Pencil, Trash2, Loader2, Save, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminTatibKategoriPage() {
   const [tab, setTab] = useState('kategori');
@@ -106,7 +107,7 @@ export default function AdminTatibKategoriPage() {
   };
 
   const handleDeleteKategori = async (id) => {
-    if (!confirm('Yakin ingin menghapus kategori ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus kategori ini?'))) return;
     try {
       await api.delete(`/tatib/kategori/${id}`);
       toast.success('Kategori dihapus');
@@ -163,7 +164,7 @@ export default function AdminTatibKategoriPage() {
   };
 
   const handleDeleteJenis = async (id) => {
-    if (!confirm('Yakin ingin menghapus jenis ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jenis ini?'))) return;
     try {
       await api.delete(`/tatib/jenis/${id}`);
       toast.success('Jenis dihapus');

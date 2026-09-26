@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Users, Plus, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const TUJUAN_LIST = ['Membaca', 'Meminjam Buku', 'Mengembalikan Buku', 'Mengerjakan Tugas', 'Lainnya'];
 
@@ -72,7 +73,7 @@ export default function AdminPerpusKunjunganPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data kunjungan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data kunjungan ini?'))) return;
     try {
       await api.delete(`/perpus/kunjungan/${id}`);
       toast.success('Data kunjungan dihapus');

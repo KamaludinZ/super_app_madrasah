@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -165,7 +166,7 @@ export default function AdminQRGeneratorPage() {
   };
 
   const deleteTemplate = async (t) => {
-    if (!window.confirm(`Hapus template ${t.name}?`)) return;
+    if (!(await confirmDialog(`Hapus template ${t.name}?`))) return;
     await api.delete(`/qr-templates/${t.id}`); toast.success('Dihapus'); refresh();
   };
 

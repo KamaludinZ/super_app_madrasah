@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Home, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyForm = {
   siswa_id: '',
@@ -109,7 +110,7 @@ export default function AdminBKHomeVisitPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jurnal home visit ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jurnal home visit ini?'))) return;
     try {
       await api.delete(`/bk/home-visit/${id}`);
       toast.success('Jurnal home visit dihapus');

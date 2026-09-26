@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ClipboardPlus, Plus, Pencil, Trash2, Loader2, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const emptyForm = { nama: '', deskripsi: '', urutan: 0 };
 
@@ -68,7 +69,7 @@ export default function AdminUKSJenisPenangananPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jenis penanganan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jenis penanganan ini?'))) return;
     try {
       await api.delete(`/uks/jenis-penanganan/${id}`);
       toast.success('Jenis penanganan dihapus');

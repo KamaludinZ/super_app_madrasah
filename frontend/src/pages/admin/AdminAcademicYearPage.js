@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminAcademicYearPage() {
   const [items, setItems] = useState([]);
@@ -83,12 +84,12 @@ export default function AdminAcademicYearPage() {
   };
 
   const handleActivate = async (ay) => {
-    if (!window.confirm(`Aktifkan ${ay.name}?`)) return;
+    if (!(await confirmDialog(`Aktifkan ${ay.name}?`))) return;
     await api.put(`/academic-years/${ay.id}/activate`); toast.success('Diaktifkan'); refresh();
   };
 
   const handleDelete = async (ay) => {
-    if (!window.confirm(`Hapus ${ay.name}?`)) return;
+    if (!(await confirmDialog(`Hapus ${ay.name}?`))) return;
     try { await api.delete(`/academic-years/${ay.id}`); toast.success('Dihapus'); refresh(); }
     catch (e) { toast.error('Gagal'); }
   };

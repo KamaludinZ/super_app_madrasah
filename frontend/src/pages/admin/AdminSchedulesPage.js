@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const ALL_DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
@@ -279,16 +280,16 @@ export default function AdminSchedulesPage() {
     }
   };
   const handleDelete = async (s) => {
-    if (!window.confirm('Hapus jadwal?')) return;
+    if (!(await confirmDialog('Hapus jadwal?'))) return;
     await api.delete(`/schedules/${s.id}`); toast.success('Dihapus'); await loadGrid(filterMode, filterValue);
   };
   const handleApprove = async (s) => {
-    if (!window.confirm(`Setujui jadwal ini?`)) return;
+    if (!(await confirmDialog(`Setujui jadwal ini?`))) return;
     try { await api.put(`/schedules/${s.id}/approve`); toast.success('Jadwal disetujui'); await loadGrid(filterMode, filterValue); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleLock = async (s) => {
-    if (!window.confirm(`Kunci jadwal ini? Setelah dikunci tidak bisa diedit kecuali dibuka kunci.`)) return;
+    if (!(await confirmDialog(`Kunci jadwal ini? Setelah dikunci tidak bisa diedit kecuali dibuka kunci.`))) return;
     try { await api.put(`/schedules/${s.id}/lock`); toast.success('Jadwal dikunci'); await loadGrid(filterMode, filterValue); }
     catch (e) {
       const detail = e?.response?.data?.detail;
@@ -297,7 +298,7 @@ export default function AdminSchedulesPage() {
     }
   };
   const handleUnlock = async (s) => {
-    if (!window.confirm(`Buka kunci jadwal ini?`)) return;
+    if (!(await confirmDialog(`Buka kunci jadwal ini?`))) return;
     try { await api.put(`/schedules/${s.id}/unlock`); toast.success('Kunci dibuka'); await loadGrid(filterMode, filterValue); }
     catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };

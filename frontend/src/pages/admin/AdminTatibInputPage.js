@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Edit2, Trash2, Upload, Plus, Download, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const AdminTatibInputPage = () => {
   const [aturanList, setAturanList] = useState([]);
@@ -128,7 +129,7 @@ const AdminTatibInputPage = () => {
   };
 
   const handleDeleteAturan = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus aturan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus aturan ini?'))) return;
     try {
       await api.delete(`/tatib/aturan/${id}`);
       toast.success('Aturan berhasil dihapus');

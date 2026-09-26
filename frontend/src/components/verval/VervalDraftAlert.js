@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, Send, X, Clock, Edit3, Trash2, XCircle, CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 /**
  * Component to show alert for verval request status
@@ -113,7 +114,7 @@ export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, 
   const handleCancelRequest = async () => {
     if (!pendingRequest) return;
 
-    if (!window.confirm('Yakin ingin membatalkan ajuan verval? Data akan kembali ke draft.')) return;
+    if (!(await confirmDialog('Yakin ingin membatalkan ajuan verval? Data akan kembali ke draft.'))) return;
 
     setSubmitting(true);
     try {
@@ -208,8 +209,8 @@ export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, 
     setHasDraft(false);
   };
 
-  const handleClearDraft = () => {
-    if (!window.confirm('Yakin ingin menghapus draft perubahan?')) return;
+  const handleClearDraft = async () => {
+    if (!(await confirmDialog('Yakin ingin menghapus draft perubahan?'))) return;
 
     localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(DISMISSED_KEY);

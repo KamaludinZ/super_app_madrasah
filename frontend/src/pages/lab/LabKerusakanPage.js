@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import LabPeminjamPicker from './LabPeminjamPicker';
 import LabKPI from './LabKPI';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 const STATUS_BADGE = {
   Diajukan: 'bg-blue-100 text-blue-700 border-blue-200',
   'Proses Ganti': 'bg-amber-100 text-amber-700 border-amber-200',
@@ -107,7 +108,7 @@ export default function LabKerusakanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus laporan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus laporan ini?'))) return;
     try {
       await api.delete(`/lab/${labKey}/kerusakan/${id}`);
       toast.success('Laporan dihapus');

@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import LabKPI from './LabKPI';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY_FORM = {
   aset_tipe: 'tetap', nama: '', sumber_dana: 'Komite', kategori: '', satuan: '',
@@ -103,7 +104,7 @@ export default function LabAlatBahanPage() {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Hapus "${item.nama}"?`)) return;
+    if (!(await confirmDialog(`Hapus "${item.nama}"?`))) return;
     try {
       await api.delete(`/lab/${labKey}/alat-bahan/${item.aset_tipe}/${item.id}`);
       toast.success('Data berhasil dihapus');

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertOctagon, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const TINGKAT_LIST = ['Ringan', 'Sedang', 'Berat'];
 const STATUS_LIST = ['Dilaporkan', 'Diperbaiki', 'Selesai', 'Tidak Dapat Diperbaiki'];
@@ -120,7 +121,7 @@ export default function AdminSarprasKerusakanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus laporan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus laporan ini?'))) return;
     try {
       await api.delete(`/sarpras/kerusakan/${id}`);
       toast.success('Laporan dihapus');

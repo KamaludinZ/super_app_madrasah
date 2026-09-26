@@ -45,6 +45,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Editor } from '@tinymce/tinymce-react';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const GuruMateriPage = () => {
   const [loading, setLoading] = useState(true);
@@ -255,7 +256,7 @@ const GuruMateriPage = () => {
   };
 
   const handleDelete = async (materiId) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus materi ini?')) {
+    if (!(await confirmDialog('Apakah Anda yakin ingin menghapus materi ini?'))) {
       return;
     }
 

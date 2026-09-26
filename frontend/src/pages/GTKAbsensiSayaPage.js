@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -201,7 +202,7 @@ function MyPerizinanTab() {
   };
 
   const handleDelete = async (i) => {
-    if (!window.confirm(`Hapus data izin ${IZIN_LABELS[i.jenis]} (${i.tanggal_mulai})?`)) return;
+    if (!(await confirmDialog(`Hapus data izin ${IZIN_LABELS[i.jenis]} (${i.tanggal_mulai})?`))) return;
     try {
       await api.delete(`/gtk/izin/${i.id}`);
       toast.success('Data izin berhasil dihapus');

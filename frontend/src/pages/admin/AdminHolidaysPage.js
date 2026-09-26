@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
 const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -85,7 +86,7 @@ function WeeklyHolidaysTab() {
     }
   };
   const handleDelete = async (h) => {
-    if (!window.confirm(`Hapus hari libur ${DAY_LABELS[h.day] || h.day}?`)) return;
+    if (!(await confirmDialog(`Hapus hari libur ${DAY_LABELS[h.day] || h.day}?`))) return;
     await api.delete(`/weekly-holidays/${h.id}`);
     toast.success('Dihapus'); await refresh();
   };
@@ -238,7 +239,7 @@ function AcademicHolidaysTab() {
     } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal'); }
   };
   const handleDelete = async (h) => {
-    if (!window.confirm(`Hapus libur ${h.name}?`)) return;
+    if (!(await confirmDialog(`Hapus libur ${h.name}?`))) return;
     await api.delete(`/academic-holidays/${h.id}`);
     toast.success('Dihapus'); await refresh();
   };

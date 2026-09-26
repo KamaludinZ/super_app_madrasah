@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const SEMESTER_OPTIONS = {
   regular: [
@@ -133,7 +134,7 @@ export default function AdminSemestersPage() {
   };
 
   const handleActivate = async (sem) => {
-    if (!window.confirm(`Aktifkan semester ${sem.name} - ${sem.academic_year_name}?`)) return;
+    if (!(await confirmDialog(`Aktifkan semester ${sem.name} - ${sem.academic_year_name}?`))) return;
     try {
       await api.post(`/semesters/${sem.id}/activate`);
       toast.success('Semester diaktifkan');
@@ -144,7 +145,7 @@ export default function AdminSemestersPage() {
   };
 
   const handleDelete = async (sem) => {
-    if (!window.confirm(`Hapus semester ${sem.name}?`)) return;
+    if (!(await confirmDialog(`Hapus semester ${sem.name}?`))) return;
     try {
       await api.delete(`/semesters/${sem.id}`);
       toast.success('Semester dihapus');

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookMarked, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const JENIS_LIST = ['Buku', 'Majalah', 'Peta', 'Alat Peraga', 'Lainnya'];
 const KONDISI_LIST = ['Baik', 'Rusak Ringan', 'Rusak Berat'];
@@ -112,7 +113,7 @@ export default function AdminPerpusKoleksiPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus koleksi ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus koleksi ini?'))) return;
     try {
       await api.delete(`/perpus/koleksi/${id}`);
       toast.success('Koleksi dihapus');

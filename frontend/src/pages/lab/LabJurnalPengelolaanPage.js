@@ -13,6 +13,7 @@ import { ClipboardList, Plus, Trash2, Loader2, Save, Download } from 'lucide-rea
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 function defaultTahunAjaran() {
   const now = new Date();
@@ -77,7 +78,7 @@ export default function LabJurnalPengelolaanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jurnal ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jurnal ini?'))) return;
     try {
       await api.delete(`/lab/${labKey}/jurnal-pengelolaan/${id}`);
       toast.success('Jurnal dihapus');

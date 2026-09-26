@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminTahunTakwimPage() {
   const [items, setItems] = useState([]);
@@ -74,7 +75,7 @@ export default function AdminTahunTakwimPage() {
   };
 
   const handleActivate = async (item) => {
-    if (!window.confirm(`Aktifkan ${item.name}?`)) return;
+    if (!(await confirmDialog(`Aktifkan ${item.name}?`))) return;
     try {
       await api.post(`/tahun-takwim/${item.id}/set-active`);
       toast.success('Diaktifkan');
@@ -85,7 +86,7 @@ export default function AdminTahunTakwimPage() {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Hapus ${item.name}?`)) return;
+    if (!(await confirmDialog(`Hapus ${item.name}?`))) return;
     try {
       await api.delete(`/tahun-takwim/${item.id}`);
       toast.success('Dihapus');

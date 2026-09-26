@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY_FORM = {
   user_id: '',
@@ -182,7 +183,7 @@ export default function AdminAgendaGuruPage() {
   };
 
   const handleDelete = async (agenda) => {
-    if (!window.confirm('Hapus agenda ini?')) return;
+    if (!(await confirmDialog('Hapus agenda ini?'))) return;
 
     try {
       await api.delete(`/staff-events/${agenda.id}`);

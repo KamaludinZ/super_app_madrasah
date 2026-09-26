@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookOpen, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang'];
 
@@ -106,7 +107,7 @@ export default function AdminPerpusPeminjamanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data peminjaman ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data peminjaman ini?'))) return;
     try {
       await api.delete(`/perpus/peminjaman/${id}`);
       toast.success('Data peminjaman dihapus');

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Edit2, Trash2, Plus, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const AdminTatibPenangananPage = () => {
   const [penangananList, setPenangananList] = useState([]);
@@ -109,7 +110,7 @@ const AdminTatibPenangananPage = () => {
   };
 
   const handleDeletePenanganan = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data penanganan ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data penanganan ini?'))) return;
     try {
       await api.delete(`/tatib/penanganan/${id}`);
       toast.success('Penanganan berhasil dihapus');

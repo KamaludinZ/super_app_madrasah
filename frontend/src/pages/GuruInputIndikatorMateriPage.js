@@ -13,6 +13,7 @@ import { BookOpen, FileText, Plus, Pencil, Trash2, Loader2, Save, Upload, Downlo
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function GuruInputIndikatorMateriPage() {
   const { user } = useAuth();
@@ -174,7 +175,7 @@ export default function GuruInputIndikatorMateriPage() {
   };
 
   const handleDeleteIndikator = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus indikator ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus indikator ini?'))) return;
     try {
       await api.delete(`/indikator/${id}`);
       toast.success('Indikator dihapus');
@@ -235,7 +236,7 @@ export default function GuruInputIndikatorMateriPage() {
   };
 
   const handleDeleteMateri = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus materi ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus materi ini?'))) return;
     try {
       await api.delete(`/materi/${id}`);
       toast.success('Materi dihapus');

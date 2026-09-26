@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const SHIFTS = [
@@ -144,7 +145,7 @@ export default function JadwalPiketPage() {
     } catch (e) { toast.error('Gagal'); }
   };
   const handleDelete = async (p) => {
-    if (!window.confirm('Hapus jadwal piket?')) return;
+    if (!(await confirmDialog('Hapus jadwal piket?'))) return;
     await api.delete(`/piket-schedules/${p.id}`); toast.success('Dihapus'); refresh();
   };
 
@@ -170,7 +171,7 @@ export default function JadwalPiketPage() {
     } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal menyimpan'); }
   };
   const handleIbadahDelete = async (s) => {
-    if (!window.confirm('Hapus jadwal ini?')) return;
+    if (!(await confirmDialog('Hapus jadwal ini?'))) return;
     await api.delete(`/ibadah-schedules/${s.id}`); toast.success('Dihapus'); refreshIbadah(); refreshToday();
   };
 

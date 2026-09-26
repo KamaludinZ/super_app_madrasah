@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { BookOpen, FileText, Search, Loader2, Eye, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminIndikatorMateriPage() {
   const [tab, setTab] = useState('indikator');
@@ -96,7 +97,7 @@ export default function AdminIndikatorMateriPage() {
   };
 
   const handleDeleteIndikator = async (id) => {
-    if (!confirm('Yakin ingin menghapus indikator ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus indikator ini?'))) return;
     try {
       await api.delete(`/indikator/${id}`);
       toast.success('Indikator dihapus');
@@ -107,7 +108,7 @@ export default function AdminIndikatorMateriPage() {
   };
 
   const handleDeleteMateri = async (id) => {
-    if (!confirm('Yakin ingin menghapus materi ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus materi ini?'))) return;
     try {
       await api.delete(`/materi/${id}`);
       toast.success('Materi dihapus');

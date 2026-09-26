@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import LabPeminjamPicker from './LabPeminjamPicker';
 import LabKPI from './LabKPI';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang/Rusak'];
 const STATUS_BADGE = {
   Dipinjam: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -91,7 +92,7 @@ export default function LabPeminjamanAlatPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus data ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus data ini?'))) return;
     try {
       await api.delete(`/lab/${labKey}/peminjaman-alat/${id}`);
       toast.success('Data dihapus');

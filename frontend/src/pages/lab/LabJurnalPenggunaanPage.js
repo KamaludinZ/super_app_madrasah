@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { LAB_META } from './LabMeta';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 const emptyForm = (userName) => ({
   tanggal: new Date().toISOString().split('T')[0], jam_mulai: '', jam_selesai: '', jp_mulai: '', jp_selesai: '',
   pengguna_nama_display: userName || '', judul_percobaan: '', alat_bahan_digunakan: '', keterangan: '',
@@ -70,7 +71,7 @@ export default function LabJurnalPenggunaanPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Yakin ingin menghapus jurnal ini?')) return;
+    if (!(await confirmDialog('Yakin ingin menghapus jurnal ini?'))) return;
     try {
       await api.delete(`/lab/${labKey}/jurnal-penggunaan/${id}`);
       toast.success('Jurnal dihapus');
