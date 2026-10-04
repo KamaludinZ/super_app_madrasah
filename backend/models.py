@@ -867,6 +867,10 @@ class UserUpdateRequest(BaseModel):
     address: Optional[str] = None
     jabatan_ids: Optional[List[str]] = None
     status_kepegawaian: Optional[str] = None
+    # Identitas kepegawaian GTK (tab Data Guru > Kepegawaian)
+    peg_id: Optional[str] = None
+    npk: Optional[str] = None
+    nrg: Optional[str] = None
 
     # Data EMIS siswa yang bisa diupdate admin langsung (tanpa verval)
     agama: Optional[str] = None

@@ -62,6 +62,7 @@ export default function AdminGTKPage() {
     if (search) {
       const s = search.toLowerCase();
       return (u.full_name || '').toLowerCase().includes(s) ||
+             (u.peg_id || '').toLowerCase().includes(s) ||
              (u.nip_nuptk || '').includes(search) ||
              (u.username || '').toLowerCase().includes(s);
     }
@@ -197,7 +198,7 @@ export default function AdminGTKPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Cari nama, NIP/NUPTK..."
+                  placeholder="Cari nama, Peg ID, NIP/NUPTK..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -233,7 +234,7 @@ export default function AdminGTKPage() {
                       <TableRow>
                         <TableHead className="w-12 text-center">NO</TableHead>
                         <TableHead>NAMA</TableHead>
-                        <TableHead>NIP/NUPTK</TableHead>
+                        <TableHead>PEG ID</TableHead>
                         <TableHead>L/P</TableHead>
                         <TableHead>PERAN</TableHead>
                         <TableHead>JABATAN</TableHead>
@@ -253,7 +254,7 @@ export default function AdminGTKPage() {
                         <TableRow key={u.id} data-testid={`gtk-row-${u.id}`}>
                           <TableCell className="text-center text-slate-500 font-mono">{i + 1}</TableCell>
                           <TableCell className="font-semibold">{u.full_name}</TableCell>
-                          <TableCell className="font-mono text-xs">{u.nip_nuptk || '-'}</TableCell>
+                          <TableCell className="font-mono text-xs">{u.peg_id || '-'}</TableCell>
                           <TableCell>
                             {u.gender === 'L' ? <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">L</Badge> :
                              u.gender === 'P' ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">P</Badge> :

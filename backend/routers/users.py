@@ -661,6 +661,10 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
             raise HTTPException(400, "Nomor KK harus 16 digit angka")
         update['nomor_kk'] = nomor_kk
 
+    for key in ('peg_id', 'npk', 'nrg'):
+        if key in update:
+            update[key] = str(update[key]).strip()
+
     password_reset_by_admin = 'new_password' in update
     if password_reset_by_admin:
         update['password_hash'] = hash_password(update.pop('new_password'))

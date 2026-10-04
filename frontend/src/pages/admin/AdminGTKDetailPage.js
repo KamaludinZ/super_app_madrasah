@@ -71,7 +71,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
         status_kepegawaian: data.status_kepegawaian || 'non_asn',
         nuptk: data.nip_nuptk || '',
         nip: data.nip || '',
-        jenis_pns: data.jenis_pns || '',
+        peg_id: data.peg_id || '',
+        npk: data.npk || '',
+        nrg: data.nrg || '',
         tmt_pns: data.tmt_pns || '',
         no_sk_pns: data.no_sk_pns || '',
         tanggal_sk_pns: data.tanggal_sk_pns || '',
@@ -429,6 +431,10 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     </Select>
                   </div>
                   <div>
+                    <Label>Peg ID</Label>
+                    <Input value={formKepegawaian.peg_id} onChange={(e) => setFormKepegawaian({...formKepegawaian, peg_id: e.target.value})} disabled={!editing} data-testid="input-peg-id" />
+                  </div>
+                  <div>
                     <Label>NUPTK</Label>
                     <Input value={formKepegawaian.nuptk} onChange={(e) => setFormKepegawaian({...formKepegawaian, nuptk: e.target.value})} disabled={!editing} />
                   </div>
@@ -437,14 +443,12 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     <Input value={formKepegawaian.nip} onChange={(e) => setFormKepegawaian({...formKepegawaian, nip: e.target.value})} disabled={!editing} />
                   </div>
                   <div>
-                    <Label>Jenis PNS</Label>
-                    <Select value={formKepegawaian.jenis_pns} onValueChange={(v) => setFormKepegawaian({...formKepegawaian, jenis_pns: v})} disabled={!editing || formKepegawaian.status_kepegawaian !== 'pns'}>
-                      <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pusat">PNS Pusat</SelectItem>
-                        <SelectItem value="daerah">PNS Daerah</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>NPK</Label>
+                    <Input value={formKepegawaian.npk} onChange={(e) => setFormKepegawaian({...formKepegawaian, npk: e.target.value})} disabled={!editing} data-testid="input-npk" />
+                  </div>
+                  <div>
+                    <Label>NRG</Label>
+                    <Input value={formKepegawaian.nrg} onChange={(e) => setFormKepegawaian({...formKepegawaian, nrg: e.target.value})} disabled={!editing} data-testid="input-nrg" />
                   </div>
                   <div>
                     <Label>TMT PNS</Label>
