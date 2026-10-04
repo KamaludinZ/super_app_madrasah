@@ -252,6 +252,14 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Seed error (development mode): {e}")
 
+    # Index koleksi BMHP & diagnosa UKS (idempotent; kegagalan tidak boleh menghentikan server)
+    try:
+        from routers.uks import ensure_uks_bmhp_indexes, ensure_uks_diagnosa_indexes
+        await ensure_uks_bmhp_indexes(db)
+        await ensure_uks_diagnosa_indexes(db)
+    except Exception as e:
+        logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
+
     # Start background tasks (both dev and production)
     try:
         from teaching_reminder_scheduler import start_reminder_scheduler, start_cleanup_task

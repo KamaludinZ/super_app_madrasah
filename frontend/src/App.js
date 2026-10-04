@@ -107,6 +107,10 @@ import AdminPerpusLaporanPage from '@/pages/admin/perpus/AdminPerpusLaporanPage'
 import AdminUKSKunjunganPage from '@/pages/admin/uks/AdminUKSKunjunganPage';
 import AdminUKSCkgPage from '@/pages/admin/uks/AdminUKSCkgPage';
 import AdminUKSObatPage from '@/pages/admin/uks/AdminUKSObatPage';
+import AdminUKSBMHPPage from '@/pages/admin/uks/AdminUKSBMHPPage';
+import AdminUKSDiagnosaPage from '@/pages/admin/uks/AdminUKSDiagnosaPage';
+import AdminUKSRiwayatSiswaPage from '@/pages/admin/uks/AdminUKSRiwayatSiswaPage';
+import AdminUKSLaporanBaruPage from '@/pages/admin/uks/AdminUKSLaporanBaruPage';
 import AdminUKSJenisPenangananPage from '@/pages/admin/uks/AdminUKSJenisPenangananPage';
 import AdminUKSDataSiswaGtkPage from '@/pages/admin/uks/AdminUKSDataSiswaGtkPage';
 import AdminUKSDataSiswaPage from '@/pages/admin/uks/AdminUKSDataSiswaPage';
@@ -362,12 +366,17 @@ function App() {
             <Route path="/admin/uks/kunjungan" element={<AdminUKSKunjunganPage />} />
             <Route path="/admin/uks/ckg" element={<AdminUKSCkgPage />} />
             <Route path="/admin/uks/obat" element={<AdminUKSObatPage />} />
+            <Route path="/admin/uks/bmhp" element={<AdminUKSBMHPPage />} />
             <Route path="/admin/uks/jenis-penanganan" element={<AdminUKSJenisPenangananPage />} />
+            <Route path="/admin/uks/penegakan-diagnosa" element={<AdminUKSDiagnosaPage />} />
             <Route path="/admin/uks/data-siswa-gtk" element={<AdminUKSDataSiswaGtkPage />} />
             <Route path="/admin/uks/data-siswa" element={<AdminUKSDataSiswaPage />} />
+            <Route path="/admin/uks/data-siswa/:studentId/riwayat" element={<AdminUKSRiwayatSiswaPage />} />
+            <Route path="/riwayat-uks/:studentId" element={<AdminUKSRiwayatSiswaPage />} />
             <Route path="/admin/uks/data-gtk" element={<AdminUKSDataGtkPage />} />
             <Route path="/admin/uks/aset" element={<AdminUKSAsetPage />} />
             <Route path="/admin/uks/laporan" element={<AdminUKSLaporanPage />} />
+            <Route path="/admin/uks/laporan-baru" element={<AdminUKSLaporanBaruPage />} />
             <Route path="/admin/sarpras/aset-tetap" element={<AdminSarprasAsetTetapPage />} />
             <Route path="/admin/sarpras/aset-lancar" element={<AdminSarprasAsetLancarPage />} />
             <Route path="/admin/sarpras/ruangan-aset" element={<AdminSarprasRuanganAsetPage />} />

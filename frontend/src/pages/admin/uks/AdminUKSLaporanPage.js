@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -256,6 +257,9 @@ export default function AdminUKSLaporanPage() {
         </Badge>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Laporan UKS</h1>
         <p className="text-sm text-slate-600 mt-1">Rekapitulasi kunjungan, penggunaan obat-obatan, dan penanganan</p>
+        <Link to="/admin/uks/laporan-baru" className="inline-block mt-2 text-sm font-medium text-[#006837] underline underline-offset-2">
+          Buka Laporan UKS Baru (rekap diagnosa &amp; opname obat/BMHP)
+        </Link>
       </div>
 
       {loading ? (

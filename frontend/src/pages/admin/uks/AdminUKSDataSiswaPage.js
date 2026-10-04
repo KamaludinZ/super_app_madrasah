@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Users, Search, GraduationCap, Eye, UserCheck, UserX, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Users, Search, GraduationCap, Eye, UserCheck, UserX, Loader2, HeartPulse } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import StudentDetailDialog from '@/components/students/StudentDetailDialog';
@@ -149,10 +150,15 @@ export default function AdminUKSDataSiswaPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => setDetailStudent(s)}
-                            className="gap-1 border-[#006837]/40 text-[#006837] hover:bg-[#006837]/5">
-                            <Eye className="h-3.5 w-3.5" /> Detail
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button asChild size="sm" variant="outline" className="gap-1 border-rose-300 text-rose-700 hover:bg-rose-50">
+                              <Link to={`/admin/uks/data-siswa/${s.id}/riwayat`}><HeartPulse className="h-3.5 w-3.5" /> Riwayat UKS</Link>
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setDetailStudent(s)}
+                              className="gap-1 border-[#006837]/40 text-[#006837] hover:bg-[#006837]/5">
+                              <Eye className="h-3.5 w-3.5" /> Detail
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

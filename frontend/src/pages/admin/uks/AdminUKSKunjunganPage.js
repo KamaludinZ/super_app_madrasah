@@ -15,8 +15,12 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import SuratKeteranganUKS, { JUDUL_SURAT } from './SuratKeteranganUKS';
+import RiwayatKunjunganPanel, { filterRiwayatSetahun } from './RiwayatKunjunganPanel';
 
 const KONDISI_PULANG_LIST = ['Membaik', 'Dirujuk', 'Dijemput Orang Tua', 'Istirahat di UKS', 'Istirahat di Mahad'];
+
+const CATATAN_SURAT_MAX = 1000;
 
 function formatTanggalID(dateStr) {
   if (!dateStr) return '-';
@@ -47,8 +51,11 @@ const emptyIntakeForm = {
 };
 
 const emptyPenangananForm = {
+  diagnosa_utama_id: '', // wajib
+  diagnosa_tambahan_ids: [], // opsional
   jenis_penanganan_ids: [],
   obat_list: [], // [{ obat_id, jumlah }]
+  bmhp_list: [], // [{ bmhp_id, jumlah }]
   penanganan: '',
   kondisi_pulang: '',
   dirujuk_ke: '',
@@ -70,6 +77,9 @@ export default function AdminUKSKunjunganPage() {
   const [gtkList, setGtkList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
   const [obatList, setObatList] = useState([]);
+  const [bmhpList, setBmhpList] = useState([]);
+  const [diagnosaList, setDiagnosaList] = useState([]);
+  const [diagnosaError, setDiagnosaError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -89,6 +99,8 @@ export default function AdminUKSKunjunganPage() {
 
   const [riwayatPasien, setRiwayatPasien] = useState({ kunjungan: [], ckg: [], imunisasi: [] });
   const [loadingRiwayat, setLoadingRiwayat] = useState(false);
+  const [riwayatError, setRiwayatError] = useState(false);
+  const [riwayatReload, setRiwayatReload] = useState(0);
 
   const [detailProfile, setDetailProfile] = useState(null);
   const [loadingDetailProfile, setLoadingDetailProfile] = useState(false);
@@ -111,11 +123,14 @@ export default function AdminUKSKunjunganPage() {
   const [suratType, setSuratType] = useState(null); // 'rujukan' | 'perizinan'
   const [suratProfile, setSuratProfile] = useState(null);
   const [loadingSurat, setLoadingSurat] = useState(false);
+  const [suratCatatan, setSuratCatatan] = useState('');
+  const [savingCatatan, setSavingCatatan] = useState(false);
 
   const openSurat = async (item, type) => {
     setSuratItem(item);
     setSuratType(type);
     setSuratProfile(null);
+    setSuratCatatan(item.catatan_surat || '');
     setLoadingSurat(true);
     try {
       const { data } = await api.get(`/uks/pasien/${item.pasien_id}/profile`);
@@ -127,7 +142,46 @@ export default function AdminUKSKunjunganPage() {
     }
   };
 
-  const closeSurat = () => { setSuratItem(null); setSuratType(null); setSuratProfile(null); };
+  const closeSurat = () => { setSuratItem(null); setSuratType(null); setSuratProfile(null); setSuratCatatan(''); };
+
+  // Saat mencetak, body diberi kelas khusus agar CSS cetak (index.css) hanya
+  // menampilkan isi surat dalam alur halaman normal (bisa lebih dari 1 halaman).
+  const cetakSurat = () => {
+    if (catatanBerubah) toast.info('Catatan belum disimpan — tetap ikut tercetak, tetapi tidak tersimpan di kunjungan.');
+    const selesai = () => {
+      document.body.classList.remove('cetak-surat-uks');
+      window.removeEventListener('afterprint', selesai);
+    };
+    document.body.classList.add('cetak-surat-uks');
+    window.addEventListener('afterprint', selesai);
+    window.print();
+  };
+
+  useEffect(() => () => document.body.classList.remove('cetak-surat-uks'), []);
+
+  const catatanBerubah = suratItem ? suratCatatan.trim() !== (suratItem.catatan_surat || '').trim() : false;
+
+  const simpanCatatanSurat = async () => {
+    if (!suratItem) return;
+    const catatan = suratCatatan.trim();
+    if (catatan.length > CATATAN_SURAT_MAX) {
+      toast.error(`Catatan maksimal ${CATATAN_SURAT_MAX} karakter`);
+      return;
+    }
+    setSavingCatatan(true);
+    try {
+      const { data } = await api.put(`/uks/kunjungan/${suratItem.id}/catatan-surat`, { catatan_surat: catatan || null });
+      const tersimpan = data?.catatan_surat ?? (catatan || null);
+      setSuratItem((cur) => (cur && cur.id === suratItem.id ? { ...cur, catatan_surat: tersimpan } : cur));
+      setList((cur) => cur.map((k) => (k.id === suratItem.id ? { ...k, catatan_surat: tersimpan } : k)));
+      setSuratCatatan(tersimpan || '');
+      toast.success('Catatan surat disimpan');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Gagal menyimpan catatan surat');
+    } finally {
+      setSavingCatatan(false);
+    }
+  };
 
   useEffect(() => { loadData(); }, []);
 
@@ -139,20 +193,24 @@ export default function AdminUKSKunjunganPage() {
     }
     let cancelled = false;
     setLoadingRiwayat(true);
+    setRiwayatError(false);
     Promise.all([
-      api.get('/uks/kunjungan', { params: { pasien_id: pasienId } }),
+      api.get(`/uks/pasien/${pasienId}/riwayat-kunjungan`, { params: { hari: 365, jenis_pasien: intakeForm.jenis_pasien } }),
       api.get('/uks/ckg', { params: { pasien_id: pasienId } }),
       api.get('/uks/imunisasi', { params: { pasien_id: pasienId } }),
     ]).then(([kRes, cRes, iRes]) => {
       if (cancelled) return;
-      setRiwayatPasien({ kunjungan: kRes.data || [], ckg: cRes.data || [], imunisasi: iRes.data || [] });
+      setRiwayatPasien({ kunjungan: kRes.data?.items || [], ckg: cRes.data || [], imunisasi: iRes.data || [] });
     }).catch(() => {
-      if (!cancelled) toast.error('Gagal memuat riwayat periksa pasien');
+      if (cancelled) return;
+      setRiwayatPasien({ kunjungan: [], ckg: [], imunisasi: [] });
+      setRiwayatError(true);
+      toast.error('Gagal memuat riwayat periksa pasien');
     }).finally(() => {
       if (!cancelled) setLoadingRiwayat(false);
     });
     return () => { cancelled = true; };
-  }, [intakeForm.pasien_id]);
+  }, [intakeForm.pasien_id, intakeForm.jenis_pasien, riwayatReload]);
 
   const loadData = async () => {
     setLoading(true);
@@ -171,6 +229,30 @@ export default function AdminUKSKunjunganPage() {
       toast.error('Gagal memuat data kunjungan UKS');
     } finally {
       setLoading(false);
+    }
+    loadBmhp();
+    loadDiagnosa();
+  };
+
+  // Semua diagnosa (termasuk nonaktif) dimuat agar nama di riwayat tetap terbaca;
+  // pilihan di form hanya menampilkan yang aktif (lihat selectableDiagnosa).
+  const loadDiagnosa = async () => {
+    try {
+      const res = await api.get('/uks/diagnosa');
+      setDiagnosaList(res.data || []);
+    } catch (e) {
+      setDiagnosaList([]);
+      toast.error('Gagal memuat master penegakan diagnosa');
+    }
+  };
+
+  const loadBmhp = async () => {
+    try {
+      const res = await api.get('/uks/bmhp');
+      setBmhpList(res.data || []);
+    } catch (e) {
+      setBmhpList([]);
+      toast.error('Gagal memuat data BMHP');
     }
   };
 
@@ -297,8 +379,11 @@ export default function AdminUKSKunjunganPage() {
   const openPenanganan = (item) => {
     setPenangananTarget(item);
     setPenangananForm({
+      diagnosa_utama_id: item.diagnosa_utama_id || '',
+      diagnosa_tambahan_ids: item.diagnosa_tambahan_ids?.length ? item.diagnosa_tambahan_ids : [],
       jenis_penanganan_ids: item.jenis_penanganan_ids?.length ? item.jenis_penanganan_ids : [],
       obat_list: item.obat_dipakai?.length ? item.obat_dipakai.map((o) => ({ obat_id: o.obat_id, jumlah: o.jumlah })) : [],
+      bmhp_list: item.bmhp_dipakai?.length ? item.bmhp_dipakai.map((b) => ({ bmhp_id: b.bmhp_id, jumlah: b.jumlah })) : [],
       penanganan: item.penanganan || '',
       kondisi_pulang: item.kondisi_pulang || '',
       dirujuk_ke: item.dirujuk_ke || '',
@@ -310,8 +395,23 @@ export default function AdminUKSKunjunganPage() {
       suhu: item.suhu ?? '',
       spo2: item.spo2 ?? '',
     });
+    setDiagnosaError('');
     setShowPenangananModal(true);
   };
+
+  const toggleDiagnosaTambahan = (id) => {
+    setPenangananForm((prev) => ({
+      ...prev,
+      diagnosa_tambahan_ids: prev.diagnosa_tambahan_ids.includes(id)
+        ? prev.diagnosa_tambahan_ids.filter((x) => x !== id)
+        : [...prev.diagnosa_tambahan_ids, id],
+    }));
+  };
+
+  // Diagnosa nonaktif disembunyikan, kecuali sudah tersimpan di kunjungan yang sedang diedit.
+  const selectableDiagnosa = diagnosaList.filter((d) => d.aktif !== false
+    || d.id === penangananForm.diagnosa_utama_id
+    || penangananForm.diagnosa_tambahan_ids.includes(d.id));
 
   const toggleJenisPenanganan = (id) => {
     setPenangananForm((prev) => ({
@@ -338,17 +438,69 @@ export default function AdminUKSKunjunganPage() {
     setPenangananForm((prev) => ({ ...prev, obat_list: prev.obat_list.filter((_, i) => i !== idx) }));
   };
 
+  const addBmhpRow = () => {
+    setPenangananForm((prev) => ({ ...prev, bmhp_list: [...prev.bmhp_list, { bmhp_id: '', jumlah: 1 }] }));
+  };
+
+  const updateBmhpRow = (idx, field, value) => {
+    setPenangananForm((prev) => {
+      const next = [...prev.bmhp_list];
+      next[idx] = { ...next[idx], [field]: value };
+      return { ...prev, bmhp_list: next };
+    });
+  };
+
+  const removeBmhpRow = (idx) => {
+    setPenangananForm((prev) => ({ ...prev, bmhp_list: prev.bmhp_list.filter((_, i) => i !== idx) }));
+  };
+
+  // Stok yang tersedia untuk kunjungan ini = stok tersisa + jumlah yang sudah tercatat
+  // pada kunjungan yang sedang diedit (karena akan dikembalikan saat disimpan ulang).
+  const bmhpAvailable = (bmhpId) => {
+    const bmhp = bmhpList.find((b) => b.id === bmhpId);
+    const already = (penangananTarget?.bmhp_dipakai || []).filter((b) => b.bmhp_id === bmhpId).reduce((n, b) => n + (b.jumlah || 0), 0);
+    return (bmhp?.stok_tersisa ?? 0) + already;
+  };
+
   const handleSavePenanganan = async () => {
+    if (!penangananForm.diagnosa_utama_id) {
+      setDiagnosaError('Diagnosa utama wajib dipilih');
+      toast.error('Pilih diagnosa utama terlebih dahulu');
+      return;
+    }
+    if (penangananForm.jenis_penanganan_ids.length === 0 && !penangananForm.penanganan.trim()) {
+      toast.error('Penanganan wajib diisi: pilih jenis penanganan atau tuliskan uraian penanganan');
+      return;
+    }
     const invalidObat = penangananForm.obat_list.some((o) => !o.obat_id || !o.jumlah || o.jumlah < 1);
     if (invalidObat) {
       toast.error('Lengkapi obat dan jumlahnya, atau hapus baris obat yang kosong');
       return;
     }
+    const invalidBmhp = penangananForm.bmhp_list.some((b) => !b.bmhp_id || !b.jumlah || Number(b.jumlah) < 1);
+    if (invalidBmhp) {
+      toast.error('Lengkapi BMHP dan jumlahnya, atau hapus baris BMHP yang kosong');
+      return;
+    }
+    const bmhpIds = penangananForm.bmhp_list.map((b) => b.bmhp_id);
+    if (new Set(bmhpIds).size !== bmhpIds.length) {
+      toast.error('BMHP yang sama dipilih lebih dari sekali; gabungkan jumlahnya dalam satu baris');
+      return;
+    }
+    const overStock = penangananForm.bmhp_list.find((b) => Number(b.jumlah) > bmhpAvailable(b.bmhp_id));
+    if (overStock) {
+      const nama = bmhpList.find((b) => b.id === overStock.bmhp_id)?.nama_bmhp || 'BMHP';
+      toast.error(`Jumlah ${nama} melebihi stok tersedia (${bmhpAvailable(overStock.bmhp_id)})`);
+      return;
+    }
     setSavingPenanganan(true);
     try {
       await api.put(`/uks/kunjungan/${penangananTarget.id}/penanganan`, {
+        diagnosa_utama_id: penangananForm.diagnosa_utama_id,
+        diagnosa_tambahan_ids: penangananForm.diagnosa_tambahan_ids.filter((id) => id !== penangananForm.diagnosa_utama_id),
         jenis_penanganan_ids: penangananForm.jenis_penanganan_ids,
         obat_list: penangananForm.obat_list.map((o) => ({ obat_id: o.obat_id, jumlah: Number(o.jumlah) })),
+        bmhp_list: penangananForm.bmhp_list.map((b) => ({ bmhp_id: b.bmhp_id, jumlah: Number(b.jumlah) })),
         penanganan: penangananForm.penanganan || null,
         kondisi_pulang: penangananForm.kondisi_pulang || null,
         dirujuk_ke: penangananForm.dirujuk_ke || null,
@@ -362,7 +514,7 @@ export default function AdminUKSKunjunganPage() {
       });
       toast.success('Penanganan berhasil disimpan');
       setShowPenangananModal(false);
-      loadData();
+      loadData(); // memuat ulang kunjungan sekaligus stok BMHP terbaru
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan penanganan');
     } finally {
@@ -370,15 +522,35 @@ export default function AdminUKSKunjunganPage() {
     }
   };
 
-  const filtered = list.filter((item) => {
+  // Server menyimpan salinan nama diagnosa; bila kosong (data lama), cari namanya di master.
+  const withDiagnosa = (item) => {
+    const utamaId = item.diagnosa_utama_id || '';
+    const tambahanIds = item.diagnosa_tambahan_ids || [];
+    const namaOf = (id) => diagnosaList.find((d) => d.id === id)?.nama;
+    return {
+      ...item,
+      diagnosa_utama_id: utamaId,
+      diagnosa_tambahan_ids: tambahanIds,
+      diagnosa_utama_nama: item.diagnosa_utama_nama || namaOf(utamaId) || '',
+      diagnosa_tambahan_nama: item.diagnosa_tambahan_nama?.length ? item.diagnosa_tambahan_nama : tambahanIds.map(namaOf).filter(Boolean),
+    };
+  };
+
+  const filtered = list.map(withDiagnosa).filter((item) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (item.pasien_nama || '').toLowerCase().includes(q) ||
-      (item.keluhan || '').toLowerCase().includes(q);
+      (item.keluhan || '').toLowerCase().includes(q) ||
+      (item.diagnosa_utama_nama || '').toLowerCase().includes(q) ||
+      item.diagnosa_tambahan_nama.some((n) => n.toLowerCase().includes(q));
   });
 
   const pasienOptions = intakeForm.jenis_pasien === 'gtk' ? gtkList : students;
   const selectedPasien = pasienOptions.find((p) => p.id === intakeForm.pasien_id);
+  const selectedKelasNama = classes.find((c) => c.id === intakeForm.kelas_id)?.name;
+  const pasienJenisLabel = intakeForm.jenis_pasien === 'gtk'
+    ? `GTK · ${intakeForm.gtk_kategori === 'tenaga_kependidikan' ? 'Tenaga Kependidikan' : 'Guru'}`
+    : `Siswa${selectedKelasNama ? ` · Kelas ${selectedKelasNama}` : ''}`;
 
   return (
     <div className="space-y-6" data-testid="admin-uks-kunjungan-page">
@@ -498,6 +670,31 @@ export default function AdminUKSKunjunganPage() {
                 </div>
               )}
 
+              {intakeForm.pasien_id && (
+                <div className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800" data-testid="riwayat-pasien-hint">
+                  <History className="h-4 w-4 shrink-0" />
+                  {loadingRiwayat ? (
+                    <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat riwayat kunjungan pasien...</span>
+                  ) : riwayatError ? (
+                    <span>Riwayat kunjungan pasien gagal dimuat.</span>
+                  ) : (
+                    <span>
+                      {(() => {
+                        const n = filterRiwayatSetahun(riwayatPasien.kunjungan).length;
+                        return n === 0 ? 'Belum ada kunjungan UKS dalam 1 tahun terakhir.' : `${n} kunjungan UKS dalam 1 tahun terakhir.`;
+                      })()}{' '}
+                      <button
+                        type="button"
+                        className="font-medium underline underline-offset-2"
+                        onClick={() => document.getElementById('riwayat-pasien-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      >
+                        Lihat riwayat
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tanggal <span className="text-rose-500">*</span></Label>
@@ -569,38 +766,25 @@ export default function AdminUKSKunjunganPage() {
           </Card>
 
           {intakeForm.pasien_id && (
-            <Card>
+            <Card id="riwayat-pasien-panel" className="scroll-mt-4">
               <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <History className="h-4 w-4 text-slate-500" />
                   <h3 className="font-semibold text-slate-900">Riwayat Periksa Sebelumnya — {selectedPasien?.full_name}</h3>
+                  <Badge className={intakeForm.jenis_pasien === 'gtk' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-sky-100 text-sky-700 border-sky-200'}>{pasienJenisLabel}</Badge>
                 </div>
 
                 {loadingRiwayat ? (
                   <div className="py-6 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-[#006837]" /></div>
                 ) : (
                   <>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Kunjungan UKS</div>
-                      {riwayatPasien.kunjungan.length === 0 ? (
-                        <p className="text-sm text-slate-400">Belum ada riwayat kunjungan</p>
-                      ) : (
-                        <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                          {riwayatPasien.kunjungan.map((item) => (
-                            <div key={item.id} className="flex items-center justify-between gap-3 text-sm bg-slate-50 rounded-lg px-3 py-2">
-                              <div className="min-w-0">
-                                <span className="font-mono text-slate-500 mr-2">{item.tanggal}{item.waktu ? ` · ${item.waktu}` : ''}</span>
-                                <span className="truncate">{item.keluhan}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge className={STATUS_BADGE[item.status] || ''}>{item.status}</Badge>
-                                <Button size="icon" variant="ghost" onClick={() => setDetailItem(item)} className="h-7 w-7 text-blue-600 hover:text-blue-700"><Eye className="h-3.5 w-3.5" /></Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <RiwayatKunjunganPanel
+                      items={filterRiwayatSetahun(riwayatPasien.kunjungan)}
+                      onDetail={setDetailItem}
+                      jenisPasien={intakeForm.jenis_pasien}
+                      error={riwayatError}
+                      onRetry={() => setRiwayatReload((n) => n + 1)}
+                    />
 
                     <div>
                       <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Cek Kesehatan (CKG)</div>
@@ -620,6 +804,7 @@ export default function AdminUKSKunjunganPage() {
                       )}
                     </div>
 
+                    {(intakeForm.jenis_pasien !== 'gtk' || riwayatPasien.imunisasi.length > 0) && (
                     <div>
                       <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Imunisasi</div>
                       {riwayatPasien.imunisasi.length === 0 ? (
@@ -637,6 +822,7 @@ export default function AdminUKSKunjunganPage() {
                         </div>
                       )}
                     </div>
+                    )}
                   </>
                 )}
               </CardContent>
@@ -649,7 +835,7 @@ export default function AdminUKSKunjunganPage() {
             <CardContent className="p-4">
               <div className="relative max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input placeholder="Cari pasien atau keluhan..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+                <Input placeholder="Cari pasien, keluhan, atau diagnosa..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
               </div>
             </CardContent>
           </Card>
@@ -668,6 +854,7 @@ export default function AdminUKSKunjunganPage() {
                         <TableHead>Tanggal</TableHead>
                         <TableHead>Pasien</TableHead>
                         <TableHead>Keluhan</TableHead>
+                        <TableHead>Diagnosa</TableHead>
                         <TableHead className="text-center">TB (cm)</TableHead>
                         <TableHead className="text-center">BB (kg)</TableHead>
                         <TableHead className="text-center">Tensi</TableHead>
@@ -682,7 +869,7 @@ export default function AdminUKSKunjunganPage() {
                     <TableBody>
                       {filtered.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={12} className="text-center py-12 text-slate-500">
+                          <TableCell colSpan={13} className="text-center py-12 text-slate-500">
                             <History className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                             <div className="font-semibold">Belum ada riwayat kunjungan</div>
                           </TableCell>
@@ -693,6 +880,18 @@ export default function AdminUKSKunjunganPage() {
                             <TableCell className="font-mono">{item.tanggal} {item.waktu ? `· ${item.waktu}` : ''}</TableCell>
                             <TableCell className="font-semibold">{item.pasien_nama}<div className="text-xs text-slate-500 font-normal">{item.pasien_identitas}</div></TableCell>
                             <TableCell className="max-w-xs"><div className="line-clamp-2">{item.keluhan}</div></TableCell>
+                            <TableCell className="max-w-[14rem]">
+                              {item.diagnosa_utama_nama ? (
+                                <div>
+                                  <div className="font-medium">{item.diagnosa_utama_nama}</div>
+                                  {item.diagnosa_tambahan_nama.length > 0 && (
+                                    <div className="text-xs text-slate-500 line-clamp-1">+ {item.diagnosa_tambahan_nama.join(', ')}</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">{item.status === 'Sudah Ditangani' ? 'Belum diisi' : '-'}</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-center font-mono">{item.tinggi_badan ?? '-'}</TableCell>
                             <TableCell className="text-center font-mono">{item.berat_badan ?? '-'}</TableCell>
                             <TableCell className="text-center font-mono">{item.tekanan_darah || '-'}</TableCell>
@@ -781,6 +980,46 @@ export default function AdminUKSKunjunganPage() {
             </div>
 
             <div className="space-y-2">
+              <Label>Penegakan Diagnosa</Label>
+              <div className="space-y-3 p-3 border border-slate-200 rounded-lg">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-600">Diagnosa Utama <span className="text-rose-500">*</span></Label>
+                  <Select
+                    value={penangananForm.diagnosa_utama_id || 'none'}
+                    onValueChange={(v) => {
+                      const id = v === 'none' ? '' : v;
+                      setPenangananForm((prev) => ({ ...prev, diagnosa_utama_id: id, diagnosa_tambahan_ids: prev.diagnosa_tambahan_ids.filter((x) => x !== id) }));
+                      setDiagnosaError('');
+                    }}
+                  >
+                    <SelectTrigger aria-invalid={!!diagnosaError} className={diagnosaError ? 'border-rose-400' : ''}><SelectValue placeholder="Pilih Diagnosa Utama" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih Diagnosa Utama</SelectItem>
+                      {selectableDiagnosa.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>{d.kode ? `${d.kode} — ` : ''}{d.nama}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {diagnosaError && <p className="text-xs text-rose-600">{diagnosaError}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-600">Diagnosa Tambahan (opsional)</Label>
+                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {selectableDiagnosa.filter((d) => d.id !== penangananForm.diagnosa_utama_id).map((d) => (
+                      <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={penangananForm.diagnosa_tambahan_ids.includes(d.id)} onCheckedChange={() => toggleDiagnosaTambahan(d.id)} />
+                        {d.nama}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {diagnosaList.filter((d) => d.aktif !== false).length === 0 && (
+                  <p className="text-xs text-rose-600">Master Penegakan Diagnosa masih kosong. Isi dulu di menu UKS &gt; Penegakan Diagnosa agar penanganan bisa disimpan.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>Jenis Penanganan (boleh pilih lebih dari satu)</Label>
               <div className="grid grid-cols-2 gap-2 p-3 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
                 {jenisList.length === 0 ? (
@@ -834,7 +1073,56 @@ export default function AdminUKSKunjunganPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Penanganan</Label>
+              <div className="flex items-center justify-between">
+                <Label>Pemakaian BMHP</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addBmhpRow} className="gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Tambah BMHP
+                </Button>
+              </div>
+              {penangananForm.bmhp_list.length === 0 ? (
+                <p className="text-xs text-slate-500">Belum ada BMHP ditambahkan (kasa, plester, sarung tangan, dll.)</p>
+              ) : (
+                <div className="space-y-2">
+                  {penangananForm.bmhp_list.map((row, idx) => {
+                    const selected = bmhpList.find((b) => b.id === row.bmhp_id);
+                    const available = row.bmhp_id ? bmhpAvailable(row.bmhp_id) : undefined;
+                    const over = row.bmhp_id && Number(row.jumlah) > available;
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Select value={row.bmhp_id || 'none'} onValueChange={(v) => updateBmhpRow(idx, 'bmhp_id', v === 'none' ? '' : v)}>
+                            <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih BMHP" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Pilih BMHP</SelectItem>
+                              {bmhpList.map((b) => (
+                                <SelectItem key={b.id} value={b.id} disabled={bmhpAvailable(b.id) <= 0}>
+                                  {b.nama_bmhp} (Stok: {b.stok_tersisa ?? 0} {b.satuan})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number" min="1" max={available || undefined}
+                            value={row.jumlah} onChange={(e) => updateBmhpRow(idx, 'jumlah', e.target.value)}
+                            className="w-24" placeholder="Jml" aria-invalid={!!over}
+                          />
+                          <Button size="icon" variant="ghost" onClick={() => removeBmhpRow(idx)} className="text-rose-600 hover:text-rose-700 shrink-0">
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {over && <p className="text-xs text-rose-600">Melebihi stok tersedia ({available} {selected?.satuan})</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs text-slate-500">
+                Pemakaian BMHP otomatis tercatat di BMHP Keluar dan mengurangi stok saat penanganan disimpan.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Penanganan <span className="text-xs font-normal text-slate-500">(wajib bila tidak memilih jenis penanganan)</span></Label>
               <Textarea rows={2} value={penangananForm.penanganan} onChange={(e) => setPenangananForm({ ...penangananForm, penanganan: e.target.value })} placeholder="Uraikan penanganan yang diberikan" />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -994,6 +1282,15 @@ export default function AdminUKSKunjunganPage() {
                 </div>
               )}
               <div><span className="text-slate-500 block text-xs">Status</span><Badge className={STATUS_BADGE[detailItem.status] || ''}>{detailItem.status}</Badge></div>
+              {(detailItem.diagnosa_utama_nama || detailItem.diagnosa_tambahan_nama?.length > 0) && (
+                <div>
+                  <span className="text-slate-500 block text-xs">Penegakan Diagnosa</span>
+                  {detailItem.diagnosa_utama_nama && <div className="font-medium">{detailItem.diagnosa_utama_nama}</div>}
+                  {detailItem.diagnosa_tambahan_nama?.length > 0 && (
+                    <div className="text-sm text-slate-600">Tambahan: {detailItem.diagnosa_tambahan_nama.join(', ')}</div>
+                  )}
+                </div>
+              )}
               {detailItem.jenis_penanganan_nama?.length > 0 && (
                 <div><span className="text-slate-500 block text-xs">Jenis Penanganan</span>{detailItem.jenis_penanganan_nama.join(', ')}</div>
               )}
@@ -1004,6 +1301,18 @@ export default function AdminUKSKunjunganPage() {
                     {detailItem.obat_dipakai.map((o, i) => (
                       <div key={i} className="flex justify-between text-sm bg-slate-50 rounded px-2 py-1">
                         <span>{o.obat_nama}</span><span className="font-mono">×{o.jumlah}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {detailItem.bmhp_dipakai?.length > 0 && (
+                <div>
+                  <span className="text-slate-500 block text-xs mb-1">BMHP Digunakan</span>
+                  <div className="space-y-1">
+                    {detailItem.bmhp_dipakai.map((b, i) => (
+                      <div key={i} className="flex justify-between text-sm bg-slate-50 rounded px-2 py-1">
+                        <span>{b.bmhp_nama}</span><span className="font-mono">×{b.jumlah}</span>
                       </div>
                     ))}
                   </div>
@@ -1025,89 +1334,38 @@ export default function AdminUKSKunjunganPage() {
       <Dialog open={!!suratItem} onOpenChange={(v) => !v && closeSurat()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{suratType === 'rujukan' ? 'Surat Rujukan' : 'Surat Perizinan Pulang'}</DialogTitle>
+            <DialogTitle>{JUDUL_SURAT[suratType] || 'Surat Keterangan UKS'}</DialogTitle>
           </DialogHeader>
           {loadingSurat ? (
             <div className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>
           ) : suratItem && (
             <>
-              <div id="surat-uks-print" className="bg-white p-6 border border-slate-200 rounded-lg text-sm text-slate-900 space-y-4">
-                <div className="text-center border-b-2 border-slate-800 pb-3 space-y-0.5">
-                  <div className="font-bold text-base uppercase">{settings?.school_name || 'MTsN 2 Kota Malang'}</div>
-                  {settings?.address && <div className="text-xs">{settings.address}</div>}
-                  {settings?.npsn && <div className="text-xs">NPSN: {settings.npsn}</div>}
+              <SuratKeteranganUKS item={suratItem} profile={suratProfile} settings={settings} jenis={suratType} catatan={suratCatatan} />
+
+              <div className="space-y-1.5 print:hidden" data-testid="surat-catatan-editor">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="surat-catatan-input">Catatan petugas (tampil di bawah penatalaksanaan)</Label>
+                  <span className={`text-xs ${suratCatatan.length > CATATAN_SURAT_MAX ? 'text-red-600' : 'text-slate-500'}`}>
+                    {suratCatatan.length}/{CATATAN_SURAT_MAX}
+                  </span>
                 </div>
-
-                <div className="text-center space-y-0.5">
-                  <div className="font-bold underline uppercase">{suratType === 'rujukan' ? 'Surat Rujukan Kesehatan' : 'Surat Perizinan Pulang'}</div>
-                  <div className="text-xs">Nomor: UKS/{suratType === 'rujukan' ? 'RJK' : 'IZN'}/{(suratItem.tanggal || '').replace(/-/g, '')}/{suratItem.id?.slice(0, 6)}</div>
-                </div>
-
-                <p>Yang bertanda tangan di bawah ini, Petugas Unit Kesehatan Sekolah (UKS) {settings?.school_name || 'MTsN 2 Kota Malang'}, menerangkan bahwa:</p>
-
-                <div className="grid grid-cols-3 gap-x-2 gap-y-1 pl-4">
-                  <div>Nama</div><div className="col-span-2">: {suratItem.pasien_nama}</div>
-                  <div>NIK</div><div className="col-span-2">: {suratProfile?.nik || '-'}</div>
-                  <div>Jenis Pasien</div><div className="col-span-2">: {suratProfile?.jenis_pasien === 'siswa' ? 'Siswa' : 'GTK'}</div>
-                  {suratProfile?.jenis_pasien === 'siswa' && (
-                    <>
-                      <div>Kelas</div><div className="col-span-2">: {suratProfile?.class_name || '-'}</div>
-                      <div>Wali Kelas</div><div className="col-span-2">: {suratProfile?.wali_kelas_nama || '-'}</div>
-                    </>
-                  )}
-                  <div>Tanggal / Waktu</div><div className="col-span-2">: {formatTanggalID(suratItem.tanggal)} {suratItem.waktu || ''}</div>
-                  <div>Keluhan</div><div className="col-span-2">: {suratItem.keluhan}</div>
-                </div>
-
-                {suratType === 'rujukan' ? (
-                  <p>
-                    Berdasarkan pemeriksaan yang telah dilakukan, yang bersangkutan memerlukan penanganan lebih lanjut dan
-                    dirujuk ke <strong>{suratItem.dirujuk_ke || '_______________'}</strong> untuk mendapatkan pemeriksaan/penanganan medis lebih lanjut.
-                  </p>
-                ) : (
-                  <p>
-                    Berdasarkan pemeriksaan yang telah dilakukan, yang bersangkutan diizinkan untuk pulang lebih awal dengan
-                    kondisi <strong>Dijemput Orang Tua/Wali</strong> guna mendapatkan istirahat dan perawatan lebih lanjut di rumah.
-                  </p>
-                )}
-
-                {(suratItem.tinggi_badan || suratItem.berat_badan || suratItem.tekanan_darah || suratItem.nadi || suratItem.suhu || suratItem.spo2) && (
-                  <div>
-                    <div className="mb-1">Hasil pemeriksaan vital:</div>
-                    <div className="grid grid-cols-3 gap-x-2 gap-y-1 pl-4 text-xs">
-                      {suratItem.tinggi_badan != null && <div>TB: {suratItem.tinggi_badan} cm</div>}
-                      {suratItem.berat_badan != null && <div>BB: {suratItem.berat_badan} kg</div>}
-                      {suratItem.tekanan_darah && <div>Tensi: {suratItem.tekanan_darah}</div>}
-                      {suratItem.nadi != null && <div>Nadi: {suratItem.nadi} bpm</div>}
-                      {suratItem.suhu != null && <div>Suhu: {suratItem.suhu} °C</div>}
-                      {suratItem.spo2 != null && <div>SpO2: {suratItem.spo2}%</div>}
-                    </div>
-                  </div>
-                )}
-
-                <p>Demikian surat ini dibuat untuk dapat dipergunakan sebagaimana mestinya.</p>
-
-                <div className="flex justify-between pt-2">
-                  {suratProfile?.jenis_pasien === 'siswa' ? (
-                    <div className="text-center">
-                      <div className="invisible">Malang, {formatTanggalID(suratItem.tanggal)}</div>
-                      <div>Mengetahui, Wali Kelas</div>
-                      <div className="h-16"></div>
-                      <div className="font-semibold underline">{suratProfile?.wali_kelas_nama || '(_________________)'}</div>
-                    </div>
-                  ) : <div />}
-                  <div className="text-center">
-                    <div>Malang, {formatTanggalID(suratItem.tanggal)}</div>
-                    <div>Petugas UKS,</div>
-                    <div className="h-16"></div>
-                    <div className="font-semibold underline">{suratItem.ditangani_oleh || suratItem.petugas_nama || '(_________________)'}</div>
-                  </div>
+                <Textarea
+                  id="surat-catatan-input"
+                  rows={3}
+                  value={suratCatatan}
+                  onChange={(e) => setSuratCatatan(e.target.value)}
+                  placeholder="Mis. anjuran istirahat, kontrol ulang, atau pesan untuk orang tua/fasilitas rujukan. Kosongkan untuk mencetak baris catatan kosong."
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={simpanCatatanSurat} disabled={savingCatatan || !catatanBerubah} className="gap-2">
+                    {savingCatatan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Simpan Catatan
+                  </Button>
                 </div>
               </div>
 
               <DialogFooter className="print:hidden">
                 <Button variant="outline" onClick={closeSurat}>Tutup</Button>
-                <Button onClick={() => window.print()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
+                <Button onClick={cetakSurat} className="gap-2 bg-[#006837] hover:bg-[#005830]">
                   <Printer className="h-4 w-4" /> Cetak
                 </Button>
               </DialogFooter>
@@ -1116,13 +1374,6 @@ export default function AdminUKSKunjunganPage() {
         </DialogContent>
       </Dialog>
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #surat-uks-print, #surat-uks-print * { visibility: visible; }
-          #surat-uks-print { position: absolute; left: 0; top: 0; width: 100%; border: none !important; }
-        }
-      `}</style>
     </div>
   );
 }

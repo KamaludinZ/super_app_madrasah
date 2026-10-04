@@ -299,3 +299,35 @@ code, .font-mono {
 #qr-reader-mount select {
     display: none;
 }
+
+/* Cetak Laporan UKS Baru: hanya area laporan yang tampil di kertas. */
+@media print {
+    body.cetak-laporan-uks * { visibility: hidden; }
+    body.cetak-laporan-uks #area-cetak-laporan-uks,
+    body.cetak-laporan-uks #area-cetak-laporan-uks * { visibility: visible; }
+    body.cetak-laporan-uks #area-cetak-laporan-uks { position: absolute; left: 0; top: 0; width: 100%; padding: 0 8mm; }
+    body.cetak-laporan-uks #area-cetak-laporan-uks .print\:hidden { display: none !important; }
+}
+
+/* Cetak Surat Keterangan UKS (rujukan / perizinan pulang) dari dialog kunjungan.
+   Dialog dilepas dari posisi fixed & batas tinggi agar surat panjang tidak terpotong. */
+@media print {
+    body.cetak-surat-uks * { visibility: hidden; }
+    body.cetak-surat-uks #root { display: none !important; }
+    body.cetak-surat-uks [role="dialog"] {
+        position: static !important; transform: none !important; inset: auto !important;
+        max-height: none !important; max-width: none !important; width: 100% !important;
+        overflow: visible !important; padding: 0 !important; margin: 0 !important;
+        border: 0 !important; box-shadow: none !important; display: block !important;
+    }
+    body.cetak-surat-uks [role="dialog"] > *:not(#surat-uks-print) { display: none !important; }
+    body.cetak-surat-uks #surat-uks-print,
+    body.cetak-surat-uks #surat-uks-print * { visibility: visible; }
+    body.cetak-surat-uks #surat-uks-print {
+        border: 0 !important; border-radius: 0 !important; padding: 0 6mm !important;
+        font-size: 11pt; line-height: 1.45; color: #000;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body.cetak-surat-uks #surat-uks-print .surat-blok,
+    body.cetak-surat-uks #surat-uks-print table tr { break-inside: avoid; page-break-inside: avoid; }
+}

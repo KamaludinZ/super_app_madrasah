@@ -357,6 +357,7 @@ function navForRole(role, userRoles = []) {
         items: [
           { to: '/admin/uks/kunjungan', label: 'Data Kunjungan UKS', icon: Stethoscope, testid: 'nav-kepsek-uks-kunjungan' },
           { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-kepsek-uks-laporan' },
+          { to: '/admin/uks/laporan-baru', label: 'Laporan UKS Baru', icon: FileBarChart, testid: 'nav-kepsek-uks-laporan-baru' },
         ],
       },
       {
@@ -391,10 +392,13 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/uks/kunjungan', label: 'Data Kunjungan', icon: Stethoscope, testid: 'nav-uks-kunjungan' },
           { to: '/admin/uks/ckg', label: 'Data CKG', icon: Syringe, testid: 'nav-uks-ckg' },
           { to: '/admin/uks/obat', label: 'Data Obat', icon: Pill, testid: 'nav-uks-obat' },
+          { to: '/admin/uks/bmhp', label: 'Data BMHP', icon: Package, testid: 'nav-uks-bmhp' },
           { to: '/admin/uks/jenis-penanganan', label: 'Jenis Penanganan', icon: ClipboardPlus, testid: 'nav-uks-jenis-penanganan' },
+          { to: '/admin/uks/penegakan-diagnosa', label: 'Penegakan Diagnosa', icon: ClipboardCheck, testid: 'nav-uks-diagnosa' },
           { to: '/admin/uks/data-siswa-gtk', label: 'Data Siswa dan GTK', icon: Users, testid: 'nav-uks-data-siswa-gtk' },
           { to: '/admin/uks/aset', label: 'Aset UKS', icon: HeartPulse, testid: 'nav-uks-aset' },
           { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-uks-laporan' },
+          { to: '/admin/uks/laporan-baru', label: 'Laporan UKS Baru', icon: FileBarChart, testid: 'nav-uks-laporan-baru' },
         ],
       },
     ];
@@ -515,10 +519,13 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/uks/kunjungan', label: 'Data Kunjungan', icon: Stethoscope, testid: 'nav-admin-uks-kunjungan' },
           { to: '/admin/uks/ckg', label: 'Data CKG', icon: Syringe, testid: 'nav-admin-uks-ckg' },
           { to: '/admin/uks/obat', label: 'Data Obat', icon: Pill, testid: 'nav-admin-uks-obat' },
+          { to: '/admin/uks/bmhp', label: 'Data BMHP', icon: Package, testid: 'nav-admin-uks-bmhp' },
           { to: '/admin/uks/jenis-penanganan', label: 'Jenis Penanganan', icon: ClipboardPlus, testid: 'nav-admin-uks-jenis-penanganan' },
+          { to: '/admin/uks/penegakan-diagnosa', label: 'Penegakan Diagnosa', icon: ClipboardCheck, testid: 'nav-admin-uks-diagnosa' },
           { to: '/admin/uks/data-siswa-gtk', label: 'Data Siswa dan GTK', icon: Users, testid: 'nav-admin-uks-data-siswa-gtk' },
           { to: '/admin/uks/aset', label: 'Aset UKS', icon: HeartPulse, testid: 'nav-admin-uks-aset' },
           { to: '/admin/uks/laporan', label: 'Laporan UKS', icon: FileBarChart, testid: 'nav-admin-uks-laporan' },
+          { to: '/admin/uks/laporan-baru', label: 'Laporan UKS Baru', icon: FileBarChart, testid: 'nav-admin-uks-laporan-baru' },
         ],
       },
       {

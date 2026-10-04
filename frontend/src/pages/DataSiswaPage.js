@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Users, Search, GraduationCap, Eye, KeyRound, Pencil, QrCode,
-  UserCheck, UserX, ShieldAlert, History, Loader2, Hash, Trash2, Home, ClipboardCheck,
+  UserCheck, UserX, ShieldAlert, History, Loader2, Hash, Trash2, Home, ClipboardCheck, HeartPulse,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
@@ -28,6 +29,8 @@ export default function DataSiswaPage() {
   const homeroomClassId = user?.homeroom_class_id;
   const canEdit = isAdmin; // Only admin can edit/delete students
   const canViewAccount = isAdmin || isWaliKelas; // Admin and wali kelas can view account info
+  // Riwayat UKS (kunjungan & CKG) boleh dilihat admin, wali kelas, kepala sekolah, dan petugas UKS.
+  const canViewRiwayatUKS = isAdmin || isWaliKelas || ['kepala_sekolah', 'unit_kesehatan'].includes(activeRole);
 
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('all');
@@ -331,6 +334,11 @@ export default function DataSiswaPage() {
                             data-testid={`detail-${s.id}`}>
                             <Eye className="h-3.5 w-3.5" /> Detail
                           </Button>
+                          {canViewRiwayatUKS && (
+                            <Button asChild size="sm" variant="outline" className="gap-1 border-rose-300 text-rose-700 hover:bg-rose-50">
+                              <Link to={`/riwayat-uks/${s.id}`} data-testid={`riwayat-uks-${s.id}`}><HeartPulse className="h-3.5 w-3.5" /> Riwayat UKS</Link>
+                            </Button>
+                          )}
                           {canViewAccount && (
                             <Button size="sm" variant="outline" onClick={() => setAccountStudent(s)}
                               className="gap-1"
