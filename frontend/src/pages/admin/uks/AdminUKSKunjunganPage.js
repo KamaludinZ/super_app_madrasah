@@ -10,12 +10,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Stethoscope, History, Plus, Trash2, Loader2, Save, Search, Eye, ClipboardPlus, X, Pencil, Printer } from 'lucide-react';
+import { Stethoscope, History, Plus, Trash2, Loader2, Save, Search, Eye, ClipboardPlus, X, Pencil, Printer, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import SuratKeteranganUKS, { JUDUL_SURAT } from './SuratKeteranganUKS';
+import { saveBlob } from './laporanExport';
 import RiwayatKunjunganPanel, { filterRiwayatSetahun } from './RiwayatKunjunganPanel';
 
 const KONDISI_PULANG_LIST = ['Membaik', 'Dirujuk', 'Dijemput Orang Tua', 'Istirahat di UKS', 'Istirahat di Mahad'];
@@ -69,7 +70,9 @@ const emptyPenangananForm = {
 };
 
 export default function AdminUKSKunjunganPage() {
-  const { settings } = useAuth();
+  const { settings, activeRole } = useAuth();
+  // Kepala madrasah hanya melihat/mencetak surat; catatan disimpan oleh petugas UKS/admin.
+  const bisaUbahCatatan = ['admin', 'unit_kesehatan'].includes(activeRole);
   const [tab, setTab] = useState('input');
   const [list, setList] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -124,6 +127,8 @@ export default function AdminUKSKunjunganPage() {
   const [suratProfile, setSuratProfile] = useState(null);
   const [loadingSurat, setLoadingSurat] = useState(false);
   const [suratCatatan, setSuratCatatan] = useState('');
+  const [suratSekolah, setSuratSekolah] = useState(null);
+  const [unduhSurat, setUnduhSurat] = useState(false);
   const [savingCatatan, setSavingCatatan] = useState(false);
 
   const openSurat = async (item, type) => {
@@ -133,16 +138,20 @@ export default function AdminUKSKunjunganPage() {
     setSuratCatatan(item.catatan_surat || '');
     setLoadingSurat(true);
     try {
-      const { data } = await api.get(`/uks/pasien/${item.pasien_id}/profile`);
-      setSuratProfile(data);
+      // Satu endpoint: kunjungan terbaru (termasuk penatalaksanaan & catatan), profil pasien, kop madrasah.
+      const { data } = await api.get(`/uks/kunjungan/${item.id}/surat`, { params: { jenis: type } });
+      setSuratItem(data.kunjungan);
+      setSuratProfile(data.pasien);
+      setSuratSekolah(data.sekolah || null);
+      setSuratCatatan(data.kunjungan?.catatan_surat || '');
     } catch (e) {
-      toast.error('Gagal memuat data pasien untuk surat');
+      toast.error(e.response?.data?.detail || 'Gagal memuat data surat');
     } finally {
       setLoadingSurat(false);
     }
   };
 
-  const closeSurat = () => { setSuratItem(null); setSuratType(null); setSuratProfile(null); setSuratCatatan(''); };
+  const closeSurat = () => { setSuratItem(null); setSuratType(null); setSuratProfile(null); setSuratCatatan(''); setSuratSekolah(null); };
 
   // Saat mencetak, body diberi kelas khusus agar CSS cetak (index.css) hanya
   // menampilkan isi surat dalam alur halaman normal (bisa lebih dari 1 halaman).
@@ -158,6 +167,26 @@ export default function AdminUKSKunjunganPage() {
   };
 
   useEffect(() => () => document.body.classList.remove('cetak-surat-uks'), []);
+
+  // PDF dibuat server dari data tersimpan (termasuk catatan yang sudah disimpan).
+  const unduhSuratPdf = async () => {
+    if (!suratItem) return;
+    if (catatanBerubah) {
+      toast.error('Simpan catatan terlebih dahulu agar ikut masuk ke PDF.');
+      return;
+    }
+    setUnduhSurat(true);
+    try {
+      const res = await api.get(`/uks/kunjungan/${suratItem.id}/surat/pdf`, { params: { jenis: suratType }, responseType: 'blob' });
+      const cd = res.headers?.['content-disposition'] || '';
+      const nama = (cd.match(/filename="?([^"]+)"?/) || [])[1] || `Surat_${suratType === 'rujukan' ? 'Rujukan' : 'Perizinan_Pulang'}_UKS_${suratItem.tanggal || ''}.pdf`;
+      saveBlob(new Blob([res.data], { type: 'application/pdf' }), nama);
+    } catch (e) {
+      toast.error('Gagal mengunduh PDF surat');
+    } finally {
+      setUnduhSurat(false);
+    }
+  };
 
   const catatanBerubah = suratItem ? suratCatatan.trim() !== (suratItem.catatan_surat || '').trim() : false;
 
@@ -1340,7 +1369,7 @@ export default function AdminUKSKunjunganPage() {
             <div className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>
           ) : suratItem && (
             <>
-              <SuratKeteranganUKS item={suratItem} profile={suratProfile} settings={settings} jenis={suratType} catatan={suratCatatan} />
+              <SuratKeteranganUKS item={suratItem} profile={suratProfile} settings={{ ...settings, ...Object.fromEntries(Object.entries(suratSekolah || {}).filter(([, v]) => v)) }} jenis={suratType} catatan={suratCatatan} />
 
               <div className="space-y-1.5 print:hidden" data-testid="surat-catatan-editor">
                 <div className="flex items-center justify-between">
@@ -1351,12 +1380,16 @@ export default function AdminUKSKunjunganPage() {
                 </div>
                 <Textarea
                   id="surat-catatan-input"
+                  readOnly={!bisaUbahCatatan}
                   rows={3}
                   value={suratCatatan}
                   onChange={(e) => setSuratCatatan(e.target.value)}
                   placeholder="Mis. anjuran istirahat, kontrol ulang, atau pesan untuk orang tua/fasilitas rujukan. Kosongkan untuk mencetak baris catatan kosong."
                 />
-                <div className="flex justify-end">
+                {bisaUbahCatatan && suratItem.catatan_surat_oleh && (
+                  <div className="text-xs text-slate-500">Terakhir disimpan oleh {suratItem.catatan_surat_oleh}</div>
+                )}
+                <div className={`flex justify-end ${bisaUbahCatatan ? '' : 'hidden'}`}>
                   <Button size="sm" variant="outline" onClick={simpanCatatanSurat} disabled={savingCatatan || !catatanBerubah} className="gap-2">
                     {savingCatatan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Simpan Catatan
                   </Button>
@@ -1365,6 +1398,9 @@ export default function AdminUKSKunjunganPage() {
 
               <DialogFooter className="print:hidden">
                 <Button variant="outline" onClick={closeSurat}>Tutup</Button>
+                <Button variant="outline" onClick={unduhSuratPdf} disabled={unduhSurat} className="gap-2">
+                  {unduhSurat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Unduh PDF
+                </Button>
                 <Button onClick={cetakSurat} className="gap-2 bg-[#006837] hover:bg-[#005830]">
                   <Printer className="h-4 w-4" /> Cetak
                 </Button>

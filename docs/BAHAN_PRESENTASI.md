@@ -229,7 +229,7 @@ Total: 20 slide (± 25–30 menit presentasi).
   - **Riwayat kunjungan otomatis**: begitu pasien dipilih di form kunjungan, riwayat 1 tahun terakhir (keluhan, diagnosa, penanganan, obat/BMHP) langsung tampil, lengkap dengan peringatan bila pasien berkunjung ≥ 3 kali dalam 30 hari
   - **Riwayat UKS Siswa**: menu di data siswa dengan tab Riwayat Kunjungan dan Riwayat CKG (IMT dihitung otomatis); bisa dibuka petugas UKS, kepala madrasah, dan wali kelas untuk siswa di kelasnya
   - **Laporan UKS Baru**: rekap penegakan diagnosa per kunjungan (dipisah siswa & GTK, klik untuk rincian kunjungan) dan rekap opname obat & BMHP (stok awal, masuk, keluar, stok akhir); filter bulanan/tahunan, unduh Excel/PDF, dan cetak
-  - **Surat Keterangan UKS diperbarui**: surat rujukan & izin pulang kini memuat bagian penatalaksanaan (diagnosa, jenis penanganan, tindakan, tabel obat/BMHP yang diberikan, kondisi keluar UKS) dan kolom catatan petugas; bila catatan kosong, tercetak baris titik-titik untuk ditulis tangan
+  - **Surat Keterangan UKS diperbarui**: surat rujukan & izin pulang kini memuat bagian penatalaksanaan (diagnosa, jenis penanganan, tindakan, tabel obat/BMHP yang diberikan, kondisi keluar UKS) dan kolom catatan petugas; bila catatan kosong, tercetak baris titik-titik untuk ditulis tangan; catatan tersimpan per kunjungan (hanya petugas UKS/admin yang bisa mengubah) dan surat bisa diunduh sebagai PDF
 - **Perpustakaan:** kunjungan, peminjaman, laporan
 
 **Saran visual:** 4 kolom ikon (gedung, tabung lab, palang hijau, buku).
@@ -362,3 +362,4 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-05 | Modul UKS lanjutan fase 3: menu Laporan UKS Baru — rekap diagnosa per kunjungan (siswa/GTK) & opname obat/BMHP dengan filter bulanan/tahunan, ekspor Excel/PDF, dan cetak | 14 |
 | 2026-10-05 | Modul UKS lanjutan fase 4 (tampilan): surat keterangan UKS dengan bagian penatalaksanaan dan kolom catatan petugas, format cetak rapi lintas halaman | 14 |
 | 2026-10-05 | Data GTK: field Jenis PNS diganti NPK, ditambah Peg ID dan NRG pada tab Kepegawaian; kolom NIP/NUPTK di daftar GTK diganti Peg ID | 13 |
+| 2026-10-05 | Modul UKS lanjutan fase 4 (server): catatan surat tersimpan per kunjungan, data surat dari satu endpoint, unduh PDF surat rujukan/izin pulang lengkap dengan penatalaksanaan & catatan | 14 |

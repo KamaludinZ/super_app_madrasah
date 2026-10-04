@@ -3,7 +3,8 @@ Migration: lengkapi skema uks_kunjungan untuk fitur Riwayat Kunjungan
 
 Script ini:
 1. Mengisi field yang belum ada pada kunjungan lama dengan nilai default:
-   diagnosa (None / list kosong), bmhp_dipakai, obat_dipakai, jenis_penanganan_*.
+   diagnosa (None / list kosong), bmhp_dipakai, obat_dipakai, jenis_penanganan_*,
+   serta catatan_surat (+ catatan_surat_oleh / catatan_surat_pada) untuk surat keterangan UKS.
 2. Mengisi salinan pasien_tipe ('siswa'/'gtk') dan pasien_kelas dari data pengguna.
    Catatan: kelas diisi dari kelas siswa SAAT INI karena kelas saat kunjungan
    tidak tercatat di data lama.
@@ -37,6 +38,9 @@ DEFAULTS = {
     'jenis_penanganan_nama': [],
     'obat_dipakai': [],
     'bmhp_dipakai': [],
+    'catatan_surat': None,
+    'catatan_surat_oleh': None,
+    'catatan_surat_pada': None,
 }
 
 

@@ -17,7 +17,8 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from xml.sax.saxutils import escape as xml_escape
 
 from core import db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
@@ -1341,6 +1342,16 @@ def _clean_keluhan(keluhan: Optional[str]) -> str:
     return text
 
 
+# Catatan petugas yang dicetak di bawah bagian penatalaksanaan pada surat
+# keterangan UKS (rujukan / perizinan pulang), beserta jejak siapa & kapan mengubahnya.
+CATATAN_SURAT_MAX = 1000
+KUNJUNGAN_CATATAN_SURAT_DEFAULTS = {
+    'catatan_surat': None,
+    'catatan_surat_oleh': None,
+    'catatan_surat_pada': None,
+}
+
+
 def _with_kunjungan_defaults(doc: Dict) -> Dict:
     """Lengkapi dokumen kunjungan lama dengan field diagnosa/BMHP agar bentuk respons konsisten."""
     return {
@@ -1352,6 +1363,7 @@ def _with_kunjungan_defaults(doc: Dict) -> Dict:
         'bmhp_dipakai': [],
         'pasien_tipe': None,
         'pasien_kelas': None,
+        **KUNJUNGAN_CATATAN_SURAT_DEFAULTS,
         **doc,
     }
 
@@ -2066,6 +2078,7 @@ async def create_kunjungan(req: KunjunganUKSRequest, user: Dict = Depends(requir
         'kondisi_pulang': None,
         'dirujuk_ke': None,
         'keterangan': None,
+        **KUNJUNGAN_CATATAN_SURAT_DEFAULTS,
         'ditangani_oleh': None,
         'ditangani_pada': None,
         'petugas_id': user['id'],
@@ -2201,6 +2214,277 @@ async def submit_penanganan(kunjungan_id: str, req: PenangananKunjunganRequest, 
     await db.uks_kunjungan.update_one({'id': kunjungan_id}, {'$set': update_data})
     await log_audit(user, 'uks_kunjungan_penanganan', f"Penanganan kunjungan UKS: {kunjungan_id}")
 
+    updated = await db.uks_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0})
+    return serialize_doc(_with_kunjungan_defaults(updated))
+
+
+# ============================================================
+# SURAT KETERANGAN UKS (rujukan / perizinan pulang)
+# ============================================================
+
+SURAT_UKS_JENIS = {
+    'rujukan': {'judul': 'Surat Rujukan Kesehatan', 'kode': 'RJK', 'kondisi_pulang': 'Dirujuk'},
+    'perizinan': {'judul': 'Surat Perizinan Pulang', 'kode': 'IZN', 'kondisi_pulang': 'Dijemput Orang Tua'},
+}
+
+
+def _penatalaksanaan_surat(k: Dict) -> Dict:
+    """Rincian penanganan/penatalaksanaan kunjungan dalam bentuk siap tampil di surat."""
+    pemberian = [{'jenis': 'obat', 'id': o.get('obat_id'), 'nama': o.get('obat_nama'), 'jumlah': o.get('jumlah')}
+                 for o in (k.get('obat_dipakai') or [])]
+    pemberian += [{'jenis': 'bmhp', 'id': b.get('bmhp_id'), 'nama': b.get('bmhp_nama'), 'jumlah': b.get('jumlah')}
+                  for b in (k.get('bmhp_dipakai') or [])]
+    return {
+        'sudah_ditangani': k.get('status') == 'Sudah Ditangani' or bool(k.get('ditangani_pada')),
+        'diagnosa_utama': ({'id': k.get('diagnosa_utama_id'), 'nama': k.get('diagnosa_utama_nama'),
+                            'kode': k.get('diagnosa_utama_kode')} if k.get('diagnosa_utama_nama') else None),
+        'diagnosa_tambahan': [n for n in (k.get('diagnosa_tambahan_nama') or []) if n],
+        'jenis_penanganan': [n for n in (k.get('jenis_penanganan_nama') or []) if n],
+        'tindakan': k.get('penanganan'),
+        'pemberian': pemberian,
+        'kondisi_pulang': k.get('kondisi_pulang'),
+        'dirujuk_ke': k.get('dirujuk_ke'),
+        'keterangan': k.get('keterangan'),
+        'ditangani_oleh': k.get('ditangani_oleh'),
+        'ditangani_pada': k.get('ditangani_pada'),
+    }
+
+
+@router.get("/uks/kunjungan/{kunjungan_id}/surat")
+async def get_surat_kunjungan(
+    kunjungan_id: str,
+    jenis: str = 'rujukan',
+    user: Dict = Depends(require_role(*UKS_VIEW_ROLES)),
+):
+    """Data lengkap surat keterangan UKS untuk satu kunjungan: identitas pasien,
+    penatalaksanaan (diagnosa, penanganan, obat/BMHP, kondisi pulang), catatan petugas,
+    kop madrasah, dan nomor surat. Jenis surat harus sesuai kondisi pulang kunjungan."""
+    cfg = SURAT_UKS_JENIS.get(jenis)
+    if not cfg:
+        raise HTTPException(400, "Jenis surat harus 'rujukan' atau 'perizinan'")
+    k = await db.uks_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0})
+    if not k:
+        raise HTTPException(404, "Kunjungan tidak ditemukan")
+    if k.get('kondisi_pulang') != cfg['kondisi_pulang']:
+        raise HTTPException(400, f"{cfg['judul']} hanya untuk kunjungan dengan kondisi pulang '{cfg['kondisi_pulang']}'")
+    k = _with_kunjungan_defaults(k)
+
+    pasien = await get_pasien_profile(k['pasien_id'], user) if k.get('pasien_id') else None
+    if pasien and pasien.get('jenis_pasien') == 'gtk' and not pasien.get('nik'):
+        u = await db.users.find_one({'id': k['pasien_id']}, {'_id': 0, 'nik': 1})
+        pasien['nik'] = (u or {}).get('nik')
+
+    settings = await get_settings()
+    return {
+        'jenis': jenis,
+        'judul': cfg['judul'],
+        'nomor': f"UKS/{cfg['kode']}/{(k.get('tanggal') or '').replace('-', '')}/{(k.get('id') or '')[:6]}",
+        'kunjungan': serialize_doc(k),
+        'pasien': pasien,
+        'penatalaksanaan': _penatalaksanaan_surat(k),
+        'catatan': {
+            'teks': k.get('catatan_surat'),
+            'oleh': k.get('catatan_surat_oleh'),
+            'pada': k.get('catatan_surat_pada'),
+            'maks': CATATAN_SURAT_MAX,
+        },
+        'sekolah': {
+            'school_name': settings.get('school_name'),
+            'address': settings.get('address'),
+            'npsn': settings.get('npsn'),
+            'city': settings.get('city'),
+        },
+    }
+
+
+def _tanggal_surat(tanggal: Optional[str]) -> str:
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})', tanggal or '')
+    if not m:
+        return tanggal or '-'
+    return f"{int(m.group(3))} {BULAN_NAMA_ID[int(m.group(2)) - 1]} {m.group(1)}"
+
+
+def _jam_wib(iso: Optional[str]) -> Optional[str]:
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None) - (dt.utcoffset() or timedelta(0))
+    return (dt + timedelta(hours=7)).strftime('%H:%M') + ' WIB'
+
+
+def _p(text, style) -> Paragraph:
+    """Paragraph dengan teks pengguna di-escape (aman dari karakter <, &) dan baris baru dipertahankan."""
+    return Paragraph(xml_escape('' if text is None else str(text)).replace('\n', '<br/>'), style)
+
+
+def _surat_pdf_bytes(data: Dict) -> bytes:
+    """Bangun PDF surat keterangan UKS (A4 portrait) dari hasil get_surat_kunjungan:
+    kop, identitas, isi, vital, penatalaksanaan, catatan (atau baris kosong), tanda tangan."""
+    k, pasien, pt = data['kunjungan'], data.get('pasien') or {}, data['penatalaksanaan']
+    sekolah = data.get('sekolah') or {}
+    nama_sekolah = sekolah.get('school_name') or 'MTsN 2 Kota Malang'
+    kota = sekolah.get('city') or 'Malang'
+    is_siswa = pasien.get('jenis_pasien') == 'siswa' or k.get('pasien_tipe') == 'siswa'
+
+    styles = getSampleStyleSheet()
+    body = styles['BodyText'].clone('surat_body', fontSize=10.5, leading=14)
+    small = body.clone('surat_small', fontSize=9, leading=12)
+    bold = body.clone('surat_bold', fontName='Helvetica-Bold')
+    center = body.clone('surat_center', alignment=1)
+    kop = styles['Title'].clone('surat_kop', fontSize=14, leading=17, spaceAfter=0)
+    judul = center.clone('surat_judul', fontName='Helvetica-Bold', fontSize=12)
+
+    def grid(rows):
+        t = Table([[_p(a, body), _p(':', body), b if isinstance(b, Paragraph) else _p(b if b not in (None, '') else '-', body)]
+                   for a, b in rows], colWidths=[4.6 * cm, 0.4 * cm, 11.2 * cm])
+        t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                               ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1)]))
+        return t
+
+    el = [_p(nama_sekolah.upper(), kop)]
+    for line in (sekolah.get('address'), f"NPSN: {sekolah['npsn']}" if sekolah.get('npsn') else None):
+        if line:
+            el.append(_p(line, small.clone('kop_line', alignment=1)))
+    garis = Table([['']], colWidths=[17 * cm], rowHeights=[4])
+    garis.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, -1), 1.5, colors.black)]))
+    el += [garis, Spacer(1, 0.3 * cm),
+           Paragraph(f"<u>{xml_escape(data['judul'].upper())}</u>", judul),
+           _p(f"Nomor: {data['nomor']}", small.clone('nomor', alignment=1)), Spacer(1, 0.4 * cm),
+           _p(f"Yang bertanda tangan di bawah ini, Petugas Unit Kesehatan Sekolah (UKS) {nama_sekolah}, menerangkan bahwa:", body),
+           Spacer(1, 0.15 * cm)]
+    ident = [('Nama', k.get('pasien_nama')), ('NIK', pasien.get('nik')), ('Jenis Pasien', 'Siswa' if is_siswa else 'GTK')]
+    if is_siswa:
+        ident += [('Kelas', pasien.get('class_name') or k.get('pasien_kelas')), ('Wali Kelas', pasien.get('wali_kelas_nama'))]
+    ident += [('Tanggal / Waktu', f"{_tanggal_surat(k.get('tanggal'))} {k.get('waktu') or ''}".strip()), ('Keluhan', k.get('keluhan'))]
+    el += [grid(ident), Spacer(1, 0.3 * cm)]
+
+    if data['jenis'] == 'rujukan':
+        isi = (f"Berdasarkan pemeriksaan yang telah dilakukan, yang bersangkutan memerlukan penanganan lebih lanjut dan dirujuk ke "
+               f"<b>{xml_escape(k.get('dirujuk_ke') or '_______________')}</b> untuk mendapatkan pemeriksaan/penanganan medis lebih lanjut.")
+    else:
+        isi = ("Berdasarkan pemeriksaan yang telah dilakukan, yang bersangkutan diizinkan untuk pulang lebih awal dengan kondisi "
+               "<b>Dijemput Orang Tua/Wali</b> guna mendapatkan istirahat dan perawatan lebih lanjut di rumah.")
+    el += [Paragraph(isi, body), Spacer(1, 0.3 * cm)]
+
+    vital = [(lbl, f"{k[f]}{sat}") for f, lbl, sat in (
+        ('tinggi_badan', 'TB', ' cm'), ('berat_badan', 'BB', ' kg'), ('tekanan_darah', 'Tensi', ''),
+        ('nadi', 'Nadi', ' bpm'), ('suhu', 'Suhu', ' °C'), ('spo2', 'SpO2', '%')) if k.get(f) not in (None, '')]
+    if vital:
+        el += [_p('Hasil pemeriksaan vital:', bold), _p('   '.join(f"{a}: {b}" for a, b in vital), body), Spacer(1, 0.3 * cm)]
+
+    blok = [_p('Penanganan / penatalaksanaan di UKS:', bold)]
+    if not pt['sudah_ditangani']:
+        blok.append(_p('Belum ada data penanganan untuk kunjungan ini.', body))
+    else:
+        du = pt['diagnosa_utama']
+        rows = [('Diagnosa utama', f"{du['nama']}{' (' + du['kode'] + ')' if du.get('kode') else ''}" if du else None)]
+        if pt['diagnosa_tambahan']:
+            rows.append(('Diagnosa tambahan', ', '.join(pt['diagnosa_tambahan'])))
+        rows.append(('Jenis penanganan', ', '.join(pt['jenis_penanganan']) or None))
+        if (pt.get('tindakan') or '').strip():
+            rows.append(('Uraian tindakan', pt['tindakan'].strip()))
+        jam = _jam_wib(pt.get('ditangani_pada'))
+        if jam:
+            rows.append(('Waktu penanganan', jam))
+        blok.append(grid(rows))
+        if pt['pemberian']:
+            hdr = [Paragraph(f'<b>{h}</b>', small) for h in ('No', 'Jenis', 'Obat / BMHP yang diberikan', 'Jumlah')]
+            tbl = Table([hdr] + [[_p(i + 1, small), _p('Obat' if x['jenis'] == 'obat' else 'BMHP', small), _p(x['nama'] or '-', small),
+                                  _p(x['jumlah'], small)] for i, x in enumerate(pt['pemberian'])],
+                        colWidths=[1.0 * cm, 2.0 * cm, 10.8 * cm, 2.2 * cm], repeatRows=1)
+            tbl.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+                                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+            blok += [Spacer(1, 0.1 * cm), tbl, Spacer(1, 0.1 * cm)]
+        else:
+            blok.append(grid([('Obat / BMHP', 'Tidak ada pemberian obat/BMHP')]))
+        kondisi = pt.get('kondisi_pulang') or '-'
+        if pt.get('dirujuk_ke'):
+            kondisi += f" — ke {pt['dirujuk_ke']}"
+        rows = [('Kondisi saat keluar UKS', kondisi)]
+        if (pt.get('keterangan') or '').strip():
+            rows.append(('Keterangan', pt['keterangan'].strip()))
+        blok.append(grid(rows))
+    el += [KeepTogether(blok), Spacer(1, 0.3 * cm)]
+
+    catatan = (data['catatan'].get('teks') or '').strip()
+    cat = [_p('Catatan:', bold)]
+    if catatan:
+        cat.append(_p(catatan, body))
+    else:
+        lines = Table([['']] * 3, colWidths=[16.2 * cm], rowHeights=[0.75 * cm] * 3)
+        lines.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, -1), 0.6, colors.grey, None, (1, 2))]))
+        cat.append(lines)
+    el += [KeepTogether(cat), Spacer(1, 0.3 * cm),
+           _p('Demikian surat ini dibuat untuk dapat dipergunakan sebagaimana mestinya.', body), Spacer(1, 0.5 * cm)]
+
+    tgl = f"{kota}, {_tanggal_surat(k.get('tanggal'))}"
+    petugas = pt.get('ditangani_oleh') or k.get('petugas_nama') or '(_________________)'
+    if is_siswa:
+        kiri = [[''], [_p('Mengetahui, Wali Kelas', center)], [''], [Paragraph(f"<b><u>{xml_escape(pasien.get('wali_kelas_nama') or '(_________________)')}</u></b>", center)]]
+    else:
+        kiri = [[''], [''], [''], ['']]
+    kanan = [[_p(tgl, center)], [_p('Petugas UKS,', center)], [''], [Paragraph(f"<b><u>{xml_escape(petugas)}</u></b>", center)]]
+    ttd = Table([[a[0], b[0]] for a, b in zip(kiri, kanan)], colWidths=[8.1 * cm, 8.1 * cm],
+                rowHeights=[None, None, 1.8 * cm, None])
+    el.append(KeepTogether([ttd]))
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=A4, topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+                            leftMargin=2 * cm, rightMargin=2 * cm, title=data['judul'])
+    doc.build(el)
+    return output.getvalue()
+
+
+@router.get("/uks/kunjungan/{kunjungan_id}/surat/pdf")
+async def download_surat_kunjungan_pdf(
+    kunjungan_id: str,
+    jenis: str = 'rujukan',
+    user: Dict = Depends(require_role(*UKS_VIEW_ROLES)),
+):
+    """Unduh surat keterangan UKS sebagai PDF A4, lengkap dengan penatalaksanaan & catatan."""
+    data = await get_surat_kunjungan(kunjungan_id, jenis, user)
+    pdf = _surat_pdf_bytes(data)
+    nama = re.sub(r'[^A-Za-z0-9]+', '_', data['kunjungan'].get('pasien_nama') or 'Pasien').strip('_') or 'Pasien'
+    label = 'Rujukan' if jenis == 'rujukan' else 'Perizinan_Pulang'
+    filename = f"Surat_{label}_UKS_{data['kunjungan'].get('tanggal') or ''}_{nama}.pdf"
+    return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+class CatatanSuratRequest(BaseModel):
+    catatan_surat: Optional[str] = None
+
+
+@router.put("/uks/kunjungan/{kunjungan_id}/catatan-surat")
+async def update_catatan_surat(
+    kunjungan_id: str,
+    req: CatatanSuratRequest,
+    user: Dict = Depends(require_role(*UKS_ROLES)),
+):
+    """Simpan catatan petugas yang dicetak di bawah penatalaksanaan pada surat
+    keterangan UKS. Teks kosong menghapus catatan (surat mencetak baris kosong)."""
+    k = await db.uks_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0, 'id': 1, 'kondisi_pulang': 1})
+    if not k:
+        raise HTTPException(404, "Kunjungan tidak ditemukan")
+    kondisi_surat = {cfg['kondisi_pulang'] for cfg in SURAT_UKS_JENIS.values()}
+    if k.get('kondisi_pulang') not in kondisi_surat:
+        raise HTTPException(400, "Catatan surat hanya untuk kunjungan yang dirujuk atau dijemput orang tua")
+    teks = (req.catatan_surat or '').strip() or None
+    if teks and len(teks) > CATATAN_SURAT_MAX:
+        raise HTTPException(400, f"Catatan surat maksimal {CATATAN_SURAT_MAX} karakter")
+    now = datetime.utcnow().isoformat()
+    await db.uks_kunjungan.update_one({'id': kunjungan_id}, {'$set': {
+        'catatan_surat': teks,
+        'catatan_surat_oleh': user.get('full_name', user.get('username')) if teks else None,
+        'catatan_surat_pada': now if teks else None,
+        'updated_at': now,
+    }})
+    await log_audit(user, 'uks_kunjungan_catatan_surat', f"Catatan surat kunjungan UKS: {kunjungan_id}")
     updated = await db.uks_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0})
     return serialize_doc(_with_kunjungan_defaults(updated))
 
