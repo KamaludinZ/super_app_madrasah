@@ -157,12 +157,14 @@ Total: 20 slide (± 25–30 menit presentasi).
 - Data pribadi, orang tua/wali, alamat, transportasi
 - Keahlian, **Tahfidz**, beasiswa/bantuan (KIP/PKH/KKS), kebutuhan khusus
 - Data **Santri Ma'had** & kamar
-- Upload berkas: KK, Akte, Ijazah, KIP, Kartu Pelajar (PDF)
+- Upload berkas: KK, Akte, Ijazah wajib; KIP, PKH, KKS, Kartu Pelajar **opsional** (tidak semua siswa punya/sudah menerima) dan tidak mengurangi % kelengkapan (PDF)
+- **Alamat bertingkat dari Master Wilayah Indonesia:** provinsi → kabupaten/kota → kecamatan → desa/kelurahan dipilih dari daftar resmi (kode Kemendagri 2025), kode pos terisi otomatis, cari cepat lewat kode pos/nama desa, pratinjau alamat lengkap; alamat domisili siswa (kost/asrama/kerabat) diisi tersendiri
 - **Indikator % kelengkapan data** per siswa dan per kelas — klik persen untuk melihat rincian per bagian (Data Siswa, Orang Tua, Alamat, Kebutuhan Khusus, Berkas) dan data yang belum diisi
 - **Verval (Verifikasi & Validasi):** perubahan dari siswa/GTK diajukan lalu disetujui admin
 - **Unduh Excel Data Siswa & Data GTK:** pilih tingkat kelas (7/8/9/semua) atau jenis GTK (guru/tendik/semua), susunan kolom baku dengan pratinjau urutan kolom — bahan pelengkapan data massal (khusus admin, berisi seluruh isian tab data siswa/GTK)
 - **Export Template:** berkas kosong siap isi dengan kolom identik hasil unduhan, kolom identitas terkunci, dan petunjuk pengisian per jenis kolom
 - **Import Pelengkapan:** unggah kembali berkas, dicocokkan lewat NISN/NIP/ID; default hanya mengisi yang kosong, opsi timpa nilai berbeda; progres per baris dan ringkasan berhasil/gagal beserta lokasi kesalahan
+- **Pencocokan Wilayah Impor:** alamat ketikan bebas dari Excel otomatis dicocokkan ke master wilayah (mengenali singkatan seperti Jatim/DIY, awalan Kab./Kec./Kel., dan salah ketik ringan) lalu disimpan dengan kode wilayah resmi; menu **Pencocokan Wilayah** menampilkan ringkasan cocok/sebagian/tidak cocok, daftar baris yang perlu diperbaiki beserta saran wilayah terdekat, perbaikan manual lewat dropdown bertingkat, dan tombol terapkan semua saran berkemiripan tinggi
 
 **Saran visual:** Screenshot dialog data siswa dengan tab-tab.
 
@@ -212,6 +214,8 @@ Total: 20 slide (± 25–30 menit presentasi).
 - **Perizinan:** sakit, cuti, dinas luar + dokumen
 - **Profesionalitas & Riwayat Sertifikasi**, Buku Induk Kepegawaian, Agenda Guru & Tendik
 - **Data GTK:** identitas kepegawaian memuat Peg ID, NUPTK, NIP, NPK, dan NRG; daftar GTK menampilkan kolom Peg ID
+- **Nama & Gelar GTK:** gelar depan, nama tanpa gelar, dan gelar belakang diisi terpisah; nama lengkap tersusun otomatis (juga saat verval & impor Excel)
+- **Alamat tempat tinggal GTK** memakai dropdown wilayah bertingkat yang sama dengan data siswa (kode wilayah & kode pos tersimpan)
 - **% Kelengkapan GTK:** persentase data wajib per GTK beserta rincian per bagian dan penanda bagian yang masih kosong
 
 **Saran visual:** Diagram: Jadwal + Jurnal → Absensi GTK otomatis.
@@ -228,6 +232,8 @@ Total: 20 slide (± 25–30 menit presentasi).
 - **Sarpras:** aset tetap & lancar, lokasi per ruang, laporan kerusakan & perbaikan
 - **Laboratorium** (IPA, Komputer, Bahasa, Agama, IPS, Seni): alat & bahan, jadwal lab, jurnal penggunaan, peminjaman — **terhubung langsung dengan data Sarpras**
 - **UKS:** kunjungan & pemeriksaan vital, stok obat, Cek Kesehatan Gratis (CKG), imunisasi, cetak surat rujukan & izin pulang
+  - **Data CKG selaras format resmi:** tabel 16 kolom baku (identitas pasien, BB, TB, TD, karies, visus, kulit, pendengaran, Hb, GDS), pencarian nama/NIK, filter kelas/tingkat/GTK & jenis kelamin; data lama dirapikan otomatis
+  - **Template & Impor CKG:** template Excel per kelas/tingkat/jenis GTK dengan identitas terisi, impor hasil pemeriksaan dengan validasi per baris (rentang nilai, tanggal), ringkasan baru/diperbarui/gagal
   - **Data BMHP** (kasa, plester, sarung tangan, dll.): stok masuk per batch dengan tanggal kadaluarsa, status Aman/Menipis/Habis, peringatan kadaluarsa ≤ 90 hari; pemakaian BMHP otomatis tercatat sebagai BMHP Keluar saat penanganan disimpan
   - **Penegakan Diagnosa**: master diagnosa (kode ICD-10 opsional, aktif/nonaktif); diagnosa utama **wajib** dipilih di setiap penanganan dan tampil di riwayat kunjungan
   - **Riwayat kunjungan otomatis**: begitu pasien dipilih di form kunjungan, riwayat 1 tahun terakhir (keluhan, diagnosa, penanganan, obat/BMHP) langsung tampil, lengkap dengan peringatan bila pasien berkunjung ≥ 3 kali dalam 30 hari
@@ -375,3 +381,6 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-05 | Kelengkapan data fase 3 (server): mesin impor pelengkapan — validasi berkas di server, pencocokan via ID/NISN/NIP (cegah data tertukar & duplikat), isi kosong atau timpa (wajib konfirmasi), konversi & validasi nilai, riwayat sesi impor, jejak per baris dan per field (nilai lama → baru), khusus admin | 10, 17 |
 | 2026-10-05 | Kelengkapan data fase 4 (tampilan): kolom % Kelengkapan di daftar GTK dengan rincian per bagian (Data Guru, Status & Riwayat, Pendidikan, Data Anak, Riwayat Pesantren, Arsip Berkas), penanda bagian kosong & daftar data yang belum diisi | 13 |
 | 2026-10-05 | Kelengkapan data fase 4 (server): compute_completeness diperluas untuk GTK (6 bagian), endpoint % kelengkapan daftar & rincian per GTK; tambahan: rincian % kelengkapan per bagian di Data Siswa (klik persen), perbaikan statistik PNS/PPPK/Non ASN di Data GTK | 10, 13 |
+| 2026-10-06 | Data CKG fase 1–2: tabel CKG 16 kolom baku dengan cari & filter, perapian data lama, template CKG bertingkat (kelas/tingkat/jenis GTK), impor hasil CKG tervalidasi; Nama & Gelar GTK terpisah dengan nama lengkap tersusun otomatis | 13, 14 |
+| 2026-10-06 | Master Wilayah Indonesia (fase 3): data resmi 38 provinsi s.d. ±83 ribu desa/kelurahan + kode pos (Kepmendagri 2025) bisa dimuat sekali klik atau lewat unggah paket, dropdown wilayah bertingkat & cari cepat kode pos | 10 |
+| 2026-10-06 | Alamat bertingkat & Pencocokan Wilayah Impor (fase 4): alamat siswa (ayah/ibu/wali/domisili) & GTK menyimpan kode wilayah, alamat impor Excel dicocokkan otomatis, menu laporan pencocokan dengan saran & perbaikan manual/massal; berkas KIP, PKH, KKS, Kartu Pelajar siswa menjadi opsional | 10, 13 |

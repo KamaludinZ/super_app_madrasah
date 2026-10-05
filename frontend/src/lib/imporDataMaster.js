@@ -138,12 +138,18 @@ export async function prosesImporBatch({ api, endpoint, mode, imporId, baris, on
     onProgress?.({ selesai: Math.min(i + batch.length, baris.length), total: baris.length, barisSaatIni: batch[batch.length - 1].baris, hasil: [...semua] });
   }
   const hitung = (st) => semua.filter((h) => h.status === st).length;
+  // Server dapat menandai tiap baris dengan hasil pencocokan alamatnya ke master wilayah
+  // (`wilayah`: 'cocok' | 'sebagian' | 'tidak_cocok'); diringkas bila ada.
+  const wilayah = { cocok: 0, sebagian: 0, tidak_cocok: 0 };
+  semua.forEach((h) => { if (wilayah[h.wilayah] !== undefined) wilayah[h.wilayah] += 1; });
+  const adaWilayah = wilayah.cocok + wilayah.sebagian + wilayah.tidak_cocok > 0;
   return {
     mode,
     imporId,
     tiruan: pakaiCadangan,
     dibatalkan,
     ringkasan: { total: baris.length, diproses: semua.length, berhasil: hitung('berhasil'), tanpa_perubahan: hitung('tanpa_perubahan'), gagal: hitung('gagal') },
+    ...(adaWilayah ? { wilayah } : {}),
     hasil: semua,
   };
 }

@@ -94,6 +94,9 @@ export default function MyVervalRequestsPage() {
     // Field labels yang user-friendly
     const fieldLabels = {
       full_name: 'Nama Lengkap',
+      nama_tanpa_gelar: 'Nama Tanpa Gelar',
+      gelar_depan: 'Gelar Depan',
+      gelar_belakang: 'Gelar Belakang',
       email: 'Email',
       phone: 'Nomor Telepon',
       nip_nuptk: 'NIP/NUPTK',
@@ -105,6 +108,15 @@ export default function MyVervalRequestsPage() {
       gender: 'Jenis Kelamin',
       birth_place: 'Tempat Lahir',
       birth_date: 'Tanggal Lahir',
+      status_tempat_tinggal: 'Status Tempat Tinggal',
+      provinsi: 'Provinsi',
+      kab_kota: 'Kabupaten/Kota',
+      kecamatan: 'Kecamatan',
+      kelurahan: 'Kelurahan/Desa',
+      kode_wilayah: 'Kode Wilayah',
+      rt: 'RT',
+      rw: 'RW',
+      kode_pos: 'Kode Pos',
       address: 'Alamat',
       // Field detail siswa (StudentDetailModel / student_details)
       citizenship: 'Kewarganegaraan',

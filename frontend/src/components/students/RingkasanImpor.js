@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle2, Download, MinusCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, MapPinned, MinusCircle, XCircle } from 'lucide-react';
 
 /** Baris laporan kesalahan (untuk diunduh) dari hasil impor. */
 export function barisLaporanKesalahan(hasil) {
@@ -33,12 +34,12 @@ function Kotak({ icon: Icon, label, nilai, warna }) {
  * kolom bermasalah, keterangan) dan unduhan laporan kesalahan.
  * `hasil` = { mode, tiruan, dibatalkan, ringkasan: {total, diproses, berhasil, tanpa_perubahan, gagal}, hasil: [...] }
  */
-export default function RingkasanImpor({ hasil, dilewati, namaData = 'data' }) {
+export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', keteranganMode, labelDilewati = 'kosong/keterangan' }) {
   const [semua, setSemua] = useState(false);
   const r = hasil.ringkasan;
   const gagal = hasil.hasil.filter((h) => h.status === 'gagal');
   const tampil = semua ? hasil.hasil : gagal;
-  const dilewatiTotal = (dilewati?.kosong || 0) + (dilewati?.keterangan || 0);
+  const dilewatiTotal = Object.values(dilewati || {}).reduce((a, b) => a + (Number(b) || 0), 0);
 
   return (
     <div className="space-y-3" data-testid="ringkasan-hasil-impor">
@@ -47,11 +48,13 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data' }) {
         <div>
           <div className="font-semibold">
             {hasil.tiruan ? 'Hasil tiruan — data belum disimpan' : hasil.dibatalkan ? 'Impor dihentikan' : 'Impor selesai'}
-            {' · '}mode {hasil.mode === 'timpa' ? 'timpa nilai berbeda' : 'isi hanya yang kosong'}
+            {keteranganMode !== undefined
+              ? (keteranganMode ? ` · ${keteranganMode}` : '')
+              : ` · mode ${hasil.mode === 'timpa' ? 'timpa nilai berbeda' : 'isi hanya yang kosong'}`}
           </div>
           <div>
             {r.diproses} dari {r.total} baris {namaData} diproses
-            {dilewatiTotal > 0 && `; ${dilewatiTotal} baris kosong/keterangan dilewati`}.
+            {dilewatiTotal > 0 && `; ${dilewatiTotal} baris ${labelDilewati} dilewati`}.
           </div>
         </div>
       </div>
@@ -62,6 +65,19 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data' }) {
         <Kotak icon={XCircle} label="Gagal" nilai={r.gagal} warna="border-rose-200 bg-rose-50 text-rose-800" />
         <Kotak icon={AlertTriangle} label="Tidak diproses" nilai={r.total - r.diproses} warna="border-amber-200 bg-amber-50 text-amber-800" />
       </div>
+
+      {hasil.wilayah && (
+        <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${hasil.wilayah.tidak_cocok + hasil.wilayah.sebagian ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+          data-testid="ringkasan-wilayah-impor">
+          <span className="flex items-center gap-1.5">
+            <MapPinned className="h-4 w-4 shrink-0" />
+            Pencocokan wilayah alamat: <b>{hasil.wilayah.cocok}</b> cocok, <b>{hasil.wilayah.sebagian}</b> cocok sebagian, <b>{hasil.wilayah.tidak_cocok}</b> tidak cocok
+          </span>
+          {hasil.wilayah.tidak_cocok + hasil.wilayah.sebagian > 0 && (
+            <Link to="/admin/pencocokan-wilayah" className="font-medium underline">Perbaiki di laporan pencocokan</Link>
+          )}
+        </div>
+      )}
 
       {hasil.hasil.length > 0 && (
         <div className="space-y-1.5">

@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import WilayahBertingkat from '@/components/wilayah/WilayahBertingkat';
+import { KOLOM_ALAMAT_GTK, alamatDariNilai, nilaiDariAlamat, ringkasAlamat } from '@/lib/wilayah';
+import { nilaiAwalNama, susunNamaLengkap } from '@/lib/namaGelar';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +62,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
       setGtk(data);
       setFormDataDiri({
         full_name: data.full_name || '',
+        ...nilaiAwalNama(data),
         gender: data.gender || '',
         birth_place: data.birth_place || '',
         birth_date: data.birth_date || '',
@@ -94,6 +98,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
       setFormTempatTinggal({
         status_tempat_tinggal: data.status_tempat_tinggal || '',
         provinsi: data.provinsi || '',
+        kode_wilayah: data.kode_wilayah || '',
         kab_kota: data.kab_kota || '',
         kecamatan: data.kecamatan || '',
         kelurahan: data.kelurahan || '',
@@ -214,7 +219,16 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
             <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
               <User className="h-3 w-3 mr-1" /> Detail GTK
             </Badge>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">{gtk?.full_name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900" data-testid="judul-nama-gtk">
+              {(editing ? susunNamaLengkap(formDataDiri) : (gtk?.nama_tanpa_gelar ? susunNamaLengkap(gtk) : '')) || gtk?.full_name}
+            </h1>
+            {(gtk?.gelar_depan || gtk?.gelar_belakang) && !editing && (
+              <p className="mt-0.5 text-xs text-slate-500" data-testid="rincian-gelar-gtk">
+                {gtk.gelar_depan && <>Gelar depan <span className="font-medium text-slate-700">{gtk.gelar_depan}</span></>}
+                {gtk.gelar_depan && gtk.gelar_belakang && ' · '}
+                {gtk.gelar_belakang && <>Gelar belakang <span className="font-medium text-slate-700">{gtk.gelar_belakang}</span></>}
+              </p>
+            )}
             <p className="text-sm text-slate-600 mt-1">
               {gtk?.nip_nuptk || 'Belum ada NUPTK'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
             </p>
@@ -304,7 +318,10 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Nama Lengkap</Label>
-                <Input value={gtk?.full_name || ''} disabled />
+                <Input value={(gtk?.nama_tanpa_gelar ? susunNamaLengkap(gtk) : '') || gtk?.full_name || ''} disabled />
+                {gtk?.nama_tanpa_gelar && gtk.nama_tanpa_gelar !== gtk.full_name && (
+                  <p className="mt-1 text-xs text-slate-500">Nama tanpa gelar: {gtk.nama_tanpa_gelar}</p>
+                )}
               </div>
               <div>
                 <Label>Username</Label>
@@ -360,9 +377,29 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                   <CardTitle className="text-lg">Formulir Data Diri</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Nama Lengkap *</Label>
-                    <Input value={formDataDiri.full_name} onChange={(e) => setFormDataDiri({...formDataDiri, full_name: e.target.value})} disabled={!editing} />
+                  <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] gap-3" data-testid="form-nama-gelar">
+                    <div>
+                      <Label>Gelar Depan</Label>
+                      <Input value={formDataDiri.gelar_depan} placeholder="mis. Dr. / Drs. / H." disabled={!editing} data-testid="input-gelar-depan"
+                        onChange={(e) => { const f = { ...formDataDiri, gelar_depan: e.target.value }; setFormDataDiri({ ...f, full_name: susunNamaLengkap(f) || f.full_name }); }} />
+                    </div>
+                    <div>
+                      <Label>Nama Tanpa Gelar *</Label>
+                      <Input value={formDataDiri.nama_tanpa_gelar} placeholder="mis. Ahmad Fauzi" disabled={!editing} data-testid="input-nama-tanpa-gelar"
+                        onChange={(e) => { const f = { ...formDataDiri, nama_tanpa_gelar: e.target.value }; setFormDataDiri({ ...f, full_name: susunNamaLengkap(f) || f.full_name }); }} />
+                    </div>
+                    <div>
+                      <Label>Gelar Belakang</Label>
+                      <Input value={formDataDiri.gelar_belakang} placeholder="mis. S.Pd., M.Pd." disabled={!editing} data-testid="input-gelar-belakang"
+                        onChange={(e) => { const f = { ...formDataDiri, gelar_belakang: e.target.value }; setFormDataDiri({ ...f, full_name: susunNamaLengkap(f) || f.full_name }); }} />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label>Nama Lengkap (otomatis)</Label>
+                      <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800" data-testid="nama-lengkap-otomatis">
+                        {susunNamaLengkap(formDataDiri) || formDataDiri.full_name || <span className="italic font-normal text-slate-400">Isi nama tanpa gelar</span>}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Tersusun dari gelar depan + nama + gelar belakang; dipakai di seluruh aplikasi.</p>
+                    </div>
                   </div>
                   <div>
                     <Label>Jenis Kelamin *</Label>
@@ -553,21 +590,19 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label>Provinsi</Label>
-                    <Input value={formTempatTinggal.provinsi} onChange={(e) => setFormTempatTinggal({...formTempatTinggal, provinsi: e.target.value})} disabled={!editing} />
-                  </div>
-                  <div>
-                    <Label>Kabupaten/Kota</Label>
-                    <Input value={formTempatTinggal.kab_kota} onChange={(e) => setFormTempatTinggal({...formTempatTinggal, kab_kota: e.target.value})} disabled={!editing} />
-                  </div>
-                  <div>
-                    <Label>Kecamatan</Label>
-                    <Input value={formTempatTinggal.kecamatan} onChange={(e) => setFormTempatTinggal({...formTempatTinggal, kecamatan: e.target.value})} disabled={!editing} />
-                  </div>
-                  <div>
-                    <Label>Kelurahan/Desa</Label>
-                    <Input value={formTempatTinggal.kelurahan} onChange={(e) => setFormTempatTinggal({...formTempatTinggal, kelurahan: e.target.value})} disabled={!editing} />
+                  <div className="md:col-span-2" data-testid="gtk-wilayah-bertingkat">
+                    <WilayahBertingkat
+                      value={nilaiDariAlamat(formTempatTinggal, KOLOM_ALAMAT_GTK)}
+                      onChange={(v, info) => setFormTempatTinggal({ ...formTempatTinggal, ...alamatDariNilai(v, info, KOLOM_ALAMAT_GTK) })}
+                      disabled={!editing}
+                      testidPrefix="gtk-wilayah"
+                      ringkasan={ringkasAlamat({ ...formTempatTinggal, address: gtk?.address }, KOLOM_ALAMAT_GTK)}
+                    />
+                    {!formTempatTinggal.kode_wilayah && (formTempatTinggal.provinsi || formTempatTinggal.kab_kota) && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Alamat lama (belum dari master wilayah): {[formTempatTinggal.kelurahan, formTempatTinggal.kecamatan, formTempatTinggal.kab_kota, formTempatTinggal.provinsi].filter(Boolean).join(', ')} — pilih ulang dari daftar.
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>

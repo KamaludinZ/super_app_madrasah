@@ -15,7 +15,8 @@ import {
   Target, Award, DollarSign, LogIn, Loader2, Globe,
   HeartHandshake, ClipboardCheck, AlertTriangle, Home, School, FileBarChart,
   Stethoscope, Pill, ClipboardPlus, HeartPulse, Syringe,
-  Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon,
+  Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon, MapPin,
+  MapPinned,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -548,6 +549,8 @@ function navForRole(role, userRoles = []) {
         items: [
           { to: '/admin/app-info', label: 'Info & Update', icon: Info, testid: 'nav-admin-app-info' },
           { to: '/admin/import', label: 'Import Excel', icon: FileUp, testid: 'nav-admin-import' },
+          { to: '/admin/master-wilayah', label: 'Master Wilayah', icon: MapPin, testid: 'nav-admin-master-wilayah' },
+          { to: '/admin/pencocokan-wilayah', label: 'Pencocokan Wilayah', icon: MapPinned, testid: 'nav-admin-pencocokan-wilayah' },
           { to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' },
           { to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' },
           { to: '/admin/settings', label: 'Pengaturan', icon: Settings, testid: 'nav-settings' },

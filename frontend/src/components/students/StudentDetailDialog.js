@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import WilayahBertingkat from '@/components/wilayah/WilayahBertingkat';
+import { KOLOM_ALAMAT_SISWA, alamatDariNilai, nilaiDariAlamat, ringkasAlamat } from '@/lib/wilayah';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -49,10 +51,10 @@ const BERKAS_LIST = [
   { key: 'berkas_kartu_keluarga', label: 'Kartu Keluarga *' },
   { key: 'berkas_akta_kelahiran', label: 'Akta Kelahiran *' },
   { key: 'berkas_ijazah_sd', label: 'Ijazah SD/MI *' },
-  { key: 'berkas_kip', label: 'Kartu Indonesia Pintar (KIP) *' },
-  { key: 'berkas_pkh', label: 'Program Keluarga Harapan (PKH) *' },
-  { key: 'berkas_kks', label: 'Kartu Keluarga Sejahtera (KKS) *' },
-  { key: 'berkas_kartu_pelajar', label: 'Kartu Pelajar MTsN 2 Kota Malang *' },
+  { key: 'berkas_kip', label: 'Kartu Indonesia Pintar (KIP) (opsional)' },
+  { key: 'berkas_pkh', label: 'Program Keluarga Harapan (PKH) (opsional)' },
+  { key: 'berkas_kks', label: 'Kartu Keluarga Sejahtera (KKS) (opsional)' },
+  { key: 'berkas_kartu_pelajar', label: 'Kartu Pelajar MTsN 2 Kota Malang (opsional)' },
 ];
 
 const EMPTY_KEAHLIAN = { bidang_keahlian: '', nama_keahlian: '', sertifikasi: '', lembaga_penyelenggara: '', hasil_tingkat_skor: '', file_bukti_sertifikat: '' };
@@ -68,8 +70,15 @@ const EMPTY_PARENT = {
 
 const EMPTY_ADDR = {
   tinggal_luar_negeri: false, status_kepemilikan: '', alamat: '',
-  provinsi: '', kabupaten: '', kecamatan: '', kelurahan: '',
+  provinsi: '', kabupaten: '', kecamatan: '', kelurahan: '', kode_wilayah: '',
   rt: '', rw: '', kode_pos: '',
+};
+
+// Status tempat tinggal yang mengikuti alamat orang tua/wali -> blok alamat yang dipakai.
+const IKUT_ALAMAT = {
+  'Tinggal dengan Ayah Kandung': { key: 'alamat_ayah', label: 'Ayah Kandung' },
+  'Tinggal dengan Ibu Kandung': { key: 'alamat_ibu', label: 'Ibu Kandung' },
+  'Tinggal dengan Wali': { key: 'alamat_wali', label: 'Wali' },
 };
 
 const EMPTY_DETAIL = {
@@ -291,10 +300,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
       need('Kartu Keluarga', d.berkas_kartu_keluarga);
       need('Akta Kelahiran', d.berkas_akta_kelahiran);
       need('Ijazah SD/MI', d.berkas_ijazah_sd);
-      need('Kartu Indonesia Pintar (KIP)', d.berkas_kip);
-      need('Program Keluarga Harapan (PKH)', d.berkas_pkh);
-      need('Kartu Keluarga Sejahtera (KKS)', d.berkas_kks);
-      need('Kartu Pelajar MTsN 2 Kota Malang', d.berkas_kartu_pelajar);
+      // KIP, PKH, KKS, dan Kartu Pelajar tidak wajib: tidak semua siswa memilikinya (atau belum menerimanya).
     }
     return missing;
   };
@@ -425,6 +431,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
     }
     cur[parts[parts.length - 1]] = value;
     setDetail(next);
+  };
+
+  // Gabungkan beberapa field sekaligus ke satu objek (mis. alamat_ayah) — dipakai dropdown wilayah
+  // bertingkat yang mengubah provinsi..kelurahan + kode wilayah + kode pos dalam satu langkah.
+  const setFieldsAt = (path, obj) => {
+    setDetail((prev) => ({ ...prev, [path]: { ...(prev[path] || {}), ...obj } }));
   };
 
   const toggleArrayItem = (path, item) => {
@@ -571,15 +583,16 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
             </TabsContent>
 
             <TabsContent value="alamat" className="mt-4 space-y-4">
-              <AddressSection title="Alamat Ayah Kandung" data={detail.alamat_ayah} setField={(k, v) => setField(`alamat_ayah.${k}`, v)} disabled={!editMode} testidPrefix="alamat-ayah" />
-              <AddressSection title="Alamat Ibu Kandung" data={detail.alamat_ibu} setField={(k, v) => setField(`alamat_ibu.${k}`, v)} disabled={!editMode}
+              <AddressSection title="Alamat Ayah Kandung" data={detail.alamat_ayah} setField={(k, v) => setField(`alamat_ayah.${k}`, v)} setFields={(obj) => setFieldsAt('alamat_ayah', obj)} disabled={!editMode} testidPrefix="alamat-ayah" />
+              <AddressSection title="Alamat Ibu Kandung" data={detail.alamat_ibu} setField={(k, v) => setField(`alamat_ibu.${k}`, v)} setFields={(obj) => setFieldsAt('alamat_ibu', obj)} disabled={!editMode}
                 hasSameAsAyah testidPrefix="alamat-ibu" />
-              <AddressSection title="Alamat Wali" data={detail.alamat_wali} setField={(k, v) => setField(`alamat_wali.${k}`, v)} disabled={!editMode}
+              <AddressSection title="Alamat Wali" data={detail.alamat_wali} setField={(k, v) => setField(`alamat_wali.${k}`, v)} setFields={(obj) => setFieldsAt('alamat_wali', obj)} disabled={!editMode}
                 hasSameAsAyah isWali testidPrefix="alamat-wali" isRequired={detail.wali?.hubungan_wali === 'Lainnya'} />
               <Section title="Alamat & Akses Siswa ke Madrasah" icon={MapPin}>
                 <FormRow label="Alamat (basic)" value={studentData?.address} readOnly />
                 <SelectRow label="Status Tempat Tinggal *" value={detail.alamat_siswa?.status_tempat_tinggal} options={['Tinggal dengan Ayah Kandung', 'Tinggal dengan Ibu Kandung', 'Tinggal dengan Wali', 'Ikut Saudara/Kerabat', 'Asrama Madrasah', 'Kontrak/Kost', 'Tinggal di Asrama Pesantren', 'Panti Asuhan', 'Rumah Singgah', 'Lainnya']}
                   onChange={(v) => setField('alamat_siswa.status_tempat_tinggal', v)} disabled={!editMode} />
+                <DomisiliSiswa detail={detail} setField={setField} setFieldsAt={setFieldsAt} disabled={!editMode} />
                 <SelectRow label="Jarak Tempuh *" value={detail.alamat_siswa?.jarak_tempuh} options={['Kurang dari 5 km', '5-10 km', '11-20 km', '21-30 km', 'Lebih dari 30 km']} onChange={(v) => setField('alamat_siswa.jarak_tempuh', v)} disabled={!editMode} />
                 <SelectRow label="Transportasi *" value={detail.alamat_siswa?.transportasi} options={['Jalan Kaki', 'Sepeda', 'Sepeda Motor', 'Mobil Pribadi', 'Antar Jemput Sekolah', 'Angkutan Umum', 'Perahu/Sampan', 'Kendaraan Pribadi', 'Kereta Api', 'Ojek', 'Andong/Bendi/Sado/Dokar/Delman/Becak', 'Lainnya']} onChange={(v) => setField('alamat_siswa.transportasi', v)} disabled={!editMode} />
                 <SelectRow label="Waktu Tempuh *" value={detail.alamat_siswa?.waktu_tempuh} options={['1-10 menit', '10-19 menit', '20-29 menit', '30-39 menit', '1-2 jam', 'Lebih dari 2 jam']} onChange={(v) => setField('alamat_siswa.waktu_tempuh', v)} disabled={!editMode} />
@@ -1134,7 +1147,58 @@ function ParentSection({ title, data, setField, disabled, isWali = false, testid
   );
 }
 
-function AddressSection({ title, data, setField, disabled, hasSameAsAyah, isWali, testidPrefix, isRequired = true }) {
+/**
+ * Alamat domisili siswa: bila tinggal dengan ayah/ibu/wali cukup mengikuti alamat itu (ditampilkan
+ * ringkas); selain itu (kost, asrama, kerabat, dll.) diisi bertingkat dari master wilayah.
+ */
+function DomisiliSiswa({ detail, setField, setFieldsAt, disabled }) {
+  const a = detail.alamat_siswa || {};
+  const ikut = IKUT_ALAMAT[a.status_tempat_tinggal];
+  if (!a.status_tempat_tinggal) return null;
+  if (ikut) {
+    let sumber = detail[ikut.key] || {};
+    if (ikut.key !== 'alamat_ayah' && sumber.sama_dengan_ayah) sumber = detail.alamat_ayah || {};
+    const teks = ringkasAlamat(sumber, KOLOM_ALAMAT_SISWA);
+    return (
+      <div className="col-span-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700" data-testid="domisili-ikut">
+        <span className="block text-xs text-slate-500">Alamat domisili mengikuti alamat {ikut.label}</span>
+        {teks || <span className="italic text-slate-400">Alamat {ikut.label} belum diisi</span>}
+      </div>
+    );
+  }
+  return (
+    <div className="col-span-2 space-y-3 rounded-md border border-slate-200 p-3" data-testid="domisili-siswa">
+      <div className="text-xs font-semibold uppercase text-slate-500">Alamat Domisili Siswa</div>
+      <WilayahBertingkat
+        value={nilaiDariAlamat(a, KOLOM_ALAMAT_SISWA)}
+        onChange={(v, info) => setFieldsAt('alamat_siswa', alamatDariNilai(v, info, KOLOM_ALAMAT_SISWA))}
+        disabled={disabled}
+        testidPrefix="domisili-wil"
+        ringkasan={ringkasAlamat(a, KOLOM_ALAMAT_SISWA)}
+      />
+      {!a.kode_wilayah && (a.provinsi || a.kabupaten || a.kecamatan || a.kelurahan) && (
+        <p className="text-xs text-amber-700">
+          Alamat lama (ketikan bebas): {[a.kelurahan, a.kecamatan, a.kabupaten, a.provinsi].filter(Boolean).join(', ')} — pilih ulang dari daftar.
+        </p>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <InputRow label="RT" value={a.rt} onChange={(v) => setField('alamat_siswa.rt', v)} type="number" maxLength={3} disabled={disabled} />
+        <InputRow label="RW" value={a.rw} onChange={(v) => setField('alamat_siswa.rw', v)} type="number" maxLength={3} disabled={disabled} />
+        <InputRow label="Kode Pos" value={a.kode_pos} onChange={(v) => setField('alamat_siswa.kode_pos', v)} type="number" maxLength={6} disabled={disabled} />
+      </div>
+      <div>
+        <Label className="text-xs uppercase text-slate-500">Alamat (jalan, nomor, dusun)</Label>
+        {disabled ? (
+          <div className="mt-1 px-3 py-2 rounded-md bg-slate-50 border border-slate-200 text-sm">{a.alamat || <span className="italic text-slate-400">-</span>}</div>
+        ) : (
+          <Textarea value={a.alamat || ''} onChange={(e) => setField('alamat_siswa.alamat', e.target.value)} rows={2} placeholder="Jl. ..." className="mt-1" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddressSection({ title, data, setField, setFields, disabled, hasSameAsAyah, isWali, testidPrefix, isRequired = true }) {
   const applicable = isRequired && !(hasSameAsAyah && data.sama_dengan_ayah);
   const req = (label) => applicable ? `${label} *` : label;
   return (
@@ -1155,10 +1219,20 @@ function AddressSection({ title, data, setField, disabled, hasSameAsAyah, isWali
           <SelectRow label={req('Status Kepemilikan Rumah')} value={data.status_kepemilikan} options={STATUS_RUMAH} onChange={(v) => setField('status_kepemilikan', v)} disabled={disabled} />
           {!data.tinggal_luar_negeri && (
             <>
-              <InputRow label={req('Provinsi')} value={data.provinsi} onChange={(v) => setField('provinsi', v)} disabled={disabled} placeholder="Jawa Timur" />
-              <InputRow label={req('Kabupaten/Kota')} value={data.kabupaten} onChange={(v) => setField('kabupaten', v)} disabled={disabled} placeholder="Kota Malang" />
-              <InputRow label={req('Kecamatan')} value={data.kecamatan} onChange={(v) => setField('kecamatan', v)} disabled={disabled} />
-              <InputRow label={req('Kelurahan/Desa')} value={data.kelurahan} onChange={(v) => setField('kelurahan', v)} disabled={disabled} />
+              <div className="col-span-2" data-testid={testidPrefix ? `${testidPrefix}-wilayah` : undefined}>
+                <WilayahBertingkat
+                  value={nilaiDariAlamat(data, KOLOM_ALAMAT_SISWA)}
+                  onChange={(v, info) => setFields(alamatDariNilai(v, info, KOLOM_ALAMAT_SISWA))}
+                  disabled={disabled}
+                  testidPrefix={testidPrefix ? `${testidPrefix}-wil` : 'alamat-wil'}
+                  ringkasan={ringkasAlamat(data, KOLOM_ALAMAT_SISWA)}
+                />
+                {!data.kode_wilayah && (data.provinsi || data.kabupaten || data.kecamatan || data.kelurahan) && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Alamat lama (ketikan bebas): {[data.kelurahan, data.kecamatan, data.kabupaten, data.provinsi].filter(Boolean).join(', ')} — {disabled ? 'perlu dipilih ulang dari master wilayah' : 'pilih ulang dari daftar'}.
+                  </p>
+                )}
+              </div>
               <InputRow label={req('RT')} value={data.rt} onChange={(v) => setField('rt', v)} type="number" maxLength={3} disabled={disabled} />
               <InputRow label={req('RW')} value={data.rw} onChange={(v) => setField('rw', v)} type="number" maxLength={3} disabled={disabled} />
               <InputRow label={req('Kode Pos')} value={data.kode_pos} onChange={(v) => setField('kode_pos', v)} type="number" maxLength={6} disabled={disabled} />

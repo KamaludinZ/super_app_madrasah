@@ -15,6 +15,11 @@ export const KOLOM_DATA_GTK = [
     ['full_name', 'Nama Lengkap'],
   ]),
   { key: 'jenis', label: 'Jenis GTK', grup: 'Identitas', path: 'jenis' },
+  ...kolom('Nama & Gelar', [
+    ['gelar_depan', 'Gelar Depan'],
+    ['nama_tanpa_gelar', 'Nama Tanpa Gelar'],
+    ['gelar_belakang', 'Gelar Belakang'],
+  ]),
   ...kolom('Data Diri', [
     ['gender', 'Jenis Kelamin (L/P)'],
     ['birth_place', 'Tempat Lahir'],

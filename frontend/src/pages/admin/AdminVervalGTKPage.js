@@ -108,6 +108,9 @@ export default function AdminVervalGTKPage() {
     // Field labels yang user-friendly
     const fieldLabels = {
       full_name: 'Nama Lengkap',
+      nama_tanpa_gelar: 'Nama Tanpa Gelar',
+      gelar_depan: 'Gelar Depan',
+      gelar_belakang: 'Gelar Belakang',
       email: 'Email',
       phone: 'Nomor Telepon',
       nip_nuptk: 'NIP/NUPTK',
@@ -118,13 +121,28 @@ export default function AdminVervalGTKPage() {
       gender: 'Jenis Kelamin',
       birth_place: 'Tempat Lahir',
       birth_date: 'Tanggal Lahir',
+      status_tempat_tinggal: 'Status Tempat Tinggal',
+      provinsi: 'Provinsi',
+      kab_kota: 'Kabupaten/Kota',
+      kecamatan: 'Kecamatan',
+      kelurahan: 'Kelurahan/Desa',
+      kode_wilayah: 'Kode Wilayah',
+      rt: 'RT',
+      rw: 'RW',
+      kode_pos: 'Kode Pos',
       // Add more fields as needed
     };
 
-    // Cari field yang berubah
-    const changedFields = Object.keys(new_data).filter(key => {
-      return new_data[key] !== old_data[key];
-    });
+    // Cari field yang berubah (kosong/undefined/null dianggap sama), field nama & gelar ditampilkan paling atas.
+    const kosong = (v) => v == null || v === '';
+    const URUTAN_NAMA = ['gelar_depan', 'nama_tanpa_gelar', 'gelar_belakang', 'full_name',
+      'status_tempat_tinggal', 'provinsi', 'kab_kota', 'kecamatan', 'kelurahan', 'rt', 'rw', 'kode_pos', 'kode_wilayah'];
+    const changedFields = Object.keys(new_data)
+      .filter((key) => !(kosong(new_data[key]) && kosong(old_data[key])) && new_data[key] !== old_data[key])
+      .sort((a, b) => {
+        const ia = URUTAN_NAMA.indexOf(a); const ib = URUTAN_NAMA.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
 
     if (changedFields.length === 0) {
       return <div className="text-center py-8 text-slate-500">Tidak ada perubahan data</div>;

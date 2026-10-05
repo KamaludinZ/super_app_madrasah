@@ -60,6 +60,7 @@ from routers import (
     uks,
     users,
     verval,
+    wilayah,
     wali_parent,
     waka_kurikulum,
 )
@@ -104,6 +105,7 @@ api_router.include_router(promotions.router)
 api_router.include_router(student_records.router)
 api_router.include_router(semesters.router)
 api_router.include_router(verval.router)
+api_router.include_router(wilayah.router)
 api_router.include_router(dokumen_siswa.router)
 api_router.include_router(ekinerja.router)
 api_router.include_router(absensi_gtk.router)
@@ -265,6 +267,15 @@ async def startup_event():
         await ensure_uks_diagnosa_indexes(db)
     except Exception as e:
         logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
+
+    # Index master wilayah Indonesia
+    try:
+        from wilayah_master import ensure_wilayah_indexes
+        gagal = await ensure_wilayah_indexes(db)
+        if gagal:
+            logger.error(f"Index master wilayah gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure wilayah indexes: {e}")
 
     # Index riwayat impor pelengkapan data master (Siswa/GTK)
     try:

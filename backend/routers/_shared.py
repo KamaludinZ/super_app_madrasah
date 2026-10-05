@@ -175,8 +175,8 @@ def compute_completeness_siswa(user_doc: Optional[Dict], detail_doc: Optional[Di
     khusus.cek(detail, ['jenis_kebutuhan_khusus', 'kebutuhan_disabilitas'])
 
     berkas = _Bagian('upload_berkas', 'Upload Berkas')
-    berkas.cek(detail, ['berkas_kartu_keluarga', 'berkas_akta_kelahiran', 'berkas_ijazah_sd', 'berkas_kip', 'berkas_pkh',
-                        'berkas_kks', 'berkas_kartu_pelajar'])
+    # KIP, PKH, KKS, dan Kartu Pelajar opsional (tidak semua siswa punya/sudah menerima) -> tidak dihitung.
+    berkas.cek(detail, ['berkas_kartu_keluarga', 'berkas_akta_kelahiran', 'berkas_ijazah_sd'])
 
     bagian = [b.hasil() for b in (siswa, ortu, alamat, khusus, berkas)]
     terisi = sum(b['terisi'] for b in bagian)

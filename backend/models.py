@@ -115,6 +115,10 @@ class UserModel(BaseModel):
     username: str
     password_hash: str
     full_name: str
+    # Nama & gelar GTK: full_name tersusun otomatis dari ketiganya (lihat nama_gelar.py)
+    nama_tanpa_gelar: Optional[str] = None
+    gelar_depan: Optional[str] = None
+    gelar_belakang: Optional[str] = None
     nip_nuptk: Optional[str] = None
     nisn: Optional[str] = None
     email: Optional[str] = None
@@ -850,6 +854,9 @@ class UserCreateRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     username: Optional[str] = None
     full_name: Optional[str] = None
+    nama_tanpa_gelar: Optional[str] = None
+    gelar_depan: Optional[str] = None
+    gelar_belakang: Optional[str] = None
     nip_nuptk: Optional[str] = None
     nisn: Optional[str] = None
     nis: Optional[str] = None
@@ -871,6 +878,21 @@ class UserUpdateRequest(BaseModel):
     peg_id: Optional[str] = None
     npk: Optional[str] = None
     nrg: Optional[str] = None
+    # Tempat tinggal GTK (tab Data Guru > Tempat Tinggal); kode_wilayah = kode Kemendagri terdalam
+    status_tempat_tinggal: Optional[str] = None
+    provinsi: Optional[str] = None
+    kab_kota: Optional[str] = None
+    kecamatan: Optional[str] = None
+    kelurahan: Optional[str] = None
+    kode_wilayah: Optional[str] = None
+    rt: Optional[str] = None
+    rw: Optional[str] = None
+    kode_pos: Optional[str] = None
+    jarak_ke_sekolah: Optional[str] = None
+    transportasi: Optional[str] = None
+    waktu_tempuh: Optional[str] = None
+    lintang: Optional[str] = None
+    bujur: Optional[str] = None
 
     # Data EMIS siswa yang bisa diupdate admin langsung (tanpa verval)
     agama: Optional[str] = None

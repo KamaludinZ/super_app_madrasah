@@ -136,7 +136,8 @@ async def _proses_batch(jenis: str, req: BatchImporRequest, request: Request, us
             {'student_id': {'$in': ids}}, {'_id': 0}).to_list(len(ids) or 1)}
 
     hasil, dok_perubahan, kesalahan = [], [], []
-    inc = {'berhasil': 0, 'tanpa_perubahan': 0, 'gagal': 0, 'field_diisi': 0, 'field_ditimpa': 0}
+    inc = {'berhasil': 0, 'tanpa_perubahan': 0, 'gagal': 0, 'field_diisi': 0, 'field_ditimpa': 0,
+           'wilayah_cocok': 0, 'wilayah_sebagian': 0, 'wilayah_tidak_cocok': 0}
     for b, c in zip(baris, cocok):
         r = {'baris': b['baris'], 'identitas': c['identitas'], 'target_id': (c['target'] or {}).get('id')}
         if not c['target']:
@@ -154,13 +155,16 @@ async def _proses_batch(jenis: str, req: BatchImporRequest, request: Request, us
                 r.update(status='tanpa_perubahan', pesan='Tidak ada field kosong yang perlu diisi' if mode == 'isi_kosong' else 'Semua nilai sudah sama')
             else:
                 try:
-                    await terapkan_perubahan(db, jenis, t, rc['perubahan'], user.get('id'), detail)
+                    status_wilayah = await terapkan_perubahan(db, jenis, t, rc['perubahan'], user.get('id'), detail)
                 except Exception as e:  # noqa: BLE001 - kegagalan tulis satu baris tidak menghentikan batch
                     r.update(status='gagal', pesan=f'Gagal menyimpan: {e}', kolom=None)
                 else:
                     r.update(status='berhasil', pesan=_ringkas_perubahan(rc['perubahan']),
                              field_diisi=sum(1 for p in rc['perubahan'] if p['aksi'] == 'isi'),
                              field_ditimpa=sum(1 for p in rc['perubahan'] if p['aksi'] == 'timpa'))
+                    if status_wilayah:
+                        r['wilayah'] = status_wilayah  # hasil pencocokan alamat ke master wilayah
+                        inc[f'wilayah_{status_wilayah}'] += 1
                     inc['field_diisi'] += r['field_diisi']
                     inc['field_ditimpa'] += r['field_ditimpa']
                     dok_perubahan += [dokumen(PerubahanModel(

@@ -13,6 +13,10 @@ import { HeartPulse, Syringe, Plus, Trash2, Loader2, Save, Search, Pencil, Eye, 
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { useAuth } from '@/lib/AuthContext';
+import TemplateCkgDialog from './TemplateCkgDialog';
+import ImportCkgDialog from './ImportCkgDialog';
+import { FILTER_GTK, FILTER_SEMUA, KOLOM_CKG, cocokCariCkg, cocokFilterCkg, nilaiCkg, opsiKelasCkg } from '@/lib/ckgKolom';
 
 const emptyPatientPicker = {
   jenis_pasien: 'siswa', // 'siswa' or 'gtk'
@@ -33,10 +37,21 @@ const emptyCkgForm = {
   spo2: '',
   pemeriksaan_mata: '',
   pemeriksaan_gigi: '',
+  // Kolom baku CKG
+  jumlah_karies: '',
+  visus_mata: '',
+  kesehatan_kulit: '',
+  fungsi_pendengaran: '',
+  hemoglobin: '',
+  gds: '',
   kesimpulan: '',
   rekomendasi: '',
   keterangan: '',
 };
+
+/** Pilihan isian kolom baku CKG (teks bebas tetap diterima untuk data lama/impor). */
+export const OPSI_KESEHATAN_KULIT = ['Normal', 'Tidak Normal'];
+export const OPSI_FUNGSI_PENDENGARAN = ['Normal', 'Gangguan Telinga Kanan', 'Gangguan Telinga Kiri', 'Gangguan Kedua Telinga'];
 
 const emptyImunisasiForm = {
   ...emptyPatientPicker,
@@ -49,12 +64,16 @@ const emptyImunisasiForm = {
 };
 
 export default function AdminUKSCkgPage() {
+  const { settings } = useAuth();
+  const namaSekolah = settings?.school_name || '';
   const [tab, setTab] = useState('ckg');
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [gtkList, setGtkList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterKelas, setFilterKelas] = useState(FILTER_SEMUA);
+  const [filterJk, setFilterJk] = useState(FILTER_SEMUA);
 
   const [ckgList, setCkgList] = useState([]);
   const [imunisasiList, setImunisasiList] = useState([]);
@@ -72,6 +91,8 @@ export default function AdminUKSCkgPage() {
   const [detailItem, setDetailItem] = useState(null);
   const [detailType, setDetailType] = useState(null);
 
+  const [showTemplateCkg, setShowTemplateCkg] = useState(false);
+  const [showImportCkg, setShowImportCkg] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importTarget, setImportTarget] = useState(null); // 'ckg' | 'imunisasi'
   const [importJenisPasien, setImportJenisPasien] = useState('siswa');
@@ -142,7 +163,8 @@ export default function AdminUKSCkgPage() {
     setLoading(true);
     try {
       const [ckgRes, imunisasiRes, classesRes] = await Promise.all([
-        api.get('/uks/ckg'),
+        // Daftar kolom baku (identitas pasien terpetakan); server lama: /uks/ckg.
+        api.get('/uks/ckg/daftar').then((r) => ({ data: r.data.items })).catch(() => api.get('/uks/ckg')),
         api.get('/uks/imunisasi'),
         api.get('/classes'),
       ]);
@@ -202,6 +224,12 @@ export default function AdminUKSCkgPage() {
       spo2: item.spo2 ?? '',
       pemeriksaan_mata: item.pemeriksaan_mata || '',
       pemeriksaan_gigi: item.pemeriksaan_gigi || '',
+      jumlah_karies: item.jumlah_karies ?? '',
+      visus_mata: item.visus_mata || '',
+      kesehatan_kulit: item.kesehatan_kulit || '',
+      fungsi_pendengaran: item.fungsi_pendengaran || '',
+      hemoglobin: item.hemoglobin ?? '',
+      gds: item.gds ?? '',
       kesimpulan: item.kesimpulan || '',
       rekomendasi: item.rekomendasi || '',
       keterangan: item.keterangan || '',
@@ -233,6 +261,12 @@ export default function AdminUKSCkgPage() {
         spo2: ckgForm.spo2 ? Number(ckgForm.spo2) : null,
         pemeriksaan_mata: ckgForm.pemeriksaan_mata || null,
         pemeriksaan_gigi: ckgForm.pemeriksaan_gigi || null,
+        jumlah_karies: ckgForm.jumlah_karies !== '' ? Number(ckgForm.jumlah_karies) : null,
+        visus_mata: ckgForm.visus_mata || null,
+        kesehatan_kulit: ckgForm.kesehatan_kulit || null,
+        fungsi_pendengaran: ckgForm.fungsi_pendengaran || null,
+        hemoglobin: ckgForm.hemoglobin !== '' ? Number(ckgForm.hemoglobin) : null,
+        gds: ckgForm.gds !== '' ? Number(ckgForm.gds) : null,
         kesimpulan: ckgForm.kesimpulan || null,
         rekomendasi: ckgForm.rekomendasi || null,
         keterangan: ckgForm.keterangan || null,
@@ -336,7 +370,9 @@ export default function AdminUKSCkgPage() {
     }
   };
 
-  const filteredCkg = ckgList.filter((item) => !search || (item.pasien_nama || '').toLowerCase().includes(search.toLowerCase()));
+  const filteredCkg = ckgList.filter((item) => cocokCariCkg(item, search) && cocokFilterCkg(item, { kelas: filterKelas, jk: filterJk }));
+  const opsiKelas = opsiKelasCkg(classes, ckgList);
+  const adaFilterCkg = search || filterKelas !== FILTER_SEMUA || filterJk !== FILTER_SEMUA;
   const filteredImunisasi = imunisasiList.filter((item) => !search || (item.pasien_nama || '').toLowerCase().includes(search.toLowerCase()) || (item.jenis_vaksin || '').toLowerCase().includes(search.toLowerCase()));
 
   const renderPatientPicker = (form, setForm) => (
@@ -457,10 +493,36 @@ export default function AdminUKSCkgPage() {
             <CardContent className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="relative max-w-sm w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input placeholder="Cari nama pasien..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+                <Input placeholder="Cari nama atau NIK..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="cari-ckg" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Select value={filterKelas} onValueChange={setFilterKelas}>
+                  <SelectTrigger className="w-40" data-testid="filter-kelas-ckg"><SelectValue placeholder="Kelas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_SEMUA}>Semua Kelas & GTK</SelectItem>
+                    <SelectItem value={FILTER_GTK}>GTK saja</SelectItem>
+                    {opsiKelas.tingkat.map((t) => <SelectItem key={`t${t}`} value={`tingkat:${t}`}>Semua Kelas {t}</SelectItem>)}
+                    {opsiKelas.kelas.map((k) => <SelectItem key={k} value={k}>Kelas {k}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterJk} onValueChange={setFilterJk}>
+                  <SelectTrigger className="w-36" data-testid="filter-jk-ckg"><SelectValue placeholder="Jenis Kelamin" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_SEMUA}>Semua L/P</SelectItem>
+                    <SelectItem value="L">Laki-laki</SelectItem>
+                    <SelectItem value="P">Perempuan</SelectItem>
+                  </SelectContent>
+                </Select>
+                {adaFilterCkg && (
+                  <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterKelas(FILTER_SEMUA); setFilterJk(FILTER_SEMUA); }} className="gap-1 text-slate-600">
+                    <X className="h-4 w-4" /> Reset
+                  </Button>
+                )}
+                <span className="self-center text-xs text-slate-500" data-testid="jumlah-ckg-tampil">{filteredCkg.length} dari {ckgList.length} data</span>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => openImport('ckg')} className="gap-2"><Upload className="h-4 w-4" /> Import</Button>
+                <Button variant="outline" onClick={() => setShowTemplateCkg(true)} className="gap-2" data-testid="btn-template-ckg"><FileSpreadsheet className="h-4 w-4" /> Template</Button>
+                <Button variant="outline" onClick={() => setShowImportCkg(true)} className="gap-2" data-testid="btn-impor-ckg"><Upload className="h-4 w-4" /> Import</Button>
                 <Button onClick={openCreateCkg} className="gap-2 bg-[#006837] hover:bg-[#005830]"><Plus className="h-4 w-4" /> Tambah Data CKG</Button>
               </div>
             </CardContent>
@@ -471,28 +533,45 @@ export default function AdminUKSCkgPage() {
                 <div className="p-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-[#006837]" /><p className="text-slate-500">Memuat data...</p></div>
               ) : (
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table data-testid="tabel-data-ckg">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Pasien</TableHead>
-                        <TableHead>TB/BB</TableHead>
-                        <TableHead>Tensi</TableHead>
-                        <TableHead>Kesimpulan</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
+                      <TableRow className="bg-slate-50">
+                        {KOLOM_CKG.map((k) => (
+                          <TableHead
+                            key={k.key}
+                            className={`whitespace-nowrap text-xs ${k.key === 'no' ? 'w-10 text-center' : ''} ${k.angka ? 'text-right' : ''} ${k.key === 'nama_lengkap' ? 'sticky left-0 z-10 bg-slate-50 min-w-[180px]' : ''}`}
+                          >
+                            {k.label}{k.satuan && <span className="ml-0.5 font-normal text-slate-400">({k.satuan})</span>}
+                          </TableHead>
+                        ))}
+                        <TableHead className="text-right whitespace-nowrap text-xs">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredCkg.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">Belum ada data CKG</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={KOLOM_CKG.length + 1} className="text-center py-12 text-slate-500">{search ? 'Tidak ada data CKG yang cocok dengan pencarian' : 'Belum ada data CKG'}</TableCell></TableRow>
                       ) : (
-                        filteredCkg.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-mono">{item.tanggal}</TableCell>
-                            <TableCell className="font-semibold">{item.pasien_nama}<div className="text-xs text-slate-500 font-normal">{item.pasien_identitas}</div></TableCell>
-                            <TableCell className="font-mono">{item.tinggi_badan ?? '-'} cm / {item.berat_badan ?? '-'} kg</TableCell>
-                            <TableCell className="font-mono">{item.tekanan_darah || '-'}</TableCell>
-                            <TableCell className="max-w-xs"><div className="line-clamp-2">{item.kesimpulan || '-'}</div></TableCell>
+                        filteredCkg.map((item, idx) => (
+                          <TableRow key={item.id} data-testid={`baris-ckg-${item.id}`}>
+                            {KOLOM_CKG.map((k) => {
+                              const v = nilaiCkg(k, item, idx, namaSekolah);
+                              if (k.key === 'nama_lengkap') {
+                                return (
+                                  <TableCell key={k.key} className="sticky left-0 z-10 bg-white font-semibold">
+                                    {v || '-'}
+                                    <div className="text-xs font-normal text-slate-500">{item.tanggal}{item.pasien_kelas ? ` · ${item.pasien_kelas}` : ''}</div>
+                                  </TableCell>
+                                );
+                              }
+                              return (
+                                <TableCell
+                                  key={k.key}
+                                  className={`whitespace-nowrap text-sm ${k.key === 'no' ? 'text-center text-slate-500' : ''} ${k.angka || k.key === 'nik' || k.key === 'td' ? 'font-mono' : ''} ${k.angka ? 'text-right' : ''} ${k.key === 'alamat' ? 'max-w-[220px] whitespace-normal' : ''}`}
+                                >
+                                  {v === '' ? <span className="text-slate-300">-</span> : v}
+                                </TableCell>
+                              );
+                            })}
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
                                 <Button size="icon" variant="ghost" onClick={() => { setDetailItem(item); setDetailType('ckg'); }} className="text-blue-600 hover:text-blue-700"><Eye className="h-4 w-4" /></Button>
@@ -621,6 +700,45 @@ export default function AdminUKSCkgPage() {
               <div className="space-y-2">
                 <Label>Pemeriksaan Gigi</Label>
                 <Input value={ckgForm.pemeriksaan_gigi} onChange={(e) => setCkgForm({ ...ckgForm, pemeriksaan_gigi: e.target.value })} placeholder="mis. Ada karies" />
+              </div>
+            </div>
+            <div className="space-y-2 rounded-lg border border-slate-200 p-3" data-testid="form-kolom-baku-ckg">
+              <Label className="text-sm font-semibold">Pemeriksaan Kolom Baku CKG</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Jumlah Karies</Label>
+                  <Input type="number" min="0" max="32" value={ckgForm.jumlah_karies} onChange={(e) => setCkgForm({ ...ckgForm, jumlah_karies: e.target.value })} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Visus Mata</Label>
+                  <Input value={ckgForm.visus_mata} onChange={(e) => setCkgForm({ ...ckgForm, visus_mata: e.target.value })} placeholder="mis. 6/6" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Kesehatan Kulit</Label>
+                  <Select value={ckgForm.kesehatan_kulit || undefined} onValueChange={(v) => setCkgForm({ ...ckgForm, kesehatan_kulit: v })}>
+                    <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
+                    <SelectContent>
+                      {[...new Set([...OPSI_KESEHATAN_KULIT, ckgForm.kesehatan_kulit].filter(Boolean))].map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Fungsi Pendengaran</Label>
+                  <Select value={ckgForm.fungsi_pendengaran || undefined} onValueChange={(v) => setCkgForm({ ...ckgForm, fungsi_pendengaran: v })}>
+                    <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
+                    <SelectContent>
+                      {[...new Set([...OPSI_FUNGSI_PENDENGARAN, ckgForm.fungsi_pendengaran].filter(Boolean))].map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">Hemoglobin (g/dL)</Label>
+                  <Input type="number" step="0.1" min="0" value={ckgForm.hemoglobin} onChange={(e) => setCkgForm({ ...ckgForm, hemoglobin: e.target.value })} placeholder="mis. 12.5" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-500">GDS (mg/dL)</Label>
+                  <Input type="number" min="0" value={ckgForm.gds} onChange={(e) => setCkgForm({ ...ckgForm, gds: e.target.value })} placeholder="mis. 95" />
+                </div>
               </div>
             </div>
             <div className="space-y-2">
@@ -757,29 +875,38 @@ export default function AdminUKSCkgPage() {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detail {detailType === 'ckg' ? 'CKG' : 'Imunisasi'}</DialogTitle></DialogHeader>
           {detailItem && detailType === 'ckg' && (
-            <div className="space-y-3 py-2 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-slate-500 block text-xs">Pasien</span>{detailItem.pasien_nama}</div>
-                <div><span className="text-slate-500 block text-xs">Tanggal</span>{detailItem.tanggal}</div>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-xs mb-1">Pemeriksaan Vital</span>
-                <div className="grid grid-cols-3 gap-2 text-xs bg-slate-50 rounded-lg p-2">
-                  <div><span className="text-slate-400 block">TB</span>{detailItem.tinggi_badan ?? '-'} cm</div>
-                  <div><span className="text-slate-400 block">BB</span>{detailItem.berat_badan ?? '-'} kg</div>
-                  <div><span className="text-slate-400 block">Tensi</span>{detailItem.tekanan_darah || '-'}</div>
-                  <div><span className="text-slate-400 block">Nadi</span>{detailItem.nadi ?? '-'} bpm</div>
-                  <div><span className="text-slate-400 block">Suhu</span>{detailItem.suhu ?? '-'} °C</div>
-                  <div><span className="text-slate-400 block">SpO2</span>{detailItem.spo2 ?? '-'}%</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-slate-500 block text-xs">Mata</span>{detailItem.pemeriksaan_mata || '-'}</div>
-                <div><span className="text-slate-500 block text-xs">Gigi</span>{detailItem.pemeriksaan_gigi || '-'}</div>
-              </div>
-              {detailItem.kesimpulan && <div><span className="text-slate-500 block text-xs">Kesimpulan</span>{detailItem.kesimpulan}</div>}
-              {detailItem.rekomendasi && <div><span className="text-slate-500 block text-xs">Rekomendasi</span>{detailItem.rekomendasi}</div>}
-              {detailItem.keterangan && <div><span className="text-slate-500 block text-xs">Keterangan</span>{detailItem.keterangan}</div>}
+            <div className="space-y-3 py-2 text-sm" data-testid="detail-ckg">
+              <div className="text-xs text-slate-500">Tanggal periksa <span className="font-mono text-slate-700">{detailItem.tanggal}</span>{detailItem.pasien_kelas ? ` · Kelas ${detailItem.pasien_kelas}` : ''}</div>
+              <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5 rounded-lg border border-slate-200 p-3 text-xs" data-testid="detail-kolom-baku-ckg">
+                {KOLOM_CKG.filter((k) => k.key !== 'no').map((k) => {
+                  const v = nilaiCkg(k, detailItem, 0, namaSekolah);
+                  return (
+                    <React.Fragment key={k.key}>
+                      <dt className="text-slate-500">{k.label}</dt>
+                      <dd className={`${k.angka || k.key === 'nik' || k.key === 'td' ? 'font-mono' : ''} text-slate-800`}>
+                        {v === '' ? <span className="text-slate-300">-</span> : <>{v}{k.satuan && v !== '' ? ` ${k.satuan}` : ''}</>}
+                      </dd>
+                    </React.Fragment>
+                  );
+                })}
+              </dl>
+              {(() => {
+                const lain = [
+                  ['Nadi', detailItem.nadi, 'bpm'], ['Suhu', detailItem.suhu, '°C'], ['SpO2', detailItem.spo2, '%'],
+                  ['Pemeriksaan Mata', detailItem.pemeriksaan_mata], ['Pemeriksaan Gigi', detailItem.pemeriksaan_gigi],
+                  ['Kesimpulan', detailItem.kesimpulan], ['Rekomendasi', detailItem.rekomendasi], ['Keterangan', detailItem.keterangan],
+                ].filter(([, v]) => v != null && v !== '');
+                return lain.length > 0 && (
+                  <div data-testid="detail-pemeriksaan-lain">
+                    <span className="mb-1 block text-xs text-slate-500">Pemeriksaan lain</span>
+                    <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs">
+                      {lain.map(([l, v, sat]) => (
+                        <React.Fragment key={l}><dt className="text-slate-500">{l}</dt><dd className="whitespace-pre-line text-slate-800">{v}{sat ? ` ${sat}` : ''}</dd></React.Fragment>
+                      ))}
+                    </dl>
+                  </div>
+                );
+              })()}
               <div className="text-xs text-slate-400 pt-2 border-t">Dicatat oleh {detailItem.petugas_nama}</div>
             </div>
           )}
@@ -801,6 +928,8 @@ export default function AdminUKSCkgPage() {
           )}
         </DialogContent>
       </Dialog>
+      <TemplateCkgDialog open={showTemplateCkg} onOpenChange={setShowTemplateCkg} classes={classes} />
+      <ImportCkgDialog open={showImportCkg} onOpenChange={setShowImportCkg} onSelesai={(h) => { if (!h.tiruan && h.success > 0) loadData(); }} />
     </div>
   );
 }

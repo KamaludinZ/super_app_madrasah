@@ -3,11 +3,11 @@ import logging
 import re
 import calendar
 import io
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 
 import openpyxl
@@ -20,6 +20,8 @@ from reportlab.lib.units import cm
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from xml.sax.saxutils import escape as xml_escape
 
+from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
+from ckg_kolom import KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, kolom_template_ckg, lengkapi_identitas_ckg, pemeriksaan_lain
 from core import db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
 router = APIRouter()
@@ -193,6 +195,13 @@ class CekKesehatanRequest(BaseModel):
     spo2: Optional[int] = None  # %
     pemeriksaan_mata: Optional[str] = None
     pemeriksaan_gigi: Optional[str] = None
+    # Kolom baku CKG
+    jumlah_karies: Optional[int] = Field(None, ge=0, le=32)
+    visus_mata: Optional[str] = None
+    kesehatan_kulit: Optional[str] = None
+    fungsi_pendengaran: Optional[str] = None
+    hemoglobin: Optional[float] = Field(None, ge=0, le=30)  # g/dL
+    gds: Optional[float] = Field(None, ge=0, le=1000)  # mg/dL
     kesimpulan: Optional[str] = None
     rekomendasi: Optional[str] = None
     keterangan: Optional[str] = None
@@ -320,21 +329,34 @@ def _user_fields(prefix: str, u: Dict) -> Dict:
     }
 
 
-async def _get_active_pasien_list(jenis_pasien: str) -> List[Dict]:
-    """Active patients for the CKG/Imunisasi import template: students currently
-    assigned to a class in the active academic year (excluding mutasi keluar),
-    or active GTK (guru/tenaga_kependidikan) — matching the same 'active' notion
-    as /admin/gtk and /admin/siswa."""
+async def _get_active_pasien_list(jenis_pasien: str, tingkat: Optional[str] = None, jenis_gtk: Optional[str] = None,
+                                  kelas: Optional[str] = None) -> List[Dict]:
+    """Pasien aktif untuk template CKG/Imunisasi:
+    - siswa: siswa di kelas tahun ajaran aktif (bukan mutasi keluar); `tingkat` 7/8/9 menyaring grade kelas,
+             `kelas` (id atau nama kelas, mis. '7A') menyaring satu kelas.
+    - gtk  : guru & tenaga kependidikan aktif (bukan mutasi keluar); `jenis_gtk` guru/tendik menyaring jenisnya
+             (pengguna yang juga guru dihitung sebagai guru, sama dengan menu Data GTK).
+    Urutan: kelas lalu nama (siswa), nama (GTK)."""
+    from data_master_service import gtk_per_jenis, normalisasi_jenis_gtk, normalisasi_tingkat
     if jenis_pasien == 'gtk':
-        items = await db.users.find(
-            {'roles': {'$in': ['guru', 'tenaga_kependidikan']}, 'is_active': {'$ne': False}},
-            {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, 'username': 1}
-        ).sort('full_name', 1).to_list(3000)
-        return [{'id': i['id'], 'full_name': i.get('full_name'), 'identitas': i.get('nip_nuptk') or i.get('username'), 'kelas': None} for i in items]
+        data = await gtk_per_jenis(db, normalisasi_jenis_gtk(jenis_gtk))
+        return [{'id': d['user']['id'], 'full_name': d['user'].get('full_name'), 'jenis_gtk': d['jenis'],
+                 'identitas': d['user'].get('nip') or d['user'].get('nip_nuptk') or d['user'].get('username'), 'kelas': None}
+                for d in data if d['user'].get('is_active', True) is not False]
+    if jenis_pasien != 'siswa':
+        raise HTTPException(400, "jenis_pasien harus 'siswa' atau 'gtk'")
 
+    grade = normalisasi_tingkat(tingkat)
     active_ay = await get_active_academic_year()
-    class_query = {'academic_year_id': active_ay['id']} if active_ay else {}
+    class_query: Dict[str, Any] = {'academic_year_id': active_ay['id']} if active_ay else {}
+    if grade is not None:
+        class_query['grade'] = grade
     classes = await db.classes.find(class_query, {'_id': 0, 'id': 1, 'name': 1}).to_list(500)
+    if kelas and kelas.strip().lower() not in ('all', 'semua'):
+        k = kelas.strip().lower()
+        classes = [c for c in classes if c['id'] == kelas.strip() or str(c.get('name') or '').strip().lower() == k]
+        if not classes:
+            raise HTTPException(404, f"Kelas '{kelas}' tidak ditemukan pada tahun ajaran aktif" + (f" tingkat {grade}" if grade else ''))
     class_names = {c['id']: c['name'] for c in classes}
     if not class_names:
         return []
@@ -345,6 +367,17 @@ async def _get_active_pasien_list(jenis_pasien: str) -> List[Dict]:
     ).to_list(5000)
     students.sort(key=lambda s: (class_names.get(s.get('student_class_id'), ''), s.get('full_name') or ''))
     return [{'id': s['id'], 'full_name': s.get('full_name'), 'identitas': s.get('nisn'), 'kelas': class_names.get(s.get('student_class_id'))} for s in students]
+
+
+def nama_kelompok_template(jenis_pasien: str, tingkat: Optional[str], jenis_gtk: Optional[str], kelas: Optional[str] = None) -> str:
+    """Bagian nama berkas template, mis. 'Siswa_Kelas_7', 'Siswa_Kelas_7A', 'Siswa_Semua_Kelas', 'GTK_Guru'."""
+    if jenis_pasien == 'siswa' and kelas and kelas.strip().lower() not in ('all', 'semua'):
+        return 'Siswa_Kelas_' + re.sub(r'[^A-Za-z0-9]+', '', kelas)
+    if jenis_pasien == 'siswa':
+        t = (tingkat or '').strip().lower()
+        return 'Siswa_Semua_Kelas' if t in ('', 'all', 'semua') else f'Siswa_Kelas_{t}'
+    j = (jenis_gtk or '').strip().lower()
+    return 'GTK_' + {'guru': 'Guru', 'tendik': 'Tendik', 'tenaga_kependidikan': 'Tendik'}.get(j, 'Semua')
 
 
 async def _get_obat_or_404(obat_id: str):
@@ -2511,8 +2544,15 @@ async def list_ckg(
     pasien_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    q: Optional[str] = None,
+    kelas: Optional[str] = None,
+    jenis_kelamin: Optional[str] = None,
     user: Dict = Depends(require_role(*UKS_VIEW_ROLES))
 ):
+    """Daftar CKG (identitas pasien dipetakan ke kolom baku). Opsional: q (nama/NIK), kelas
+    ('7A', 'tingkat:7', 'gtk'), jenis_kelamin (L/P) — aturan sama dengan /uks/ckg/daftar."""
+    if jenis_kelamin and jenis_kelamin not in ('L', 'P'):
+        raise HTTPException(400, "Jenis kelamin harus 'L' atau 'P'")
     query = {}
     if pasien_id:
         query['pasien_id'] = pasien_id
@@ -2525,7 +2565,76 @@ async def list_ckg(
         query['tanggal'] = date_query
 
     items = await db.uks_ckg.find(query, {'_id': 0}).sort('tanggal', -1).to_list(5000)
+    settings = await get_settings()
+    # Petakan ke kolom baku CKG: identitas pasien terkini (NIK, tgl lahir, JK, alamat, kelas) & nama sekolah.
+    items = await lengkapi_identitas_ckg(db, items, settings.get('school_name'))
+    if q or kelas or jenis_kelamin:
+        items = [i for i in items if _cocok_cari_ckg(i, q) and _cocok_filter_ckg(i, kelas, jenis_kelamin)]
     return [serialize_doc(i) for i in items]
+
+
+def _cocok_cari_ckg(item: Dict, q: str) -> bool:
+    """Pencarian nama (semua kata) atau NIK (angka, spasi/titik diabaikan) — sama dengan frontend."""
+    q = (q or '').strip().lower()
+    if not q:
+        return True
+    teks = ' '.join(str(item.get(k) or '') for k in ('pasien_nama', 'pasien_nik', 'pasien_alamat', 'pasien_identitas', 'pasien_kelas')).lower()
+    digit = re.sub(r'[\s.-]', '', q)
+    if digit.isdigit() and len(digit) >= 3:
+        return digit in re.sub(r'\D', '', str(item.get('pasien_nik') or '')) or q in teks
+    return all(kata in teks for kata in q.split())
+
+
+def _cocok_filter_ckg(item: Dict, kelas: Optional[str], jenis_kelamin: Optional[str]) -> bool:
+    if jenis_kelamin and item.get('pasien_jenis_kelamin') != jenis_kelamin:
+        return False
+    if not kelas or kelas == 'all':
+        return True
+    siswa = item.get('pasien_tipe') == 'siswa'
+    if kelas == 'gtk':
+        return not siswa
+    if not siswa:
+        return False
+    nama = str(item.get('pasien_kelas') or '')
+    if kelas.startswith('tingkat:'):
+        return nama.startswith(kelas[8:])
+    return nama == kelas
+
+
+@router.get("/uks/ckg/daftar")
+async def daftar_ckg_kolom_baku(
+    q: Optional[str] = None,
+    kelas: Optional[str] = None,
+    jenis_kelamin: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    format_baris: bool = False,
+    user: Dict = Depends(require_role(*UKS_VIEW_ROLES)),
+):
+    """Daftar Data CKG dalam susunan kolom baku (NO, Nama Lengkap, NIK, Nama Sekolah, Tgl Lahir,
+    Jenis Kelamin, Alamat Lengkap, BB, TB, TD, Jumlah Karies, Visus Mata, Kesehatan Kulit,
+    Fungsi Pendengaran, Hemoglobin, GDS), dengan pencarian nama/NIK dan filter kelas
+    ('7A', 'tingkat:7', 'gtk', 'all') & jenis kelamin (L/P). format_baris=true menambahkan
+    nilai per kolom berurutan (siap ekspor/template)."""
+    if jenis_kelamin and jenis_kelamin not in ('L', 'P'):
+        raise HTTPException(400, "Jenis kelamin harus 'L' atau 'P'")
+    query: Dict[str, Any] = {}
+    if start_date or end_date:
+        query['tanggal'] = {k: v for k, v in (('$gte', start_date), ('$lte', end_date)) if v}
+    items = await db.uks_ckg.find(query, {'_id': 0}).sort([('tanggal', -1), ('created_at', -1)]).to_list(5000)
+    settings = await get_settings()
+    items = await lengkapi_identitas_ckg(db, items, settings.get('school_name'))
+    total_semua = len(items)
+    items = [i for i in items if _cocok_cari_ckg(i, q) and _cocok_filter_ckg(i, kelas, jenis_kelamin)]
+    hasil = {
+        'kolom': [{k: v for k, v in kol.items()} for kol in KOLOM_CKG],
+        'total': len(items),
+        'total_semua': total_semua,
+        'items': [serialize_doc({**i, 'pemeriksaan_lain': pemeriksaan_lain(i)}) for i in items],
+    }
+    if format_baris:
+        hasil['baris'] = [baris_kolom_baku(i, n) for n, i in enumerate(items)]
+    return hasil
 
 
 @router.post("/uks/ckg")
@@ -2551,7 +2660,9 @@ async def update_ckg(ckg_id: str, req: CekKesehatanRequest, user: Dict = Depends
     if not existing:
         raise HTTPException(404, "Data CKG tidak ditemukan")
 
-    update_data = req.model_dump()
+    # Hanya field yang dikirim yang diubah: field lama tanpa padanan kolom baku (nadi, suhu,
+    # kesimpulan, dst.) atau field baku yang tidak disertakan klien tetap utuh.
+    update_data = req.model_dump(exclude_unset=True)
     if req.pasien_id != existing.get('pasien_id'):
         pasien = await _get_user_or_404(req.pasien_id)
         update_data.update(_user_fields('pasien', pasien))
@@ -2589,115 +2700,197 @@ def _style_import_header(ws, headers: List[str]):
     return locked_fill
 
 
-@router.get("/uks/ckg/template")
-async def download_ckg_template(jenis_pasien: str = Query('siswa'), user: Dict = Depends(require_role(*UKS_ROLES))):
-    """Excel template pre-filled with active patients (siswa in the active
-    academic year's classes, or active GTK), ready for petugas UKS to fill
-    in the CKG examination columns and re-upload."""
-    pasien_list = await _get_active_pasien_list(jenis_pasien)
-
+async def buat_template_ckg(pasien_list: List[Dict], jenis_pasien: str, tingkat: Optional[str],
+                            jenis_gtk: Optional[str], kelas: Optional[str]) -> openpyxl.Workbook:
+    """Template CKG dengan 16 judul kolom baku (+ Tanggal Periksa & ID Pasien di kanan).
+    Kolom identitas (No, Nama, NIK, Sekolah, Tgl Lahir, JK, Alamat) & ID pasien terisi otomatis
+    dari data siswa/GTK; kolom hasil pemeriksaan & tanggal dikosongkan untuk diisi petugas."""
+    kolom = kolom_template_ckg()
+    settings = await get_settings()
+    items = await lengkapi_identitas_ckg(
+        db, [{'pasien_id': p_['id'], 'pasien_nama': p_.get('full_name')} for p_ in pasien_list], settings.get('school_name'))
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Template CKG"
-
-    headers = [
-        'ID (jangan diubah)', 'NISN/NIP', 'Nama', 'Kelas', 'Tanggal (YYYY-MM-DD)',
-        'Tinggi Badan (cm)', 'Berat Badan (kg)', 'Tekanan Darah', 'Nadi (bpm)', 'Suhu (C)', 'SpO2 (%)',
-        'Pemeriksaan Mata', 'Pemeriksaan Gigi', 'Kesimpulan', 'Rekomendasi', 'Keterangan',
-    ]
-    locked_fill = _style_import_header(ws, headers)
-
-    for row_num, p in enumerate(pasien_list, 2):
-        ws.cell(row=row_num, column=1, value=p['id']).fill = locked_fill
-        ws.cell(row=row_num, column=2, value=p.get('identitas') or '').fill = locked_fill
-        ws.cell(row=row_num, column=3, value=p.get('full_name') or '').fill = locked_fill
-        ws.cell(row=row_num, column=4, value=p.get('kelas') or '').fill = locked_fill
-
-    widths = [28, 14, 26, 10, 16, 12, 12, 12, 10, 10, 10, 20, 20, 24, 24, 20]
-    for idx, w in enumerate(widths, 1):
-        ws.column_dimensions[get_column_letter(idx)].width = w
-    ws.column_dimensions['A'].hidden = True
+    isi_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    head_fill = PatternFill(start_color="006837", end_color="006837", fill_type="solid")
+    bantu_fill = PatternFill(start_color="B45309", end_color="B45309", fill_type="solid")
+    for c, k in enumerate(kolom, 1):
+        cell = ws.cell(row=1, column=c, value=k['label'])
+        cell.fill = bantu_fill if k['grup'] == 'Kolom bantu impor' else head_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.column_dimensions[get_column_letter(c)].width = 28 if k['key'] in ('nama_lengkap', 'alamat', 'pasien_id') else max(11, len(k['label']) + 2)
+    for r, item in enumerate(items, 2):
+        nilai = baris_kolom_baku(item, r - 2) + ['', item['pasien_id']]
+        for c, (k, v) in enumerate(zip(kolom, nilai), 1):
+            prefill = k['key'] == 'no' or k['key'] in KOLOM_IDENTITAS_CKG or k['key'] == 'pasien_id'
+            cell = ws.cell(row=r, column=c, value=v if prefill else None)
+            cell.number_format = '@' if k['key'] in ('nik', 'td', 'visus_mata', 'tanggal', 'tgl_lahir') else cell.number_format
+            if prefill:
+                cell.fill = isi_fill
+    ws.row_dimensions[1].height = 36
+    ws.freeze_panes = 'C2'
 
     ws2 = wb.create_sheet("PETUNJUK")
-    ws2['A1'] = "Petunjuk Pengisian Template CKG"
+    ws2['A1'] = f"Petunjuk Pengisian Template CKG — {nama_kelompok_template(jenis_pasien, tingkat, jenis_gtk, kelas).replace('_', ' ')}"
     ws2['A1'].font = Font(bold=True, size=13, color='006837')
-    ws2.column_dimensions['A'].width = 100
+    ws2.column_dimensions['A'].width = 110
     for line in [
-        '', "Kolom ID, NISN/NIP, Nama, dan Kelas sudah terisi otomatis — JANGAN diubah atau dihapus urutannya.",
-        "Isi kolom Tanggal dan hasil pemeriksaan pada baris siswa/GTK yang diperiksa.",
-        "Baris yang kolom Tanggal-nya dikosongkan akan dilewati saat diimpor.",
-        "Format Tanggal: YYYY-MM-DD (contoh: 2026-09-19).",
+        '', "Susunan kolom sama persis dengan tabel Data CKG: NO, Nama Lengkap, NIK, Nama Sekolah, Tgl Lahir, Jenis Kelamin, Alamat Lengkap,",
+        "BB, TB, TD, Jumlah Karies, Visus Mata, Kesehatan Kulit, Fungsi Pendengaran, Hemoglobin, GDS — lalu kolom bantu Tanggal & ID Pasien.",
+        "Kolom identitas (abu-abu) sudah terisi dari data siswa/GTK — JANGAN mengubah kolom ID Pasien, urutan, atau judul kolom.",
+        "Isi Tanggal Periksa dan hasil pemeriksaan pada baris pasien yang diperiksa; baris tanpa hasil pemeriksaan dilewati saat impor.",
+        "Format: Tanggal YYYY-MM-DD (mis. 2026-09-19) · TD sistolik/diastolik (mis. 110/70) · Visus mis. 6/6 · angka memakai titik desimal.",
+        "Batas wajar: BB 1-300 kg, TB 30-250 cm, Jumlah Karies 0-32, Hemoglobin 0-30 g/dL, GDS 0-1000 mg/dL.",
+        "Pasien baru di luar daftar: tambahkan baris dengan NIK (16 digit) bila ID Pasien tidak diketahui.",
     ]:
         ws2.append([line])
+    wb.active = 0
+    return wb
+
+
+@router.get("/uks/ckg/template")
+async def download_ckg_template(
+    jenis_pasien: str = Query('siswa'),
+    tingkat: Optional[str] = Query(None, description="Siswa: 7, 8, 9, atau kosong = semua kelas"),
+    jenis_gtk: Optional[str] = Query(None, description="GTK: guru, tendik, atau kosong = semua"),
+    kelas: Optional[str] = Query(None, description="Siswa: id atau nama satu kelas, mis. 7A"),
+    user: Dict = Depends(require_role(*UKS_ROLES)),
+):
+    """Excel template pre-filled with active patients (siswa in the active
+    academic year's classes, or active GTK), ready for petugas UKS to fill
+    in the CKG examination columns and re-upload."""
+    pasien_list = await _get_active_pasien_list(jenis_pasien, tingkat, jenis_gtk, kelas)
+    wb = await buat_template_ckg(pasien_list, jenis_pasien, tingkat, jenis_gtk, kelas)
 
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    filename = f"Template_CKG_{jenis_pasien}.xlsx"
+    # Nama kelas resmi (bukan ketikan pengguna) untuk nama berkas, mis. '7a' -> '7A'.
+    kelas_nama = next((p_['kelas'] for p_ in pasien_list if p_.get('kelas')), None) if kelas else None
+    if kelas and not kelas_nama:
+        cls = await db.classes.find_one({'$or': [{'id': kelas}, {'name': {'$regex': f'^{re.escape(kelas.strip())}$', '$options': 'i'}}]}, {'_id': 0, 'name': 1})
+        kelas_nama = (cls or {}).get('name') or kelas
+    filename = f"Template_CKG_{nama_kelompok_template(jenis_pasien, tingkat, jenis_gtk, kelas_nama)}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        # Template memuat NIK & alamat pasien: jangan di-cache peramban/proxy.
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', 'X-Jumlah-Data': str(len(pasien_list)),
+                 'Cache-Control': 'no-store'},
     )
+
+
+async def _cari_pasien_impor_ckg(data: Dict[str, str]) -> (Optional[Dict], Optional[str], Optional[str]):
+    """Pasien untuk satu baris impor: ID Pasien (kolom bantu) lalu NIK (siswa: student_details, GTK: users).
+    Mengembalikan (pasien, pesan_galat, kolom_galat)."""
+    pid = (data.get('pasien_id') or '').strip()
+    if pid:
+        u = await db.users.find_one({'id': pid}, {'_id': 0, 'password_hash': 0})
+        return (u, None, None) if u else (None, f'ID Pasien {pid} tidak ditemukan', 'ID Pasien')
+    nik = re.sub(r'\D', '', data.get('nik') or '')
+    if not nik:
+        return None, 'Identitas pasien kosong; isi ID Pasien (dari template) atau NIK', 'ID Pasien / NIK'
+    calon = [d['student_id'] for d in await db.student_details.find({'nik': nik}, {'_id': 0, 'student_id': 1}).to_list(5)]
+    calon += [u['id'] for u in await db.users.find({'nik': nik}, {'_id': 0, 'id': 1}).to_list(5)]
+    calon = list(dict.fromkeys(calon))
+    if not calon:
+        return None, f'NIK {nik} tidak ditemukan pada data siswa/GTK', 'NIK'
+    if len(calon) > 1:
+        return None, f'NIK {nik} dimiliki {len(calon)} pengguna; isi kolom ID Pasien', 'NIK'
+    return await db.users.find_one({'id': calon[0]}, {'_id': 0, 'password_hash': 0}), None, None
 
 
 @router.post("/uks/ckg/import-excel")
 async def import_ckg_excel(file: UploadFile = File(...), user: Dict = Depends(require_role(*UKS_ROLES))):
-    if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
+    """Impor Data CKG dari berkas template (format kolom baku; template lama tetap diterima).
+    Baris tanpa hasil pemeriksaan dilewati. Respons: success, failed, total, hasil per baris
+    (baris, nama, status, pesan, kolom) dan errors (teks, kompatibel dengan klien lama)."""
+    if not (file.filename or '').lower().endswith(('.xlsx', '.xlsm')):
         raise HTTPException(400, "Hanya file .xlsx yang didukung")
-    contents = await file.read()
-    wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
-    ws = wb['Template CKG'] if 'Template CKG' in wb.sheetnames else wb.active
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(413, 'Ukuran berkas maksimal 5 MB')
+    try:
+        berkas = baca_berkas_ckg(contents)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if berkas['masalah_header']:
+        raise HTTPException(422, {'pesan': 'Susunan kolom berkas tidak sesuai template CKG', 'masalah': berkas['masalah_header']})
 
-    success = 0
-    errors = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row or not row[0] or not row[4]:
-            continue  # skip rows without ID or Tanggal
-        pasien_id = str(row[0]).strip()
-        tanggal = str(row[4]).strip() if not hasattr(row[4], 'isoformat') else row[4].date().isoformat() if hasattr(row[4], 'date') else row[4].isoformat()
+    hasil = []
+    sekarang = datetime.utcnow().isoformat()
+    sudah_di_berkas: Dict[tuple, int] = {}  # (pasien_id, tanggal) -> baris pertama di berkas ini
+    for b in berkas['baris']:
+        data = b['data']
+        r = {'baris': b['baris'], 'nama': data.get('nama_lengkap') or '-', 'status': 'gagal', 'kolom': None}
+        salah = validasi_baris_ckg(data)
+        if salah:
+            # Satu baris disimpan utuh atau tidak sama sekali; semua kesalahan dilaporkan sekaligus.
+            r.update(pesan='; '.join(e['pesan'] for e in salah), kolom=', '.join(e['kolom'] for e in salah))
+            hasil.append(r)
+            continue
+        pasien, pesan, kolom = await _cari_pasien_impor_ckg(data)
+        if not pasien:
+            r.update(pesan=pesan, kolom=kolom)
+            hasil.append(r)
+            continue
+        r['nama'] = pasien.get('full_name') or r['nama']
         try:
-            pasien = await db.users.find_one({'id': pasien_id}, {'_id': 0, 'password_hash': 0})
-            if not pasien:
-                errors.append(f"Baris {idx}: pasien tidak ditemukan")
-                continue
-
-            def num(v, cast=float):
-                if v is None or str(v).strip() == '':
-                    return None
-                try:
-                    return cast(v)
-                except (TypeError, ValueError):
-                    return None
-
-            doc = {
-                'id': str(uuid.uuid4()),
-                'pasien_id': pasien_id,
-                'tanggal': tanggal,
-                'tinggi_badan': num(row[5]),
-                'berat_badan': num(row[6]),
-                'tekanan_darah': str(row[7]).strip() if row[7] else None,
-                'nadi': num(row[8], int),
-                'suhu': num(row[9]),
-                'spo2': num(row[10], int),
-                'pemeriksaan_mata': str(row[11]).strip() if row[11] else None,
-                'pemeriksaan_gigi': str(row[12]).strip() if row[12] else None,
-                'kesimpulan': str(row[13]).strip() if row[13] else None,
-                'rekomendasi': str(row[14]).strip() if row[14] else None,
-                'keterangan': str(row[15]).strip() if len(row) > 15 and row[15] else None,
-                **_user_fields('pasien', pasien),
-                'petugas_id': user['id'],
-                'petugas_nama': user.get('full_name', user.get('username')),
-                'created_at': datetime.utcnow().isoformat(),
-                'updated_at': datetime.utcnow().isoformat(),
-            }
+            fields = dokumen_ckg(data)
+        except ValueError:
+            r.update(pesan='Ada nilai angka yang tidak valid', kolom='Hasil Pemeriksaan')
+            hasil.append(r)
+            continue
+        if not fields.get('tanggal'):
+            r.update(pesan='Tanggal pemeriksaan wajib diisi', kolom='Tanggal Periksa')
+            hasil.append(r)
+            continue
+        kunci = (pasien['id'], fields['tanggal'])
+        if kunci in sudah_di_berkas:
+            r.update(pesan=f"Pemeriksaan pasien & tanggal yang sama sudah ada di baris {sudah_di_berkas[kunci]}", kolom='Tanggal Periksa')
+            hasil.append(r)
+            continue
+        sudah_di_berkas[kunci] = b['baris']
+        ada = await db.uks_ckg.find_one({'pasien_id': pasien['id'], 'tanggal': fields['tanggal']}, {'_id': 0, 'id': 1})
+        if ada:
+            # Impor ulang berkas yang sama tidak menggandakan data: perbarui pemeriksaan pada tanggal itu,
+            # hanya untuk kolom yang terisi di berkas (kolom kosong tidak menghapus data tersimpan).
+            isi = {k: v for k, v in fields.items() if v is not None}
+            await db.uks_ckg.update_one({'id': ada['id']}, {'$set': {**isi, 'updated_at': sekarang, 'diperbarui_oleh': user['id'],
+                                                                    'sumber_terakhir': f"impor:{berkas['format']}"}})
+            r.update(status='berhasil', pesan='Diperbarui (pemeriksaan tanggal ini sudah ada)', aksi='perbarui', ckg_id=ada['id'])
+        else:
+            doc = {'id': str(uuid.uuid4()), 'pasien_id': pasien['id'], **fields, **_user_fields('pasien', pasien),
+                   'pasien_tipe': 'siswa' if 'siswa' in (pasien.get('roles') or []) else 'gtk', 'sumber': f"impor:{berkas['format']}",
+                   'petugas_id': user['id'], 'petugas_nama': user.get('full_name', user.get('username')), 'created_at': sekarang, 'updated_at': sekarang}
             await db.uks_ckg.insert_one(doc)
-            success += 1
-        except Exception as e:
-            errors.append(f"Baris {idx}: {e}")
+            r.update(status='berhasil', pesan='Tersimpan', aksi='baru', ckg_id=doc['id'])
+        hasil.append(r)
 
-    await log_audit(user, 'uks_ckg_import', f"Import CKG dari Excel: {success} baris berhasil")
-    return {'success': success, 'errors': errors, 'total_rows': success + len(errors)}
+    success = sum(1 for h in hasil if h['status'] == 'berhasil')
+    diperbarui = sum(1 for h in hasil if h.get('aksi') == 'perbarui')
+    await log_audit(user, 'uks_ckg_import', f"Import CKG dari Excel ({berkas['format']}): {success} berhasil, {len(hasil) - success} gagal")
+    return {
+        'format': berkas['format'],
+        'success': success,
+        'baru': success - diperbarui,
+        'diperbarui': diperbarui,
+        'failed': len(hasil) - success,
+        'total': len(hasil),
+        'dilewati': berkas['dilewati'],
+        # Ringkasan siap tampil: jumlah per status & daftar baris gagal (lokasi + alasan).
+        'ringkasan': {
+            'diproses': len(hasil), 'berhasil': success, 'baru': success - diperbarui, 'diperbarui': diperbarui,
+            'gagal': len(hasil) - success, 'dilewati_kosong': berkas['dilewati']['kosong'],
+            'dilewati_belum_diperiksa': berkas['dilewati']['belum_diperiksa'],
+        },
+        'gagal': [{k: h.get(k) for k in ('baris', 'nama', 'kolom', 'pesan')} for h in hasil if h['status'] == 'gagal'],
+        'hasil': hasil,
+        'errors': [f"Baris {h['baris']}: {h['pesan']}" for h in hasil if h['status'] == 'gagal'],
+        'total_rows': len(hasil),
+    }
 
 
 # ============================================================

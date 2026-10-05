@@ -30,6 +30,10 @@ class RingkasanImpor(BaseModel):
     gagal: int = 0            # baris ditolak (identitas tidak cocok / nilai tidak valid)
     field_diisi: int = 0      # field kosong yang diisi
     field_ditimpa: int = 0    # field berisi yang diganti (mode timpa)
+    # Pencocokan alamat ke master wilayah (baris yang mengubah nama wilayah)
+    wilayah_cocok: int = 0
+    wilayah_sebagian: int = 0
+    wilayah_tidak_cocok: int = 0
 
 
 class ImporModel(BaseModel):
@@ -352,11 +356,20 @@ def _set_detail(perubahan: List[Dict[str, Any]], detail: Optional[Dict[str, Any]
 
 
 async def terapkan_perubahan(db, jenis: str, target: Dict[str, Any], perubahan: List[Dict[str, Any]], oleh: Optional[str],
-                             detail: Optional[Dict[str, Any]] = None) -> None:
-    """Tulis perubahan ke users ($set field) dan student_details ($set path bersarang, upsert)."""
+                             detail: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Tulis perubahan ke users ($set field) dan student_details ($set path bersarang, upsert).
+    Nama wilayah alamat yang berubah dicocokkan ke master wilayah (kode wilayah + nama resmi ikut disimpan);
+    mengembalikan status pencocokan wilayah baris ini ('cocok'/'sebagian'/'tidak_cocok') atau None."""
     sekarang = datetime.utcnow()
     set_user = {p['path'][5:]: p['baru'] for p in perubahan if p['path'].startswith('user.')}
+    if jenis == 'gtk':
+        # Nama & gelar GTK: full_name disusun ulang dari nama tanpa gelar + gelar (gabung data tersimpan);
+        # mengalahkan kolom Nama Lengkap di berkas agar susunan nama selalu konsisten.
+        from nama_gelar import lengkapi_nama
+        lengkapi_nama(set_user, target)
     set_detail = _set_detail(perubahan, detail)
+    from wilayah_cocok import cocokkan_alamat_impor
+    status_wilayah = await cocokkan_alamat_impor(db, jenis, target, detail, set_user, set_detail)
     if set_user:
         set_user['updated_at'] = sekarang.isoformat()
         await db.users.update_one({'id': target['id']}, {'$set': set_user})
@@ -369,3 +382,4 @@ async def terapkan_perubahan(db, jenis: str, target: Dict[str, Any], perubahan: 
              '$setOnInsert': {'id': str(uuid.uuid4()), 'student_id': target['id'], 'created_at': sekarang}},
             upsert=True,
         )
+    return status_wilayah

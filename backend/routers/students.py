@@ -27,6 +27,7 @@ from excel_io import (
     student_combined_template,
     student_template,
 )
+from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_SISWA, selaraskan_alamat
 from data_master_service import alasan_siswa_kosong, jumlah_siswa_per_tingkat, normalisasi_tingkat, siswa_per_tingkat
 from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, tambah_keterangan_kosong, workbook_bytes
 from data_master_template import template_bytes
@@ -446,6 +447,12 @@ async def upsert_student_detail(sid: str, payload: Dict, request: Request, user:
         raise HTTPException(403, "Tidak diizinkan")
     payload.pop('id', None); payload.pop('_id', None); payload.pop('student_id', None)
     payload.pop('created_at', None)
+    # Kode wilayah tiap blok alamat divalidasi & nama tingkatnya diselaraskan dengan master wilayah.
+    try:
+        for blok in BLOK_ALAMAT_SISWA:
+            await selaraskan_alamat(db, payload.get(blok), KOLOM_ALAMAT_SISWA)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     payload['updated_at'] = now_wib().isoformat()
     payload['updated_by'] = user['id']
     existing = await db.student_details.find_one({'student_id': sid})

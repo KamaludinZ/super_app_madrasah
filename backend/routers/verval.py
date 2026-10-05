@@ -2,6 +2,8 @@
 Verval (Verifikasi & Validasi) Router
 Mengelola request perubahan data siswa/guru/tendik yang perlu approval admin/wali kelas.
 """
+from nama_gelar import FIELD_NAMA_GELAR, lengkapi_nama
+from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_GTK, KOLOM_ALAMAT_SISWA, selaraskan_alamat
 from datetime import datetime
 from typing import Dict, Optional, List
 
@@ -153,6 +155,11 @@ async def create_verval_request(
         target_collection = 'achievements'
     old_data = payload.get('old_data', {})
     new_data = payload.get('new_data', {})
+    if request_type == 'profile_update' and target_collection == 'users' and any(k in new_data for k in FIELD_NAMA_GELAR):
+        # Tampilkan pada peninjau nama lengkap hasil susunan (bukan ketikan bebas), beserta nilai lamanya.
+        tersimpan = await db.users.find_one({'id': user_id}, {'_id': 0, 'full_name': 1, **{k: 1 for k in FIELD_NAMA_GELAR}}) or {}
+        new_data = lengkapi_nama(dict(new_data), tersimpan)
+        old_data = {**{k: tersimpan.get(k) for k in (*FIELD_NAMA_GELAR, 'full_name') if k in new_data}, **(old_data or {})}
 
     if request_type == 'prestasi_create':
         old_data = {}  # wajib kosong untuk create prestasi
@@ -226,6 +233,12 @@ async def approve_verval_request(
                     {'id': verval_req['user_id']},
                     {'$set': users_patch}
                 )
+            # Kode wilayah tiap blok alamat divalidasi & nama tingkatnya diselaraskan dengan master wilayah.
+            try:
+                for blok in BLOK_ALAMAT_SISWA:
+                    await selaraskan_alamat(db, new_data.get(blok), KOLOM_ALAMAT_SISWA)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
             # Apply perubahan ke sub-collection detail siswa (Data Siswa/Ortu/Alamat/Keahlian/dst)
             await db.student_details.update_one(
                 {'student_id': verval_req['user_id']},
@@ -233,10 +246,19 @@ async def approve_verval_request(
                 upsert=True,
             )
         else:
-            # Apply perubahan ke user doc
+            # Apply perubahan ke user doc. Bila pengajuan memuat nama/gelar GTK, full_name disusun
+            # ulang dari nama tanpa gelar + gelar depan/belakang (gabung dengan data tersimpan).
+            new_data = dict(verval_req.get('new_data', {}))
+            if any(k in new_data for k in FIELD_NAMA_GELAR):
+                tersimpan = await db.users.find_one({'id': verval_req['user_id']}, {'_id': 0, **{k: 1 for k in FIELD_NAMA_GELAR}})
+                lengkapi_nama(new_data, tersimpan)
+            try:
+                await selaraskan_alamat(db, new_data, KOLOM_ALAMAT_GTK)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
             await db.users.update_one(
                 {'id': verval_req['user_id']},
-                {'$set': verval_req.get('new_data', {})}
+                {'$set': new_data}
             )
     elif request_type == 'prestasi_create':
         # Insert achievement baru dari payload new_data

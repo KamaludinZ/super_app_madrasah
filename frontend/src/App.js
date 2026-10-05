@@ -31,6 +31,8 @@ import AdminSchedulesPage from '@/pages/admin/AdminSchedulesPage';
 import AdminQRGeneratorPage from '@/pages/admin/AdminQRGeneratorPage';
 import AdminAuditLogsPage from '@/pages/admin/AdminAuditLogsPage';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
+import AdminMasterWilayahPage from '@/pages/admin/AdminMasterWilayahPage';
+import AdminPencocokanWilayahPage from '@/pages/admin/AdminPencocokanWilayahPage';
 import AdminAcademicYearPage from '@/pages/admin/AdminAcademicYearPage';
 import AdminTahunTakwimPage from '@/pages/admin/AdminTahunTakwimPage';
 import AdminSemestersPage from '@/pages/admin/AdminSemestersPage';
@@ -324,6 +326,8 @@ function App() {
             <Route path="/admin/qr-generator" element={<AdminQRGeneratorPage />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/master-wilayah" element={<AdminMasterWilayahPage />} />
+            <Route path="/admin/pencocokan-wilayah" element={<AdminPencocokanWilayahPage />} />
             <Route path="/admin/tahun-takwim" element={<AdminTahunTakwimPage />} />
             <Route path="/admin/academic-year" element={<AdminAcademicYearPage />} />
             <Route path="/admin/semesters" element={<AdminSemestersPage />} />

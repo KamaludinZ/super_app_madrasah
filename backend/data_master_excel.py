@@ -100,6 +100,7 @@ def _gtk(grup: str, daftar) -> List[Dict[str, Any]]:
 KOLOM_DATA_GTK: List[Dict[str, Any]] = [
     *_gtk('Identitas', [('id', 'ID GTK', {'kunci': True}), ('nip', 'NIP', {'kunci': True}), ('full_name', 'Nama Lengkap')]),
     _k('jenis', 'Jenis GTK', 'Identitas', 'jenis'),
+    *_gtk('Nama & Gelar', [('gelar_depan', 'Gelar Depan'), ('nama_tanpa_gelar', 'Nama Tanpa Gelar'), ('gelar_belakang', 'Gelar Belakang')]),
     *_gtk('Data Diri', [
         ('gender', 'Jenis Kelamin (L/P)'), ('birth_place', 'Tempat Lahir'), ('birth_date', 'Tanggal Lahir (YYYY-MM-DD)'),
         ('nik', 'NIK'), ('nomor_kk', 'Nomor KK'), ('nama_ibu_kandung', 'Nama Ibu Kandung'), ('agama', 'Agama'),

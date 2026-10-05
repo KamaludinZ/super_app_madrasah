@@ -1,4 +1,6 @@
 """Users CRUD + Excel import + Mutation set + Mutations list."""
+from nama_gelar import FIELD_NAMA_GELAR, lengkapi_nama
+from wilayah_master import KOLOM_ALAMAT_GTK, selaraskan_alamat
 from datetime import datetime
 import re
 from typing import Dict, Optional
@@ -460,6 +462,16 @@ async def update_my_profile(req: UserUpdateRequest, request: Request, user: Dict
         if existing:
             raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
 
+    # Nama & gelar GTK: full_name disusun otomatis dari nama tanpa gelar + gelar depan/belakang.
+    if any(k in update for k in FIELD_NAMA_GELAR):
+        lengkapi_nama(update, await db.users.find_one({'id': user['id']}, {'_id': 0, **{k: 1 for k in FIELD_NAMA_GELAR}}))
+
+    # Alamat tempat tinggal: kode wilayah divalidasi & nama tingkat diselaraskan dengan master wilayah.
+    try:
+        await selaraskan_alamat(db, update, KOLOM_ALAMAT_GTK)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
     # Validasi NIK & Nomor KK harus 16 digit angka (hanya jika ada dan tidak kosong)
     nik = update.get('nik')
     if nik is not None and str(nik).strip():
@@ -645,6 +657,16 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
         existing = await db.users.find_one({'username': update['username'], 'id': {'$ne': uid}})
         if existing:
             raise HTTPException(400, "Username sudah digunakan oleh pengguna lain")
+
+    # Nama & gelar GTK: full_name disusun otomatis dari nama tanpa gelar + gelar depan/belakang.
+    if any(k in update for k in FIELD_NAMA_GELAR):
+        lengkapi_nama(update, await db.users.find_one({'id': uid}, {'_id': 0, **{k: 1 for k in FIELD_NAMA_GELAR}}))
+
+    # Alamat tempat tinggal: kode wilayah divalidasi & nama tingkat diselaraskan dengan master wilayah.
+    try:
+        await selaraskan_alamat(db, update, KOLOM_ALAMAT_GTK)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     # Validasi NIK & Nomor KK harus 16 digit angka (hanya jika ada dan tidak kosong)
     nik = update.get('nik')
