@@ -2,7 +2,7 @@
 import io
 import uuid
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -27,9 +27,12 @@ from excel_io import (
     student_combined_template,
     student_template,
 )
+from data_master_service import alasan_siswa_kosong, jumlah_siswa_per_tingkat, normalisasi_tingkat, siswa_per_tingkat
+from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, tambah_keterangan_kosong, workbook_bytes
+from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
-from routers._shared import compute_completeness, user_can_view_class
+from routers._shared import ADMIN_DATA_MASTER, compute_completeness, compute_completeness_siswa, user_can_view_class
 
 router = APIRouter()
 
@@ -409,6 +412,25 @@ async def get_student_detail(sid: str, user: Dict = Depends(get_current_user)):
     }
 
 
+@router.get("/students/{sid}/kelengkapan")
+async def get_student_kelengkapan(sid: str, user: Dict = Depends(get_current_user)):
+    """Rincian % kelengkapan data siswa per bagian (Data Siswa, Data Orang Tua, Data Alamat,
+    Kebutuhan Khusus, Upload Berkas) beserta data yang belum diisi. Hanya nama field yang kurang,
+    bukan isi data pribadi. Akses sama dengan daftar siswa: admin, siswa sendiri, dan pengguna
+    yang boleh melihat kelas siswa tersebut (wali kelas, guru pengampu, BK, kepala madrasah, dll.)."""
+    student = await db.users.find_one({'id': sid}, {'_id': 0, 'password_hash': 0})
+    if not student or 'siswa' not in (student.get('roles') or []):
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    if sid != user.get('id') and not await user_can_view_class(user, student.get('student_class_id')):
+        raise HTTPException(403, "Tidak diizinkan melihat kelengkapan data siswa ini")
+    detail = await db.student_details.find_one({'student_id': sid}, {'_id': 0})
+    k = compute_completeness_siswa(student, detail)
+    for b in k['bagian']:
+        b['status'] = 'lengkap' if b['terisi'] >= b['total'] else ('kosong' if b['terisi'] == 0 else 'sebagian')
+    k['bagian_kosong'] = [b['label'] for b in k['bagian'] if b['status'] == 'kosong']
+    return {'id': sid, 'full_name': student.get('full_name'), 'kelengkapan': k}
+
+
 @router.put("/students/{sid}/detail")
 async def upsert_student_detail(sid: str, payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
     """Upsert detail siswa. Hanya admin atau wali kelas atau siswa itu sendiri."""
@@ -439,6 +461,55 @@ async def upsert_student_detail(sid: str, payload: Dict, request: Request, user:
     await log_audit(user, 'update', 'student_detail', sid, request=request)
     out = await db.student_details.find_one({'student_id': sid}, {'_id': 0})
     return serialize_doc(out)
+
+
+# ============================================================
+# UNDUH DATA SISWA (kelengkapan data: ekspor -> lengkapi -> impor)
+# ============================================================
+@router.get("/students/import-template")
+async def students_import_template(request: Request, user: Dict = Depends(ADMIN_DATA_MASTER)):
+    """Template impor kelengkapan Data Siswa: kolom identik dengan Unduh Excel (tab Data Siswa,
+    Data Orang Tua, Data Alamat), tanpa data, plus sheet Petunjuk & dropdown pilihan."""
+    content = template_bytes('siswa')
+    await log_audit(user, 'export', 'students_import_template', None, request=request)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename="Template_Data_Siswa.xlsx"'},
+    )
+
+
+@router.get("/students/export-excel/ringkasan")
+async def export_students_ringkasan(user: Dict = Depends(ADMIN_DATA_MASTER)):
+    """Jumlah siswa aktif per tingkat (tahun ajaran aktif) untuk pratinjau dialog unduhan."""
+    return await jumlah_siswa_per_tingkat(db)
+
+
+@router.get("/students/export-excel")
+async def export_students_excel(
+    request: Request,
+    tingkat: Optional[str] = None,
+    user: Dict = Depends(ADMIN_DATA_MASTER),
+):
+    """Unduh Excel data lengkap siswa (tab Data Siswa, Data Orang Tua, Data Alamat) dengan
+    susunan kolom baku KOLOM_DATA_SISWA. tingkat: 7, 8, 9, atau kosong = keseluruhan."""
+    tingkat = normalisasi_tingkat(tingkat)
+    data = await siswa_per_tingkat(db, tingkat)
+    rows = [[nilai_kolom_siswa(k, d['user'], d['detail'], d['kelas']) for k in KOLOM_DATA_SISWA] for d in data]
+    wb = buat_berkas('siswa', rows)
+    if not rows:
+        tambah_keterangan_kosong(wb, await alasan_siswa_kosong(db, tingkat))
+    content = workbook_bytes(wb)
+    await log_audit(user, 'export', 'students_excel', None,
+                    details={'tingkat': str(tingkat) if tingkat else 'semua', 'jumlah': len(rows)}, request=request)
+    filename = f"Data_Siswa_{f'Kelas_{tingkat}' if tingkat else 'Semua'}_{now_wib().strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        # Berisi data pribadi (NIK, KK, no HP): jangan disimpan cache peramban/proxy.
+        headers={'Content-Disposition': f'attachment; filename="{filename}"', 'X-Jumlah-Data': str(len(rows)),
+                 'Cache-Control': 'no-store'},
+    )
 
 
 # ============================================================

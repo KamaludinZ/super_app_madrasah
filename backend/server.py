@@ -26,11 +26,13 @@ from routers import (
     auth,
     bk,
     classes,
+    data_gtk,
     dokumen_siswa,
     ekinerja,
     events,
     health,
     holidays_tasks,
+    impor_data_master,
     indikator_materi,
     jabatan,
     journals,
@@ -82,6 +84,8 @@ api_router.include_router(subjects.router)
 api_router.include_router(rooms.router)
 api_router.include_router(jabatan.router)
 api_router.include_router(users.router)
+api_router.include_router(data_gtk.router)
+api_router.include_router(impor_data_master.router)
 api_router.include_router(students.router)
 api_router.include_router(student_detail_upload.router)
 api_router.include_router(schedules.router)
@@ -169,6 +173,8 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Nama berkas & jumlah baris unduhan Excel perlu terbaca frontend lintas origin.
+    expose_headers=["Content-Disposition", "X-Jumlah-Data"],
 )
 
 # Security Headers Middleware - Production Hardening
@@ -259,6 +265,15 @@ async def startup_event():
         await ensure_uks_diagnosa_indexes(db)
     except Exception as e:
         logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
+
+    # Index riwayat impor pelengkapan data master (Siswa/GTK)
+    try:
+        from data_master_impor import ensure_data_master_impor_indexes
+        gagal = await ensure_data_master_impor_indexes(db)
+        if gagal:
+            logger.error(f"Index riwayat impor gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure data master import indexes: {e}")
 
     # Start background tasks (both dev and production)
     try:

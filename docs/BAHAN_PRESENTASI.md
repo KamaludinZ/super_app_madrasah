@@ -158,8 +158,11 @@ Total: 20 slide (± 25–30 menit presentasi).
 - Keahlian, **Tahfidz**, beasiswa/bantuan (KIP/PKH/KKS), kebutuhan khusus
 - Data **Santri Ma'had** & kamar
 - Upload berkas: KK, Akte, Ijazah, KIP, Kartu Pelajar (PDF)
-- **Indikator % kelengkapan data** per siswa dan per kelas
+- **Indikator % kelengkapan data** per siswa dan per kelas — klik persen untuk melihat rincian per bagian (Data Siswa, Orang Tua, Alamat, Kebutuhan Khusus, Berkas) dan data yang belum diisi
 - **Verval (Verifikasi & Validasi):** perubahan dari siswa/GTK diajukan lalu disetujui admin
+- **Unduh Excel Data Siswa & Data GTK:** pilih tingkat kelas (7/8/9/semua) atau jenis GTK (guru/tendik/semua), susunan kolom baku dengan pratinjau urutan kolom — bahan pelengkapan data massal (khusus admin, berisi seluruh isian tab data siswa/GTK)
+- **Export Template:** berkas kosong siap isi dengan kolom identik hasil unduhan, kolom identitas terkunci, dan petunjuk pengisian per jenis kolom
+- **Import Pelengkapan:** unggah kembali berkas, dicocokkan lewat NISN/NIP/ID; default hanya mengisi yang kosong, opsi timpa nilai berbeda; progres per baris dan ringkasan berhasil/gagal beserta lokasi kesalahan
 
 **Saran visual:** Screenshot dialog data siswa dengan tab-tab.
 
@@ -209,6 +212,7 @@ Total: 20 slide (± 25–30 menit presentasi).
 - **Perizinan:** sakit, cuti, dinas luar + dokumen
 - **Profesionalitas & Riwayat Sertifikasi**, Buku Induk Kepegawaian, Agenda Guru & Tendik
 - **Data GTK:** identitas kepegawaian memuat Peg ID, NUPTK, NIP, NPK, dan NRG; daftar GTK menampilkan kolom Peg ID
+- **% Kelengkapan GTK:** persentase data wajib per GTK beserta rincian per bagian dan penanda bagian yang masih kosong
 
 **Saran visual:** Diagram: Jadwal + Jurnal → Absensi GTK otomatis.
 
@@ -363,3 +367,11 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-05 | Modul UKS lanjutan fase 4 (tampilan): surat keterangan UKS dengan bagian penatalaksanaan dan kolom catatan petugas, format cetak rapi lintas halaman | 14 |
 | 2026-10-05 | Data GTK: field Jenis PNS diganti NPK, ditambah Peg ID dan NRG pada tab Kepegawaian; kolom NIP/NUPTK di daftar GTK diganti Peg ID | 13 |
 | 2026-10-05 | Modul UKS lanjutan fase 4 (server): catatan surat tersimpan per kunjungan, data surat dari satu endpoint, unduh PDF surat rujukan/izin pulang lengkap dengan penatalaksanaan & catatan | 14 |
+| 2026-10-05 | Kelengkapan data fase 1 (tampilan): tombol Unduh Excel di Data Siswa (filter tingkat) dan Data GTK (filter jenis), pratinjau urutan kolom baku | 10 |
+| 2026-10-05 | Kelengkapan data fase 1 (server): unduh Excel Data Siswa (Data Siswa, Orang Tua, Alamat; per tingkat) dan Data GTK (6 sub-tab Data Guru; per jenis) khusus admin, kolom baku sama dengan template/impor, keterangan bila data kosong, tercatat di audit log | 10 |
+| 2026-10-05 | Kelengkapan data fase 2 (tampilan): tombol Export Template di Data Siswa & Data GTK dengan pratinjau kolom (per sub-tab untuk GTK), penanda kolom identitas terkunci, dan legenda petunjuk pengisian | 10 |
+| 2026-10-05 | Kelengkapan data fase 2 (server): template impor Data Siswa & GTK dari server — sheet Petunjuk, baris keterangan pengisian, komentar & dropdown pilihan, kolom identitas terkunci pada berkas unduhan; khusus admin | 10 |
+| 2026-10-05 | Kelengkapan data fase 3 (tampilan): tombol Import di Data Siswa & GTK — unggah .xlsx (seret-lepas), cek susunan kolom, pilih mode isi-kosong/timpa (dengan konfirmasi), progres baris demi baris, ringkasan & daftar kesalahan per baris yang bisa diunduh | 10 |
+| 2026-10-05 | Kelengkapan data fase 3 (server): mesin impor pelengkapan — validasi berkas di server, pencocokan via ID/NISN/NIP (cegah data tertukar & duplikat), isi kosong atau timpa (wajib konfirmasi), konversi & validasi nilai, riwayat sesi impor, jejak per baris dan per field (nilai lama → baru), khusus admin | 10, 17 |
+| 2026-10-05 | Kelengkapan data fase 4 (tampilan): kolom % Kelengkapan di daftar GTK dengan rincian per bagian (Data Guru, Status & Riwayat, Pendidikan, Data Anak, Riwayat Pesantren, Arsip Berkas), penanda bagian kosong & daftar data yang belum diisi | 13 |
+| 2026-10-05 | Kelengkapan data fase 4 (server): compute_completeness diperluas untuk GTK (6 bagian), endpoint % kelengkapan daftar & rincian per GTK; tambahan: rincian % kelengkapan per bagian di Data Siswa (klik persen), perbaikan statistik PNS/PPPK/Non ASN di Data GTK | 10, 13 |

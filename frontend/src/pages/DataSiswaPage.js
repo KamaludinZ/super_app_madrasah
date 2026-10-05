@@ -17,6 +17,11 @@ import { toast } from 'sonner';
 import StudentDetailDialog from '@/components/students/StudentDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import UnduhDataSiswaButton from '@/components/students/UnduhDataSiswaButton';
+import KelengkapanPopover from '@/components/students/KelengkapanPopover';
+import ExportTemplateButton from '@/components/students/ExportTemplateButton';
+import { KOLOM_DATA_SISWA } from '@/lib/dataSiswaKolom';
+import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
@@ -87,6 +92,7 @@ export default function DataSiswaPage() {
 
   const tingkatOptions = [...new Set(classes.map((c) => c.grade).filter((g) => g !== undefined && g !== null))].sort((a, b) => a - b);
   const classIdToGrade = classes.reduce((acc, c) => { acc[c.id] = c.grade; return acc; }, {});
+  const kelasMap = classes.reduce((acc, c) => { acc[c.id] = { name: c.name, grade: c.grade }; return acc; }, {});
 
   const filtered = students.filter((s) => {
     if (search && !s.full_name?.toLowerCase().includes(search.toLowerCase()) && !s.nisn?.includes(search)) return false;
@@ -110,6 +116,12 @@ export default function DataSiswaPage() {
       : 0;
     return { grade, total, laki, perempuan, mahad, avgCompleteness };
   });
+
+  // Jumlah siswa per tingkat (dari semua siswa termuat) untuk pratinjau dialog unduhan.
+  // Hanya akurat bila semua kelas termuat (filter kelas = semua).
+  const jumlahPerTingkat = selectedClass === 'all'
+    ? gradeStats.reduce((acc, g) => ({ ...acc, [String(g.grade)]: g.total }), { all: students.length })
+    : {};
 
   // Calculate age from date of birth
   const calculateAge = (birthDate) => {
@@ -151,6 +163,35 @@ export default function DataSiswaPage() {
             {hasAdminView ? 'Semua siswa madrasah' : isWaliKelas ? 'Siswa di kelas Anda' : 'Siswa'}
           </p>
         </div>
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2" data-testid="aksi-data-siswa">
+            <ExportTemplateButton
+              endpoint="/students/import-template"
+              kolom={KOLOM_DATA_SISWA}
+              sheet="Data Siswa"
+              filename="Template_Data_Siswa.xlsx"
+              judul="Template Impor Data Siswa"
+              testid="btn-export-template-siswa"
+            />
+            <ImportDataMasterButton
+              onSelesai={(h) => { if (!h.tiruan && h.ringkasan.berhasil > 0) refresh(); }}
+              endpoint="/students/import-kelengkapan"
+              kolom={KOLOM_DATA_SISWA}
+              sheet="Data Siswa"
+              judul="Import Pelengkapan Data Siswa"
+              namaData="siswa"
+              testid="btn-import-siswa"
+            />
+            <UnduhDataSiswaButton
+              tingkat={tingkatFilter}
+              tingkatOptions={tingkatOptions}
+              jumlahPerTingkat={jumlahPerTingkat}
+              siswa={selectedClass === 'all' ? students : []}
+              kelasMap={kelasMap}
+              disabled={loading}
+            />
+          </div>
+        )}
       </div>
 
       {/* Stat overview */}
@@ -282,30 +323,13 @@ export default function DataSiswaPage() {
                       </TableCell>
                       <TableCell className="text-sm">{calculateAge(s.birth_date)}</TableCell>
                       <TableCell>
-                        {(() => {
-                          const percentage = s.completeness_percentage ?? 0;
-                          return (
-                            <div className="flex items-center gap-2">
-                              <div className={`font-semibold ${
-                                percentage >= 80 ? 'text-emerald-700' :
-                                percentage >= 50 ? 'text-amber-700' :
-                                'text-rose-700'
-                              }`}>
-                                {percentage}%
-                              </div>
-                              <div className="flex-1 bg-slate-200 rounded-full h-2 w-16">
-                                <div
-                                  className={`h-2 rounded-full ${
-                                    percentage >= 80 ? 'bg-emerald-500' :
-                                    percentage >= 50 ? 'bg-amber-500' :
-                                    'bg-rose-500'
-                                  }`}
-                                  style={{ width: `${percentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <KelengkapanPopover
+                          persen={s.completeness_percentage ?? 0}
+                          muat={async () => (await api.get(`/students/${s.id}/kelengkapan`)).data.kelengkapan}
+                          nama={s.full_name}
+                          onLengkapi={() => setDetailStudent(s)}
+                          testid={`btn-kelengkapan-siswa-${s.id}`}
+                        />
                       </TableCell>
                       <TableCell>{s.class_name || '-'}</TableCell>
                       <TableCell>

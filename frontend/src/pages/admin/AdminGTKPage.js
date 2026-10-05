@@ -18,10 +18,30 @@ import { useAuth } from '@/lib/AuthContext';
 import StaffDetailDialog from '@/components/staff/StaffDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import UnduhDataGtkButton from '@/components/staff/UnduhDataGtkButton';
+import ExportTemplateButton from '@/components/students/ExportTemplateButton';
+import { KOLOM_DATA_GTK } from '@/lib/dataGtkKolom';
+import KelengkapanGtkCell from '@/components/staff/KelengkapanGtkCell';
+import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
 
 const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
 const TENDIK_ROLES = ['tenaga_kependidikan'];
 const STATUS_KEPEGAWAIAN_LIST = ['PNS', 'PPPK', 'Non ASN'];
+const BELUM_DIISI = 'Belum diisi';
+
+/**
+ * Label status kepegawaian dari data tersimpan. Form detail GTK & impor menyimpan kode
+ * (pns / pppk / non_asn) di `status_kepegawaian`; data lama memakai `employee_status`
+ * (mis. "PNS"). Keduanya dinormalkan ke label PNS / PPPK / Non ASN.
+ */
+export function labelKepegawaian(u) {
+  const raw = String(u?.status_kepegawaian || u?.employee_status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!raw) return null;
+  if (raw === 'pns') return 'PNS';
+  if (raw === 'pppk' || raw === 'p3k') return 'PPPK';
+  if (['non_asn', 'nonasn', 'honorer', 'gtt', 'ptt', 'gty', 'pty'].includes(raw)) return 'Non ASN';
+  return null;
+}
 // Roles that see the same all-GTK admin-style view/filters, but without any
 // account/edit/delete actions (view-only) — only the Detail button remains.
 const VIEW_ONLY_BROAD_ROLES = ['kepala_sekolah'];
@@ -42,11 +62,14 @@ export default function AdminGTKPage() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [usersRes, jabatanRes] = await Promise.all([
+      const [usersRes, jabatanRes, kelengkapanRes] = await Promise.all([
         api.get('/users', { params: { exclude_mutation: true } }),
-        api.get('/jabatan/active')
+        api.get('/jabatan/active'),
+        // % kelengkapan dari server; bila belum tersedia, dihitung di browser (lib/kelengkapanGtk).
+        api.get('/gtk/kelengkapan').catch(() => null),
       ]);
-      setUsers(usersRes.data || []);
+      const kelMap = Object.fromEntries((kelengkapanRes?.data?.items || []).map((it) => [it.id, it.kelengkapan]));
+      setUsers((usersRes.data || []).map((u) => (kelMap[u.id] ? { ...u, kelengkapan: kelMap[u.id] } : u)));
       setJabatanList(jabatanRes.data || []);
     } finally { setLoading(false); }
   };
@@ -81,8 +104,8 @@ export default function AdminGTKPage() {
     L: list.filter((u) => u.gender === 'L').length,
     P: list.filter((u) => u.gender === 'P').length,
   });
-  const kepegawaianStats = (list) => STATUS_KEPEGAWAIAN_LIST.reduce((acc, s) => {
-    acc[s] = list.filter((u) => u.status_kepegawaian === s).length;
+  const kepegawaianStats = (list) => [...STATUS_KEPEGAWAIAN_LIST, BELUM_DIISI].reduce((acc, s) => {
+    acc[s] = list.filter((u) => (labelKepegawaian(u) || BELUM_DIISI) === s).length;
     return acc;
   }, {});
 
@@ -104,12 +127,37 @@ export default function AdminGTKPage() {
 
   return (
     <div className="space-y-6" data-testid="admin-gtk-page">
-      <div>
-        <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
-          <Briefcase className="h-3 w-3 mr-1" /> Data GTK
-        </Badge>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Data Guru & Tenaga Kependidikan</h1>
-        <p className="text-sm text-slate-600 mt-1">Biodata lengkap GTK madrasah</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
+            <Briefcase className="h-3 w-3 mr-1" /> Data GTK
+          </Badge>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Data Guru & Tenaga Kependidikan</h1>
+          <p className="text-sm text-slate-600 mt-1">Biodata lengkap GTK madrasah</p>
+        </div>
+        {canManage && (
+          <div className="flex flex-wrap gap-2" data-testid="aksi-data-gtk">
+            <ExportTemplateButton
+              endpoint="/gtk/import-template"
+              kolom={KOLOM_DATA_GTK}
+              sheet="Data GTK"
+              filename="Template_Data_GTK.xlsx"
+              judul="Template Impor Data GTK"
+              pilihBagian
+              testid="btn-export-template-gtk"
+            />
+            <ImportDataMasterButton
+              onSelesai={(h) => { if (!h.tiruan && h.ringkasan.berhasil > 0) refresh(); }}
+              endpoint="/gtk/import-kelengkapan"
+              kolom={KOLOM_DATA_GTK}
+              sheet="Data GTK"
+              judul="Import Pelengkapan Data GTK"
+              namaData="GTK"
+              testid="btn-import-gtk"
+            />
+            <UnduhDataGtkButton jumlah={counts} users={users} disabled={loading} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -153,8 +201,11 @@ export default function AdminGTKPage() {
             </div>
             <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
               {STATUS_KEPEGAWAIAN_LIST.map((s) => (
-                <Badge key={s} variant="outline" className="text-xs">{s}: {guruKepegawaian[s]}</Badge>
+                <Badge key={s} variant="outline" className="text-xs" data-testid={`stat-guru-${s}`}>{s}: {guruKepegawaian[s]}</Badge>
               ))}
+              {guruKepegawaian[BELUM_DIISI] > 0 && (
+                <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">{BELUM_DIISI}: {guruKepegawaian[BELUM_DIISI]}</Badge>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -176,8 +227,11 @@ export default function AdminGTKPage() {
             </div>
             <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
               {STATUS_KEPEGAWAIAN_LIST.map((s) => (
-                <Badge key={s} variant="outline" className="text-xs">{s}: {tendikKepegawaian[s]}</Badge>
+                <Badge key={s} variant="outline" className="text-xs" data-testid={`stat-tendik-${s}`}>{s}: {tendikKepegawaian[s]}</Badge>
               ))}
+              {tendikKepegawaian[BELUM_DIISI] > 0 && (
+                <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">{BELUM_DIISI}: {tendikKepegawaian[BELUM_DIISI]}</Badge>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -239,6 +293,7 @@ export default function AdminGTKPage() {
                         <TableHead>PERAN</TableHead>
                         <TableHead>JABATAN</TableHead>
                         <TableHead>STATUS KEPEGAWAIAN</TableHead>
+                        <TableHead className="min-w-[130px]">KELENGKAPAN</TableHead>
                         <TableHead>STATUS</TableHead>
                         <TableHead className="text-right">AKSI</TableHead>
                       </TableRow>
@@ -279,11 +334,14 @@ export default function AdminGTKPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {u.status_kepegawaian ? (
-                              <Badge variant="outline" className="text-xs">{u.status_kepegawaian}</Badge>
+                            {labelKepegawaian(u) ? (
+                              <Badge variant="outline" className="text-xs">{labelKepegawaian(u)}</Badge>
                             ) : (
                               <span className="italic text-slate-400 text-xs">-</span>
                             )}
+                          </TableCell>
+                          <TableCell data-testid={`gtk-kelengkapan-${u.id}`}>
+                            <KelengkapanGtkCell user={u} linkDetail={`/admin/gtk/${u.id}`} />
                           </TableCell>
                           <TableCell>
                             {u.mutation_type === 'keluar' ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">Mutasi Keluar</Badge> :
@@ -327,7 +385,7 @@ export default function AdminGTKPage() {
                         );
                       })}
                       {filtered.length === 0 && (
-                        <TableRow><TableCell colSpan={9} className="text-center py-12 text-slate-500">
+                        <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-500">
                           <Briefcase className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                           <div className="font-semibold">Tidak ada data GTK</div>
                         </TableCell></TableRow>
