@@ -57,7 +57,7 @@ def petunjuk_kolom(k: Dict[str, Any]) -> Tuple[str, str, str]:
     if aturan == 'pilihan':
         kode = pilihan_kolom(k)
         field = k['path'].split('.')[-1]
-        label = PILIHAN_GTK.get(field, {})
+        label = PILIHAN_GTK.get(field, {}) if k['path'].startswith('user.') else {}
         if label:
             petunjuk += ' Boleh juga label: ' + ', '.join(f'{kd} = {label[kd]}' for kd in kode if kd in label) + '.'
         contoh = kode[0] if kode else ''

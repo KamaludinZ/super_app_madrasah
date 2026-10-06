@@ -286,7 +286,9 @@ def ubah_nilai_impor(kolom: Dict[str, Any], teks: Any) -> Any:
     if nilai is None:
         return None
     field = kolom['path'].split('.')[-1]
-    if field in PILIHAN_GTK and isinstance(nilai, str):
+    # Pilihan berkode GTK hanya untuk field akun (users). Field senama di detail siswa punya isian lain,
+    # mis. alamat_siswa.status_tempat_tinggal = "Tinggal dengan Ayah Kandung" (bukan milik_sendiri/sewa/...).
+    if field in PILIHAN_GTK and kolom['path'].startswith('user.') and isinstance(nilai, str):
         try:
             nilai = normalisasi_pilihan(field, nilai)
         except ValueError as e:
