@@ -14,11 +14,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from core import db, get_current_user
+from penyimpanan import folder_unggahan
 
 router = APIRouter()
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'uploads', 'student_detail')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = folder_unggahan('student_detail')
 
 PDF_ONLY_EXTENSIONS = {'.pdf'}
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
@@ -63,7 +63,7 @@ async def upload_student_detail_file(
     if not file.filename or not allowed_file(file.filename):
         raise HTTPException(400, f"File harus berformat: {', '.join(sorted(PDF_ONLY_EXTENSIONS))}")
 
-    content = await file.read()
+    content = await file.read(MAX_FILE_SIZE + 1)
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Ukuran file maksimal 2MB")
 
@@ -101,13 +101,19 @@ async def get_student_detail_file(
     filename: str,
     user: Dict = Depends(get_current_user),
 ):
-    """Serve file bukti keahlian/tahfidz/berkas. Semua user login boleh melihat (dipakai lintas role)."""
+    """Serve file bukti keahlian/tahfidz/berkas. Staf (non-siswa) boleh melihat; siswa hanya berkas miliknya
+    (nama file memuat NISN pemilik: berkas_{jenis}_{nama}_{nisn}_{uuid8}.pdf)."""
     if jenis not in JENIS_VALID and jenis not in BERKAS_JENIS_VALID:
         raise HTTPException(400, "Jenis file tidak valid")
 
     safe_name = os.path.basename(filename)
+    roles = user.get('roles') or []
+    if roles and all(r == 'siswa' for r in roles):
+        nisn = sanitize_for_filename(user.get('nisn') or '')
+        if not nisn or nisn == 'tanpa_nama' or f'_{nisn}_' not in safe_name:
+            raise HTTPException(403, "Tidak diizinkan melihat berkas siswa lain")
     file_path = os.path.join(UPLOAD_DIR, safe_name)
-    if not os.path.exists(file_path):
+    if not os.path.isfile(file_path):
         raise HTTPException(404, "File tidak ditemukan")
 
     return FileResponse(file_path)

@@ -137,3 +137,7 @@ backend/nul
 # Log & file sementara
 *.log
 .blackbox/
+
+# Berkas unggahan pengguna (data pribadi) - disimpan di volume, bukan di repo/image
+/uploads/
+backend/uploads/

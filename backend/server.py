@@ -27,6 +27,7 @@ from routers import (
     bk,
     classes,
     data_gtk,
+    gtk_berkas,
     dokumen_siswa,
     ekinerja,
     events,
@@ -86,6 +87,7 @@ api_router.include_router(rooms.router)
 api_router.include_router(jabatan.router)
 api_router.include_router(users.router)
 api_router.include_router(data_gtk.router)
+api_router.include_router(gtk_berkas.router)
 api_router.include_router(impor_data_master.router)
 api_router.include_router(students.router)
 api_router.include_router(student_detail_upload.router)
@@ -267,6 +269,13 @@ async def startup_event():
         await ensure_uks_diagnosa_indexes(db)
     except Exception as e:
         logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
+
+    # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
+    try:
+        from penyimpanan import periksa_penyimpanan
+        periksa_penyimpanan()
+    except Exception as e:
+        logger.error(f"Failed to prepare upload folder: {e}")
 
     # Index master wilayah Indonesia
     try:

@@ -214,6 +214,8 @@ Total: 20 slide (± 25–30 menit presentasi).
 - **Perizinan:** sakit, cuti, dinas luar + dokumen
 - **Profesionalitas & Riwayat Sertifikasi**, Buku Induk Kepegawaian, Agenda Guru & Tendik
 - **Data GTK:** identitas kepegawaian memuat Peg ID, NUPTK, NIP, NPK, dan NRG; daftar GTK menampilkan kolom Peg ID
+- **Detail GTK lengkap tersimpan:** tab Status & Riwayat (fungsi/jabatan, pangkat, status, pensiun), Pendidikan, Diklat, Penghargaan, Data Anak, Riwayat Pesantren (tambah/ubah/hapus), dan Arsip Berkas + File SK (unggah PDF/JPG/PNG) kini benar-benar tersimpan
+- **Umur & Masa Kerja otomatis** di Formulir Data Diri GTK: umur (tahun & bulan) dari tanggal lahir; masa kerja PNS/PPPK dari TMT PNS, Non ASN dari TMT Pegawai
 - **Nama & Gelar GTK:** gelar depan, nama tanpa gelar, dan gelar belakang diisi terpisah; nama lengkap tersusun otomatis (juga saat verval & impor Excel)
 - **Alamat tempat tinggal GTK** memakai dropdown wilayah bertingkat yang sama dengan data siswa (kode wilayah & kode pos tersimpan)
 - **% Kelengkapan GTK:** persentase data wajib per GTK beserta rincian per bagian dan penanda bagian yang masih kosong
@@ -302,6 +304,7 @@ Total: 20 slide (± 25–30 menit presentasi).
 - Logout / ganti password **mencabut sesi** di perangkat lain
 - Log aktivitas & log keamanan untuk setiap tindakan
 - **Backup** rutin (JSON & Excel) + mode maintenance
+- **Berkas unggahan aman** di penyimpanan permanen (tidak hilang saat pembaruan aplikasi); berkas pribadi siswa tidak bisa dibuka siswa lain
 - **Migrasi data otomatis** saat pembaruan aplikasi: data lama dirapikan sendiri sekali jalan, tanpa perintah manual di server
 - Audit keamanan menyeluruh (September 2026) — temuan sudah ditindaklanjuti
 
@@ -386,3 +389,6 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-06 | Master Wilayah Indonesia (fase 3): data resmi 38 provinsi s.d. ±83 ribu desa/kelurahan + kode pos (Kepmendagri 2025) bisa dimuat sekali klik atau lewat unggah paket, dropdown wilayah bertingkat & cari cepat kode pos | 10 |
 | 2026-10-06 | Alamat bertingkat & Pencocokan Wilayah Impor (fase 4): alamat siswa (ayah/ibu/wali/domisili) & GTK menyimpan kode wilayah, alamat impor Excel dicocokkan otomatis, menu laporan pencocokan dengan saran & perbaikan manual/massal; berkas KIP, PKH, KKS, Kartu Pelajar siswa menjadi opsional | 10, 13 |
 | 2026-10-06 | Migrasi data otomatis saat deploy/redeploy (sekali per database, aman multi-worker, dicoba ulang bila gagal): perapian CKG, nama & gelar GTK, pemuatan master wilayah resmi, dan kode wilayah alamat tersimpan | 18 |
+| 2026-10-06 | Detail GTK: field Umur Saat Ini (tahun & bulan dari tanggal lahir) dan Masa Kerja (PNS/PPPK dari TMT PNS, Non ASN dari TMT Pegawai) dihitung otomatis di Formulir Data Diri | 13 |
+| 2026-10-06 | Perbaikan simpan data GTK & siswa dari admin: 22 field Data Guru yang sebelumnya hilang setelah disimpan kini tersimpan, NUPTK terbaca ulang, tab Status & Riwayat/Pendidikan/Diklat/Penghargaan/Anak/Pesantren/Arsip Berkas berfungsi; isian siswa yang dikosongkan admin ikut terhapus | 10, 13 |
+| 2026-10-06 | Penyimpanan berkas unggahan dipindah ke folder volume permanen (aman saat redeploy) dengan peringatan bila volume belum terpasang; berkas detail siswa (KK, akta, ijazah, dll.) hanya bisa dibuka staf & siswa pemiliknya | 18 |

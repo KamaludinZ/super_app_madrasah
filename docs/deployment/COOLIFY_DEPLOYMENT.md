@@ -174,6 +174,25 @@ muat data lewat menu **Master Wilayah** (tombol Muat Data Resmi atau unggah pake
 
 Environment opsional (backend): `MIGRASI_OTOMATIS=0` mematikan seluruh migrasi otomatis; `MIGRASI_WILAYAH_UNDUH=0` melewati unduhan data wilayah.
 
+### 4.1b Berkas unggahan aman saat redeploy (WAJIB dicek)
+Semua berkas unggahan (prestasi, dokumen & berkas detail siswa, arsip berkas GTK) disimpan di **`/app/uploads`**
+di container backend (`backend/penyimpanan.py`, bisa diganti env `UPLOAD_ROOT`). Folder ini harus berupa volume:
+- **Deploy Docker Compose (Opsi A)**: sudah otomatis lewat `./uploads:/app/uploads` di `docker-compose.yml` /
+  `docker-compose.traefik.yml` — Coolify menyimpannya permanen di server.
+- **Service terpisah dari Dockerfile (Opsi B)**: buka service backend → **Storages / Persistent Storage** →
+  tambah volume dengan *Destination Path* `/app/uploads`.
+
+Cek setelah redeploy di log backend:
+- `[unggahan] folder /app/uploads siap (N berkas)` → aman.
+- `[unggahan] PERINGATAN: /app/uploads BUKAN volume` → berkas akan hilang saat redeploy; pasang volume di atas.
+
+Versi lama menulis berkas ke `/uploads` (di luar volume). Bila server produksi sudah berisi unggahan dari versi lama,
+**sebelum redeploy** salin dulu dari container yang sedang berjalan ke folder volume di host, mis.:
+`docker cp <container_backend_lama>:/uploads/. <folder_volume_uploads_di_host>/`
+(saat start, backend juga otomatis menyalin isi `/uploads` lama ke `/app/uploads` bila masih ada di container yang sama).
+
+Catatan: menu Backup & Restore hanya mencadangkan database. Cadangkan juga folder volume `uploads` di server.
+
 ### 4.2 Troubleshooting Error Build Coolify (metadata base image / BuildKit)
 Jika log berhenti seperti ini:
 - `load metadata for docker.io/library/python:3.11-slim`

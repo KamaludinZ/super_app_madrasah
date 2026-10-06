@@ -11,12 +11,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from core import db, get_current_user, log_audit, logger, serialize_doc, require_role
+from penyimpanan import folder_unggahan
 
 router = APIRouter()
 
 # Direktori untuk menyimpan dokumen siswa
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'uploads', 'dokumen_siswa')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = folder_unggahan('dokumen_siswa')
 
 # Mapping field dokumen ke field di UserModel
 DOKUMEN_FIELDS = {
@@ -73,7 +73,7 @@ async def upload_dokumen(
     new_filename = f"{student_id}_{jenis_dokumen}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = os.path.join(UPLOAD_DIR, new_filename)
 
-    content = await file.read()
+    content = await file.read(MAX_FILE_SIZE + 1)
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Ukuran file maksimal 5MB")
 
@@ -88,7 +88,7 @@ async def upload_dokumen(
     field_name = DOKUMEN_FIELDS[jenis_dokumen]
     old_file_url = siswa.get(field_name)
     if old_file_url:
-        old_filename = old_file_url.split('/')[-1]
+        old_filename = os.path.basename(old_file_url.split('/')[-1])
         old_file_path = os.path.join(UPLOAD_DIR, old_filename)
         if os.path.exists(old_file_path):
             try:
@@ -174,7 +174,7 @@ async def delete_dokumen(
         raise HTTPException(404, "Dokumen tidak ditemukan")
 
     # Delete file from disk
-    filename = file_url.split('/')[-1]
+    filename = os.path.basename(file_url.split('/')[-1])
     file_path = os.path.join(UPLOAD_DIR, filename)
     if os.path.exists(file_path):
         try:

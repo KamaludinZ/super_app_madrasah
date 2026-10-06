@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, Eye, Clock, AlertCircle, Users, ListChecks, Ban } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
@@ -133,12 +133,30 @@ export default function AdminVervalGTKPage() {
       // Add more fields as needed
     };
 
+    // Nilai daftar (riwayat, data anak), ya/tidak, dan berkas ditampilkan rapi, bukan objek mentah.
+    const tampilNilai = (v) => {
+      if (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return <span className="text-slate-400 italic">Tidak ada data</span>;
+      if (typeof v === 'boolean') return v ? 'Ya' : 'Tidak';
+      if (Array.isArray(v)) {
+        return (
+          <span className="block space-y-0.5">
+            {v.map((it, i) => <span key={i} className="block">{i + 1}. {typeof it === 'object' ? Object.values(it || {}).filter(Boolean).join(' · ') : String(it)}</span>)}
+          </span>
+        );
+      }
+      if (typeof v === 'object') return JSON.stringify(v);
+      if (typeof v === 'string' && v.startsWith('/api/')) {
+        return <button type="button" onClick={() => openAuthedFile(v)} className="text-blue-600 underline text-sm">Lihat berkas</button>;
+      }
+      return String(v);
+    };
+
     // Cari field yang berubah (kosong/undefined/null dianggap sama), field nama & gelar ditampilkan paling atas.
     const kosong = (v) => v == null || v === '';
     const URUTAN_NAMA = ['gelar_depan', 'nama_tanpa_gelar', 'gelar_belakang', 'full_name',
       'status_tempat_tinggal', 'provinsi', 'kab_kota', 'kecamatan', 'kelurahan', 'rt', 'rw', 'kode_pos', 'kode_wilayah'];
     const changedFields = Object.keys(new_data)
-      .filter((key) => !(kosong(new_data[key]) && kosong(old_data[key])) && new_data[key] !== old_data[key])
+      .filter((key) => !(kosong(new_data[key]) && kosong(old_data[key])) && JSON.stringify(new_data[key] ?? '') !== JSON.stringify(old_data[key] ?? ''))
       .sort((a, b) => {
         const ia = URUTAN_NAMA.indexOf(a); const ib = URUTAN_NAMA.indexOf(b);
         return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -155,13 +173,13 @@ export default function AdminVervalGTKPage() {
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SEBELUM</Label>
               <div className="bg-rose-50 border border-rose-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 break-words">{old_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 break-words">{tampilNilai(old_data[field])}</p>
               </div>
             </div>
             <div>
               <Label className="text-xs text-slate-600 mb-2 block">{fieldLabels[field] || field} - SESUDAH</Label>
               <div className="bg-emerald-50 border border-emerald-200 rounded p-3 min-h-[60px]">
-                <p className="text-sm text-slate-900 font-semibold break-words">{new_data[field] || <span className="text-slate-400 italic">Tidak ada data</span>}</p>
+                <p className="text-sm text-slate-900 font-semibold break-words">{tampilNilai(new_data[field])}</p>
               </div>
             </div>
           </div>

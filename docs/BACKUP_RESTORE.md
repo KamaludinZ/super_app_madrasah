@@ -72,3 +72,10 @@ Gunakan log ini untuk audit & compliance.
 4. Hapus backup lama (> 1 tahun) jika storage terbatas, tapi simpan minimal **4 backup terakhir**.
 5. Backup sebelum **setiap** kegiatan beresiko (import massal, migrasi, dst).
 6. **Jangan share file backup** sembarangan — berisi data pribadi siswa (NIK, alamat).
+
+## Berkas unggahan
+
+Backup dari menu admin hanya berisi **database**. Berkas unggahan (prestasi, dokumen/berkas siswa, arsip berkas GTK)
+tersimpan di folder volume `uploads` (di container: `/app/uploads`). Cadangkan folder tersebut secara terpisah,
+mis. salin/arsipkan folder volume `uploads` di server secara berkala. Lihat juga
+`docs/deployment/COOLIFY_DEPLOYMENT.md` bagian 4.1b.

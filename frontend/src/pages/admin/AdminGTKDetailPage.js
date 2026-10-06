@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import WilayahBertingkat from '@/components/wilayah/WilayahBertingkat';
 import { KOLOM_ALAMAT_GTK, alamatDariNilai, nilaiDariAlamat, ringkasAlamat } from '@/lib/wilayah';
 import { nilaiAwalNama, susunNamaLengkap } from '@/lib/namaGelar';
+import { bacaTanggal, masaKerjaGtk, selisihTahunBulan, teksTahunBulan } from '@/lib/masaWaktu';
+import { ARSIP_BERKAS_GTK, ArsipBerkasGtk, BerkasGtk, DaftarRiwayatGtk, PilihJabatanGtk } from './gtk/RiwayatGtk';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,20 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
 
+const formatTanggalId = (teks) => bacaTanggal(teks)?.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) || teks;
+
+/** Nilai hasil hitung otomatis (hanya baca) beserta keterangan sumbernya. */
+function NilaiHitung({ nilai, kosong, keterangan, testid }) {
+  return (
+    <>
+      <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" data-testid={testid}>
+        {nilai ? <span className="font-medium text-slate-800">{nilai}</span> : <span className="italic text-slate-400">{kosong}</span>}
+      </div>
+      {keterangan && <p className="mt-1 text-xs text-slate-500">{keterangan}</p>}
+    </>
+  );
+}
+
 export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButton = false }) {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
@@ -43,13 +59,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
   const [formPerkawinan, setFormPerkawinan] = useState({});
   const [formPenugasan, setFormPenugasan] = useState({});
 
-  // Dialog states
-  const [pendidikanDialog, setPendidikanDialog] = useState(false);
-  const [diklatDialog, setDiklatDialog] = useState(false);
-  const [penghargaanDialog, setPenghargaanDialog] = useState(false);
-  const [anakDialog, setAnakDialog] = useState(false);
-  const [pesantrenDialog, setPesantrenDialog] = useState(false);
-  const [arsipDialog, setArsipDialog] = useState(false);
+  // Status & Riwayat, daftar riwayat (pendidikan, diklat, penghargaan, anak, pesantren), dan arsip berkas
+  const [formRiwayat, setFormRiwayat] = useState({});
+  const setRiwayat = (field, nilai) => setFormRiwayat((f) => ({ ...f, [field]: nilai }));
 
   const loadGTKData = useCallback(async () => {
     setLoading(true);
@@ -73,7 +85,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
       });
       setFormKepegawaian({
         status_kepegawaian: data.status_kepegawaian || 'non_asn',
-        nuptk: data.nip_nuptk || '',
+        nuptk: data.nuptk || data.nip_nuptk || '',
         nip: data.nip || '',
         peg_id: data.peg_id || '',
         npk: data.npk || '',
@@ -115,6 +127,22 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
         status_perkawinan: data.status_perkawinan || 'belum_menikah',
         nama_pasangan: data.nama_pasangan || '',
       });
+      setFormRiwayat({
+        jabatan_ids: data.jabatan_ids || [],
+        status_penugasan: data.status_penugasan || '',
+        pangkat_golongan: data.pangkat_golongan || '',
+        status_keaktifan: data.status_keaktifan || '',
+        tanggal_pensiun: data.tanggal_pensiun || '',
+        no_sk_pensiun: data.no_sk_pensiun || '',
+        riwayat_pendidikan: data.riwayat_pendidikan || [],
+        riwayat_diklat: data.riwayat_diklat || [],
+        riwayat_penghargaan: data.riwayat_penghargaan || [],
+        data_anak: data.data_anak || [],
+        tidak_punya_anak: !!data.tidak_punya_anak,
+        riwayat_pesantren: data.riwayat_pesantren || [],
+        tidak_pernah_pesantren: !!data.tidak_pernah_pesantren,
+        ...Object.fromEntries(ARSIP_BERKAS_GTK.map((b) => [b.field, data[b.field] || ''])),
+      });
       setFormPenugasan({
         jenis_ptk: data.jenis_ptk || '',
         tmt_pegawai: data.tmt_pegawai || '',
@@ -135,6 +163,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
           if (draftData.status_tempat_tinggal !== undefined) setFormTempatTinggal(prev => ({ ...prev, ...draftData }));
           if (draftData.status_perkawinan !== undefined) setFormPerkawinan(prev => ({ ...prev, ...draftData }));
           if (draftData.jenis_ptk !== undefined) setFormPenugasan(prev => ({ ...prev, ...draftData }));
+          setFormRiwayat(prev => ({ ...prev, ...Object.fromEntries(Object.keys(prev).filter((k) => draftData[k] !== undefined).map((k) => [k, draftData[k]])) }));
         }
       }
 
@@ -159,7 +188,10 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
       ...formTempatTinggal,
       ...formPerkawinan,
       ...formPenugasan,
+      ...formRiwayat,
     };
+    // Fungsi/Jabatan hanya bisa diubah admin (profil sendiri tidak boleh mengubah jabatan).
+    if (!currentUser?.roles?.includes('admin') || userIdOverride) delete payload.jabatan_ids;
 
     const isAdmin = currentUser?.roles?.includes('admin');
 
@@ -230,7 +262,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               </p>
             )}
             <p className="text-sm text-slate-600 mt-1">
-              {gtk?.nip_nuptk || 'Belum ada NUPTK'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
+              {gtk?.nip || gtk?.nuptk || gtk?.nip_nuptk || 'Belum ada NIP/NUPTK'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
             </p>
           </div>
         </div>
@@ -272,6 +304,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               if (draftData.status_tempat_tinggal !== undefined) setFormTempatTinggal(prev => ({ ...prev, ...draftData }));
               if (draftData.status_perkawinan !== undefined) setFormPerkawinan(prev => ({ ...prev, ...draftData }));
               if (draftData.jenis_ptk !== undefined) setFormPenugasan(prev => ({ ...prev, ...draftData }));
+          setFormRiwayat(prev => ({ ...prev, ...Object.fromEntries(Object.keys(prev).filter((k) => draftData[k] !== undefined).map((k) => [k, draftData[k]])) }));
             }
           }}
         />
@@ -420,6 +453,23 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     <Input type="date" value={formDataDiri.birth_date} onChange={(e) => setFormDataDiri({...formDataDiri, birth_date: e.target.value})} disabled={!editing} />
                   </div>
                   <div>
+                    <Label>Umur Saat Ini</Label>
+                    <NilaiHitung testid="umur-gtk"
+                      nilai={teksTahunBulan(selisihTahunBulan(formDataDiri.birth_date))}
+                      kosong={formDataDiri.birth_date ? 'Tanggal lahir tidak valid' : 'Isi tanggal lahir'}
+                      keterangan="Dihitung otomatis dari tanggal lahir" />
+                  </div>
+                  <div>
+                    <Label>Masa Kerja</Label>
+                    {(() => {
+                      const mk = masaKerjaGtk({ ...formKepegawaian, tmt_pegawai: formPenugasan.tmt_pegawai });
+                      return (
+                        <NilaiHitung testid="masa-kerja-gtk" nilai={teksTahunBulan(mk.lama)} kosong={mk.pesan}
+                          keterangan={mk.sumber ? `Dihitung dari ${mk.sumber}${mk.tmt ? ` (${formatTanggalId(mk.tmt)})` : ''} — ${mk.sumber === 'TMT PNS' ? 'PNS/PPPK' : 'Non ASN'}` : 'Lengkapi status kepegawaian'} />
+                      );
+                    })()}
+                  </div>
+                  <div>
                     <Label>NIK</Label>
                     <Input value={formDataDiri.nik} onChange={(e) => setFormDataDiri({...formDataDiri, nik: e.target.value})} disabled={!editing} placeholder="16 digit" />
                   </div>
@@ -501,12 +551,8 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                   </div>
                   <div>
                     <Label>File SK</Label>
-                    <div className="flex gap-2">
-                      <Input type="file" disabled={!editing} />
-                      {formKepegawaian.file_sk_pns && (
-                        <Button size="sm" variant="outline"><Download className="h-4 w-4" /></Button>
-                      )}
-                    </div>
+                    <BerkasGtk gtkId={id} jenis="sk_pns" url={formKepegawaian.file_sk_pns} editing={editing} testid="berkas-sk-pns"
+                      onChange={(url) => setFormKepegawaian({ ...formKepegawaian, file_sk_pns: url })} />
                   </div>
                 </CardContent>
               </Card>
@@ -729,14 +775,16 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="md:col-span-2">
                   <Label>Fungsi/Jabatan</Label>
-                  <Input placeholder="Contoh: Wali Kelas, Wakasek" disabled={!editing} />
+                  <PilihJabatanGtk value={formRiwayat.jabatan_ids || []} onChange={(v) => setRiwayat('jabatan_ids', v)}
+                    disabled={!editing || !currentUser?.roles?.includes('admin') || !!userIdOverride} />
+                  {editing && (!currentUser?.roles?.includes('admin') || userIdOverride) && <p className="mt-1 text-xs text-slate-500">Fungsi/jabatan diatur oleh admin.</p>}
                 </div>
                 <div>
                   <Label>Status Penugasan</Label>
-                  <Select disabled={!editing}>
-                    <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
+                  <Select value={formRiwayat.status_penugasan || ''} onValueChange={(v) => setRiwayat('status_penugasan', v)} disabled={!editing}>
+                    <SelectTrigger data-testid="select-status-penugasan"><SelectValue placeholder="Pilih..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="aktif">Aktif</SelectItem>
                       <SelectItem value="cuti">Cuti</SelectItem>
@@ -745,13 +793,14 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                   </Select>
                 </div>
                 <div>
-                  <Label>Pangkat Jabatan</Label>
-                  <Input placeholder="Contoh: Penata Muda, III/a" disabled={!editing} />
+                  <Label>Pangkat/Golongan</Label>
+                  <Input value={formRiwayat.pangkat_golongan || ''} onChange={(e) => setRiwayat('pangkat_golongan', e.target.value)}
+                    placeholder="Contoh: Penata Muda, III/a" disabled={!editing} data-testid="input-pangkat-golongan" />
                 </div>
                 <div>
                   <Label>Status Keaktifan</Label>
-                  <Select disabled={!editing}>
-                    <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
+                  <Select value={formRiwayat.status_keaktifan || ''} onValueChange={(v) => setRiwayat('status_keaktifan', v)} disabled={!editing}>
+                    <SelectTrigger data-testid="select-status-keaktifan"><SelectValue placeholder="Pilih..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="aktif">Aktif</SelectItem>
                       <SelectItem value="non_aktif">Non Aktif</SelectItem>
@@ -761,20 +810,15 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               </div>
 
               <div className="border-t pt-4">
-                <h4 className="font-semibold mb-2">Perjanjian SK</h4>
-                <div className="text-sm text-slate-500">Fitur dalam pengembangan</div>
-              </div>
-
-              <div className="border-t pt-4">
                 <h4 className="font-semibold mb-2">Data Pensiun</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Tanggal Pensiun</Label>
-                    <Input type="date" disabled={!editing} />
+                    <Input type="date" value={formRiwayat.tanggal_pensiun || ''} onChange={(e) => setRiwayat('tanggal_pensiun', e.target.value)} disabled={!editing} />
                   </div>
                   <div>
                     <Label>Nomor SK Pensiun</Label>
-                    <Input disabled={!editing} />
+                    <Input value={formRiwayat.no_sk_pensiun || ''} onChange={(e) => setRiwayat('no_sk_pensiun', e.target.value)} disabled={!editing} />
                   </div>
                 </div>
               </div>
@@ -782,165 +826,54 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
           </Card>
         </TabsContent>
 
-        {/* TAB: PENDIDIKAN FORMAL */}
         <TabsContent value="pendidikan">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Riwayat Pendidikan Formal</CardTitle>
-              <Button onClick={() => setPendidikanDialog(true)} size="sm" className="bg-[#006837] hover:bg-[#0B7A3B]">
-                <Plus className="h-4 w-4 mr-1" /> Tambah
-              </Button>
-            </CardHeader>
+            <CardHeader><CardTitle>Riwayat Pendidikan Formal</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Jenjang</TableHead>
-                    <TableHead>Nama Institusi</TableHead>
-                    <TableHead>Jurusan</TableHead>
-                    <TableHead>Tahun Lulus</TableHead>
-                    <TableHead>No. Ijazah</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                      Belum ada data pendidikan. Klik "Tambah" untuk menambah data.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <DaftarRiwayatGtk jenis="riwayat_pendidikan" items={formRiwayat.riwayat_pendidikan || []} editing={editing} testid="daftar-riwayat-pendidikan"
+                onChange={(v) => setRiwayat('riwayat_pendidikan', v)} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* TAB: DIKLAT/PELATIHAN */}
         <TabsContent value="diklat">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Riwayat Diklat/Pelatihan</CardTitle>
-              <Button onClick={() => setDiklatDialog(true)} size="sm" className="bg-[#006837] hover:bg-[#0B7A3B]">
-                <Plus className="h-4 w-4 mr-1" /> Tambah
-              </Button>
-            </CardHeader>
+            <CardHeader><CardTitle>Riwayat Diklat/Pelatihan</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Diklat/Pelatihan</TableHead>
-                    <TableHead>Penyelenggara</TableHead>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Durasi (Jam)</TableHead>
-                    <TableHead>No. Sertifikat</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                      Belum ada data diklat. Klik "Tambah" untuk menambah data.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <DaftarRiwayatGtk jenis="riwayat_diklat" items={formRiwayat.riwayat_diklat || []} editing={editing} testid="daftar-riwayat-diklat"
+                onChange={(v) => setRiwayat('riwayat_diklat', v)} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* TAB: PENGHARGAAN */}
         <TabsContent value="penghargaan">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Riwayat Penghargaan</CardTitle>
-              <Button onClick={() => setPenghargaanDialog(true)} size="sm" className="bg-[#006837] hover:bg-[#0B7A3B]">
-                <Plus className="h-4 w-4 mr-1" /> Tambah
-              </Button>
-            </CardHeader>
+            <CardHeader><CardTitle>Riwayat Penghargaan</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Jenis Penghargaan</TableHead>
-                    <TableHead>Nama Penghargaan</TableHead>
-                    <TableHead>Pemberi</TableHead>
-                    <TableHead>Tahun</TableHead>
-                    <TableHead>Tingkat</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                      Belum ada data penghargaan. Klik "Tambah" untuk menambah data.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <DaftarRiwayatGtk jenis="riwayat_penghargaan" items={formRiwayat.riwayat_penghargaan || []} editing={editing} testid="daftar-riwayat-penghargaan"
+                onChange={(v) => setRiwayat('riwayat_penghargaan', v)} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* TAB: DATA ANAK */}
         <TabsContent value="data-anak">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Data Anak</CardTitle>
-              <Button onClick={() => setAnakDialog(true)} size="sm" className="bg-[#006837] hover:bg-[#0B7A3B]">
-                <Plus className="h-4 w-4 mr-1" /> Tambah
-              </Button>
-            </CardHeader>
+            <CardHeader><CardTitle>Data Anak</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Lengkap</TableHead>
-                    <TableHead>Jenis Kelamin</TableHead>
-                    <TableHead>Tempat, Tanggal Lahir</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                      Belum ada data anak. Klik "Tambah" untuk menambah data.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <DaftarRiwayatGtk jenis="data_anak" items={formRiwayat.data_anak || []} editing={editing} testid="daftar-data-anak"
+                onChange={(v) => setRiwayat('data_anak', v)}
+                tidakAda={formRiwayat.tidak_punya_anak} onTidakAda={(v) => setRiwayat('tidak_punya_anak', v)} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* TAB: RIWAYAT PESANTREN */}
         <TabsContent value="riwayat-pesantren">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Riwayat Pesantren</CardTitle>
-              <Button onClick={() => setPesantrenDialog(true)} size="sm" className="bg-[#006837] hover:bg-[#0B7A3B]">
-                <Plus className="h-4 w-4 mr-1" /> Tambah
-              </Button>
-            </CardHeader>
+            <CardHeader><CardTitle>Riwayat Pesantren</CardTitle></CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Pesantren</TableHead>
-                    <TableHead>Lokasi</TableHead>
-                    <TableHead>Periode</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                      Belum ada data riwayat pesantren. Klik "Tambah" untuk menambah data.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <DaftarRiwayatGtk jenis="riwayat_pesantren" items={formRiwayat.riwayat_pesantren || []} editing={editing} testid="daftar-riwayat-pesantren"
+                onChange={(v) => setRiwayat('riwayat_pesantren', v)}
+                tidakAda={formRiwayat.tidak_pernah_pesantren} onTidakAda={(v) => setRiwayat('tidak_pernah_pesantren', v)} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -951,35 +884,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
             <CardHeader>
               <CardTitle>Arsip Berkas</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: 'KTP', key: 'ktp' },
-                { label: 'Kartu Keluarga (KK)', key: 'kk' },
-                { label: 'Ijazah', key: 'ijazah' },
-                { label: 'NPWP', key: 'npwp' },
-                { label: 'Absensi', key: 'absensi' },
-                { label: 'SKBK/SKMT', key: 'skbk' },
-                { label: 'SKAKPT', key: 'skakpt' },
-                { label: 'Tunjangan Non ASN', key: 'tunjangan' },
-              ].map((doc) => (
-                <div key={doc.key} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileCheck className="h-5 w-5 text-slate-500" />
-                      <span className="font-medium">{doc.label}</span>
-                    </div>
-                    <Badge variant="outline" className="text-xs">Belum upload</Badge>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <Button size="sm" variant="outline" className="flex-1" disabled={!editing}>
-                      <Upload className="h-3 w-3 mr-1" /> Upload
-                    </Button>
-                    <Button size="sm" variant="outline" disabled>
-                      <Download className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <CardContent>
+              {!editing && <p className="mb-3 text-xs text-slate-500">Klik <b>Edit Data</b> untuk mengunggah berkas (PDF/JPG/PNG, maks. 2MB).</p>}
+              <ArsipBerkasGtk gtkId={id} nilai={formRiwayat} editing={editing} onChange={(v) => setFormRiwayat(v)} />
             </CardContent>
           </Card>
         </TabsContent>

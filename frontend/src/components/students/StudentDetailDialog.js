@@ -347,11 +347,13 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
       if (isAdmin) {
         // Admin simpan langsung (tanpa verval)
         await api.put(`/users/${student.id}`, {
-          agama: payload.agama || null,
-          nik: payload.nik || null,
-          nomor_kk: payload.nomor_kk || null,
-          nama_kepala_keluarga: payload.nama_kepala_keluarga || null,
-          ibu_nama: payload?.ibu?.nama || null,
+          // String kosong (bukan null) agar isian yang dihapus admin ikut terhapus di akun siswa;
+          // server mengabaikan null.
+          agama: payload.agama || '',
+          nik: payload.nik || '',
+          nomor_kk: payload.nomor_kk || '',
+          nama_kepala_keluarga: payload.nama_kepala_keluarga || '',
+          ibu_nama: payload?.ibu?.nama || '',
           full_name: studentData?.full_name || undefined,
           nisn: studentData?.nisn ?? '',
           nis: studentData?.nis ?? '',

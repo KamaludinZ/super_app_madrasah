@@ -75,3 +75,6 @@ dmypy.json
 *.tar.gz
 *.tar
 *.tgz
+
+# Berkas unggahan lokal - jangan ikut ke image (di server memakai volume /app/uploads)
+uploads/
