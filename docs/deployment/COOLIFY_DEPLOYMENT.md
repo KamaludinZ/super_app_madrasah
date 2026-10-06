@@ -160,6 +160,20 @@ Env frontend:
    - verifikasi `MONGO_URL` menggunakan host `mongodb` (bukan localhost).
    - verifikasi credential env yang sama dengan Mongo service.
 
+### 4.1a Migrasi data otomatis saat redeploy
+Backend menjalankan migrasi data sendiri saat start (`backend/migrasi_otomatis.py`), di latar belakang sehingga health check tidak tertahan.
+Tiap migrasi hanya dijalankan **sekali per database** (dicatat di koleksi `app_migrasi`), aman dengan beberapa worker uvicorn,
+dan yang gagal dicoba lagi pada start berikutnya:
+- perapian data CKG UKS ke 16 kolom baku,
+- pemecahan nama & gelar GTK,
+- master wilayah Indonesia (38 provinsi s.d. ±83 ribu desa + kode pos; **diunduh dari GitHub, butuh akses internet keluar dari container backend**, ±20 detik),
+- pencocokan kode wilayah untuk alamat siswa & GTK yang sudah tersimpan.
+
+Cek di log backend: baris `[migrasi] ... selesai`. Bila server tanpa internet, log menampilkan `[migrasi] 2026-10-06_master_wilayah: gagal` —
+muat data lewat menu **Master Wilayah** (tombol Muat Data Resmi atau unggah paket), lalu restart backend agar pencocokan alamat berjalan.
+
+Environment opsional (backend): `MIGRASI_OTOMATIS=0` mematikan seluruh migrasi otomatis; `MIGRASI_WILAYAH_UNDUH=0` melewati unduhan data wilayah.
+
 ### 4.2 Troubleshooting Error Build Coolify (metadata base image / BuildKit)
 Jika log berhenti seperti ini:
 - `load metadata for docker.io/library/python:3.11-slim`

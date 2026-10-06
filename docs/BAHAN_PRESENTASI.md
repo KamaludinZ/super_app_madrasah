@@ -302,6 +302,7 @@ Total: 20 slide (± 25–30 menit presentasi).
 - Logout / ganti password **mencabut sesi** di perangkat lain
 - Log aktivitas & log keamanan untuk setiap tindakan
 - **Backup** rutin (JSON & Excel) + mode maintenance
+- **Migrasi data otomatis** saat pembaruan aplikasi: data lama dirapikan sendiri sekali jalan, tanpa perintah manual di server
 - Audit keamanan menyeluruh (September 2026) — temuan sudah ditindaklanjuti
 
 **Saran visual:** Ikon gembok/perisai dengan daftar centang.
@@ -384,3 +385,4 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-06 | Data CKG fase 1–2: tabel CKG 16 kolom baku dengan cari & filter, perapian data lama, template CKG bertingkat (kelas/tingkat/jenis GTK), impor hasil CKG tervalidasi; Nama & Gelar GTK terpisah dengan nama lengkap tersusun otomatis | 13, 14 |
 | 2026-10-06 | Master Wilayah Indonesia (fase 3): data resmi 38 provinsi s.d. ±83 ribu desa/kelurahan + kode pos (Kepmendagri 2025) bisa dimuat sekali klik atau lewat unggah paket, dropdown wilayah bertingkat & cari cepat kode pos | 10 |
 | 2026-10-06 | Alamat bertingkat & Pencocokan Wilayah Impor (fase 4): alamat siswa (ayah/ibu/wali/domisili) & GTK menyimpan kode wilayah, alamat impor Excel dicocokkan otomatis, menu laporan pencocokan dengan saran & perbaikan manual/massal; berkas KIP, PKH, KKS, Kartu Pelajar siswa menjadi opsional | 10, 13 |
+| 2026-10-06 | Migrasi data otomatis saat deploy/redeploy (sekali per database, aman multi-worker, dicoba ulang bila gagal): perapian CKG, nama & gelar GTK, pemuatan master wilayah resmi, dan kode wilayah alamat tersimpan | 18 |

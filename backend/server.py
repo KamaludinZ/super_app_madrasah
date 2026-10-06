@@ -286,6 +286,14 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to ensure data master import indexes: {e}")
 
+    # Migrasi data otomatis (sekali per database, di latar belakang): perapian CKG, nama & gelar GTK,
+    # master wilayah resmi, dan kode wilayah alamat tersimpan. Lihat migrasi_otomatis.py.
+    try:
+        from migrasi_otomatis import jalankan_semua
+        asyncio.create_task(jalankan_semua(db))
+    except Exception as e:
+        logger.error(f"Failed to start automatic migrations: {e}")
+
     # Start background tasks (both dev and production)
     try:
         from teaching_reminder_scheduler import start_reminder_scheduler, start_cleanup_task
