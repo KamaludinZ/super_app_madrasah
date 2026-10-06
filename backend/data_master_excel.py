@@ -4,6 +4,7 @@ Urutan, key, dan judul kolom HARUS identik dengan frontend
 (frontend/src/lib/dataSiswaKolom.js dan dataGtkKolom.js) agar ekspor–impor akurat.
 """
 import io
+import re
 from typing import Any, Dict, List, Optional
 
 from openpyxl import Workbook
@@ -149,7 +150,198 @@ PILIHAN_GTK: Dict[str, Dict[str, str]] = {
     'gender': {'L': 'Laki-laki', 'P': 'Perempuan'},
     'jenis_ptk': {'guru_mapel': 'Guru Mata Pelajaran', 'guru_bk': 'Guru BK', 'kepala_sekolah': 'Kepala Sekolah',
                   'tenaga_administrasi': 'Tenaga Administrasi', 'pustakawan': 'Pustakawan', 'laboran': 'Laboran'},
+    'agama': {'islam': 'Islam', 'kristen': 'Kristen', 'katolik': 'Katolik', 'hindu': 'Hindu', 'buddha': 'Buddha', 'konghucu': 'Konghucu'},
+    'golongan_darah': {'A': 'A', 'B': 'B', 'AB': 'AB', 'O': 'O'},
+    'transportasi': {'jalan_kaki': 'Jalan Kaki', 'sepeda': 'Sepeda', 'motor': 'Sepeda Motor', 'mobil': 'Mobil Pribadi',
+                     'angkutan_umum': 'Angkutan Umum'},
 }
+
+# Pilihan isian Data Siswa (field student_details, per NAMA FIELD) — HARUS sama dengan pilihan form detail siswa
+# (frontend/src/lib/pilihanDataMaster.js, dipakai StudentDetailDialog). Disimpan apa adanya (label).
+PILIHAN_SISWA: Dict[str, List[str]] = {
+    'citizenship': ['WNI', 'WNA'],
+    'agama': ['Islam', 'Kristen Protestan', 'Katolik', 'Hindu', 'Buddha', 'Kong hu cu'],
+    'cita_cita': ['PNS', 'TNI/Polri', 'Guru/Dosen', 'Dokter', 'Politikus', 'Wiraswasta', 'Seniman/Artis', 'Ilmuwan', 'Agamawan', 'Lainnya'],
+    'hobi': ['Olahraga', 'Kesenian', 'Membaca', 'Menulis', 'Jalan-jalan', 'Lainnya'],
+    'pembiaya_sekolah': ['Orang Tua', 'Wali/Orang Tua Asuh', 'Tanggungan Sendiri', 'Lainnya'],
+    'pra_sekolah': ['Pernah TK/RA', 'Pernah PAUD'],
+    'imunisasi': ['Hepatitis B', 'BCG', 'DPT', 'Polio', 'Campak', 'Covid'],
+    'status': ['Masih Hidup', 'Sudah Meninggal', 'Tidak Diketahui'],
+    'pendidikan': ['SD/Sederajat', 'SMP/Sederajat', 'SMA/Sederajat', 'D1', 'D2', 'D3', 'D4/S1', 'S2', 'S3', 'Tidak Sekolah', 'Lainnya'],
+    'pekerjaan': ['Tidak Bekerja', 'Pensiunan', 'PNS', 'TNI/Polri', 'Guru/Dosen', 'Pegawai Swasta', 'Wiraswasta',
+                  'Pengacara/Jaksa/Hakim/Notaris', 'Seniman/Pelukis/Artis/Sejenis', 'Dokter/Bidan/Perawat', 'Pilot/Pramugara',
+                  'Pedagang', 'Petani/Peternak', 'Nelayan', 'Buruh (Tani/Pabrik/Bangunan)', 'Sopir/Masinis/Kondektur/Tukang Ojek',
+                  'Politikus', 'Lainnya'],
+    'penghasilan': ['Di bawah 800.000', '800.001-1.200.000', '1.200.001-1.800.000', '1.800.001-2.500.000', '2.500.001-3.500.000',
+                    '3.500.001-4.800.000', '4.800.001-6.500.000', '6.500.001-10.000.000', '10.000.001-20.000.000', 'Lebih dari 20.000.000'],
+    'hubungan_wali': ['Sama dengan ayah kandung', 'Sama dengan ibu kandung', 'Lainnya'],
+    'status_wali': ['Sama dengan ayah kandung', 'Sama dengan ibu kandung', 'Lainnya'],
+    'status_kepemilikan': ['Milik Sendiri', 'Rumah Orang Tua', 'Rumah Saudara/Kerabat', 'Rumah Dinas', 'Sewa/Kontrak', 'Lainnya'],
+    'status_tempat_tinggal': ['Tinggal dengan Ayah Kandung', 'Tinggal dengan Ibu Kandung', 'Tinggal dengan Wali', 'Ikut Saudara/Kerabat',
+                              'Asrama Madrasah', 'Kontrak/Kost', 'Tinggal di Asrama Pesantren', 'Panti Asuhan', 'Rumah Singgah', 'Lainnya'],
+    'jarak_tempuh': ['Kurang dari 5 km', '5-10 km', '11-20 km', '21-30 km', 'Lebih dari 30 km'],
+    'transportasi': ['Jalan Kaki', 'Sepeda', 'Sepeda Motor', 'Mobil Pribadi', 'Antar Jemput Sekolah', 'Angkutan Umum', 'Perahu/Sampan',
+                     'Kendaraan Pribadi', 'Kereta Api', 'Ojek', 'Andong/Bendi/Sado/Dokar/Delman/Becak', 'Lainnya'],
+    'waktu_tempuh': ['1-10 menit', '10-19 menit', '20-29 menit', '30-39 menit', '1-2 jam', 'Lebih dari 2 jam'],
+}
+
+
+def opsi_kolom(kolom: Dict[str, Any]) -> List[str]:
+    """Isian yang tersedia di aplikasi untuk satu kolom (kosong = teks bebas).
+    Field akun (user.*) memakai kode PILIHAN_GTK; field detail siswa (detail.*) memakai PILIHAN_SISWA."""
+    path = kolom.get('path') or ''
+    field = path.split('.')[-1]
+    if path.startswith('user.') and field in PILIHAN_GTK:
+        return list(PILIHAN_GTK[field])
+    if path.startswith('detail.') and field in PILIHAN_SISWA:
+        return list(PILIHAN_SISWA[field])
+    return []
+
+
+def label_opsi(kolom: Dict[str, Any]) -> List[str]:
+    """Opsi untuk dibaca manusia: kode GTK beserta labelnya ('islam = Islam'), pilihan siswa apa adanya."""
+    path = kolom.get('path') or ''
+    field = path.split('.')[-1]
+    if path.startswith('user.') and field in PILIHAN_GTK:
+        return [kd if kd == lb else f'{kd} = {lb}' for kd, lb in PILIHAN_GTK[field].items()]
+    return opsi_kolom(kolom)
+
+
+# Variasi isian yang lazim di data pendaftaran/EMIS -> pilihan baku aplikasi (kunci = teks dinormalkan).
+ALIAS_PILIHAN: Dict[str, Dict[str, str]] = {
+    'agama': {'kristen': 'Kristen Protestan', 'protestan': 'Kristen Protestan', 'kristenprotestan': 'Kristen Protestan',
+              'katholik': 'Katolik', 'katolikroma': 'Katolik', 'budha': 'Buddha', 'konghucu': 'Kong hu cu',
+              'khonghucu': 'Kong hu cu', 'khonghuchu': 'Kong hu cu', 'konghuchu': 'Kong hu cu'},
+    'citizenship': {'indonesia': 'WNI', 'warganeganindonesia': 'WNI', 'warganegaraindonesia': 'WNI',
+                    'asing': 'WNA', 'warganegaraasing': 'WNA'},
+    'status': {'hidup': 'Masih Hidup', 'masihada': 'Masih Hidup', 'meninggal': 'Sudah Meninggal', 'meninggaldunia': 'Sudah Meninggal',
+               'almarhum': 'Sudah Meninggal', 'almarhumah': 'Sudah Meninggal', 'wafat': 'Sudah Meninggal',
+               'tidaktahu': 'Tidak Diketahui', 'tidakdiketahui': 'Tidak Diketahui'},
+    'pendidikan': {'sd': 'SD/Sederajat', 'mi': 'SD/Sederajat', 'sdmi': 'SD/Sederajat', 'sdsederajat': 'SD/Sederajat', 'paketa': 'SD/Sederajat',
+                   'smp': 'SMP/Sederajat', 'mts': 'SMP/Sederajat', 'smpmts': 'SMP/Sederajat', 'sltp': 'SMP/Sederajat', 'paketb': 'SMP/Sederajat',
+                   'sma': 'SMA/Sederajat', 'ma': 'SMA/Sederajat', 'smk': 'SMA/Sederajat', 'smamasmk': 'SMA/Sederajat', 'smama': 'SMA/Sederajat',
+                   'slta': 'SMA/Sederajat', 'paketc': 'SMA/Sederajat', 'mak': 'SMA/Sederajat',
+                   's1': 'D4/S1', 'd4': 'D4/S1', 'sarjana': 'D4/S1', 's1d4': 'D4/S1', 'd4s1': 'D4/S1', 'diploma4': 'D4/S1',
+                   'diploma1': 'D1', 'diploma2': 'D2', 'diploma3': 'D3', 'magister': 'S2', 'doktor': 'S3',
+                   'tidaksekolah': 'Tidak Sekolah', 'tidakbersekolah': 'Tidak Sekolah', 'tidaktamatsd': 'Tidak Sekolah', 'putussd': 'Tidak Sekolah'},
+    'pekerjaan': {'tidakbekerja': 'Tidak Bekerja', 'ibumahtangga': 'Tidak Bekerja', 'iburumahtangga': 'Tidak Bekerja', 'irt': 'Tidak Bekerja',
+                  'pensiun': 'Pensiunan', 'pnstnipolri': 'PNS', 'tni': 'TNI/Polri', 'polri': 'TNI/Polri', 'polisi': 'TNI/Polri',
+                  'guru': 'Guru/Dosen', 'dosen': 'Guru/Dosen', 'karyawanswasta': 'Pegawai Swasta', 'pegawaiswasta': 'Pegawai Swasta',
+                  'swasta': 'Pegawai Swasta', 'karyawan': 'Pegawai Swasta', 'wirausaha': 'Wiraswasta', 'wiraswasta': 'Wiraswasta',
+                  'pengusaha': 'Wiraswasta', 'dagang': 'Pedagang', 'pedagangkecil': 'Pedagang', 'pedagangbesar': 'Pedagang',
+                  'petani': 'Petani/Peternak', 'peternak': 'Petani/Peternak', 'buruh': 'Buruh (Tani/Pabrik/Bangunan)',
+                  'buruhtani': 'Buruh (Tani/Pabrik/Bangunan)', 'buruhpabrik': 'Buruh (Tani/Pabrik/Bangunan)',
+                  'buruhbangunan': 'Buruh (Tani/Pabrik/Bangunan)', 'sopir': 'Sopir/Masinis/Kondektur/Tukang Ojek',
+                  'supir': 'Sopir/Masinis/Kondektur/Tukang Ojek', 'ojek': 'Sopir/Masinis/Kondektur/Tukang Ojek',
+                  'tukangojek': 'Sopir/Masinis/Kondektur/Tukang Ojek', 'dokter': 'Dokter/Bidan/Perawat', 'bidan': 'Dokter/Bidan/Perawat',
+                  'perawat': 'Dokter/Bidan/Perawat', 'tenagakesehatan': 'Dokter/Bidan/Perawat', 'nelayanperikanan': 'Nelayan',
+                  'seniman': 'Seniman/Pelukis/Artis/Sejenis', 'artis': 'Seniman/Pelukis/Artis/Sejenis'},
+    'pembiaya_sekolah': {'orangtua': 'Orang Tua', 'ortu': 'Orang Tua', 'wali': 'Wali/Orang Tua Asuh', 'orangtuaasuh': 'Wali/Orang Tua Asuh',
+                         'sendiri': 'Tanggungan Sendiri'},
+    'pra_sekolah': {'tk': 'Pernah TK/RA', 'ra': 'Pernah TK/RA', 'tkra': 'Pernah TK/RA', 'paud': 'Pernah PAUD', 'kb': 'Pernah PAUD'},
+    'imunisasi': {'hepatitis': 'Hepatitis B', 'hepb': 'Hepatitis B', 'hb': 'Hepatitis B', 'covid19': 'Covid', 'vaksincovid': 'Covid'},
+    'hubungan_wali': {'ayah': 'Sama dengan ayah kandung', 'ayahkandung': 'Sama dengan ayah kandung',
+                      'ibu': 'Sama dengan ibu kandung', 'ibukandung': 'Sama dengan ibu kandung'},
+    'status_wali': {'ayah': 'Sama dengan ayah kandung', 'ayahkandung': 'Sama dengan ayah kandung',
+                    'ibu': 'Sama dengan ibu kandung', 'ibukandung': 'Sama dengan ibu kandung'},
+    'status_kepemilikan': {'milikpribadi': 'Milik Sendiri', 'sendiri': 'Milik Sendiri', 'milikorangtua': 'Rumah Orang Tua',
+                           'orangtua': 'Rumah Orang Tua', 'rumahortu': 'Rumah Orang Tua', 'saudara': 'Rumah Saudara/Kerabat',
+                           'kerabat': 'Rumah Saudara/Kerabat', 'dinas': 'Rumah Dinas', 'sewa': 'Sewa/Kontrak', 'kontrak': 'Sewa/Kontrak',
+                           'kost': 'Sewa/Kontrak', 'kos': 'Sewa/Kontrak'},
+    'status_tempat_tinggal': {'denganayah': 'Tinggal dengan Ayah Kandung',
+                              'bersamaayah': 'Tinggal dengan Ayah Kandung', 'ayahkandung': 'Tinggal dengan Ayah Kandung',
+                              'denganibu': 'Tinggal dengan Ibu Kandung', 'bersamaibu': 'Tinggal dengan Ibu Kandung',
+                              'ibukandung': 'Tinggal dengan Ibu Kandung', 'denganwali': 'Tinggal dengan Wali', 'bersamawali': 'Tinggal dengan Wali',
+                              'wali': 'Tinggal dengan Wali', 'saudara': 'Ikut Saudara/Kerabat', 'kerabat': 'Ikut Saudara/Kerabat',
+                              'asrama': 'Asrama Madrasah', 'pesantren': 'Tinggal di Asrama Pesantren', 'pondokpesantren': 'Tinggal di Asrama Pesantren',
+                              'pondok': 'Tinggal di Asrama Pesantren', 'kost': 'Kontrak/Kost', 'kos': 'Kontrak/Kost', 'kontrak': 'Kontrak/Kost',
+                              'panti': 'Panti Asuhan'},
+    # GTK (label form detail GTK)
+    'status_perkawinan': {'kawin': 'Menikah', 'sudahmenikah': 'Menikah', 'sudahkawin': 'Menikah', 'belumkawin': 'Belum Menikah',
+                          'lajang': 'Belum Menikah'},
+    'transportasi': {'jalan': 'Jalan Kaki', 'motor': 'Sepeda Motor', 'sepedamotorpribadi': 'Sepeda Motor', 'mobil': 'Mobil Pribadi',
+                     'mobilpribadi': 'Mobil Pribadi', 'antarjemput': 'Antar Jemput Sekolah', 'jemputan': 'Antar Jemput Sekolah',
+                     'angkot': 'Angkutan Umum', 'angkutanumumbusbus': 'Angkutan Umum', 'bus': 'Angkutan Umum', 'ojekonline': 'Ojek',
+                     'perahu': 'Perahu/Sampan', 'sampan': 'Perahu/Sampan', 'becak': 'Andong/Bendi/Sado/Dokar/Delman/Becak',
+                     'delman': 'Andong/Bendi/Sado/Dokar/Delman/Becak', 'keretaapi': 'Kereta Api', 'kereta': 'Kereta Api'},
+}
+
+# Batas bawah (rupiah) tiap pilihan penghasilan aplikasi, urut naik; batas atas = batas bawah berikutnya - 1.
+_BATAS_PENGHASILAN = [(0, 'Di bawah 800.000'), (800001, '800.001-1.200.000'), (1200001, '1.200.001-1.800.000'),
+                      (1800001, '1.800.001-2.500.000'), (2500001, '2.500.001-3.500.000'), (3500001, '3.500.001-4.800.000'),
+                      (4800001, '4.800.001-6.500.000'), (6500001, '6.500.001-10.000.000'), (10000001, '10.000.001-20.000.000'),
+                      (20000001, 'Lebih dari 20.000.000')]
+
+
+def _kunci_pilihan(teks: str) -> str:
+    return re.sub(r'[^a-z0-9]', '', str(teks or '').lower())
+
+
+def _kelompok_penghasilan(teks: str) -> Optional[str]:
+    """Penghasilan berupa angka/rentang rupiah -> pilihan aplikasi bila seluruh rentang masuk satu pilihan."""
+    t = teks.lower().replace('rp', ' ')
+    if re.search(r'\b(juta|jt)\b', t):
+        angka = [float(x.replace(',', '.')) * 1_000_000 for x in re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:juta|jt)', t)]
+    else:
+        angka = [int(re.sub(r'\D', '', x)) for x in re.findall(r'\d[\d.,]*', t) if re.sub(r'\D', '', x)]
+    if not angka:
+        if re.search(r'tidak\s+(ada|berpenghasilan)', t):
+            return 'Di bawah 800.000'
+        return None
+    if re.search(r'kurang|di ?bawah|<', t) and len(angka) == 1:
+        rendah, tinggi = 0, angka[0] - 1
+    elif re.search(r'lebih|di ?atas|>', t) and len(angka) == 1:
+        rendah, tinggi = angka[0] + 1, float('inf')
+    else:
+        rendah, tinggi = min(angka[:2]), max(angka[:2])
+
+    def kelompok(n):
+        hasil = _BATAS_PENGHASILAN[0][1]
+        for batas, nama in _BATAS_PENGHASILAN:
+            if n >= batas:
+                hasil = nama
+        return hasil
+
+    a, b = kelompok(rendah), kelompok(min(tinggi, 10 ** 12))
+    return a if a == b else None
+
+
+def kenali_pilihan(field: str, teks: str, opsi: List[str]) -> Optional[str]:
+    """Kenali isian bebas sebagai salah satu `opsi`: sama persis (tanpa beda huruf/spasi/tanda baca), alias lazim
+    data pendaftaran, rentang penghasilan, lalu kemiripan tinggi yang tidak ambigu. None bila tidak dikenali."""
+    from difflib import SequenceMatcher
+    kunci = _kunci_pilihan(teks)
+    if not kunci:
+        return None
+    for o in opsi:
+        if _kunci_pilihan(o) == kunci:
+            return o
+    alias = ALIAS_PILIHAN.get(field, {}).get(kunci)
+    if alias in opsi:
+        return alias
+    if field == 'penghasilan':
+        k = _kelompok_penghasilan(teks)
+        if k in opsi:
+            return k
+    # isian memuat persis satu pilihan (mis. "Tinggal bersama Ayah Kandung")
+    for k_alias, tujuan in ALIAS_PILIHAN.get(field, {}).items():
+        if len(k_alias) >= 4 and k_alias in kunci and tujuan in opsi:
+            calon = {t for ka, t in ALIAS_PILIHAN[field].items() if len(ka) >= 4 and ka in kunci}
+            if len(calon) == 1:
+                return tujuan
+    skor = sorted(((SequenceMatcher(None, kunci, _kunci_pilihan(o)).ratio(), o) for o in opsi), reverse=True)
+    if skor and skor[0][0] >= 0.85 and (len(skor) == 1 or skor[0][0] - skor[1][0] >= 0.08):
+        return skor[0][1]
+    return None
+
+
+def normalisasi_pilihan_siswa(field: str, teks: str) -> str:
+    """Isian pilihan siswa -> ejaan baku di aplikasi (dikenali dari variasi penulisan, lihat kenali_pilihan);
+    ValueError berisi daftar pilihan bila tidak dikenali."""
+    hasil = kenali_pilihan(field, teks, PILIHAN_SISWA[field])
+    if hasil:
+        return hasil
+    raise ValueError('pilihan yang tersedia: ' + ' / '.join(PILIHAN_SISWA[field]))
 
 
 def normalisasi_pilihan(field: str, teks: str) -> str:
@@ -159,6 +351,10 @@ def normalisasi_pilihan(field: str, teks: str) -> str:
     for kode, label in opsi.items():
         if t in (kode.lower(), label.lower(), kode.lower().replace('_', ' ')):
             return kode
+    label_ke_kode = {label: kode for kode, label in opsi.items()}
+    dikenali = kenali_pilihan(field, teks, list(label_ke_kode)) or kenali_pilihan(field, teks, list(opsi))
+    if dikenali:
+        return label_ke_kode.get(dikenali, dikenali)
     raise ValueError(f"isi salah satu: {', '.join(opsi)}")
 
 

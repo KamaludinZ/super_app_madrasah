@@ -12,16 +12,15 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from data_master_excel import PENANDA_KETERANGAN, PILIHAN_GTK, SKEMA, TERKUNCI, buat_template, workbook_bytes
+from data_master_excel import PENANDA_KETERANGAN, SKEMA, TERKUNCI, buat_template, label_opsi, opsi_kolom, workbook_bytes
 
-_POLA_PILIHAN = re.compile(r'\(([^)]*/[^)]*)\)\s*$')
 
 PETUNJUK_ATURAN = {
     'kunci': 'Kolom identitas terkunci — penanda baris saat impor. Jangan diubah; baris tanpa identitas valid dilewati.',
     'tanggal': 'Tanggal dengan format TAHUN-BULAN-TANGGAL.',
     'ya_tidak': 'Isi "Ya" atau "Tidak".',
     'daftar': 'Beberapa nilai dipisah titik koma (;).',
-    'pilihan': 'Isi salah satu kode yang tertulis di judul kolom (dalam kurung).',
+    'pilihan': 'Pilih salah satu isian yang tersedia di aplikasi (dropdown di sel; daftar lengkap di sheet "Daftar Pilihan").',
     'teks': 'Teks bebas. Nomor ditulis lengkap termasuk angka 0 di depan.',
 }
 
@@ -38,15 +37,14 @@ def aturan_kolom(k: Dict[str, Any]) -> str:
         return 'ya_tidak'
     if k.get('daftar'):
         return 'daftar'
-    if _POLA_PILIHAN.search(k['label']):
+    if opsi_kolom(k):
         return 'pilihan'
     return 'teks'
 
 
 def pilihan_kolom(k: Dict[str, Any]) -> List[str]:
-    """Kode pilihan yang diterima kolom 'pilihan' (dari judul kolom), mis. ['L', 'P']."""
-    m = _POLA_PILIHAN.search(k['label'])
-    return [x.strip() for x in m.group(1).split('/')] if m else []
+    """Isian yang tersedia di aplikasi untuk kolom pilihan/daftar (kode GTK atau pilihan siswa), mis. ['L', 'P']."""
+    return opsi_kolom(k)
 
 
 def petunjuk_kolom(k: Dict[str, Any]) -> Tuple[str, str, str]:
@@ -54,35 +52,76 @@ def petunjuk_kolom(k: Dict[str, Any]) -> Tuple[str, str, str]:
     aturan = aturan_kolom(k)
     petunjuk = PETUNJUK_ATURAN[aturan]
     contoh = CONTOH_ATURAN.get(aturan, '')
+    opsi = pilihan_kolom(k)
     if aturan == 'pilihan':
-        kode = pilihan_kolom(k)
-        field = k['path'].split('.')[-1]
-        label = PILIHAN_GTK.get(field, {}) if k['path'].startswith('user.') else {}
-        if label:
-            petunjuk += ' Boleh juga label: ' + ', '.join(f'{kd} = {label[kd]}' for kd in kode if kd in label) + '.'
-        contoh = kode[0] if kode else ''
+        label = label_opsi(k)
+        if label != opsi:  # kode GTK: tampilkan kode beserta labelnya
+            petunjuk = ('Isi salah satu kode yang tersedia di aplikasi: ' + '; '.join(label) +
+                        '. Label (mis. "' + label[0].split(' = ')[-1] + '") juga diterima.')
+        else:
+            petunjuk = 'Pilih salah satu isian yang tersedia di aplikasi: ' + ' / '.join(opsi) + '.'
+        contoh = opsi[0] if opsi else ''
+    elif aturan == 'daftar' and opsi:
+        petunjuk = 'Beberapa nilai dipisah titik koma (;). Isian yang tersedia di aplikasi: ' + ' / '.join(opsi) + '.'
+        contoh = '; '.join(opsi[:2])
     return aturan, petunjuk, contoh
 
 
 BARIS_VALIDASI = 2000  # jangkauan dropdown pada template (baris 2..2001)
 
 
-def tambah_validasi_pilihan(ws, kolom: List[Dict[str, Any]], baris_awal: int = 2) -> int:
-    """Dropdown Excel untuk kolom pilihan (kode di judul) dan Ya/Tidak. Isian di luar daftar
-    hanya diberi peringatan (bukan ditolak) karena impor juga menerima label, mis. 'Milik Sendiri'."""
+SHEET_PILIHAN = 'Daftar Pilihan'
+
+
+def tambah_sheet_pilihan(wb, kolom: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Sheet "Daftar Pilihan": satu kolom per kolom data yang punya pilihan (judul + isian yang tersedia
+    di aplikasi). Dipakai sebagai sumber dropdown dan rujukan saat mengisi. -> {key: rentang sel sumber}."""
+    ws = wb.create_sheet(SHEET_PILIHAN)
+    ws['A1'] = 'Isian yang tersedia di aplikasi untuk tiap kolom (dipakai juga sebagai dropdown di sheet data).'
+    ws['A1'].font = Font(bold=True)
+    fill = PatternFill(start_color='006837', end_color='006837', fill_type='solid')
+    rentang, c = {}, 0
+    for k in kolom:
+        opsi = pilihan_kolom(k)
+        if not opsi:
+            continue
+        c += 1
+        huruf = get_column_letter(c)
+        sel = ws.cell(row=3, column=c, value=k['label'])
+        sel.font = Font(bold=True, color='FFFFFF')
+        sel.fill = fill
+        sel.alignment = Alignment(wrap_text=True, vertical='top')
+        for r, (o, lbl) in enumerate(zip(opsi, label_opsi(k)), 4):
+            ws.cell(row=r, column=c, value=o).number_format = '@'
+            if lbl != o:
+                ws.cell(row=r, column=c).comment = Comment(lbl, 'MATSANDATAMA', width=160, height=30)
+        ws.column_dimensions[huruf].width = max(18, min(42, max(len(o) for o in opsi) + 4))
+        rentang[k['key']] = f"'{SHEET_PILIHAN}'!${huruf}$4:${huruf}${3 + len(opsi)}"
+    ws.row_dimensions[3].height = 45
+    ws.freeze_panes = 'A4'
+    return rentang
+
+
+def tambah_validasi_pilihan(ws, kolom: List[Dict[str, Any]], baris_awal: int = 2, rentang: Dict[str, str] = None) -> int:
+    """Dropdown Excel untuk kolom pilihan (isian dari sheet Daftar Pilihan) dan Ya/Tidak. Isian di luar daftar
+    hanya diberi peringatan karena impor juga menerima label GTK, mis. 'Milik Sendiri' untuk milik_sendiri."""
+    rentang = rentang or {}
     n = 0
     for i, k in enumerate(kolom, 1):
         aturan = aturan_kolom(k)
         if aturan == 'pilihan':
             opsi = pilihan_kolom(k)
+            formula = rentang.get(k['key']) or '"' + ','.join(opsi) + '"'
         elif aturan == 'ya_tidak':
             opsi = ['Ya', 'Tidak']
+            formula = '"Ya,Tidak"'
         else:
             continue
-        dv = DataValidation(type='list', formula1='"' + ','.join(opsi) + '"', allow_blank=True,
+        ringkas = ', '.join(opsi) if len(', '.join(opsi)) <= 200 else f'{len(opsi)} pilihan - lihat sheet {SHEET_PILIHAN}'
+        dv = DataValidation(type='list', formula1=formula, allow_blank=True,
                             showErrorMessage=True, errorStyle='warning',
-                            errorTitle='Isian tidak dikenal', error='Pilih salah satu: ' + ', '.join(opsi),
-                            promptTitle=k['label'][:32], prompt='Pilih: ' + ', '.join(opsi), showInputMessage=True)
+                            errorTitle='Isian tidak tersedia di aplikasi', error=('Pilih salah satu: ' + ringkas)[:255],
+                            promptTitle=k['label'][:32], prompt=('Pilih: ' + ringkas)[:255], showInputMessage=True)
         col = get_column_letter(i)
         dv.add(f'{col}{baris_awal}:{col}{baris_awal + BARIS_VALIDASI - 1}')
         ws.add_data_validation(dv)
@@ -104,7 +143,8 @@ def keterangan_singkat(k: Dict[str, Any]) -> str:
     """Teks pendek untuk baris keterangan di bawah judul kolom."""
     aturan, _, contoh = petunjuk_kolom(k)
     if aturan == 'pilihan':
-        teks = 'Pilih: ' + ' / '.join(pilihan_kolom(k))
+        opsi = pilihan_kolom(k)
+        teks = ('Pilih: ' + ' / '.join(opsi)) if len(opsi) <= 6 else f'Pilih dari dropdown ({len(opsi)} pilihan, lihat sheet {SHEET_PILIHAN})'
     else:
         teks = KETERANGAN_SINGKAT[aturan]
     return f'{teks} (mis. {contoh})' if contoh and aturan != 'pilihan' else teks
@@ -136,10 +176,12 @@ def buat_template_data_master(jenis: str):
     for i, k in enumerate(kolom, 1):
         _, petunjuk, contoh = petunjuk_kolom(k)
         teks = petunjuk + (f' Contoh: {contoh}' if contoh else '')
-        ws.cell(row=1, column=i).comment = Comment(teks, 'MATSANDATAMA', width=260, height=110)
+        tinggi = 110 if len(teks) < 200 else min(420, 60 + len(teks) // 2)
+        ws.cell(row=1, column=i).comment = Comment(teks, 'MATSANDATAMA', width=300, height=tinggi)
 
     tambah_baris_keterangan(ws, kolom)
-    tambah_validasi_pilihan(ws, kolom, baris_awal=3)
+    rentang = tambah_sheet_pilihan(wb, kolom)
+    tambah_validasi_pilihan(ws, kolom, baris_awal=3, rentang=rentang)
 
     p = wb.create_sheet('Petunjuk')
     p['A1'] = f"Petunjuk pengisian template {sk['sheet']}"
@@ -149,7 +191,9 @@ def buat_template_data_master(jenis: str):
         f"(diawali {PENANDA_KETERANGAN}, dilewati saat impor). Jangan mengubah, menghapus, atau menukar urutan baris judul.",
         '2. Kolom identitas terkunci (oranye) dipakai mencocokkan baris dengan data di aplikasi — jangan diubah.',
         '3. Kolom yang dikosongkan tidak mengubah data tersimpan (mode bawaan impor: hanya mengisi yang kosong).',
-        '4. Simpan tetap dalam format .xlsx lalu unggah lewat tombol Import.',
+        f'4. Kolom pilihan harus diisi dengan salah satu isian yang tersedia di aplikasi (pakai dropdown di sel, daftar lengkapnya '
+        f'di sheet "{SHEET_PILIHAN}"). Isian lain ditolak saat impor dan dilaporkan per baris.',
+        '5. Simpan tetap dalam format .xlsx lalu unggah lewat tombol Import.',
     ]
     for r, t in enumerate(umum, 2):
         p.cell(row=r, column=1, value=t)
@@ -169,6 +213,7 @@ def buat_template_data_master(jenis: str):
     for c, w in zip('ABCDEF', (8, 45, 18, 12, 70, 16)):
         p.column_dimensions[c].width = w
     p.freeze_panes = p.cell(row=hr + 1, column=1)
+    wb.move_sheet(SHEET_PILIHAN, offset=len(wb.sheetnames) - 1 - wb.sheetnames.index(SHEET_PILIHAN))  # urutan: data, Petunjuk, Daftar Pilihan
     wb.active = 0
     return wb
 

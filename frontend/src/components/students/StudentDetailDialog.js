@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import WilayahBertingkat from '@/components/wilayah/WilayahBertingkat';
+import {
+  AGAMA_OPTIONS, CITA_CITA_OPTIONS, HOBI_OPTIONS, HUBUNGAN_WALI_OPTIONS, IMUNISASI_OPTIONS, JARAK_TEMPUH_OPTIONS,
+  KEWARGANEGARAAN_OPTIONS, PEKERJAAN_OPTIONS, PEMBIAYA_OPTIONS, PENDIDIKAN_OPTIONS, PENGHASILAN_OPTIONS, PRA_SEKOLAH_OPTIONS,
+  STATUS_HIDUP, STATUS_RUMAH, STATUS_TEMPAT_TINGGAL_SISWA, TRANSPORTASI_SISWA, WAKTU_TEMPUH_OPTIONS,
+} from '@/lib/pilihanDataMaster'; // pilihan sama dengan template & validasi impor
+
 import { KOLOM_ALAMAT_SISWA, alamatDariNilai, nilaiDariAlamat, ringkasAlamat } from '@/lib/wilayah';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -28,17 +34,6 @@ function fileUrl(u) {
   return `${BACKEND_URL}${u}`;
 }
 
-const AGAMA_OPTIONS = ['Islam', 'Kristen Protestan', 'Katolik', 'Hindu', 'Buddha', 'Kong hu cu'];
-const CITA_CITA_OPTIONS = ['PNS', 'TNI/Polri', 'Guru/Dosen', 'Dokter', 'Politikus', 'Wiraswasta', 'Seniman/Artis', 'Ilmuwan', 'Agamawan', 'Lainnya'];
-const HOBI_OPTIONS = ['Olahraga', 'Kesenian', 'Membaca', 'Menulis', 'Jalan-jalan', 'Lainnya'];
-const PEMBIAYA_OPTIONS = ['Orang Tua', 'Wali/Orang Tua Asuh', 'Tanggungan Sendiri', 'Lainnya'];
-const PRA_SEKOLAH_OPTIONS = ['Pernah TK/RA', 'Pernah PAUD'];
-const IMUNISASI_OPTIONS = ['Hepatitis B', 'BCG', 'DPT', 'Polio', 'Campak', 'Covid'];
-const PENDIDIKAN_OPTIONS = ['SD/Sederajat', 'SMP/Sederajat', 'SMA/Sederajat', 'D1', 'D2', 'D3', 'D4/S1', 'S2', 'S3', 'Tidak Sekolah', 'Lainnya'];
-const PEKERJAAN_OPTIONS = ['Tidak Bekerja', 'Pensiunan', 'PNS', 'TNI/Polri', 'Guru/Dosen', 'Pegawai Swasta', 'Wiraswasta', 'Pengacara/Jaksa/Hakim/Notaris', 'Seniman/Pelukis/Artis/Sejenis', 'Dokter/Bidan/Perawat', 'Pilot/Pramugara', 'Pedagang', 'Petani/Peternak', 'Nelayan', 'Buruh (Tani/Pabrik/Bangunan)', 'Sopir/Masinis/Kondektur/Tukang Ojek', 'Politikus', 'Lainnya'];
-const PENGHASILAN_OPTIONS = ['Di bawah 800.000', '800.001-1.200.000', '1.200.001-1.800.000', '1.800.001-2.500.000', '2.500.001-3.500.000', '3.500.001-4.800.000', '4.800.001-6.500.000', '6.500.001-10.000.000', '10.000.001-20.000.000', 'Lebih dari 20.000.000'];
-const STATUS_RUMAH = ['Milik Sendiri', 'Rumah Orang Tua', 'Rumah Saudara/Kerabat', 'Rumah Dinas', 'Sewa/Kontrak', 'Lainnya'];
-const STATUS_HIDUP = ['Masih Hidup', 'Sudah Meninggal', 'Tidak Diketahui'];
 
 const BEASISWA_KATEGORI_OPTIONS = ['Beasiswa Lainnya', 'Beasiswa Berprestasi', 'Beasiswa Kurang Mampu/Miskin', 'Beasiswa Miskin dan Berprestasi'];
 const INSTANSI_PEMBERI_OPTIONS = ['Kementerian Agama', 'Kementerian Lain', 'Pemerintah Daerah', 'BUMN', 'BUMD', 'Instansi Swasta', 'Yayasan', 'Perorangan', 'Lainnya'];
@@ -526,7 +521,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                 <SelectRow label="Jenis Kelamin" value={studentData?.gender === 'L' ? 'Laki-laki' : studentData?.gender === 'P' ? 'Perempuan' : ''} options={['Laki-laki', 'Perempuan']} onChange={(v) => setStudentData({ ...studentData, gender: v === 'Laki-laki' ? 'L' : 'P' })} disabled={!editMode || !canEdit} />
                 <InputRow label="Tempat Lahir" value={studentData?.birth_place} onChange={(v) => setStudentData({ ...studentData, birth_place: v })} disabled={!editMode} readOnly={!canEdit} />
                 <InputRow label="Tanggal Lahir" value={studentData?.birth_date} onChange={(v) => setStudentData({ ...studentData, birth_date: v })} disabled={!editMode} readOnly={!canEdit} type="date" mono />
-                <SelectRow label="Warga Negara *" value={detail.citizenship} options={['WNI', 'WNA']} onChange={(v) => setField('citizenship', v)} disabled={!editMode} testid="citizenship" />
+                <SelectRow label="Warga Negara *" value={detail.citizenship} options={KEWARGANEGARAAN_OPTIONS} onChange={(v) => setField('citizenship', v)} disabled={!editMode} testid="citizenship" />
                 {detail.citizenship === 'WNI' && (
                   <InputRow label="NIK (16 digit) *" value={detail.nik} onChange={(v) => {
                     const next = String(v || '').replace(/\D/g, '').slice(0, 16);
@@ -592,12 +587,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                 hasSameAsAyah isWali testidPrefix="alamat-wali" isRequired={detail.wali?.hubungan_wali === 'Lainnya'} />
               <Section title="Alamat & Akses Siswa ke Madrasah" icon={MapPin}>
                 <FormRow label="Alamat (basic)" value={studentData?.address} readOnly />
-                <SelectRow label="Status Tempat Tinggal *" value={detail.alamat_siswa?.status_tempat_tinggal} options={['Tinggal dengan Ayah Kandung', 'Tinggal dengan Ibu Kandung', 'Tinggal dengan Wali', 'Ikut Saudara/Kerabat', 'Asrama Madrasah', 'Kontrak/Kost', 'Tinggal di Asrama Pesantren', 'Panti Asuhan', 'Rumah Singgah', 'Lainnya']}
+                <SelectRow label="Status Tempat Tinggal *" value={detail.alamat_siswa?.status_tempat_tinggal} options={STATUS_TEMPAT_TINGGAL_SISWA}
                   onChange={(v) => setField('alamat_siswa.status_tempat_tinggal', v)} disabled={!editMode} />
                 <DomisiliSiswa detail={detail} setField={setField} setFieldsAt={setFieldsAt} disabled={!editMode} />
-                <SelectRow label="Jarak Tempuh *" value={detail.alamat_siswa?.jarak_tempuh} options={['Kurang dari 5 km', '5-10 km', '11-20 km', '21-30 km', 'Lebih dari 30 km']} onChange={(v) => setField('alamat_siswa.jarak_tempuh', v)} disabled={!editMode} />
-                <SelectRow label="Transportasi *" value={detail.alamat_siswa?.transportasi} options={['Jalan Kaki', 'Sepeda', 'Sepeda Motor', 'Mobil Pribadi', 'Antar Jemput Sekolah', 'Angkutan Umum', 'Perahu/Sampan', 'Kendaraan Pribadi', 'Kereta Api', 'Ojek', 'Andong/Bendi/Sado/Dokar/Delman/Becak', 'Lainnya']} onChange={(v) => setField('alamat_siswa.transportasi', v)} disabled={!editMode} />
-                <SelectRow label="Waktu Tempuh *" value={detail.alamat_siswa?.waktu_tempuh} options={['1-10 menit', '10-19 menit', '20-29 menit', '30-39 menit', '1-2 jam', 'Lebih dari 2 jam']} onChange={(v) => setField('alamat_siswa.waktu_tempuh', v)} disabled={!editMode} />
+                <SelectRow label="Jarak Tempuh *" value={detail.alamat_siswa?.jarak_tempuh} options={JARAK_TEMPUH_OPTIONS} onChange={(v) => setField('alamat_siswa.jarak_tempuh', v)} disabled={!editMode} />
+                <SelectRow label="Transportasi *" value={detail.alamat_siswa?.transportasi} options={TRANSPORTASI_SISWA} onChange={(v) => setField('alamat_siswa.transportasi', v)} disabled={!editMode} />
+                <SelectRow label="Waktu Tempuh *" value={detail.alamat_siswa?.waktu_tempuh} options={WAKTU_TEMPUH_OPTIONS} onChange={(v) => setField('alamat_siswa.waktu_tempuh', v)} disabled={!editMode} />
               </Section>
             </TabsContent>
 
@@ -1110,13 +1105,13 @@ function ParentSection({ title, data, setField, disabled, isWali = false, testid
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {isWali && (
-            <SelectRow label="Hubungan Wali" value={data.hubungan_wali} options={['Sama dengan ayah kandung', 'Sama dengan ibu kandung', 'Lainnya']} onChange={(v) => setField('hubungan_wali', v)} disabled={disabled} testid={`${testidPrefix}-hubungan`} />
+            <SelectRow label="Hubungan Wali" value={data.hubungan_wali} options={HUBUNGAN_WALI_OPTIONS} onChange={(v) => setField('hubungan_wali', v)} disabled={disabled} testid={`${testidPrefix}-hubungan`} />
           )}
           <InputRow label={req('Nama Lengkap')} value={data.nama} onChange={(v) => setField('nama', v)} disabled={disabled} />
           <SelectRow label={req('Status')} value={data.status} options={STATUS_HIDUP} onChange={(v) => setField('status', v)} disabled={disabled} />
           {!isDead && (
             <>
-              <SelectRow label={req('Kewarganegaraan')} value={data.citizenship} options={['WNI', 'WNA']} onChange={(v) => setField('citizenship', v)} disabled={disabled} />
+              <SelectRow label={req('Kewarganegaraan')} value={data.citizenship} options={KEWARGANEGARAAN_OPTIONS} onChange={(v) => setField('citizenship', v)} disabled={disabled} />
               {data.citizenship === 'WNI' && (
                 <InputRow label={req('NIK (16 digit)')} value={data.nik} onChange={(v) => setField('nik', v)} disabled={disabled} mono maxLength={16} />
               )}
@@ -1212,7 +1207,7 @@ function AddressSection({ title, data, setField, setFields, disabled, hasSameAsA
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {isWali && (
-            <SelectRow label="Status Wali" value={data.status_wali} options={['Sama dengan ayah kandung', 'Sama dengan ibu kandung', 'Lainnya']} onChange={(v) => setField('status_wali', v)} disabled={disabled} />
+            <SelectRow label="Status Wali" value={data.status_wali} options={HUBUNGAN_WALI_OPTIONS} onChange={(v) => setField('status_wali', v)} disabled={disabled} />
           )}
           {hasSameAsAyah && (
             <CheckboxRow label="Sama dengan alamat ayah kandung" checked={data.sama_dengan_ayah} onChange={(v) => setField('sama_dengan_ayah', v)} disabled={disabled} />

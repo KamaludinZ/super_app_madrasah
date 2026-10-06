@@ -281,7 +281,7 @@ def _nilai_tersimpan(kolom: Dict[str, Any], user: Dict[str, Any], detail: Option
 def ubah_nilai_impor(kolom: Dict[str, Any], teks: Any) -> Any:
     """Teks sel -> nilai tersimpan, dengan validasi. None = sel kosong (tidak mengubah apa pun).
     Melempar ValueError berisi pesan berbahasa Indonesia bila isi tidak valid."""
-    from data_master_excel import PILIHAN_GTK, normalisasi_pilihan, parse_nilai
+    from data_master_excel import PILIHAN_GTK, PILIHAN_SISWA, normalisasi_pilihan, normalisasi_pilihan_siswa, parse_nilai
     nilai = parse_nilai(kolom, teks)
     if nilai is None:
         return None
@@ -293,6 +293,15 @@ def ubah_nilai_impor(kolom: Dict[str, Any], teks: Any) -> Any:
             nilai = normalisasi_pilihan(field, nilai)
         except ValueError as e:
             raise ValueError(f"{kolom['label']}: {e}")
+    # Pilihan Data Siswa: harus salah satu pilihan di form aplikasi; disimpan dengan ejaan baku.
+    if field in PILIHAN_SISWA and kolom['path'].startswith('detail.'):
+        try:
+            if isinstance(nilai, list):
+                nilai = [normalisasi_pilihan_siswa(field, x) for x in nilai]
+            elif isinstance(nilai, str):
+                nilai = normalisasi_pilihan_siswa(field, nilai)
+        except ValueError as e:
+            raise ValueError(f"{kolom['label']}: \"{teks}\" tidak dikenal — {e}")
     if field in FIELD_16_DIGIT and isinstance(nilai, str):
         digit = re.sub(r'\D', '', nilai)
         if len(digit) != 16:

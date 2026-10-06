@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Download, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import PratinjauKolom from './PratinjauKolom';
 import LegendaPengisian, { aturanPengisian } from './LegendaPengisian';
+import { labelOpsi, opsiKolom } from '@/lib/pilihanDataMaster';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -35,7 +36,9 @@ export function barisPetunjuk(kolom, sheet) {
     ...(a.tanggal.length ? [[`3. Tanggal ditulis TAHUN-BULAN-TANGGAL (mis. 2012-05-10): ${daftar(a.tanggal)}.`]] : []),
     ...(a.yaTidak.length ? [[`- Isi "Ya" atau "Tidak": ${daftar(a.yaTidak)}.`]] : []),
     ...(a.daftar.length ? [[`- Beberapa nilai dipisah titik koma (mis. BCG; Polio): ${daftar(a.daftar)}.`]] : []),
-    ...(a.pilihan.length ? [[`- Isi salah satu kode di dalam kurung pada judul kolom: ${daftar(a.pilihan)}.`]] : []),
+    ...(a.pilihan.length ? [['- Kolom pilihan diisi salah satu isian yang tersedia di aplikasi (isian lain ditolak saat impor):'],
+      ...a.pilihan.map((k) => [`   • ${k.label}: ${labelOpsi(k).join(' / ')}`])] : []),
+    ...a.daftar.filter((k) => opsiKolom(k).length).map((k) => [`   • ${k.label} (boleh lebih dari satu, pisahkan ;): ${opsiKolom(k).join(' / ')}`]),
     ['- Nomor (NIK, KK, HP, NISN/NIP) ditulis lengkap termasuk angka 0 di depan.'],
     ['- Kolom yang dikosongkan tidak mengubah data tersimpan (mode bawaan impor: hanya mengisi yang kosong).'],
   ];
@@ -50,15 +53,17 @@ export function barisKeterangan(kolom) {
   const jenis = {};
   Object.entries(a).forEach(([aturan, daftar]) => daftar.forEach((k) => { jenis[k.key] = aturan; }));
   const contoh = { tanggal: '2012-05-10', yaTidak: 'Ya', daftar: 'BCG; Polio' };
+  // contoh daftar dari isian aplikasi bila ada (sama dengan backend petunjuk_kolom)
   const dasar = { kunci: 'Penanda baris - jangan diubah', tanggal: 'Format TAHUN-BULAN-TANGGAL', yaTidak: 'Ya / Tidak', daftar: 'Pisahkan dengan ;', teks: 'Teks bebas' };
   return kolom.map((k, i) => {
     const aturan = jenis[k.key];
     let teks;
     if (aturan === 'pilihan') {
-      const m = k.label.match(/\(([^)]*\/[^)]*)\)\s*$/);
-      teks = `Pilih: ${(m ? m[1].split('/') : []).map((x) => x.trim()).join(' / ')}`;
+      const opsi = opsiKolom(k);
+      teks = opsi.length <= 6 ? `Pilih: ${opsi.join(' / ')}` : `Pilih dari dropdown (${opsi.length} pilihan, lihat sheet Daftar Pilihan)`;
     } else {
-      teks = dasar[aturan] + (contoh[aturan] ? ` (mis. ${contoh[aturan]})` : '');
+      const ct = aturan === 'daftar' && opsiKolom(k).length ? opsiKolom(k).slice(0, 2).join('; ') : contoh[aturan];
+      teks = dasar[aturan] + (ct ? ` (mis. ${ct})` : '');
     }
     return i === 0 ? `${PENANDA_KETERANGAN} ${teks}` : teks;
   });
