@@ -19,6 +19,8 @@ from models_phase4 import (
     StudentAchievementModel,
 )
 
+from routers._shared import sembunyikan_siswa_nonaktif
+
 router = APIRouter()
 
 
@@ -52,6 +54,7 @@ async def list_achievements(student_id: Optional[str] = None,
     if is_pure_siswa and not is_admin and not is_wk:
         if not student_id and not holder_id:
             q['$or'] = [{'student_id': user['id']}, {'holder_id': user['id']}]
+    await sembunyikan_siswa_nonaktif(q, 'student_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.achievements.find(q, {'_id': 0}).sort([('year', -1), ('date', -1)]).to_list(1000)
     enriched = []
     for a in items:

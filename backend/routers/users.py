@@ -638,6 +638,12 @@ async def create_user(req: UserCreateRequest, request: Request, user: Dict = Dep
     return serialize_doc(doc)
 
 
+def _riwayat_mutasi(u: Dict) -> Dict:
+    """Salinan status mutasi yang sedang berlaku (disimpan ke riwayat_mutasi saat diakhiri)."""
+    return {k: u.get(k) for k in ('mutation_type', 'mutation_date', 'mutation_note', 'mutation_ay_id', 'mutation_keluar_type',
+                                  'mutation_destination', 'mutation_document_url')}
+
+
 @router.put("/users/{uid}")
 async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: Dict = Depends(require_role('admin'))):
     # Build update dict, keeping empty strings for username (to allow clearing/setting)
@@ -661,6 +667,15 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
     # Nama & gelar GTK: full_name disusun otomatis dari nama tanpa gelar + gelar depan/belakang.
     if any(k in update for k in FIELD_NAMA_GELAR):
         lengkapi_nama(update, await db.users.find_one({'id': uid}, {'_id': 0, **{k: 1 for k in FIELD_NAMA_GELAR}}))
+
+    # Mengaktifkan kembali siswa mutasi keluar: status mutasi diakhiri (disimpan di riwayat_mutasi) agar
+    # siswa beserta seluruh datanya tampil lagi di daftar siswa aktif.
+    aktifkan_lagi = None
+    if update.get('is_active') is True:
+        lama = await db.users.find_one({'id': uid}, {'_id': 0})
+        if lama and lama.get('mutation_type') == 'keluar':
+            aktifkan_lagi = {**_riwayat_mutasi(lama), 'diakhiri_pada': datetime.utcnow().isoformat()}
+            update['mutation_type'] = None
 
     # Alamat tempat tinggal: kode wilayah divalidasi & nama tingkat diselaraskan dengan master wilayah.
     try:
@@ -690,7 +705,7 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
     password_reset_by_admin = 'new_password' in update
     if password_reset_by_admin:
         update['password_hash'] = hash_password(update.pop('new_password'))
-    res = await db.users.update_one({'id': uid}, {'$set': update})
+    res = await db.users.update_one({'id': uid}, {'$set': update, **({'$push': {'riwayat_mutasi': aktifkan_lagi}} if aktifkan_lagi else {})})
     if res.matched_count == 0:
         raise HTTPException(404, "User tidak ditemukan")
     if password_reset_by_admin or update.get('is_active') is False:
@@ -774,7 +789,12 @@ async def set_student_mutation(uid: str, payload: Dict, request: Request,
         update['is_active'] = False
     elif mtype == 'masuk':
         update['is_active'] = True
-    await db.users.update_one({'id': uid}, {'$set': update})
+    elif existing.get('mutation_type') == 'keluar':
+        update['is_active'] = True  # status mutasi keluar dihapus = siswa diaktifkan kembali
+    tambahan = {}
+    if existing.get('mutation_type') == 'keluar' and mtype != 'keluar':
+        tambahan['$push'] = {'riwayat_mutasi': {**_riwayat_mutasi(existing), 'diakhiri_pada': datetime.utcnow().isoformat()}}
+    await db.users.update_one({'id': uid}, {'$set': update, **tambahan})
     await log_audit(user, 'set_mutation', 'user', uid, details=update, request=request)
     doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
     return serialize_doc(doc)

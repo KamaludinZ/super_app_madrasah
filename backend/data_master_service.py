@@ -37,7 +37,7 @@ async def siswa_per_tingkat(db, tingkat: Optional[int], with_detail: bool = True
     - tingkat diisi: hanya siswa di kelas tahun ajaran aktif dengan grade tersebut.
     - keseluruhan: semua siswa aktif, termasuk yang kelasnya belum dipindah ke tahun ajaran aktif.
     """
-    q: Dict[str, Any] = {'roles': 'siswa', 'mutation_type': {'$ne': 'keluar'}}
+    q: Dict[str, Any] = {'roles': 'siswa', 'mutation_type': {'$ne': 'keluar'}, 'is_active': {'$ne': False}}
     if tingkat is not None:
         q['student_class_id'] = {'$in': [c['id'] for c in await kelas_per_tingkat(db, tingkat)]}
     users = await db.users.find(q, {'_id': 0, 'password_hash': 0}).to_list(5000)

@@ -270,3 +270,29 @@ async def user_can_view_class(user: Dict, class_id: str) -> bool:
         if sched:
             return True
     return False
+
+
+
+# ============================================================
+# SISWA AKTIF — satu definisi untuk semua daftar siswa & data per siswa
+# ============================================================
+# Siswa aktif = bukan mutasi keluar dan akun tidak dinonaktifkan. Data siswa nonaktif TIDAK dihapus;
+# hanya disembunyikan dari daftar dan muncul kembali setelah siswa diaktifkan lagi (menu Mutasi / Pengguna).
+FILTER_SISWA_AKTIF: Dict[str, Any] = {'mutation_type': {'$ne': 'keluar'}, 'is_active': {'$ne': False}}
+
+
+async def id_siswa_nonaktif(database=None) -> List[str]:
+    """ID siswa yang tidak aktif (mutasi keluar atau akun nonaktif)."""
+    database = database if database is not None else db
+    return [u['id'] async for u in database.users.find(
+        {'roles': 'siswa', '$or': [{'mutation_type': 'keluar'}, {'is_active': False}]}, {'_id': 0, 'id': 1}) if u.get('id')]
+
+
+async def sembunyikan_siswa_nonaktif(query: Dict[str, Any], field: str, database=None) -> Dict[str, Any]:
+    """Tambahkan syarat ke query daftar data per siswa agar data milik siswa nonaktif tidak tampil.
+    Bila query sudah meminta siswa tertentu (field terisi), query tidak diubah."""
+    if field not in query:
+        nonaktif = await id_siswa_nonaktif(database)
+        if nonaktif:
+            query[field] = {'$nin': nonaktif}
+    return query

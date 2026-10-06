@@ -33,7 +33,7 @@ from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, 
 from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
-from routers._shared import ADMIN_DATA_MASTER, compute_completeness, compute_completeness_siswa, user_can_view_class
+from routers._shared import ADMIN_DATA_MASTER, FILTER_SISWA_AKTIF, compute_completeness, compute_completeness_siswa, user_can_view_class
 
 router = APIRouter()
 
@@ -44,10 +44,13 @@ router = APIRouter()
 @router.get("/students")
 async def list_students(
     class_id: Optional[str] = None,
-    exclude_mutation: bool = False,
+    exclude_mutation: bool = True,
+    include_inactive: bool = False,
     user: Dict = Depends(get_current_user)
 ):
-    """Get list of students. Admin sees all; wali kelas sees own class; siswa sees self only."""
+    """Daftar siswa. Admin melihat semua kelas; wali kelas kelasnya; siswa dirinya sendiri.
+    Bawaan hanya siswa AKTIF (bukan mutasi keluar & akun aktif); include_inactive=true memuat semua
+    (data siswa nonaktif tetap tersimpan). exclude_mutation dipertahankan untuk kompatibilitas."""
     if 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1:
         me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
         return [serialize_doc(me)] if me else []
@@ -66,9 +69,8 @@ async def list_students(
             q['student_class_id'] = cls['id']
         else:
             return []
-    if exclude_mutation:
-        # Exclude students with mutation_type 'keluar'
-        q['mutation_type'] = {'$ne': 'keluar'}
+    if not include_inactive:
+        q.update(FILTER_SISWA_AKTIF)
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
     student_ids = [s['id'] for s in items if s.get('id')]
     details = await db.student_details.find({'student_id': {'$in': student_ids}}, {'_id': 0}).to_list(2000)

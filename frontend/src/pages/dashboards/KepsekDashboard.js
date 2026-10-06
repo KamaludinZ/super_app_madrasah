@@ -49,7 +49,7 @@ export default function KepsekDashboard() {
         api.get('/tatib/stats/summary'),
         api.get('/bk/laporan/summary'),
         api.get('/uks/laporan/rekap-kunjungan', { params: { period: 'bulan', bulan } }),
-        api.get('/students'),
+        api.get('/students', { params: { exclude_mutation: true } }), // siswa aktif saja (tanpa mutasi keluar)
         api.get('/classes'),
       ]);
       setKehadiran(kehadiranRes.data);

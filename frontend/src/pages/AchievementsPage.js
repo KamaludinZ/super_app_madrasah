@@ -254,7 +254,8 @@ export default function AchievementsPage() {
             // Admin uses /users endpoint for all students and staff
             const usersResp = await api.get('/users');
             const all = usersResp.data || [];
-            setStudents(all.filter((u) => (u.roles || []).includes('siswa')));
+            // hanya siswa aktif (mutasi keluar / akun nonaktif tidak dipilih; datanya tetap tersimpan)
+            setStudents(all.filter((u) => (u.roles || []).includes('siswa') && u.is_active !== false && u.mutation_type !== 'keluar'));
             setStaff(all.filter((u) => (u.roles || []).some((r) => r !== 'siswa')));
           }
         }

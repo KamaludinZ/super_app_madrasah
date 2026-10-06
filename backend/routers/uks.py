@@ -24,6 +24,8 @@ from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
 from ckg_kolom import KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, kolom_template_ckg, lengkapi_identitas_ckg, pemeriksaan_lain
 from core import db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
+from routers._shared import sembunyikan_siswa_nonaktif
+
 router = APIRouter()
 
 UKS_ROLES = ('admin', 'unit_kesehatan')
@@ -623,7 +625,7 @@ async def _restore_obat_stock(obat_id: str, jumlah: int):
 async def list_warga_madrasah(search: Optional[str] = None, role: Optional[str] = None, user: Dict = Depends(require_role(*UKS_ROLES))):
     """Minimal lookup of active users for the patient picker, optionally filtered by role
     (e.g. role=guru or role=tenaga_kependidikan for the GTK patient-type selector)."""
-    query = {'is_active': {'$ne': False}}
+    query = {'is_active': {'$ne': False}, 'mutation_type': {'$ne': 'keluar'}}
     if role:
         query['roles'] = role
     if search:
@@ -1353,6 +1355,7 @@ async def list_kunjungan(
             date_query['$lte'] = end_date
         query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'pasien_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.uks_kunjungan.find(query, {'_id': 0}).sort(KUNJUNGAN_SORT_TERBARU).to_list(5000)
     return [serialize_doc(_with_kunjungan_defaults(i)) for i in items]
 
@@ -2564,6 +2567,7 @@ async def list_ckg(
             date_query['$lte'] = end_date
         query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'pasien_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.uks_ckg.find(query, {'_id': 0}).sort('tanggal', -1).to_list(5000)
     settings = await get_settings()
     # Petakan ke kolom baku CKG: identitas pasien terkini (NIK, tgl lahir, JK, alamat, kelas) & nama sekolah.
@@ -2915,6 +2919,7 @@ async def list_imunisasi(
             date_query['$lte'] = end_date
         query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'pasien_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.uks_imunisasi.find(query, {'_id': 0}).sort('tanggal', -1).to_list(5000)
     return [serialize_doc(i) for i in items]
 

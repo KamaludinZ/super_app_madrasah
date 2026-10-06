@@ -75,7 +75,8 @@ export default function DataSiswaPage() {
   const loadStudents = async (classId) => {
     setLoading(true);
     try {
-      const params = {};
+      // Data Siswa hanya menampilkan siswa aktif (termasuk mutasi masuk); mutasi keluar ada di menu Mutasi.
+      const params = { exclude_mutation: true };
       if (classId && classId !== 'all') params.class_id = classId;
       const { data } = await api.get('/students', { params });
       setStudents(data || []);
@@ -199,7 +200,7 @@ export default function DataSiswaPage() {
         <StatBox icon={Users} label="Total" value={filtered.length} color="bg-slate-50 border-slate-200 text-slate-700" />
         <StatBox icon={UserCheck} label="Laki-laki" value={filtered.filter((s) => s.gender === 'L').length} color="bg-blue-50 border-blue-200 text-blue-700" />
         <StatBox icon={UserCheck} label="Perempuan" value={filtered.filter((s) => s.gender === 'P').length} color="bg-rose-50 border-rose-200 text-rose-700" />
-        <StatBox icon={UserX} label="Mutasi" value={filtered.filter((s) => s.mutation_type).length} color="bg-amber-50 border-amber-200 text-amber-700" />
+        <StatBox icon={UserX} label="Mutasi Masuk" value={filtered.filter((s) => s.mutation_type === 'masuk').length} color="bg-amber-50 border-amber-200 text-amber-700" />
       </div>
 
       {/* Per-grade stat overview */}

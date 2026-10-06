@@ -11,6 +11,8 @@ from pcl_bank import PCL_CATEGORIES, PCL_ESSAY_QUESTIONS, PCL_PETUNJUK, pcl_tota
 from ai_client import generate_text, AIError
 from auth_utils import WIB_TZ
 
+from routers._shared import sembunyikan_siswa_nonaktif
+
 router = APIRouter()
 
 BK_ROLES = ('admin', 'guru_bk')
@@ -154,6 +156,7 @@ async def list_kunjungan(
             date_query['$lte'] = end_date
         query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.bk_kunjungan.find(query, {'_id': 0}).sort('tanggal', -1).to_list(2000)
     return [serialize_doc(i) for i in items]
 
@@ -367,6 +370,7 @@ async def list_clkb_submissions(
             date_query['$lte'] = end_date
         query['submitted_at'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.bk_clkb_submissions.find(query, {'_id': 0}).sort('submitted_at', -1).to_list(2000)
     return [serialize_doc(i) for i in items]
 
@@ -605,6 +609,7 @@ async def list_pcl_submissions(
             date_query['$lte'] = end_date
         query['submitted_at'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.bk_pcl_submissions.find(query, {'_id': 0}).sort('submitted_at', -1).to_list(2000)
     return [serialize_doc(i) for i in items]
 
@@ -732,6 +737,7 @@ async def list_home_visit(
             date_query['$lte'] = end_date
         query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.bk_home_visit.find(query, {'_id': 0}).sort('tanggal', -1).to_list(2000)
     return [serialize_doc(i) for i in items]
 
@@ -846,6 +852,7 @@ async def list_sekolah_lanjutan(
     if jenjang_tujuan:
         query['jenjang_tujuan'] = jenjang_tujuan
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.bk_sekolah_lanjutan.find(query, {'_id': 0}).sort('created_at', -1).to_list(2000)
     return [serialize_doc(i) for i in items]
 

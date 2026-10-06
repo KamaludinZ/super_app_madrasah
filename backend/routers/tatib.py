@@ -9,6 +9,8 @@ import io
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit
 
+from routers._shared import sembunyikan_siswa_nonaktif
+
 router = APIRouter()
 
 
@@ -462,6 +464,7 @@ async def list_penanganan(
         if date_query:
             query['tanggal'] = date_query
 
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.tatib_penanganan.find(query, {'_id': 0}).sort('tanggal', -1).to_list(1000)
     return [serialize_doc(i) for i in items]
 
