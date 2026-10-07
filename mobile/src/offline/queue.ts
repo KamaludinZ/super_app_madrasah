@@ -21,7 +21,7 @@ export type QueueMeta = {
   end_time?: string;
   is_substitute?: boolean;
   original_teacher_name?: string | null;
-  attendance_summary?: { hadir: number; sakit: number; izin: number; alpha: number };
+  attendance_summary?: { hadir: number; sakit: number; izin: number; alpa: number };
 };
 
 export type QueueItem = {

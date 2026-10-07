@@ -59,6 +59,8 @@ def _format_absensi_text(journal: Dict[str, Any], student_name_map: Dict[str, st
     absent_lines: List[str] = []
     for item in details:
         status = (item.get("status") or "").lower()
+        if status == "alpha":  # data lama (jurnal piket) memakai ejaan "alpha"
+            status = "alpa"
         if status in ("alpa", "izin", "sakit"):
             sid = item.get("student_id")
             sname = student_name_map.get(sid, sid or "-")

@@ -20,7 +20,7 @@ import httpx
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from jose import ExpiredSignatureError, JWTError, jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 
 from auth_utils import JWT_SECRET
@@ -41,7 +41,8 @@ DEVICES = 'mobile_devices'
 EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
 EXPO_BATCH = 100
 WEEKDAY_KEYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']
-ATTENDANCE_STATUSES = ('hadir', 'sakit', 'izin', 'alpha')
+# Ejaan baku status absensi = 'alpa' (sama dengan scan QR web & ekspor jurnal); 'alpha' diterima lalu dinormalkan.
+ATTENDANCE_STATUSES = ('hadir', 'sakit', 'izin', 'alpa')
 
 PERMIT_TYPE = 'offline_journal_permit'
 # Kunci izin offline diturunkan dari JWT_SECRET agar izin tidak bisa dipakai sebagai token login.
@@ -346,7 +347,12 @@ async def offline_permits(
 class OfflineAttendance(BaseModel):
     student_id: str
     student_name: Optional[str] = None
-    status: str = Field(pattern='^(hadir|sakit|izin|alpha)$')
+    status: str = Field(pattern='^(hadir|sakit|izin|alpa|alpha)$')
+
+    @field_validator('status')
+    @classmethod
+    def _normalize_status(cls, v: str) -> str:
+        return 'alpa' if v == 'alpha' else v
 
 
 class OfflineJournalIn(BaseModel):
@@ -515,7 +521,7 @@ async def submit_offline_journal_mobile(payload: OfflineJournalIn, request: Requ
         'materi_id': payload.materi_id,
         'catatan': (payload.catatan or '').strip() or None,
         'siswa_hadir': counts['hadir'],
-        'siswa_tidak_hadir': counts['alpha'],
+        'siswa_tidak_hadir': counts['alpa'],
         'siswa_izin': counts['izin'],
         'siswa_sakit': counts['sakit'],
         'started_at': trusted.isoformat(),

@@ -72,7 +72,8 @@ export type ScheduleItem = {
   [k: string]: unknown;
 };
 
-export type AttendanceStatus = 'hadir' | 'sakit' | 'izin' | 'alpha';
+/** Ejaan baku backend: 'alpa' (scan QR, ekspor). */
+export type AttendanceStatus = 'hadir' | 'sakit' | 'izin' | 'alpa';
 
 export type AttendanceDetail = { student_id: string; student_name?: string | null; status: string; note?: string | null };
 

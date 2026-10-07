@@ -12,7 +12,7 @@ from datetime import date as date_cls, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 from core import (
@@ -887,7 +887,8 @@ async def cancel_assignment(assignment_id: str, request: Request,
     return {'ok': True}
 
 
-ATTENDANCE_STATUSES = ('hadir', 'sakit', 'izin', 'alpha')
+# Ejaan baku status absensi = 'alpa' (sama dengan scan QR web & ekspor jurnal); 'alpha' diterima lalu dinormalkan.
+ATTENDANCE_STATUSES = ('hadir', 'sakit', 'izin', 'alpa')
 JOURNAL_GRACE_MINUTES = 15  # sama dengan default validate_schedule
 
 
@@ -918,7 +919,12 @@ async def validate_slot_for_journal(a: Dict) -> Dict:
 class AttendanceRecordIn(BaseModel):
     student_id: str
     student_name: Optional[str] = None
-    status: str = Field(pattern='^(hadir|sakit|izin|alpha)$')
+    status: str = Field(pattern='^(hadir|sakit|izin|alpa|alpha)$')
+
+    @field_validator('status')
+    @classmethod
+    def _normalize_status(cls, v: str) -> str:
+        return 'alpa' if v == 'alpha' else v
 
 
 class SubstituteJournalIn(BaseModel):
@@ -968,7 +974,7 @@ async def fill_substitute_journal(payload: SubstituteJournalIn, request: Request
         'materi': materi,
         'catatan': (payload.catatan or '').strip() or None,
         'siswa_hadir': counts['hadir'],
-        'siswa_tidak_hadir': counts['alpha'],
+        'siswa_tidak_hadir': counts['alpa'],
         'siswa_izin': counts['izin'],
         'siswa_sakit': counts['sakit'],
         'started_at': now,
