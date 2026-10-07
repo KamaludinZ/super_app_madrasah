@@ -1,13 +1,12 @@
-apply plugin: 'com.android.library'
+// Modul native lokal: jam monoton SystemClock.elapsedRealtime() untuk bukti waktu jurnal offline.
+// Pola Expo SDK 57: expo-module-gradle-plugin mengatur compileSdk/minSdk/Kotlin sama dengan modul Expo lain.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
 
 group = 'id.sch.mtsn2kotamalang.superapps.elapsedrealtime'
 version = '1.0.0'
-
-def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
-apply from: expoModulesCorePlugin
-applyKotlinExpoModulesCorePlugin()
-useCoreDependencies()
-useExpoPublishing()
 
 android {
   namespace "id.sch.mtsn2kotamalang.superapps.elapsedrealtime"
@@ -15,7 +14,7 @@ android {
     versionCode 1
     versionName "1.0.0"
   }
-  lintOptions {
+  lint {
     abortOnError false
   }
 }
