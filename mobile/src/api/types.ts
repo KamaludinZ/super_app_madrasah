@@ -320,3 +320,9 @@ export type PiketSchedule = ScheduleItem & {
   teacher_name?: string | null;
   task?: TeacherTask | null;
 };
+
+/** KD/Indikator mapel (GET /indikator?mapel_id&semester_id) — opsional di jurnal. */
+export type Indikator = { id: string; kode?: string | null; nama?: string | null; mapel_id?: string; semester_id?: string };
+
+/** Materi/Pokok Bahasan mapel (GET /materi?mapel_id&semester_id) — opsional di jurnal. */
+export type MateriPokok = { id: string; nama: string; deskripsi?: string | null; indikator_id?: string | null };

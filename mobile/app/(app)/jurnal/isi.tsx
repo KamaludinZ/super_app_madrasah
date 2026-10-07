@@ -15,7 +15,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/endpoints';
 import { errorMessage, isNetworkError } from '@/api/client';
-import type { PiketSchedule, ScheduleItem, Student } from '@/api/types';
+import type { Indikator, MateriPokok, PiketSchedule, ScheduleItem, Student } from '@/api/types';
 import { CacheKeys, getCache } from '@/db/cache';
 import { useCached } from '@/hooks/useCached';
 import { useAuth } from '@/store/auth';
@@ -38,6 +38,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/States';
 import { toast } from '@/components/ui/Toast';
 import { AttendanceList, AttendanceMap, summarize } from '@/components/AttendanceList';
+import { SelectField } from '@/components/ui/SelectField';
 
 type Mode = 'qr' | 'class_token' | 'offline' | 'substitute' | 'original' | 'piket' | 'slot';
 
@@ -67,6 +68,8 @@ export default function IsiJurnalScreen() {
   const [materi, setMateri] = useState('');
   const [catatan, setCatatan] = useState('');
   const [piketNote, setPiketNote] = useState('');
+  const [indikatorId, setIndikatorId] = useState<string | null>(null);
+  const [materiId, setMateriId] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<AttendanceMap>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +104,22 @@ export default function IsiJurnalScreen() {
     () => api.students.byClass(classId!),
     { enabled: !!classId && needsAttendance, staleTime: 10 * 60_000 },
   );
+  // KD/Indikator & Materi/Pokok Bahasan (opsional, sama dengan web) untuk jurnal QR, Token Kelas, dan offline.
+  const subjectId = (slot?.subject_id as string | undefined) || undefined;
+  const semesterId = (slot?.semester_id as string | undefined) || null;
+  const withAkademik = !!subjectId && (mode === 'qr' || mode === 'class_token' || mode === 'offline');
+  const indikator = useCached<Indikator[]>(
+    subjectId ? CacheKeys.indikator(subjectId, semesterId) : 'akademik.none',
+    () => api.akademik.indikator({ mapel_id: subjectId!, semester_id: semesterId }),
+    { enabled: withAkademik, staleTime: 30 * 60_000 },
+  );
+  const materiOpts = useCached<MateriPokok[]>(
+    subjectId ? CacheKeys.materi(subjectId, semesterId) : 'akademik.none.m',
+    () => api.akademik.materi({ mapel_id: subjectId!, semester_id: semesterId }),
+    { enabled: withAkademik, staleTime: 30 * 60_000 },
+  );
+  const akademikIds = { indikator_id: withAkademik ? indikatorId : null, materi_id: withAkademik ? materiId : null };
+
   const studentList = useMemo(
     () => [...(students.data ?? [])].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')),
     [students.data],
@@ -132,6 +151,7 @@ export default function IsiJurnalScreen() {
       ...ev,
       materi: materi.trim(),
       catatan: catatan.trim() || null,
+      ...akademikIds,
       attendance_details: records(),
     }, {
       schedule_id: pm.schedule_id, date: pm.date, class_name: pm.class_name, subject_name: pm.subject_name,
@@ -181,6 +201,7 @@ export default function IsiJurnalScreen() {
             user_lon: draft.location?.lon ?? null,
             materi: materi.trim(),
             catatan: catatan.trim() || null,
+            ...akademikIds,
             siswa_hadir: counts.hadir,
             siswa_sakit: counts.sakit,
             siswa_izin: counts.izin,
@@ -195,6 +216,7 @@ export default function IsiJurnalScreen() {
             user_lon: draft.location?.lon ?? null,
             materi: materi.trim(),
             catatan: catatan.trim() || null,
+            ...akademikIds,
             siswa_hadir: counts.hadir,
             siswa_sakit: counts.sakit,
             siswa_izin: counts.izin,
@@ -282,6 +304,27 @@ export default function IsiJurnalScreen() {
       </Card>
 
       <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+        {withAkademik && (indikator.data?.length ?? 0) > 0 ? (
+          <SelectField
+            label="KD/Indikator (opsional)"
+            icon="list-outline"
+            value={indikatorId}
+            onChange={setIndikatorId}
+            placeholder="Pilih KD/Indikator"
+            options={(indikator.data ?? []).map((i) => ({ value: i.id, label: `${i.kode ? `${i.kode} – ` : ''}${i.nama ?? ''}`.trim() || i.id }))}
+          />
+        ) : null}
+        {withAkademik && (materiOpts.data?.length ?? 0) > 0 ? (
+          <SelectField
+            label="Materi/Pokok Bahasan (opsional)"
+            icon="book-outline"
+            value={materiId}
+            onChange={setMateriId}
+            placeholder="Pilih materi/pokok bahasan"
+            options={(materiOpts.data ?? []).map((m) => ({ value: m.id, label: m.nama, description: m.deskripsi }))}
+            hint={materiId ? (materiOpts.data ?? []).find((m) => m.id === materiId)?.deskripsi || null : null}
+          />
+        ) : null}
         <Input label="Materi yang disampaikan *" value={materi} onChangeText={setMateri} multiline placeholder="Mis. Bab 3: Sistem Pencernaan — diskusi & latihan soal" />
         <Input label="Catatan (opsional)" value={catatan} onChangeText={setCatatan} multiline placeholder="Mis. tugas rumah, kendala kelas, siswa perlu perhatian" />
         {mode === 'piket' ? (

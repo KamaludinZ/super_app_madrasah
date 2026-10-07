@@ -1,5 +1,6 @@
 /**
- * Orkestrasi sinkronisasi: izin offline → antrean jurnal → cache data penting → pengingat lokal.
+ * Orkestrasi sinkronisasi: izin offline → antrean jurnal → cache data penting (termasuk KD/Indikator &
+ * Materi mapel hari ini untuk jurnal offline) → pengingat lokal.
  * Juga mendaftarkan background task (expo-background-task, min. 15 menit).
  */
 import { Platform } from 'react-native';
@@ -40,7 +41,16 @@ export function runSync(userId: string, opts: { force?: boolean; notify?: boolea
       }
       if (opts.refreshCaches !== false) {
         await Promise.allSettled([
-          api.schedules.myToday().then((d) => setCache(CacheKeys.myToday, userId, d)),
+          api.schedules.myToday().then(async (d) => {
+            await setCache(CacheKeys.myToday, userId, d);
+            // KD/Indikator & Materi mapel hari ini → tersedia saat mengisi jurnal offline.
+            const pairs = new Map<string, { mapel: string; sem: string | null }>();
+            d.forEach((x) => { if (x.subject_id) pairs.set(`${x.subject_id}|${x.semester_id ?? ''}`, { mapel: x.subject_id, sem: (x.semester_id as string) || null }); });
+            await Promise.allSettled([...pairs.values()].flatMap(({ mapel, sem }) => [
+              api.akademik.indikator({ mapel_id: mapel, semester_id: sem }).then((r) => setCache(CacheKeys.indikator(mapel, sem), userId, r)),
+              api.akademik.materi({ mapel_id: mapel, semester_id: sem }).then((r) => setCache(CacheKeys.materi(mapel, sem), userId, r)),
+            ]));
+          }),
           api.jurnal.my().then((d) => setCache(CacheKeys.myJournals, userId, d.slice(0, 50))),
           api.announcements.list().then((d) => setCache(CacheKeys.announcements, userId, d)),
           api.notifications.list().then((d) => setCache(CacheKeys.notifications, userId, d)),

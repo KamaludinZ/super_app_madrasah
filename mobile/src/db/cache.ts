@@ -54,4 +54,6 @@ export const CacheKeys = {
   classSchedules: (classId: string) => `schedules.class.${classId}`,
   classJournals: (classId: string) => `jurnal.class.${classId}`,
   adminJournals: 'jurnal.admin',
+  indikator: (mapelId: string, semesterId?: string | null) => `akademik.indikator.${mapelId}.${semesterId ?? '-'}`,
+  materi: (mapelId: string, semesterId?: string | null) => `akademik.materi.${mapelId}.${semesterId ?? '-'}`,
 };

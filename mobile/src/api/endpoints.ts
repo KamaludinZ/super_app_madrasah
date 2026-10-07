@@ -1,8 +1,8 @@
 import { request } from './client';
 import type {
   Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
-  GPSlotDates, GPTeacher, Journal, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
-  PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
+  GPSlotDates, GPTeacher, Indikator, Journal, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
+  MateriPokok, PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
 } from './types';
 
 export const api = {
@@ -50,6 +50,13 @@ export const api = {
     byClass: (class_id: string) => request<Journal[]>(`/jurnal/by-class/${class_id}`),
     admin: (q: { start_date?: string; end_date?: string; class_id?: string; limit?: number }) => request<{ items: Journal[] }>('/admin/jurnal', { query: q }),
     piketFilled: () => request<Journal[]>('/jurnal/piket-filled'),
+  },
+
+  akademik: {
+    indikator: (q: { mapel_id: string; semester_id?: string | null }) =>
+      request<Indikator[]>('/indikator', { query: { mapel_id: q.mapel_id, semester_id: q.semester_id || undefined } }),
+    materi: (q: { mapel_id: string; semester_id?: string | null }) =>
+      request<MateriPokok[]>('/materi', { query: { mapel_id: q.mapel_id, semester_id: q.semester_id || undefined } }),
   },
 
   piket: {
