@@ -12,17 +12,20 @@ import type { User } from '@/api/types';
 
 export type BridgeMessage =
   | { type: 'route'; path: string; title?: string }
+  | { type: 'ready' }
   | { type: 'download'; name: string; mime: string; data: string }
   | { type: 'open'; url: string }
   | { type: 'print' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'log'; level: string; message: string };
 
-export function buildBridgeScript(opts: { host: string; token: string | null; user: User | null; activeRole: string | null }): string {
+export function buildBridgeScript(opts: { host: string; token: string | null; user: User | null; activeRole: string | null; debug?: boolean }): string {
   const cfg = JSON.stringify({
     host: opts.host,
     token: opts.token,
     user: opts.user ? JSON.stringify({ ...opts.user, active_role: opts.activeRole ?? opts.user.active_role }) : null,
     role: opts.activeRole,
+    debug: !!opts.debug,
   });
   return `(function () {
   try {
@@ -111,6 +114,28 @@ export function buildBridgeScript(opts: { host: string; token: string | null; us
       return null;
     };
     window.print = function () { post({ type: 'print' }); };
+
+    // Beri tahu aplikasi saat isi halaman benar-benar tampil (halaman web dimuat terpisah/lazy):
+    // area konten tertanam sudah berisi teks, atau setelah 30 detik.
+    var started = Date.now();
+    var readyTimer = setInterval(function () {
+      var main = document.querySelector('[data-testid="app-shell-embedded"] main');
+      var hasText = main && (main.innerText || '').trim().length > 0;
+      // Halaman di luar kerangka tertanam (mis. halaman publik) dianggap siap setelah 12 detik;
+      // layar boot web tidak dihitung karena belum ada kerangka tertanam.
+      var outside = !document.querySelector('[data-testid="app-shell-embedded"]') && Date.now() - started > 12000
+        && (document.body.innerText || '').trim().length > 0 && !/Super Apps MATSANDATAMA\\s*MTsN 2 Kota Malang\\s*$/.test((document.body.innerText || '').trim());
+      if (hasText || outside || Date.now() - started > 30000) { clearInterval(readyTimer); post({ type: 'ready' }); }
+    }, 250);
+
+    // Mode pengembangan: teruskan galat halaman web ke log aplikasi (Metro) untuk diagnosis.
+    if (CFG.debug) {
+      var fmt = function (a) { try { return a && a.stack ? String(a.stack) : typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); } };
+      var origErr = console.error;
+      console.error = function () { post({ type: 'log', level: 'error', message: Array.prototype.map.call(arguments, fmt).join(' ').slice(0, 2000) }); return origErr.apply(console, arguments); };
+      window.addEventListener('error', function (e) { post({ type: 'log', level: 'onerror', message: (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || '') }); });
+      window.addEventListener('unhandledrejection', function (e) { post({ type: 'log', level: 'rejection', message: fmt(e.reason).slice(0, 2000) }); });
+    }
   } catch (e) {}
 })();
 true;`;

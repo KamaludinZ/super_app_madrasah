@@ -18,6 +18,7 @@ import { WEB_URL } from '@/config';
 import { useAuth } from '@/store/auth';
 import { useNetwork } from '@/store/network';
 import { buildBridgeScript, BridgeMessage } from '@/web/bridge';
+import { nativeRoute } from '@/menu/routes';
 import { spacing, useTheme } from '@/theme';
 import { T } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/Button';
@@ -43,22 +44,49 @@ export default function WebModuleScreen() {
   const [failed, setFailed] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState('');
   const reloginTried = useRef(false);
+  // HTML termuat ≠ halaman siap: tahan layar memuat sampai jembatan mengirim 'ready' (isi halaman
+  // sudah berisi teks) — pemuatan pertama bisa lama karena mengunduh bundel web. Batas 30 detik.
+  const [appReady, setAppReady] = useState(false);
+  const startUrlFor = `${WEB_URL}${(params.path || '/dashboard').startsWith('/') ? params.path || '/dashboard' : `/${params.path}`}`;
+  useEffect(() => {
+    // Layar /web bisa dipakai ulang dengan path lain (tautan notifikasi/menu) → mulai ulang status muat.
+    setAppReady(false);
+    setFailed(null);
+    setTitle(params.title || 'Super Apps');
+    reloginTried.current = false;
+    const t = setTimeout(() => setAppReady(true), 30_000);
+    return () => clearTimeout(t);
+  }, [startUrlFor]);
 
   const path = (params.path || '/dashboard').startsWith('/') ? params.path || '/dashboard' : `/${params.path}`;
   const startUrl = `${WEB_URL}${path}`;
-  const script = useMemo(() => buildBridgeScript({ host: WEB_HOST, token, user, activeRole }), [token, user, activeRole]);
+  const script = useMemo(() => buildBridgeScript({ host: WEB_HOST, token, user, activeRole, debug: __DEV__ }), [token, user, activeRole]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (canGoBack) { ref.current?.goBack(); return true; }
+      if (!router.canGoBack()) { router.replace('/(app)/(tabs)'); return true; }
       return false;
     });
     return () => sub.remove();
-  }, [canGoBack]);
+  }, [canGoBack, router]);
+
+  /** Halaman web yang punya layar native → buka native, WebView kembali ke halaman sebelumnya. */
+  const redirectedTo = useRef<string | null>(null);
+  const toNative = (webPath: string) => {
+    const nat = nativeRoute(webPath, activeRole);
+    if (!nat || webPath.split('?')[0] === path.split('?')[0] || redirectedTo.current === webPath) return false;
+    redirectedTo.current = webPath;
+    setTimeout(() => { redirectedTo.current = null; }, 1500);
+    ref.current?.goBack();
+    router.push(nat as any);
+    return true;
+  };
 
   const onNav = (nav: WebViewNavigation) => {
     setCanGoBack(nav.canGoBack);
     setCurrentUrl(nav.url);
+    if (nav.url.startsWith(WEB_URL) && toNative(nav.url.slice(WEB_URL.length) || '/')) return;
     // Sesi web habis → web mengarah ke /login: suntik ulang sesi aplikasi sekali, lalu muat ulang.
     if (/\/login(\?|$)/.test(nav.url.replace(WEB_URL, '')) && !nav.loading) {
       if (!reloginTried.current && token) {
@@ -82,8 +110,15 @@ export default function WebModuleScreen() {
   const onMessage = useCallback(async (e: WebViewMessageEvent) => {
     let msg: BridgeMessage;
     try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-    if (msg.type === 'route') {
+    if (msg.type === 'ready') {
+      setAppReady(true);
+    } else if (msg.type === 'route') {
+      // Halaman web yang punya layar native (scan QR, riwayat jurnal, guru pengganti, tugas piket)
+      // dibuka native; WebView kembali ke halaman sebelumnya.
+      if (toNative(msg.path)) return;
       if (msg.title && !params.title) setTitle(msg.title.replace(/\s*[|–-]\s*Super Apps.*$/i, '') || title);
+    } else if (msg.type === 'log') {
+      if (__DEV__) console.log(`[web ${msg.level}]`, msg.message);
     } else if (msg.type === 'open') {
       openExternal(msg.url);
     } else if (msg.type === 'print') {
@@ -105,7 +140,7 @@ export default function WebModuleScreen() {
         toast.error('Berkas gagal disimpan di perangkat.');
       }
     }
-  }, [openExternal, params.title, title]);
+  }, [openExternal, params.title, title, activeRole, path, router]);
 
   const onShouldStart = useCallback((req: { url: string; isTopFrame?: boolean }) => {
     const url = req.url;
@@ -116,13 +151,14 @@ export default function WebModuleScreen() {
     return false;
   }, [openExternal]);
 
-  const reload = () => { setFailed(null); reloginTried.current = false; ref.current?.reload(); };
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)'));
+  const reload = () => { setFailed(null); reloginTried.current = false; setAppReady(false); ref.current?.reload(); };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.surfaceSecondary }]}>
       <StatusBar style="light" />
       <View style={[styles.header, { paddingTop: insets.top + 4, backgroundColor: colors.brand }]}>
-        <IconButton name="arrow-back" color="#FFFFFF" accessibilityLabel="Kembali" onPress={() => (canGoBack ? ref.current?.goBack() : router.back())} />
+        <IconButton name="arrow-back" color="#FFFFFF" accessibilityLabel="Kembali" onPress={() => (canGoBack ? ref.current?.goBack() : close())} />
         <View style={{ flex: 1 }}>
           <T variant="subtitle" color={colors.onBrand} numberOfLines={1}>{title}</T>
           <T variant="small" color={colors.onBrand} style={{ opacity: 0.75 }} numberOfLines={1}>
@@ -130,7 +166,7 @@ export default function WebModuleScreen() {
           </T>
         </View>
         <IconButton name="refresh" color="#FFFFFF" accessibilityLabel="Muat ulang" onPress={reload} />
-        <IconButton name="close" color="#FFFFFF" accessibilityLabel="Tutup" onPress={() => router.back()} />
+        <IconButton name="close" color="#FFFFFF" accessibilityLabel="Tutup" onPress={close} />
       </View>
       {loading && progress < 1 ? <View style={[styles.progress, { width: `${Math.max(progress, 0.08) * 100}%`, backgroundColor: colors.warning }]} /> : null}
 
@@ -170,8 +206,16 @@ export default function WebModuleScreen() {
           mediaPlaybackRequiresUserAction
           originWhitelist={['https://*', 'http://*', 'about:*', 'blob:*', 'data:*']}
           applicationNameForUserAgent="MatsandatamaApp/1.0"
+          webviewDebuggingEnabled={__DEV__}
         />
       )}
+      {!failed && !appReady ? (
+        <View style={[StyleSheet.absoluteFill, styles.center, styles.loadingOverlay, { top: insets.top + 60, backgroundColor: colors.surfaceSecondary }]} pointerEvents="none">
+          <ActivityIndicator color={colors.brandPrimary} size="large" />
+          <T tone="muted" style={{ marginTop: spacing.md }}>Memuat halaman…</T>
+          <T variant="caption" tone="muted" center style={{ marginTop: 4 }}>Pembukaan pertama bisa sedikit lebih lama.</T>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -181,4 +225,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
   progress: { height: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  loadingOverlay: { zIndex: 5, elevation: 12 },
 });
