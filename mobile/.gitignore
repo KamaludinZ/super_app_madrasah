@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+# Kunci service account Firebase (RAHASIA) — jangan pernah di-commit
+*firebase-adminsdk*.json
+.env
+.env.*.local

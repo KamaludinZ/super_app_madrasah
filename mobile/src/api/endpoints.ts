@@ -1,0 +1,91 @@
+import { request } from './client';
+import type {
+  Announcement, Captcha, GPAssignment, GPCandidate, GPConfig, GPDate, GPPeriod, GPSlot, GPTeacher, Journal,
+  LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule, PublicSettings, QRValidation,
+  ScheduleItem, Student, User,
+} from './types';
+
+export const api = {
+  health: () => request<{ status: string; time_wib: string }>('/health', { token: null, timeoutMs: 8000 }),
+  settings: () => request<PublicSettings>('/settings', { token: null }),
+
+  auth: {
+    captcha: () => request<Captcha>('/auth/captcha', { token: null }),
+    login: (body: { username: string; password: string; captcha_id: string; captcha_answer: string; remember: boolean }) =>
+      request<LoginResponse>('/auth/login', { method: 'POST', body, token: null, silent401: true }),
+    me: (token?: string) => request<User>('/auth/me', { token, silent401: true }),
+    switchRole: (new_role: string) =>
+      request<{ access_token: string; active_role: string; user: User }>('/auth/switch-role', { method: 'POST', body: { new_role } }),
+    logout: () => request<{ message: string }>('/auth/logout', { method: 'POST', silent401: true }),
+    changePassword: (current_password: string, new_password: string) =>
+      request<{ message: string; access_token?: string }>('/auth/change-password', { method: 'POST', body: { current_password, new_password } }),
+  },
+
+  schedules: {
+    myToday: () => request<ScheduleItem[]>('/schedules/my-today', { query: { include_substitute: true } }),
+    list: (q: { teacher_id?: string; class_id?: string; day?: string }) => request<ScheduleItem[]>('/schedules', { query: q }),
+    grouped: (q: { teacher_id?: string; class_id?: string }) => request<ScheduleItem[]>('/schedules/grouped', { query: q }),
+    mySubstitute: (from: string, to: string) => request<ScheduleItem[]>('/guru-pengganti/my-schedule', { query: { from, to } }),
+  },
+
+  students: {
+    byClass: (class_id: string) => request<Student[]>('/students', { query: { class_id } }),
+  },
+
+  jurnal: {
+    validate: (qr_token: string, user_lat?: number | null, user_lon?: number | null) =>
+      request<QRValidation>('/jurnal/validate', { method: 'POST', body: { qr_token, user_lat, user_lon } }),
+    create: (body: Record<string, unknown>) => request<Journal>('/jurnal', { method: 'POST', body }),
+    validateByClassToken: (class_token: string, user_lat?: number | null, user_lon?: number | null) =>
+      request<QRValidation>('/jurnal/validate-by-class-token', { method: 'POST', body: { class_token, user_lat, user_lon } }),
+    createByClassToken: (body: Record<string, unknown>) => request<Journal>('/jurnal/by-class-token', { method: 'POST', body }),
+    my: () => request<Journal[]>('/jurnal/my'),
+    detail: (id: string) => request<Journal>(`/jurnal/${id}`),
+    byClass: (class_id: string) => request<Journal[]>(`/jurnal/by-class/${class_id}`),
+    admin: (q: { date_from?: string; date_to?: string; limit?: number }) => request<Journal[] | { items: Journal[] }>('/admin/jurnal', { query: q }),
+  },
+
+  piket: {
+    today: () => request<PiketSchedule[]>('/piket/schedules/today'),
+    fill: (body: Record<string, unknown>) => request<Journal>('/piket/fill-journal', { method: 'POST', body }),
+  },
+
+  announcements: {
+    list: () => request<Announcement[]>('/announcements'),
+  },
+
+  notifications: {
+    list: () => request<NotificationItem[]>('/notifications'),
+    unreadCount: () => request<{ unread: number }>('/notifications/unread-count'),
+    markRead: (source: string, source_id: string) => request<unknown>(`/notifications/${source}/${source_id}/read`, { method: 'POST' }),
+    markAllRead: () => request<{ marked_read: number }>('/notifications/mark-all-read', { method: 'POST' }),
+  },
+
+  gp: {
+    config: () => request<GPConfig>('/guru-pengganti/config'),
+    period: () => request<GPPeriod>('/guru-pengganti/period'),
+    teachers: (q?: string) => request<GPTeacher[]>('/guru-pengganti/teachers', { query: { q } }),
+    teacherSlots: (teacher_id: string) => request<GPSlot[]>(`/guru-pengganti/teachers/${teacher_id}/slots`),
+    slotDates: (schedule_id: string, month: string) => request<GPDate[] | { dates: GPDate[] }>(`/guru-pengganti/slots/${schedule_id}/dates`, { query: { month } }),
+    candidates: (schedule_id: string, dates: string[]) =>
+      request<GPCandidate[]>('/guru-pengganti/substitute-candidates', { query: { schedule_id, dates: dates.join(',') } }),
+    assignments: (q: { from?: string; to?: string; status?: string; q?: string; teacher_id?: string }) =>
+      request<GPAssignment[]>('/guru-pengganti/assignments', { query: q }),
+    assign: (body: { schedule_id: string; dates: string[]; substitute_teacher_id: string; reason?: string }) =>
+      request<GPAssignment[] | GPAssignment>('/guru-pengganti/assignments', { method: 'POST', body }),
+    cancel: (id: string) => request<unknown>(`/guru-pengganti/assignments/${id}`, { method: 'DELETE' }),
+    assignmentJournals: (id: string) => request<{ assignment?: GPAssignment; journals?: Journal[] } | Journal[]>(`/guru-pengganti/assignments/${id}/journals`),
+    fillJournal: (body: { assignment_id: string; materi: string; catatan?: string; attendance_records: { student_id: string; student_name?: string; status: string }[] }) =>
+      request<Journal>('/guru-pengganti/journals', { method: 'POST', body }),
+    fillOriginal: (body: { assignment_id: string; materi: string; catatan?: string }) =>
+      request<Journal>('/guru-pengganti/journals/original', { method: 'POST', body }),
+  },
+
+  mobile: {
+    registerDevice: (body: { device_id: string; expo_push_token?: string | null; platform: 'android' | 'ios'; app_version?: string; local_reminders: boolean }) =>
+      request<{ ok: boolean; device_id: string }>('/mobile/devices', { method: 'POST', body }),
+    unregisterDevice: (device_id: string) => request<{ ok: boolean; removed: number }>(`/mobile/devices/${device_id}`, { method: 'DELETE' }),
+    offlinePermits: (date: string) => request<OfflinePermitsResponse>('/mobile/offline-permits', { query: { date } }),
+    submitOffline: (body: Record<string, unknown>) => request<Journal>('/mobile/journals/offline', { method: 'POST', body }),
+  },
+};

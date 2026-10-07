@@ -12,7 +12,7 @@ import requests
 from typing import Dict, Optional, Tuple
 
 # Configuration
-BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://android-ios-launch.preview.emergentagent.com")
+BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://malang-mobile-hub.preview.emergentagent.com")
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test credentials

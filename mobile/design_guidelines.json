@@ -1,0 +1,233 @@
+{
+  "app_name": "Super Apps MATSANDATAMA",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A highly functional, deeply readable, and authoritative utility interface that prioritizes fast data entry and clear daily schedules for teachers.",
+  "color": {
+    "light": {
+      "surface": "#FFFFFF",
+      "onSurface": "#1A1C1E",
+      "surfaceSecondary": "#F5F6F8",
+      "onSurfaceSecondary": "#444749",
+      "surfaceTertiary": "#EAECEF",
+      "onSurfaceTertiary": "#444749",
+      "surfaceInverse": "#2F3132",
+      "onSurfaceInverse": "#F0F1F3",
+      "brand": "#006837",
+      "brandPrimary": "#006837",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#0B7A3B",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#E6F0EB",
+      "onBrandTertiary": "#006837",
+      "success": "#198754",
+      "onSuccess": "#FFFFFF",
+      "warning": "#FFC107",
+      "onWarning": "#4B3800",
+      "error": "#DC3545",
+      "onError": "#FFFFFF",
+      "border": "#EAECEF",
+      "borderStrong": "#C8CBD0",
+      "divider": "#F5F6F8",
+      "muted": "#747779",
+      "onBrand": "#FFFFFF"
+    },
+    "dark": {
+      "surface": "#121212",
+      "onSurface": "#E1E2E4",
+      "surfaceSecondary": "#1E1E1E",
+      "onSurfaceSecondary": "#C4C6C8",
+      "surfaceTertiary": "#2C2C2C",
+      "onSurfaceTertiary": "#A9ABAE",
+      "surfaceInverse": "#E1E2E4",
+      "onSurfaceInverse": "#121212",
+      "brand": "#006837",
+      "brandPrimary": "#2E8B57",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#3CB371",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#003A1F",
+      "onBrandTertiary": "#99E5BC",
+      "success": "#198754",
+      "onSuccess": "#FFFFFF",
+      "warning": "#FFC107",
+      "onWarning": "#4B3800",
+      "error": "#DC3545",
+      "onError": "#FFFFFF",
+      "border": "#2C2C2C",
+      "borderStrong": "#444749",
+      "divider": "#1E1E1E",
+      "muted": "#A9ABAE",
+      "onBrand": "#FFFFFF"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical breathing room. Cards are never flush to the screen edge; always maintain md or lg margins. Use appropriate whitespace to logically group schedule information.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [],
+    "dont's": [
+      "Avoid glassmorphism. Use solid surface colors and light shadows to maintain performance on low-end Android devices."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Splash & Onboarding",
+      "purpose": "Introduce the app benefits and request notification permissions with a clean and visually engaging start.",
+      "states": {
+        "loading": "Centered brand-colored spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed background using the Islamic geometric pattern image with a dark gradient scrim at the bottom. The onboarding text and primary CTA should sit in the bottom 30% of the screen over the scrim."
+    },
+    {
+      "name": "Login",
+      "purpose": "Secure authentication with an image captcha.",
+      "states": {
+        "loading": "Spinner on the login button.",
+        "empty": "N/A",
+        "error": "Toast or inline text below the specific field showing validation error."
+      },
+      "layout": "Single column form centered on screen. Labels above inputs. The captcha image and input field are grouped together. Sticky submit button at the bottom inside KeyboardAvoidingView."
+    },
+    {
+      "name": "Home (Beranda Jadwal Hari Ini)",
+      "purpose": "Show today's teaching schedule, acting as a functional command center.",
+      "states": {
+        "loading": "Skeleton loaders matching the shape of schedule cards.",
+        "empty": "Illustration of an empty clipboard and 'Tidak ada jadwal mengajar hari ini'.",
+        "error": "Readable error message with a 'Coba Lagi' button."
+      },
+      "layout": "Vertical list of schedule cards. Each card displays time, class, and subject. Cards for substitute classes should feature a prominent yellow warning badge ('Guru Pengganti: Menggantikan {nama}'). Pull-to-refresh enabled. Add offline mode banner ('Mode offline — data terakhir diperbarui {waktu}') at the very top when disconnected."
+    },
+    {
+      "name": "Scan QR & Journal Form (Isi Jurnal)",
+      "purpose": "Scan a classroom QR to validate GPS, then log the teaching journal and student attendance.",
+      "states": {
+        "loading": "Spinner while verifying GPS/QR location.",
+        "empty": "N/A",
+        "error": "Error modal if QR/GPS mismatch, allowing retry."
+      },
+      "layout": "Two parts. First, full-screen camera view with a scanning frame overlay. Upon success, navigate to the Journal Form: a long scrollable view with inputs for 'Materi' and 'Catatan', followed by a list of students. Each student row has a segmented control (Hadir, Sakit, Izin, Alpha). A sticky 'Simpan Jurnal' button fixed to the bottom."
+    },
+    {
+      "name": "Journal History (Riwayat Jurnal)",
+      "purpose": "Display past submitted journals.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "Icon + 'Belum ada riwayat jurnal'.",
+        "error": "Error text + retry button."
+      },
+      "layout": "List view. Each row shows the date, class, and a side-by-side layout for 'Diisi oleh' and 'Catatan'. Use surfaceSecondary for the cards to group info cleanly."
+    },
+    {
+      "name": "Announcements (Pengumuman & Notifikasi)",
+      "purpose": "Keep users informed about school news and personal notifications.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "Icon + 'Belum ada pengumuman'.",
+        "error": "Error text + retry button."
+      },
+      "layout": "Vertical list. Unread items have a subtle brandTertiary background or a dot indicator. Tap to expand or view full details in a modal sheet."
+    },
+    {
+      "name": "Offline Queue (Antrean Jurnal)",
+      "purpose": "Manage journals saved offline that are waiting to be synced.",
+      "states": {
+        "loading": "Spinner during sync.",
+        "empty": "Icon + 'Semua jurnal sudah tersinkronisasi'.",
+        "error": "Failed sync states highlighted in red on individual list items."
+      },
+      "layout": "List of pending items showing status (pending, syncing, synced, failed). A sticky 'Sinkronkan Sekarang' primary CTA at the bottom."
+    },
+    {
+      "name": "Substitute Assignment Wizard (Penugasan Guru Pengganti)",
+      "purpose": "Allow admins/waka to assign substitute teachers via a 5-step process.",
+      "states": {
+        "loading": "Spinner overlay on transition.",
+        "empty": "N/A",
+        "error": "Validation errors handled per step."
+      },
+      "layout": "A wizard interface. Top of the screen displays a step indicator (1 of 5). Step content (like multi-select calendar) takes up the main body. Sticky 'Selanjutnya'/'Sebelumnya' buttons at the bottom."
+    },
+    {
+      "name": "Profile & Settings",
+      "purpose": "Manage user role, app preferences, and view diagnostics.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Standard grouped list settings layout. Sections for Profile (switch role), Preferences (Reminder minutes 5/10/15, Battery settings link), and Diagnostics (Expo push token, connection, queue). Show app version at the absolute bottom in muted text."
+    }
+  ],
+  "images": {
+    "splash_background": {
+      "url": "https://images.unsplash.com/photo-1739478469935-65b0ac94355c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwxfHxpc2xhbWljJTIwZ2VvbWV0cmljJTIwcGF0dGVybiUyMGJhY2tncm91bmQlMjBncmVlbnxlbnwwfHx8fDE3OTEzNTczMTR8MA&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1739478469935-65b0ac94355c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwxfHxpc2xhbWljJTIwZ2VvbWV0cmljJTIwcGF0dGVybiUyMGJhY2tncm91bmQlMjBncmVlbnxlbnwwfHx8fDE3OTEzNTczMTR8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Islamic geometric pattern in green"
+    },
+    "empty_state_journal": {
+      "url": "https://images.unsplash.com/photo-1651760680066-db9d32bd0357?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGNsaXBib2FyZCUyMGRvY3VtZW50fGVufDB8fHx8MTc5MTM1NzMxNHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty clipboard"
+    }
+  },
+  "haptics": {
+    "button_press": "light",
+    "tab_switch": "light",
+    "success_action": "success",
+    "error_action": "error",
+    "toggle_switch": "light",
+    "refresh": "medium"
+  },
+  "instructions_to_main_agent": [
+    "Export the tokens into /app/mobile/src/theme.ts in a format that works seamlessly with React Navigation and styled-components/Tailwind as set up.",
+    "CRITICAL: Avoid using heavy animations or glassmorphism. The target audience includes low-end Android 8+ devices. Stick to solid colors and simple `react-native-reanimated` transitions.",
+    "Implement the 'Guru Pengganti' badge prominently in yellow (#FFC107) on schedule cards so users immediately notice substitution duties.",
+    "Ensure 'Sticky Primary CTAs over scrolling content' rule is applied strictly to forms, especially the 'Isi Jurnal' and 'Penugasan Guru Pengganti' wizard. Do not use transparent background for the CTA container; use solid surface.",
+    "Always apply Loading, Empty, and Error states natively across every screen. The empty state illustrations should fill the screen flex: 1.",
+    "Design the offline mode banner directly below the header. It should not overlap the main content but push it down.",
+    "Do not use @expo/vector-icons. Only use @react-native-vector-icons/ionicons.",
+    "Adhere exactly to the color palette specified. No blues, purples, or indigo hues are permitted."
+  ]
+}

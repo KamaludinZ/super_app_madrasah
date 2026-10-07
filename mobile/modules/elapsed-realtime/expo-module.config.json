@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["id.sch.mtsn2kotamalang.superapps.elapsedrealtime.ElapsedRealtimeModule"]
+  }
+}
