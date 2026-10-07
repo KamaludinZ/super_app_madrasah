@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ImageBackground, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, useTheme } from '@/theme';
 import { useAuth } from '@/store/auth';
@@ -7,6 +7,7 @@ import { T } from './ui/Text';
 import { Button } from './ui/Button';
 import { BrandLogo } from './BrandLogo';
 import { Icon } from './ui/Icon';
+import { EduBackground } from './EduBackground';
 
 /** Layar kunci (biometrik/PIN) — menutupi seluruh aplikasi saat `locked`. */
 export function LockScreen() {
@@ -26,7 +27,7 @@ export function LockScreen() {
   useEffect(() => { void tryUnlock(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   return (
-    <ImageBackground source={require('../../assets/images/pattern-dark.png')} style={[styles.root, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xl }]} resizeMode="cover">
+    <EduBackground style={[styles.root, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xl }]}>
       <View style={styles.center}>
         <BrandLogo light size={88} />
         <View style={[styles.lockBadge, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
@@ -42,7 +43,7 @@ export function LockScreen() {
         <Button title={biometricAvailable ? 'Buka dengan Biometrik / PIN' : 'Lanjutkan'} icon="finger-print" size="lg" loading={busy} onPress={tryUnlock} style={{ backgroundColor: colors.surface }} textColor={colors.brandPrimary} fullWidth />
         <Button title="Keluar dari akun" variant="ghost" textColor={colors.onBrand} onPress={() => logout()} fullWidth style={{ marginTop: spacing.sm }} />
       </View>
-    </ImageBackground>
+    </EduBackground>
   );
 }
 

@@ -17,6 +17,12 @@ export const api = {
     switchRole: (new_role: string) =>
       request<{ access_token: string; active_role: string; user: User }>('/auth/switch-role', { method: 'POST', body: { new_role } }),
     logout: () => request<{ message: string }>('/auth/logout', { method: 'POST', silent401: true }),
+    forgotPassword: (identifier: string) =>
+      request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: { identifier }, token: null }),
+    resetValidate: (token: string) =>
+      request<{ valid: boolean; username?: string | null }>(`/auth/reset-password/validate/${encodeURIComponent(token)}`, { token: null }),
+    resetPassword: (token: string, new_password: string) =>
+      request<{ message: string }>('/auth/reset-password', { method: 'POST', body: { token, new_password }, token: null }),
     changePassword: (current_password: string, new_password: string) =>
       request<{ message: string; access_token?: string }>('/auth/change-password', { method: 'POST', body: { current_password, new_password } }),
   },

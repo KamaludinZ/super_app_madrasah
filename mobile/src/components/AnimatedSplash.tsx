@@ -7,8 +7,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/store/auth';
+import { EduBackground } from './EduBackground';
 
-const BG = '#006837';
 const LOGO = 180;
 const MIN_VISIBLE_MS = 1800;
 /** Jeda setelah siap agar layar tujuan sempat tergambar sebelum splash memudar (tanpa kedipan kosong). */
@@ -19,6 +19,7 @@ export function AnimatedSplash({ ready, onFinish }: { ready: boolean; onFinish: 
   const pulse = useRef(new Animated.Value(0)).current;
   const spin = useRef(new Animated.Value(0)).current;
   const appear = useRef(new Animated.Value(0)).current;
+  const patternIn = useRef(new Animated.Value(0)).current;
   const [minElapsed, setMinElapsed] = useState(false);
 
   useEffect(() => {
@@ -31,9 +32,11 @@ export function AnimatedSplash({ ready, onFinish }: { ready: boolean; onFinish: 
     ];
     loops.forEach((l) => l.start());
     Animated.timing(appear, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+    // Splash native polos hijau → motif pendidikan muncul perlahan agar peralihan mulus.
+    Animated.timing(patternIn, { toValue: 1, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
     const t = setTimeout(() => setMinElapsed(true), MIN_VISIBLE_MS);
     return () => { clearTimeout(t); loops.forEach((l) => l.stop()); };
-  }, [pulse, spin, appear]);
+  }, [pulse, spin, appear, patternIn]);
 
   useEffect(() => {
     if (!ready || !minElapsed) return;
@@ -46,6 +49,7 @@ export function AnimatedSplash({ ready, onFinish }: { ready: boolean; onFinish: 
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const patternOpacity = patternIn.interpolate({ inputRange: [0, 1], outputRange: [0, 0.13] });
 
   return (
     <Animated.View
@@ -55,6 +59,7 @@ export function AnimatedSplash({ ready, onFinish }: { ready: boolean; onFinish: 
       accessibilityLabel="Memuat aplikasi"
       accessibilityRole="progressbar"
     >
+      <EduBackground style={StyleSheet.absoluteFill as any} patternOpacity={patternOpacity} />
       <Animated.Image source={require('../../assets/images/splash-icon.png')} style={[styles.logo, { transform: [{ scale }] }]} resizeMode="contain" />
       <Animated.View style={[styles.loader, { opacity: appear }]}>
         <Animated.View style={[styles.ring, { transform: [{ rotate }] }]} />
@@ -65,7 +70,7 @@ export function AnimatedSplash({ ready, onFinish }: { ready: boolean; onFinish: 
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: BG, alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  root: { alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   logo: { width: LOGO, height: LOGO },
   // Diletakkan absolut di bawah logo agar posisi logo tetap sama persis dengan splash native.
   loader: { position: 'absolute', top: '50%', marginTop: LOGO / 2 + 48, alignItems: 'center', gap: 14 },

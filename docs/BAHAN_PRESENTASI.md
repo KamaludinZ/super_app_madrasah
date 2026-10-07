@@ -327,7 +327,7 @@ Total: 20 slide (± 25–30 menit presentasi).
 - **Backend:** Python FastAPI · **Database:** MongoDB
 - **Frontend:** React (web responsif + PWA)
 - **Mobile:** Aplikasi Android (Capacitor) — otomatis ikut update web
-- **Aplikasi Android native (Expo, dalam pengembangan, APK gratis):** login dengan captcha, kunci biometrik/PIN, Beranda jadwal hari ini, Scan QR & isi jurnal (bisa offline, terkirim otomatis saat online), Riwayat Jurnal sesuai peran, Notifikasi & pengumuman, Antrean jurnal offline, serta Tentang & Diagnostik
+- **Aplikasi Android native (Expo, dalam pengembangan, APK gratis):** login dengan captcha, kunci biometrik/PIN, Beranda jadwal hari ini, Scan QR & isi jurnal (bisa offline, terkirim otomatis saat online), Riwayat Jurnal sesuai peran, Notifikasi & pengumuman, Antrean jurnal offline, serta Tentang & Diagnostik; tampilan bermotif pendidikan modern dengan layar pembuka beranimasi, dan Lupa Password langsung di aplikasi
 - **Server:** Docker + Coolify, HTTPS
 - Alamat: super.mtsn2kotamalang.sch.id
 
@@ -413,3 +413,4 @@ Setiap ada fitur baru atau penyesuaian di aplikasi, catat di sini lalu perbarui 
 | 2026-10-07 | Persiapan aplikasi mobile Android/iPhone: server siap mengirim notifikasi ke HP (pengumuman, penugasan & pembatalan guru pengganti, pengingat mengajar tanpa dobel dengan pengingat lokal), izin jurnal offline bertanda tangan server, dan penyimpanan jurnal offline yang tetap tercatat sesuai jam mengajar walau baru tersinkron belakangan, aman dari pengiriman ganda & manipulasi jam HP; dokumen prompt Emergent & panduan Firebase gratis | 18, 19 |
 | 2026-10-07 | Notifikasi web & iPhone (PWA) diperbaiki ke standar enkripsi Web Push terbaru sehingga bisa diterima iPhone (iOS 16.4+) dan browser modern; rencana aplikasi mobile ditetapkan gratis: Android via APK langsung, iPhone via web app di Layar Utama | 17, 19 |
 | 2026-10-07 | Aplikasi Android native (Expo) berlogo resmi madrasah: login, kunci biometrik/PIN, Beranda jadwal hari ini, Scan QR & Isi Jurnal (online/offline/guru pengganti), Riwayat Jurnal sesuai peran (guru, piket, wali kelas, admin), Notifikasi & detail pengumuman, detail jurnal dengan daftar siswa tidak hadir, Antrean jurnal offline (kirim ulang/hapus), serta layar Tentang & Diagnostik (status server, izin notifikasi, pengaturan baterai) | 19 |
+| 2026-10-07 | Aplikasi Android: layar pembuka beranimasi (logo resmi + indikator memuat), latar bermotif pendidikan modern (buku, toga, atom, laptop, rumus) di layar pembuka, login, lupa password & layar kunci; Lupa Password kini di dalam aplikasi — kirim tautan reset ke email, tempel tautan, buat password baru tanpa membuka versi web | 19 |

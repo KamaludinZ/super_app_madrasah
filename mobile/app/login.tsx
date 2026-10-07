@@ -3,28 +3,23 @@
  * Saat sesi berakhir (401), tampilkan penjelasan bahwa antrean jurnal offline tetap aman.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import { api } from '@/api/endpoints';
 import { errorMessage } from '@/api/client';
 import type { Captcha } from '@/api/types';
 import { useAuth } from '@/store/auth';
 import { useNetwork } from '@/store/network';
 import { radius, spacing, useTheme } from '@/theme';
-import { BrandLogo } from '@/components/BrandLogo';
+import { AuthLayout } from '@/components/AuthLayout';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Input } from '@/components/ui/Input';
 import { T } from '@/components/ui/Text';
-import { WEB_URL } from '@/config';
-import * as WebBrowser from 'expo-web-browser';
 
 export default function LoginScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session, login, reauthRequired } = useAuth();
   const { online } = useNetwork();
@@ -83,15 +78,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.brand }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <StatusBar style="light" />
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.xxl, paddingBottom: insets.bottom + spacing.xl }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        <BrandLogo light size={104} />
-
-        <Card style={styles.card}>
+    <AuthLayout footer="Data Anda dilindungi: token login disimpan terenkripsi di perangkat.">
           <T variant="heading">Masuk</T>
           <T variant="caption" tone="muted" style={{ marginBottom: spacing.sm }}>
             Gunakan akun yang sama dengan aplikasi web madrasah.
@@ -192,26 +179,18 @@ export default function LoginScreen() {
 
           <Button title="Masuk" icon="log-in-outline" size="lg" fullWidth loading={busy} disabled={!online || !captcha} onPress={submit} style={{ marginTop: spacing.md }} />
           <Button
-            title="Lupa password? Buka versi web"
+            title="Lupa password?"
             variant="ghost"
             size="sm"
             fullWidth
-            onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/forgot-password`).catch(() => {})}
+            onPress={() => router.push('/lupa-password')}
             style={{ marginTop: spacing.xs }}
           />
-        </Card>
-
-        <T variant="small" center color={colors.onBrand} style={{ opacity: 0.75 }}>
-          Data Anda dilindungi: token login disimpan terenkripsi di perangkat.
-        </T>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, paddingHorizontal: spacing.lg, gap: spacing.xl, justifyContent: 'center' },
-  card: { borderRadius: radius.lg, padding: spacing.xl },
   field: { marginTop: spacing.md },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm, padding: spacing.md },
   captchaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
