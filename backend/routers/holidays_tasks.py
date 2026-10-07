@@ -14,7 +14,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import current_day_id, now_wib
+from journal_core import current_day_id, day_started_at_filter, now_wib
 from models import (
     AcademicHolidayModel,
     TeacherTaskModel,
@@ -268,12 +268,13 @@ async def piket_schedules_today(user: Dict = Depends(require_role('guru_piket', 
     if not semester_id:
         return []
     schedules = await db.schedules.find({
-        'day': today, 'semester_id': semester_id
+        # Data lama menyimpan hari campuran ("Senin"/"senin").
+        'day': {'$regex': f'^{today}$', '$options': 'i'}, 'semester_id': semester_id
     }, {'_id': 0}).sort('start_time', 1).to_list(200)
-    today_start = now_wib().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    journals_today = await db.journals.find({
-        'started_at': {'$gte': today_start}
-    }, {'_id': 0, 'schedule_id': 1, 'fill_mode': 1, 'filled_by_user_id': 1}).to_list(500)
+    journals_today = await db.journals.find(
+        day_started_at_filter(),
+        {'_id': 0, 'schedule_id': 1, 'fill_mode': 1, 'filled_by_user_id': 1},
+    ).to_list(500)
     journaled_set = {j['schedule_id']: j for j in journals_today}
     tasks_today = await db.teacher_tasks.find({'date': today_date}, {'_id': 0}).to_list(200)
     task_by_sched = {}
@@ -308,9 +309,9 @@ async def piket_fill_journal(payload: Dict, request: Request,
     sch = await db.schedules.find_one({'id': schedule_id})
     if not sch:
         raise HTTPException(404, "Jadwal tidak ditemukan")
-    today_start = now_wib().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     existing = await db.journals.find_one({
-        'schedule_id': schedule_id, 'started_at': {'$gte': today_start}
+        # Jurnal guru pengganti tersimpan berdampingan, bukan jurnal slot guru asli.
+        'schedule_id': schedule_id, 'fill_mode': {'$ne': 'substitute'}, **day_started_at_filter(),
     })
     if existing:
         raise HTTPException(400, "Jurnal hari ini untuk jadwal ini sudah ada")
@@ -345,6 +346,7 @@ async def piket_fill_journal(payload: Dict, request: Request,
         'fill_mode': 'piket',
         'filled_by_user_id': user['id'],
         'filled_by_role': fill_role,
+        'filled_by_name': user.get('full_name') or user.get('username'),
         'task_id': payload.get('task_id'),
         'piket_note': payload.get('piket_note'),
         'jenis_izin': payload.get('jenis_izin'),  # Simpan jenis izin dari task

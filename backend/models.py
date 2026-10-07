@@ -536,11 +536,20 @@ class JournalModel(BaseModel):
     academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
     semester: Optional[str] = None  # DEPRECATED: use semester_id instead
     # === Audit pengisian jurnal ===
-    fill_mode: str = 'self'  # 'self' (guru pengajar isi sendiri) | 'piket' (guru piket titipan) | 'admin' (admin override)
-    filled_by_user_id: Optional[str] = None  # Jika beda dari teacher_id (mis. piket)
-    filled_by_role: Optional[str] = None  # 'guru' | 'guru_piket' | 'admin'
+    fill_mode: str = 'self'  # 'self' (guru pengajar isi sendiri) | 'piket' (guru piket titipan) | 'admin' (admin override) | 'substitute' (guru pengganti)
+    filled_by_user_id: Optional[str] = None  # Jika beda dari teacher_id (mis. piket, guru pengganti)
+    filled_by_role: Optional[str] = None  # 'guru' | 'guru_piket' | 'admin' | 'guru_pengganti'
     task_id: Optional[str] = None  # Link ke TeacherTaskModel jika berbasis titipan
     piket_note: Optional[str] = None  # Catatan piket (alasan titipan, dll)
+    # === Guru Pengganti (fill_mode='substitute') ===
+    # teacher_id tetap guru terjadwal (yang digantikan) agar catatan tampil di kedua akun;
+    # jurnal ini entri TERPISAH dari jurnal guru asli pada slot yang sama (tidak saling menimpa).
+    substitute_assignment_id: Optional[str] = None  # Link ke SubstituteAssignmentModel
+    substitute_teacher_id: Optional[str] = None  # Guru pengganti (= filled_by_user_id)
+    filled_by_name: Optional[str] = None  # Snapshot nama pengisi untuk kolom "diisi oleh"
+    journal_date: Optional[str] = None  # YYYY-MM-DD tanggal penugasan (WIB)
+    # Jurnal guru asli (fill_mode='self') yang diisi saat slot-nya sedang digantikan (tanpa QR).
+    replaced_assignment_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -562,6 +571,29 @@ class TeacherTaskModel(BaseModel):
     completed_by_user_id: Optional[str] = None  # Guru piket yang mengisi
     completed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SubstituteAssignmentModel(BaseModel):
+    """Penugasan guru pengganti: satu dokumen per (slot jadwal, tanggal).
+    Guru pengganti boleh mengisi jurnal slot tsb. pada tanggal itu; guru asli tetap bisa mengisi."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    schedule_id: str
+    semester_id: Optional[str] = None
+    date: str  # YYYY-MM-DD (WIB)
+    day: str  # 'senin'..'sabtu' — sama dengan schedules.day
+    original_teacher_id: str  # guru yang digantikan (schedules.teacher_id)
+    substitute_teacher_id: str
+    reason: Optional[str] = None
+    status: str = 'active'  # 'active' | 'cancelled'
+    # Petugas yang menyimpan penugasan (admin / waka kurikulum / guru piket).
+    assigned_by_user_id: str
+    assigned_by_role: Optional[str] = None
+    assigned_by_name: Optional[str] = None  # snapshot nama saat disimpan
+    assigned_at: Optional[str] = None  # ISO WIB
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    cancelled_at: Optional[str] = None  # ISO WIB
+    cancelled_by_user_id: Optional[str] = None
 
 
 class StudentDetailModel(BaseModel):

@@ -16,7 +16,7 @@ import {
   HeartHandshake, ClipboardCheck, AlertTriangle, Home, School, FileBarChart,
   Stethoscope, Pill, ClipboardPlus, HeartPulse, Syringe,
   Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon, MapPin,
-  MapPinned,
+  MapPinned, UserRoundCog,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { useAuth } from '@/lib/AuthContext';
@@ -35,6 +35,7 @@ import EnableNotifications from '@/components/pwa/EnableNotifications';
 import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog';
 import { OfflineQueueBadge } from '@/components/offline/OfflineQueueBadge';
 import { CommandPalette } from '@/components/CommandPalette';
+import { GURU_PENGGANTI_PATH, canManageGuruPengganti } from '@/lib/guruPengganti';
 
 /**
  * Build sidebar items based ONLY on activeRole.
@@ -64,6 +65,14 @@ function buildLabGroupItems(labKey, testidPrefix) {
     { to: `/lab/${labKey}/peminjaman-alat`, label: 'Peminjaman Alat', icon: Handshake, testid: `nav-${testidPrefix}-peminjaman-alat` },
     { to: `/lab/${labKey}/kerusakan`, label: 'Laporan Kerusakan', icon: AlertOctagon, testid: `nav-${testidPrefix}-kerusakan` },
   ];
+}
+
+// Menu Guru Pengganti hanya untuk admin, waka kurikulum, dan guru piket —
+// disaring di sini agar guru mata pelajaran tidak pernah melihatnya.
+function withoutGuruPengganti(entries) {
+  return entries
+    .filter((e) => e.to !== GURU_PENGGANTI_PATH)
+    .map((e) => (e.items ? { ...e, items: e.items.filter((i) => i.to !== GURU_PENGGANTI_PATH) } : e));
 }
 
 function navForRole(role, userRoles = []) {
@@ -179,6 +188,7 @@ function navForRole(role, userRoles = []) {
   } else if (role === 'guru_piket') {
     items.push({ to: '/piket/tugas', label: 'Tugas Hari Ini', icon: ListChecks, testid: 'nav-piket-tasks', highlight: true });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket' });
+    items.push({ to: '/guru-pengganti', label: 'Guru Pengganti', icon: UserRoundCog, testid: 'nav-piket-guru-pengganti' });
     items.push({ to: '/jurnal/riwayat', label: 'Riwayat Jurnal Piket', icon: History, testid: 'nav-jurnal-history-piket' });
     items.push({ to: '/guru/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-piket-kebersihan' });
   } else if (role === 'guru_bk') {
@@ -462,6 +472,7 @@ function navForRole(role, userRoles = []) {
         items: [
           { to: '/admin/schedules', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-schedules' },
           { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-admin' },
+          { to: '/guru-pengganti', label: 'Guru Pengganti', icon: UserRoundCog, testid: 'nav-admin-guru-pengganti' },
           { to: '/admin/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-admin-jurnal' },
           { to: '/admin/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-admin-indikator-materi' },
           { to: '/admin/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-admin-materi' },
@@ -578,6 +589,7 @@ function navForRole(role, userRoles = []) {
         items: [
           { to: '/wakakur/jadwal', label: 'Jadwal Pelajaran', icon: Calendar, testid: 'nav-wakakur-schedules' },
           { to: '/wakakur/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-wakakur-jadwal-piket' },
+          { to: '/guru-pengganti', label: 'Guru Pengganti', icon: UserRoundCog, testid: 'nav-wakakur-guru-pengganti' },
           { to: '/wakakur/jurnal', label: 'Data Jurnal', icon: ClipboardList, testid: 'nav-wakakur-jurnal' },
           { to: '/wakakur/indikator-materi', label: 'Data Indikator & Materi', icon: BookOpen, testid: 'nav-wakakur-indikator-materi' },
           { to: '/wakakur/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-wakakur-materi' },
@@ -931,8 +943,23 @@ export default function AppShell({ children }) {
   const [appVersion, setAppVersion] = useState(null);
   const [stoppingImpersonate, setStoppingImpersonate] = useState(false);
 
+  // Hak membuka menu Guru Pengganti ditentukan server (GET /guru-pengganti/config);
+  // sebelum respons tiba / bila gagal, pakai aturan lokal yang sama (admin, waka kurikulum, guru piket).
+  const [serverCanManageGP, setServerCanManageGP] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setServerCanManageGP(null);
+    if (!activeRole) return undefined;
+    api.get('/guru-pengganti/config')
+      .then(({ data }) => { if (alive) setServerCanManageGP(!!data?.can_manage); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [activeRole]);
+
   // Get base menu items for role
-  const items = navForRole(activeRole, user?.roles || []);
+  const roleItems = navForRole(activeRole, user?.roles || []);
+  const showGuruPengganti = serverCanManageGP ?? canManageGuruPengganti(activeRole);
+  const items = showGuruPengganti ? roleItems : withoutGuruPengganti(roleItems);
 
   // Note: Public pages menu items are NOT added to sidebar
   // They appear in the dashboard content via DashboardRouter/individual dashboards

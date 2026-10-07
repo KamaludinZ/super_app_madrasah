@@ -19,7 +19,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import current_day_id, now_wib
+from journal_core import current_day_id, day_started_at_filter, now_wib
 from models import ScheduleModel
 
 router = APIRouter()
@@ -545,28 +545,69 @@ async def bulk_lock_schedules(payload: Dict, request: Request, user: Dict = Depe
 
 # my-today / grid / excel-template MUST come BEFORE /schedules/{sid} for path matching
 @router.get("/schedules/my-today")
-async def my_today_schedule(user: Dict = Depends(get_current_user)):
-    """Get today's schedule for current user, filtered by user's view context (semester)."""
+async def my_today_schedule(include_substitute: bool = False, user: Dict = Depends(get_current_user)):
+    """Get today's schedule for current user, filtered by user's view context (semester).
+
+    include_substitute=true: ikut sertakan slot hasil penugasan Guru Pengganti hari ini
+    (ditandai `is_substitute: true`), diurutkan bersama jadwal reguler berdasarkan jam mulai.
+    """
+    from routers.guru_pengganti import day_query, substitute_slots_for_date
+
+    substitute = await substitute_slots_for_date(user['id']) if include_substitute else []
     ctx = await get_active_context(user)
     semester_id = ctx.get('semester_id')
     if not semester_id:
-        return []
+        return substitute
     day = current_day_id()
     items = await db.schedules.find({
-        'teacher_id': user['id'], 'day': day, 'semester_id': semester_id,
+        # Data lama menyimpan hari campuran ("Senin"/"senin").
+        'teacher_id': user['id'], 'day': day_query(day), 'semester_id': semester_id,
     }, {'_id': 0}).sort('start_time', 1).to_list(50)
+    # Slot saya yang hari ini sedang digantikan guru lain (tetap terbuka untuk jurnal saya sendiri).
+    today_iso = now_wib().date().isoformat()
+    replaced = {
+        a['schedule_id']: a for a in await db.substitute_assignments.find(
+            {'schedule_id': {'$in': [x['id'] for x in items]}, 'date': today_iso, 'status': 'active'},
+            {'_id': 0, 'id': 1, 'schedule_id': 1, 'substitute_teacher_id': 1},
+        ).to_list(50)
+    } if items else {}
+    sub_names = {
+        u['id']: u.get('full_name') for u in await db.users.find(
+            {'id': {'$in': [a['substitute_teacher_id'] for a in replaced.values()]}}, {'_id': 0, 'id': 1, 'full_name': 1},
+        ).to_list(50)
+    } if replaced else {}
+    sub_journals = {
+        j['substitute_assignment_id'] for j in await db.journals.find(
+            {'substitute_assignment_id': {'$in': [a['id'] for a in replaced.values()]}},
+            {'_id': 0, 'substitute_assignment_id': 1},
+        ).to_list(50)
+    } if replaced else set()
+
     enriched = []
     for s in items:
         cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
         room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
-        journal = await db.journals.find_one({'schedule_id': s['id'], 'teacher_id': user['id']}, {'_id': 0, 'id': 1})
+        # Jurnal guru sendiri HARI INI; jurnal guru pengganti (fill_mode 'substitute') entri terpisah.
+        journal = await db.journals.find_one({
+            'schedule_id': s['id'], 'teacher_id': user['id'],
+            'fill_mode': {'$ne': 'substitute'}, **day_started_at_filter(),
+        }, {'_id': 0, 'id': 1})
         s['class_name'] = cls.get('name') if cls else None
         s['subject_name'] = sub.get('name') if sub else None
         s['room_name'] = room.get('name') if room else None
         s['journal_filled'] = bool(journal)
         s['journal_id'] = journal.get('id') if journal else None
+        a = replaced.get(s['id'])
+        s['substitute'] = {
+            'assignment_id': a['id'],
+            'substitute_teacher_id': a['substitute_teacher_id'],
+            'substitute_teacher_name': sub_names.get(a['substitute_teacher_id']),
+            'journal_filled': a['id'] in sub_journals,
+        } if a else None
         enriched.append(serialize_doc(s))
+    if substitute:
+        enriched = sorted(enriched + substitute, key=lambda x: x.get('start_time') or '')
     return enriched
 
 

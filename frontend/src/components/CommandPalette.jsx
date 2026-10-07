@@ -13,7 +13,7 @@ import {
   LayoutDashboard, Calendar, ScanLine, Users, BookOpen, Settings,
   QrCode, Trophy, FileText, UserCheck, Sparkles, ClipboardList,
   Building2, BookMarked, GraduationCap, Megaphone, DollarSign,
-  ShieldCheck, ArrowRightLeft, Globe, CalendarDays,
+  ShieldCheck, ArrowRightLeft, Globe, CalendarDays, UserRoundCog,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -151,6 +151,11 @@ export function CommandPalette() {
             onSelect: () => navigate('/admin/jurnal'),
           },
           {
+            icon: UserRoundCog,
+            label: 'Guru Pengganti',
+            onSelect: () => navigate('/guru-pengganti'),
+          },
+          {
             icon: UserCheck,
             label: 'Kehadiran Siswa',
             onSelect: () => navigate('/admin/kehadiran'),
@@ -217,6 +222,17 @@ export function CommandPalette() {
             icon: FileText,
             label: 'Rapor Saya',
             onSelect: () => navigate('/rapor'),
+          },
+        ],
+      });
+    } else if (activeRole === 'waka_kurikulum' || activeRole === 'guru_piket') {
+      baseItems.push({
+        group: 'Jadwal & Jurnal',
+        items: [
+          {
+            icon: UserRoundCog,
+            label: 'Guru Pengganti',
+            onSelect: () => navigate('/guru-pengganti'),
           },
         ],
       });

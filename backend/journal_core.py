@@ -6,7 +6,8 @@ import math
 import json
 import base64
 import logging
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 import io
 
@@ -473,3 +474,20 @@ def validate_dynamic_qr(token: str, room_secret: str) -> Dict[str, Any]:
     if totp.verify(code, valid_window=1):
         return {'valid': True, 'reason': 'QR dinamis valid', 'payload': payload}
     return {'valid': False, 'reason': 'Kode TOTP tidak valid/kedaluwarsa'}
+
+
+def day_started_at_filter(day: Optional[date] = None) -> Dict[str, Any]:
+    """Filter Mongo `started_at` untuk satu hari kalender WIB (default hari ini).
+
+    Format `started_at` di koleksi journals campuran: jurnal scan QR/token kelas menyimpan waktu UTC
+    tanpa zona (JournalModel memakai utcnow), sedangkan jurnal piket/guru pengganti menyimpan WIB
+    ber-offset '+07:00'. Filter ini mencocokkan keduanya untuk hari WIB yang sama.
+    """
+    day = day or now_wib().date()
+    start_wib = datetime(day.year, day.month, day.day, tzinfo=WIB_TZ)
+    utc_start = start_wib.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    utc_end = (start_wib + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    return {'$or': [
+        {'started_at': {'$regex': rf"^{day.isoformat()}T.*\+07:00$"}},
+        {'started_at': {'$gte': utc_start, '$lt': utc_end, '$not': re.compile(r'[+Z]')}},
+    ]}

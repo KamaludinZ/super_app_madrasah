@@ -52,6 +52,10 @@ import AdminImportPage from '@/pages/admin/AdminImportPage';
 import AdminHolidaysPage from '@/pages/admin/AdminHolidaysPage';
 import AdminBackupPage from '@/pages/admin/AdminBackupPage';
 import PiketTasksPage from '@/pages/PiketTasksPage';
+import GuruPenggantiPage from '@/pages/GuruPenggantiPage';
+import GuruPenggantiFormPage from '@/pages/GuruPenggantiFormPage';
+import GuruPenggantiKalenderPage from '@/pages/GuruPenggantiKalenderPage';
+import JurnalBerdampinganPage from '@/pages/JurnalBerdampinganPage';
 import MySchedulePage from '@/pages/MySchedulePage';
 import AdminMutationsPage from '@/pages/admin/AdminMutationsPage';
 import AchievementsPage from '@/pages/AchievementsPage';
@@ -339,6 +343,10 @@ function App() {
             <Route path="/admin/kurikulum" element={<AdminCurriculumsPage />} />
             <Route path="/admin/app-info" element={<AdminAppInfoPage />} />
             <Route path="/piket/tugas" element={<PiketTasksPage />} />
+            <Route path="/guru-pengganti" element={<GuruPenggantiPage />} />
+            <Route path="/guru-pengganti/tugaskan" element={<GuruPenggantiFormPage />} />
+            <Route path="/guru-pengganti/kalender" element={<GuruPenggantiKalenderPage />} />
+            <Route path="/guru-pengganti/jurnal/:assignmentId" element={<JurnalBerdampinganPage />} />
             <Route path="/jadwal/atur" element={<MySchedulePage />} />
             <Route path="/admin/mutasi" element={<AdminMutationsPage />} />
             <Route path="/admin/alumni" element={<AdminAlumniPage />} />

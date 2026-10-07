@@ -2,17 +2,35 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Loader2, LayoutGrid, List, Trash2, XCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Calendar, Clock, Loader2, PenLine, LayoutGrid, List, Trash2, XCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { getMySubstituteToday, mergeTodaySchedule } from '@/lib/guruPenggantiSchedule';
+import SubstituteBadge from '@/components/guru-pengganti/SubstituteBadge';
+import SubstituteJournalDialog from '@/components/guru-pengganti/SubstituteJournalDialog';
+import ReplacedSlotNote from '@/components/guru-pengganti/ReplacedSlotNote';
 
 export default function JadwalPage() {
   const { user, activeRole } = useAuth();
   const [today, setToday] = useState([]);
+  // Slot hasil penugasan guru pengganti hari ini (wali kelas: ditampilkan terpisah dari jadwal kelas).
+  const [substituteToday, setSubstituteToday] = useState([]);
+  // Slot yang sedang diisi jurnalnya: mode 'substitute' (saya pengganti) | 'original' (slot saya sedang digantikan).
+  const [journalTarget, setJournalTarget] = useState(null);
+  const markJournalFilled = (slot) => {
+    const same = (x) => (journalTarget?.mode === 'original'
+      ? !x.is_substitute && x.id === slot.id
+      : x.assignment_id && x.assignment_id === slot.assignment_id);
+    const mark = (list) => list.map((x) => (same(x) ? { ...x, journal_filled: true } : x));
+    setToday(mark);
+    setSubstituteToday(mark);
+  };
+  const fillSubstitute = (slot) => setJournalTarget({ slot, mode: 'substitute' });
+  const fillOriginal = (slot) => setJournalTarget({ slot, mode: 'original' });
   const [weekly, setWeekly] = useState([]);
   const [weeklyGrouped, setWeeklyGrouped] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +61,7 @@ export default function JadwalPage() {
           params: activeAY ? { academic_year_id: activeAY.id } : {}
         });
         const myClass = classes.find(c => c.homeroom_teacher_id === user.id);
+        setSubstituteToday(await getMySubstituteToday().catch(() => []));
         if (myClass) {
           const { data: todayData } = await api.get('/schedules', { params: { class_id: myClass.id, day: getDayId() } });
           setToday(todayData || []);
@@ -56,9 +75,12 @@ export default function JadwalPage() {
           setWeeklyGrouped([]);
         }
       } else {
-        // Guru: jadwal mengajar mereka sendiri
-        const { data } = await api.get('/schedules/my-today');
-        setToday(data);
+        // Guru: jadwal mengajar mereka sendiri + slot yang ditugaskan sebagai guru pengganti
+        const [{ data }, substitute] = await Promise.all([
+          api.get('/schedules/my-today'),
+          getMySubstituteToday().catch(() => []),
+        ]);
+        setToday(mergeTodaySchedule(data, substitute));
         const { data: all } = await api.get('/schedules', { params: { teacher_id: user.id } });
         setWeekly(all);
         const { data: grouped } = await api.get('/schedules/grouped', { params: { teacher_id: user.id } });
@@ -180,12 +202,20 @@ export default function JadwalPage() {
       </div>
       <Tabs defaultValue="today">
         <TabsList>
-          <TabsTrigger value="today" data-testid="jadwal-tab-today">Hari Ini ({today.length})</TabsTrigger>
+          <TabsTrigger value="today" data-testid="jadwal-tab-today">Hari Ini ({today.length + substituteToday.length})</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="jadwal-tab-weekly">Mingguan ({weekly.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="today" className="mt-4">
           {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-            <ScheduleList items={today} />
+            <div className="space-y-4">
+              <ScheduleList items={today} onFillSubstitute={fillSubstitute} onFillOriginal={fillOriginal} />
+              {substituteToday.length > 0 && (
+                <div data-testid="jadwal-substitute-today">
+                  <div className="text-sm font-semibold text-slate-700 mb-2">Menggantikan Guru Hari Ini</div>
+                  <ScheduleList items={substituteToday} onFillSubstitute={fillSubstitute} />
+                </div>
+              )}
+            </div>
           )}
         </TabsContent>
         <TabsContent value="weekly" className="mt-4 space-y-4">
@@ -348,24 +378,69 @@ export default function JadwalPage() {
           )}
         </TabsContent>
       </Tabs>
+      <SubstituteJournalDialog
+        slot={journalTarget?.slot}
+        mode={journalTarget?.mode}
+        open={!!journalTarget}
+        onOpenChange={(o) => { if (!o) setJournalTarget(null); }}
+        onSaved={markJournalFilled}
+      />
     </div>
   );
 }
 
-function ScheduleList({ items }) {
+function ScheduleList({ items, onFillSubstitute, onFillOriginal }) {
   if (!items || items.length === 0) {
     return <div className="text-sm text-slate-500 italic py-4">Tidak ada jadwal</div>;
   }
   return (
     <div className="space-y-2">
       {items.map((s, idx) => (
-        <div key={s.id || idx} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <div
+          key={s.assignment_id || s.id || idx}
+          className={`flex items-center gap-3 rounded-xl border p-3 ${s.is_substitute ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white'}`}
+          data-testid={s.is_substitute ? `jadwal-substitute-${s.assignment_id}` : undefined}
+        >
           <div className="font-mono text-sm font-semibold w-24 shrink-0">{s.start_time}-{s.end_time}</div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-slate-900 truncate">{s.subject_name}</div>
-            <div className="text-xs text-slate-600">{s.class_name} • {s.room_name} • {s.teacher_name}</div>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="font-semibold text-slate-900 truncate">{s.subject_name}</div>
+              {s.is_substitute && <SubstituteBadge originalTeacherName={s.original_teacher_name} className="shrink-0" />}
+            </div>
+            {s.is_substitute ? (
+              <div className="text-xs text-slate-600">
+                {s.class_name} • {s.room_name} • Menggantikan <span className="font-medium">{s.original_teacher_name}</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-xs text-slate-600">{s.class_name} • {s.room_name} • {s.teacher_name}</div>
+                <ReplacedSlotNote substitute={s.substitute} />
+              </>
+            )}
           </div>
-          {s.journal_filled && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Terisi</Badge>}
+          {s.journal_filled ? (
+            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Terisi</Badge>
+          ) : !s.is_substitute && s.substitute && onFillOriginal ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 shrink-0"
+              onClick={() => onFillOriginal(s)}
+              data-testid={`fill-original-${s.id}`}
+            >
+              <PenLine className="h-3.5 w-3.5" /> Isi Jurnal
+            </Button>
+          ) : s.is_substitute && onFillSubstitute && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 border-amber-300 text-amber-800 hover:bg-amber-50 shrink-0"
+              onClick={() => onFillSubstitute(s)}
+              data-testid={`fill-substitute-${s.assignment_id}`}
+            >
+              <PenLine className="h-3.5 w-3.5" /> Isi Jurnal
+            </Button>
+          )}
         </div>
       ))}
     </div>

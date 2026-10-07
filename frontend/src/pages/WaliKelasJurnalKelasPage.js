@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
+import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
 
 export default function WaliKelasJurnalKelasPage() {
   const { user } = useAuth();
@@ -303,7 +304,9 @@ export default function WaliKelasJurnalKelasPage() {
                           <TableCell className="text-sm">{j.subject_name}</TableCell>
                           <TableCell className="text-sm">{j.teacher_name}</TableCell>
                           <TableCell>
-                            {j.fill_mode === 'piket' ? (
+                            {j.fill_mode === 'substitute' ? (
+                              <SubstituteFilledBadge journal={j} />
+                            ) : j.fill_mode === 'piket' ? (
                               <Badge className="bg-amber-100 text-amber-700 border-amber-200">
                                 ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
                               </Badge>

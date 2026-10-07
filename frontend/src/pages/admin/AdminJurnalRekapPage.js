@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
+import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
@@ -362,7 +363,9 @@ export default function AdminJurnalRekapPage() {
                         <span className="text-rose-600">{j.siswa_tidak_hadir || 0}</span>
                       </TableCell>
                       <TableCell>
-                        {j.fill_mode === 'piket' ? (
+                        {j.fill_mode === 'substitute' ? (
+                          <SubstituteFilledBadge journal={j} />
+                        ) : j.fill_mode === 'piket' ? (
                           <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1 text-xs" data-testid={`fill-badge-piket-${j.id}`}>
                             ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
                           </Badge>
@@ -481,7 +484,9 @@ export default function AdminJurnalRekapPage() {
                 <div>
                   <Label className="text-xs text-slate-500">Diisi Oleh</Label>
                   <div>
-                    {detailDialog.journal.fill_mode === 'piket' ? (
+                    {detailDialog.journal.fill_mode === 'substitute' ? (
+                      <SubstituteFilledBadge journal={detailDialog.journal} />
+                    ) : detailDialog.journal.fill_mode === 'piket' ? (
                       <Badge className="bg-amber-100 text-amber-700 border-amber-200">
                         ✋ Piket{detailDialog.journal.filled_by_name ? `: ${detailDialog.journal.filled_by_name}` : ''}
                       </Badge>
@@ -746,7 +751,9 @@ export default function AdminJurnalRekapPage() {
                 <div>
                   <Label className="text-xs text-slate-500">Mode Pengisian</Label>
                   <div>
-                    {editDialog.journal.fill_mode === 'piket' ? (
+                    {editDialog.journal.fill_mode === 'substitute' ? (
+                      <SubstituteFilledBadge journal={editDialog.journal} />
+                    ) : editDialog.journal.fill_mode === 'piket' ? (
                       <Badge className="bg-amber-100 text-amber-700 border-amber-200">
                         Piket{editDialog.journal.filled_by_name ? `: ${editDialog.journal.filled_by_name}` : ''}
                       </Badge>

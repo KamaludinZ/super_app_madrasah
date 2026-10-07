@@ -28,6 +28,7 @@ from routers import (
     classes,
     data_gtk,
     gtk_berkas,
+    guru_pengganti,
     dokumen_siswa,
     ekinerja,
     events,
@@ -122,6 +123,7 @@ api_router.include_router(perpus.router)
 api_router.include_router(uks.router)
 api_router.include_router(sarpras.router)
 api_router.include_router(lab.router)
+api_router.include_router(guru_pengganti.router)
 
 api_router.include_router(kelas_digital.router)
 
@@ -269,6 +271,15 @@ async def startup_event():
         await ensure_uks_diagnosa_indexes(db)
     except Exception as e:
         logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
+
+    # Index penugasan Guru Pengganti
+    try:
+        from routers.guru_pengganti import ensure_substitute_assignment_indexes
+        gagal = await ensure_substitute_assignment_indexes(db)
+        if gagal:
+            logger.error(f"Index guru pengganti gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure substitute assignment indexes: {e}")
 
     # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
     try:

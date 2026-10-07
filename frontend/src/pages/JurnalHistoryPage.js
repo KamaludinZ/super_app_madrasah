@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/lib/AuthContext';
 import { useSearchParams } from 'react-router-dom';
+import FilledByCell, { filledByText } from '@/components/guru-pengganti/FilledByCell';
+import { groupSideBySideJournals } from '@/lib/guruPengganti';
 
 // Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
 // "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
@@ -92,6 +94,7 @@ export default function JurnalHistoryPage() {
       endpoint = '/jurnal/piket-filled';
     }
 
+    // GET /jurnal/my sudah menyertakan jurnal yang diisi sebagai guru pengganti.
     api.get(endpoint).then(({ data }) => {
       // For admin endpoint, data is in data.items
       const journalData = isAdmin ? data.items : data;
@@ -164,7 +167,8 @@ export default function JurnalHistoryPage() {
       filtered = filtered.filter(j => (j.fill_mode || 'self') === filterFillMode);
     }
 
-    return filtered;
+    // Catatan guru asli & guru pengganti pada slot yang sama ditampilkan berurutan.
+    return groupSideBySideJournals(filtered);
   }, [items, filterDateStart, filterDateEnd, filterClass, filterSubject, filterQrMode, filterFillMode]);
 
   const handleExportExcel = () => {
@@ -195,9 +199,12 @@ export default function JurnalHistoryPage() {
           'Catatan': j.catatan || '-',
         };
 
+        base['Diisi Oleh'] = j.fill_mode === 'substitute'
+          ? `${filledByText(j)} (menggantikan ${j.teacher_name || '-'})`
+          : filledByText(j);
         if (isPiket) {
-          base['Mode Pengisian'] = j.fill_mode === 'piket' ? 'Piket' : j.fill_mode === 'admin' ? 'Admin' : 'Guru';
-          base['Diisi Oleh'] = j.filled_by_name || j.teacher_name || '-';
+          base['Mode Pengisian'] = j.fill_mode === 'piket' ? 'Piket' : j.fill_mode === 'admin' ? 'Admin'
+            : j.fill_mode === 'substitute' ? 'Guru Pengganti' : 'Guru';
           base['Catatan Piket'] = j.piket_note || '-';
         }
 
@@ -304,6 +311,8 @@ export default function JurnalHistoryPage() {
       return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">Dynamic QR</Badge>;
     } else if (qrMode === 'rotation') {
       return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">Rotation QR</Badge>;
+    } else if (qrMode === 'substitute') {
+      return <Badge variant="outline" className="text-slate-600">Tanpa QR (Pengganti)</Badge>;
     }
     return <Badge variant="outline">{qrMode}</Badge>;
   };
@@ -430,6 +439,7 @@ export default function JurnalHistoryPage() {
                       <SelectItem value="all">Semua Mode</SelectItem>
                       <SelectItem value="piket">Piket</SelectItem>
                       <SelectItem value="self">Guru Sendiri</SelectItem>
+                      <SelectItem value="substitute">Guru Pengganti</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
@@ -488,8 +498,17 @@ export default function JurnalHistoryPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((j, index) => (
-                    <TableRow key={j.id} className="hover:bg-slate-50">
-                      <TableCell className="font-medium text-slate-500">{index + 1}</TableCell>
+                    <TableRow
+                      key={j.id}
+                      className={`hover:bg-slate-50 ${j.pair_position ? 'bg-amber-50/30 border-l-4 border-l-amber-300' : ''} ${j.pair_position === 'first' ? 'border-b-0' : ''}`}
+                      data-testid={j.pair_position ? `journal-pair-${j.pair_position}-${j.id}` : undefined}
+                    >
+                      <TableCell className="font-medium text-slate-500">
+                        {index + 1}
+                        {j.pair_position === 'second' && (
+                          <div className="text-[10px] font-normal text-amber-700 whitespace-nowrap">berdampingan</div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="text-sm">
                           <div className="font-medium text-slate-900">
@@ -532,15 +551,7 @@ export default function JurnalHistoryPage() {
                         </TableCell>
                       )}
                       <TableCell>
-                        {j.fill_mode === 'piket' ? (
-                          <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                            ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
-                          </Badge>
-                        ) : j.fill_mode === 'admin' ? (
-                          <Badge className="bg-purple-100 text-purple-700 border-purple-200">Admin</Badge>
-                        ) : (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
-                        )}
+                        <FilledByCell journal={j} />
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-slate-700">{j.room_name || '-'}</span>

@@ -17,7 +17,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import now_wib, WIB_TZ
+from journal_core import day_started_at_filter, now_wib, WIB_TZ
 from fastapi.responses import StreamingResponse
 from journal_exports import (
     export_monthly_teacher_journal_excel,
@@ -113,6 +113,55 @@ async def validate_qr(req: QRValidateRequest, user: Dict = Depends(get_current_u
     return await _validate_qr_full(req.qr_token, req.user_lat, req.user_lon, user['id'])
 
 
+def diisi_oleh_label(j: Dict) -> str:
+    """Teks kolom "diisi oleh" riwayat jurnal; catatan guru pengganti → "pengganti: <nama>"."""
+    name = j.get('filled_by_name') or '-'
+    mode = j.get('fill_mode') or 'self'
+    if mode == 'substitute':
+        return f"pengganti: {name}"
+    if mode == 'piket':
+        return f"piket: {name}"
+    if mode == 'admin':
+        return f"admin: {name}"
+    return j.get('filled_by_name') or j.get('teacher_name') or '-'
+
+
+def group_side_by_side(journals: List[Dict]) -> List[Dict]:
+    """Penggabungan entri riwayat: catatan guru asli & guru pengganti untuk satu penugasan
+    (slot + tanggal yang sama) diletakkan berurutan — guru asli dulu — dan diberi `pair_key`
+    serta `pair_position` ('first' | 'second'). Urutan entri lain dipertahankan."""
+    groups: Dict[str, List[Dict]] = {}
+    for j in journals:
+        key = j.get('substitute_assignment_id') or j.get('replaced_assignment_id')
+        if key:
+            j['pair_key'] = key
+            groups.setdefault(key, []).append(j)
+    out, placed = [], set()
+    for j in journals:
+        if id(j) in placed:
+            continue
+        group = groups.get(j.get('pair_key')) if j.get('pair_key') else None
+        if not group or len(group) < 2:
+            out.append(j)
+            placed.add(id(j))
+            continue
+        ordered = sorted(group, key=lambda g: g.get('fill_mode') == 'substitute')
+        for i, g in enumerate(ordered):
+            g['pair_position'] = 'first' if i == 0 else 'second'
+            out.append(g)
+            placed.add(id(g))
+    return out
+
+
+def _stamp_filled_by(doc: Dict, user: Dict) -> None:
+    """Kolom "diisi oleh": jurnal yang diisi guru sendiri (scan QR / token kelas) mencatat pengisinya
+    sama seperti jurnal piket & guru pengganti, agar riwayat seragam."""
+    doc.setdefault('fill_mode', 'self')
+    doc['filled_by_user_id'] = doc.get('filled_by_user_id') or user['id']
+    doc['filled_by_role'] = doc.get('filled_by_role') or 'guru'
+    doc['filled_by_name'] = doc.get('filled_by_name') or user.get('full_name') or user.get('username')
+
+
 async def _resolve_indikator_materi(indikator_id: Optional[str], materi_id: Optional[str]) -> Dict[str, Optional[str]]:
     """Resolve KD/Indikator dan Materi opsional ke bentuk denormalized agar tetap
     tampil di jurnal/rekap/export walau data indikator/materi asal diubah atau dihapus."""
@@ -146,9 +195,14 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
     if not semester_id:
         raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
 
-    existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
+    # Satu jurnal per slot per HARI (jadwal berulang tiap minggu). Jurnal guru pengganti pada slot
+    # ini entri terpisah — tidak menghalangi guru asli mengisi.
+    existing = await db.journals.find_one({
+        'schedule_id': sched['id'], 'teacher_id': user['id'], 'fill_mode': {'$ne': 'substitute'},
+        **day_started_at_filter(),
+    })
     if existing:
-        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini hari ini sudah diisi")
 
     resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
 
@@ -170,6 +224,7 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
         doc['started_at'] = doc['started_at'].isoformat()
     if isinstance(doc.get('created_at'), datetime):
         doc['created_at'] = doc['created_at'].isoformat()
+    _stamp_filled_by(doc, user)
     await db.journals.insert_one(doc)
 
     # Save individual attendance records to attendances collection
@@ -333,9 +388,14 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
     if not semester_id:
         raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
 
-    existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
+    # Satu jurnal per slot per HARI (jadwal berulang tiap minggu). Jurnal guru pengganti pada slot
+    # ini entri terpisah — tidak menghalangi guru asli mengisi.
+    existing = await db.journals.find_one({
+        'schedule_id': sched['id'], 'teacher_id': user['id'], 'fill_mode': {'$ne': 'substitute'},
+        **day_started_at_filter(),
+    })
     if existing:
-        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini hari ini sudah diisi")
 
     resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
 
@@ -355,6 +415,7 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
         'validations': validation, 'qr_mode': 'class_token',
         'created_at': now_wib().isoformat(),
     }
+    _stamp_filled_by(doc, user)
     await db.journals.insert_one(doc)
     await log_audit(user, 'create', 'journal', j_id,
                     details={'class_id': sched['class_id'], 'subject_id': sched['subject_id'], 'method': 'class_token'},
@@ -373,7 +434,12 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
     from core import get_teaching_slots_for_day
     import re
 
-    query = {'teacher_id': user['id']}
+    # Jurnal slot milik saya (termasuk yang diisi guru pengganti untuk slot saya) +
+    # jurnal yang SAYA isi sebagai guru pengganti di slot guru lain.
+    query = {'$or': [
+        {'teacher_id': user['id']},
+        {'fill_mode': 'substitute', 'filled_by_user_id': user['id']},
+    ]}
 
     if semester_filter:
         ctx = await get_active_context(user)
@@ -454,9 +520,17 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
         filled_by_id = j.get('filled_by_user_id')
         if filled_by_id:
             filled_by = await db.users.find_one({'id': filled_by_id}, {'_id': 0, 'full_name': 1})
-            j['filled_by_name'] = filled_by.get('full_name') if filled_by else None
+            j['filled_by_name'] = (filled_by.get('full_name') if filled_by else None) or j.get('filled_by_name')
         else:
             j['filled_by_name'] = None
+
+        # Kolom "diisi oleh" untuk semua jurnal; jurnal guru pengganti tampil di kedua akun
+        # dengan penanda arah (saya menggantikan / slot saya digantikan).
+        j['diisi_oleh'] = diisi_oleh_label(j)
+        j['filled_by_me'] = (filled_by_id or j.get('teacher_id')) == user['id']
+        if j.get('fill_mode') == 'substitute':
+            j['is_substitute'] = True
+            j['substitute_label'] = j['diisi_oleh']
 
         # Get attendance details, with placeholder fallback for journals that only
         # stored aggregate counts (e.g. submitted via /jurnal/scan).
@@ -470,7 +544,7 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
         j['attendance_details'] = attendance_records
 
         enriched.append(serialize_doc(j))
-    return enriched
+    return group_side_by_side(enriched)
 
 
 @router.get("/jurnal/my-timeliness")
@@ -718,7 +792,8 @@ async def admin_jurnal_rekap(
         j['room_name'] = room.get('name') if room else None
         if j.get('filled_by_user_id') and j.get('filled_by_user_id') != j.get('teacher_id'):
             fb = await db.users.find_one({'id': j['filled_by_user_id']}, {'_id': 0, 'full_name': 1})
-            j['filled_by_name'] = fb.get('full_name') if fb else None
+            j['filled_by_name'] = (fb.get('full_name') if fb else None) or j.get('filled_by_name')
+        j['diisi_oleh'] = diisi_oleh_label(j)
 
         # Calculate jam_ke and jtm_count from schedule
         schedule_id = j.get('schedule_id')
@@ -771,7 +846,7 @@ async def admin_jurnal_rekap(
     total_izin = sum(j.get('siswa_izin', 0) for j in enriched)
     total_alpa = sum(j.get('siswa_tidak_hadir', 0) for j in enriched)
     return {
-        'items': enriched,
+        'items': group_side_by_side(enriched),
         'total': len(enriched),
         'summary': {
             'total_hadir': total_hadir, 'total_sakit': total_sakit,
@@ -1281,9 +1356,14 @@ async def submit_offline_journal(req: JournalCreateRequest, request: Request, us
         raise HTTPException(status_code=400, detail="Schedule tidak memiliki semester_id")
 
     # Check for duplicate
-    existing = await db.journals.find_one({'schedule_id': sched['id'], 'teacher_id': user['id']})
+    # Satu jurnal per slot per HARI (jadwal berulang tiap minggu). Jurnal guru pengganti pada slot
+    # ini entri terpisah — tidak menghalangi guru asli mengisi.
+    existing = await db.journals.find_one({
+        'schedule_id': sched['id'], 'teacher_id': user['id'], 'fill_mode': {'$ne': 'substitute'},
+        **day_started_at_filter(),
+    })
     if existing:
-        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini sudah diisi")
+        raise HTTPException(status_code=400, detail="Jurnal untuk jadwal ini hari ini sudah diisi")
 
     # Create journal with offline metadata
     resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
@@ -1320,6 +1400,7 @@ async def submit_offline_journal(req: JournalCreateRequest, request: Request, us
         'sync_attempts': metadata.get('sync_attempts', 1)
     }
 
+    _stamp_filled_by(doc, user)
     await db.journals.insert_one(doc)
 
     # Save individual attendance records

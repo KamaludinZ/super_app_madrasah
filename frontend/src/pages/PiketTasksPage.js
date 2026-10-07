@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -242,7 +242,11 @@ export default function PiketTasksPage() {
                         <TableCell className="text-sm font-mono">{s.room_name || '-'}</TableCell>
                         <TableCell>
                           {s.has_journal ? (
-                            s.journal_info?.fill_mode === 'piket' ? (
+                            s.journal_info?.fill_mode === 'substitute' ? (
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Sudah Diisi (Pengganti)
+                              </Badge>
+                            ) : s.journal_info?.fill_mode === 'piket' ? (
                               <Badge className="bg-amber-100 text-amber-700 border-amber-200 gap-1">
                                 <CheckCircle2 className="h-3 w-3" /> Sudah Diisi (Piket)
                               </Badge>

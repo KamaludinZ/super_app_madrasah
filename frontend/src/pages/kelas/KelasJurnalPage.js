@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
 
 const KelasJurnalPage = () => {
   const [loading, setLoading] = useState(true);
@@ -162,7 +163,9 @@ const KelasJurnalPage = () => {
                         </TableCell>
                         <TableCell>{j.teacher_name || '-'}</TableCell>
                         <TableCell>
-                          {j.fill_mode === 'piket' ? (
+                          {j.fill_mode === 'substitute' ? (
+                            <SubstituteFilledBadge journal={j} />
+                          ) : j.fill_mode === 'piket' ? (
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200">
                               ✋ Piket{j.filled_by_name ? `: ${j.filled_by_name}` : ''}
                             </Badge>

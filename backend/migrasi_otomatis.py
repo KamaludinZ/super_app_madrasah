@@ -104,11 +104,26 @@ async def _alamat_kode_wilayah(db):
     return await cocokkan_alamat_tersimpan(db)
 
 
+async def _guru_pengganti(db):
+    from migrations.migrate_guru_pengganti import migrate
+    hasil = await migrate(db)
+    if hasil['index_gagal']:
+        raise RuntimeError(f"index gagal: {hasil['index_gagal']}")
+    return {k: hasil[k] for k in ('status_diisi', 'total')} | {'ganda': len(hasil['ganda'])}
+
+
+async def _journal_pengisi(db):
+    from migrations.migrate_journal_pengisi import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
     ('2026-10-06_master_wilayah', _master_wilayah),
     ('2026-10-06_alamat_kode_wilayah', _alamat_kode_wilayah),
+    ('2026-10-07_guru_pengganti', _guru_pengganti),
+    ('2026-10-07_journal_pengisi', _journal_pengisi),
 ]
 
 

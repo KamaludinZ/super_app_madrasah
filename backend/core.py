@@ -237,6 +237,9 @@ async def bump_token_version(user_id: str):
 # Helper constants for common role groups
 MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas')
 ACADEMIC_MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'waka_kurikulum')
+# Peran yang boleh membuka menu Guru Pengganti & menugaskan guru pengganti.
+# Guru mata pelajaran hanya melaksanakan penugasan (tanpa menu).
+GURU_PENGGANTI_ROLES = ('admin', 'waka_kurikulum', 'guru_piket')
 
 
 def require_role(*allowed_roles: str):

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ScanLine, Calendar, CheckCircle2, Circle, ClipboardList, UserCircle,
   CalendarDays, History, ShieldAlert, FileText, ClipboardEdit, BookOpen, Clock,
-  ListChecks, Sparkles, Trophy,
+  ListChecks, Sparkles, Trophy, PenLine,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,10 @@ import { useAuth } from '@/lib/AuthContext';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
 import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 import { NoJurnalEmptyState } from '@/components/ui/EmptyState';
+import { getMySubstituteToday, mergeTodaySchedule } from '@/lib/guruPenggantiSchedule';
+import SubstituteBadge from '@/components/guru-pengganti/SubstituteBadge';
+import SubstituteJournalDialog from '@/components/guru-pengganti/SubstituteJournalDialog';
+import ReplacedSlotNote from '@/components/guru-pengganti/ReplacedSlotNote';
 
 // This dashboard is shared by roles whose sidebar menus differ significantly —
 // each Menu Cepat set below mirrors exactly what that role sees in AppShell.js,
@@ -56,11 +60,17 @@ export default function GuruDashboard() {
   const [totalJtm, setTotalJtm] = useState(0);
   const [timeliness, setTimeliness] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Slot yang sedang diisi jurnalnya: mode 'substitute' (saya pengganti) | 'original' (slot saya sedang digantikan).
+  const [journalTarget, setJournalTarget] = useState(null);
 
   useEffect(() => {
     if (!isSubjectTeacher) { setLoading(false); return; }
     Promise.all([
-      api.get('/schedules/my-today').then(({ data }) => setSchedule(data)).catch(() => {}),
+      // Jadwal reguler + slot yang ditugaskan sebagai guru pengganti hari ini.
+      Promise.all([
+        api.get('/schedules/my-today').then(({ data }) => data).catch(() => []),
+        getMySubstituteToday().catch(() => []),
+      ]).then(([regular, substitute]) => setSchedule(mergeTodaySchedule(regular, substitute))),
       api.get('/schedules/grouped', { params: { teacher_id: user?.id } })
         .then(({ data }) => setTotalJtm((data || []).reduce((sum, s) => sum + (s.jtm_count || 1), 0)))
         .catch(() => {}),
@@ -115,19 +125,39 @@ export default function GuruDashboard() {
               <div className="space-y-2" data-testid="guru-schedule-list">
                 {schedule.map((s, idx) => (
                   <motion.div
-                    key={s.id || idx}
+                    key={s.assignment_id || s.id || idx}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.04 }}
-                    className={`flex items-center gap-3 rounded-xl border p-3 ${s.journal_filled ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'}`}
+                    className={`flex items-center gap-3 rounded-xl border p-3 ${
+                      s.journal_filled ? 'bg-emerald-50/50 border-emerald-200'
+                        : s.is_substitute ? 'bg-amber-50/40 border-amber-300' : 'bg-white border-slate-200'}`}
                   >
                     <div className="font-mono text-sm font-semibold text-slate-900 w-20 shrink-0">{s.start_time}<br /><span className="text-xs text-slate-500">{s.end_time}</span></div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-slate-900 truncate">{s.subject_name}</div>
-                      <div className="text-xs text-slate-600">{s.class_name} • {s.room_name}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">{s.subject_name}</div>
+                        {s.is_substitute && <SubstituteBadge originalTeacherName={s.original_teacher_name} className="shrink-0" />}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {s.class_name} • {s.room_name}
+                        {s.is_substitute && <> • Menggantikan <span className="font-medium">{s.original_teacher_name}</span></>}
+                      </div>
+                      {!s.is_substitute && <ReplacedSlotNote substitute={s.substitute} />}
                     </div>
                     {s.journal_filled ? (
                       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" />Terisi</Badge>
+                    ) : s.is_substitute ? (
+                      <Button size="sm" variant="outline" className="gap-1 border-amber-300 text-amber-800 hover:bg-amber-50"
+                        onClick={() => setJournalTarget({ slot: s, mode: 'substitute' })} data-testid={`fill-substitute-${s.assignment_id}`}>
+                        <PenLine className="h-3.5 w-3.5" /> Isi
+                      </Button>
+                    ) : s.substitute ? (
+                      // Slot saya sedang digantikan: saya tidak di kelas (tanpa scan QR), isi lewat form.
+                      <Button size="sm" variant="outline" className="gap-1"
+                        onClick={() => setJournalTarget({ slot: s, mode: 'original' })} data-testid={`fill-original-${s.id}`}>
+                        <PenLine className="h-3.5 w-3.5" /> Isi
+                      </Button>
                     ) : (
                       <Link to="/jurnal/scan">
                         <Button size="sm" variant="outline" className="gap-1" data-testid={`scan-now-${idx}`}><ScanLine className="h-3.5 w-3.5" /> Isi</Button>
@@ -198,6 +228,19 @@ export default function GuruDashboard() {
           </CardContent>
         </Card>
       )}
+
+      <SubstituteJournalDialog
+        slot={journalTarget?.slot}
+        mode={journalTarget?.mode}
+        open={!!journalTarget}
+        onOpenChange={(o) => { if (!o) setJournalTarget(null); }}
+        onSaved={(slot) => setSchedule((list) => list.map((x) => {
+          const same = journalTarget?.mode === 'original'
+            ? !x.is_substitute && x.id === slot.id
+            : x.assignment_id && x.assignment_id === slot.assignment_id;
+          return same ? { ...x, journal_filled: true } : x;
+        }))}
+      />
     </div>
   );
 }
