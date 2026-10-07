@@ -4,7 +4,7 @@
     "slug": "super-apps-matsandatama",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "matsandatama",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#006837",
@@ -12,7 +12,7 @@
       "package": "id.sch.mtsn2kotamalang.superapps",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/app-icon-adaptive.png",
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [

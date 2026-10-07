@@ -4,8 +4,8 @@ Sumber: assets/images/logo-madrasah.png (salinan `logo_url` di Pengaturan web, 1
 Jalankan dari folder mobile/:  python scripts/generate-logo-assets.py   (butuh Pillow)
 
 Menghasilkan (assets/images/):
-  icon.png             1024  logo di atas latar putih membulat (ikon umum / Expo Go)
-  adaptive-icon.png    1024  foreground ikon adaptif Android (logo di zona aman 66%, latar transparan)
+  app-icon.png          1024 logo di atas latar putih membulat (ikon umum / Expo Go)
+  app-icon-adaptive.png 1024 foreground ikon adaptif Android (logo di zona aman 66%, latar transparan)
   splash-icon.png      1024  logo untuk layar pembuka (dipasang di atas latar hijau #006837)
   notification-icon.png 256  siluet putih (Android mewajibkan ikon notifikasi monokrom)
   favicon.png            48
@@ -41,11 +41,11 @@ def main():
     # Ikon umum: latar putih membulat + logo 84%.
     icon = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
     ImageDraw.Draw(icon).rounded_rectangle([0, 0, 1023, 1023], radius=224, fill=(255, 255, 255, 255))
-    centered(icon, fit(logo, 860)).save(os.path.join(OUT, 'icon.png'))
+    centered(icon, fit(logo, 860)).save(os.path.join(OUT, 'app-icon.png'))
 
     # Ikon adaptif Android: launcher dapat memotong hingga lingkaran 66% → logo 62% agar utuh.
     adaptive = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
-    centered(adaptive, fit(logo, 636)).save(os.path.join(OUT, 'adaptive-icon.png'))
+    centered(adaptive, fit(logo, 636)).save(os.path.join(OUT, 'app-icon-adaptive.png'))
 
     # Splash: logo dengan sedikit bayangan lembut agar menonjol di atas hijau.
     splash = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
