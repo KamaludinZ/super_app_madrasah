@@ -39,9 +39,8 @@ export function LockScreen() {
         {error ? <T center color={colors.warning} weight="semibold">{error}</T> : null}
       </View>
       <View style={styles.actions}>
-        <Button title={biometricAvailable ? 'Buka dengan Biometrik / PIN' : 'Lanjutkan'} icon="finger-print" size="lg" loading={busy} onPress={tryUnlock} style={{ backgroundColor: colors.surface }} fullWidth
-          variant="primary" />
-        <Button title="Keluar dari akun" variant="ghost" onPress={() => logout()} fullWidth style={{ marginTop: spacing.sm }} />
+        <Button title={biometricAvailable ? 'Buka dengan Biometrik / PIN' : 'Lanjutkan'} icon="finger-print" size="lg" loading={busy} onPress={tryUnlock} style={{ backgroundColor: colors.surface }} textColor={colors.brandPrimary} fullWidth />
+        <Button title="Keluar dari akun" variant="ghost" textColor={colors.onBrand} onPress={() => logout()} fullWidth style={{ marginTop: spacing.sm }} />
       </View>
     </ImageBackground>
   );

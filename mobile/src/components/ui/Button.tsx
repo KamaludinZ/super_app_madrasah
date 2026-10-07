@@ -18,9 +18,11 @@ export type ButtonProps = Omit<PressableProps, 'style'> & {
   iconRight?: IconName;
   fullWidth?: boolean;
   style?: ViewStyle;
+  /** Warna teks & ikon khusus (mis. tombol di atas latar gelap). */
+  textColor?: string;
 };
 
-export function Button({ title, variant = 'primary', size = 'md', loading, icon, iconRight, fullWidth, style, disabled, onPress, ...rest }: ButtonProps) {
+export function Button({ title, variant = 'primary', size = 'md', loading, icon, iconRight, fullWidth, style, textColor, disabled, onPress, ...rest }: ButtonProps) {
   const { colors } = useTheme();
   const isDisabled = disabled || loading;
   const bg: Record<Variant, string> = {
@@ -39,6 +41,7 @@ export function Button({ title, variant = 'primary', size = 'md', loading, icon,
     danger: colors.onError,
     warning: colors.onWarning,
   };
+  if (textColor) fg[variant] = textColor;
   const heights: Record<Size, number> = { sm: 40, md: 48, lg: 54 };
   const textVariant = size === 'sm' ? 'label' : 'subtitle';
 

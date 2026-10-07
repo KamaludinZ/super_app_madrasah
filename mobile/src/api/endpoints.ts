@@ -42,7 +42,8 @@ export const api = {
     my: () => request<Journal[]>('/jurnal/my'),
     detail: (id: string) => request<Journal>(`/jurnal/${id}`),
     byClass: (class_id: string) => request<Journal[]>(`/jurnal/by-class/${class_id}`),
-    admin: (q: { date_from?: string; date_to?: string; limit?: number }) => request<Journal[] | { items: Journal[] }>('/admin/jurnal', { query: q }),
+    admin: (q: { start_date?: string; end_date?: string; class_id?: string; limit?: number }) => request<{ items: Journal[] }>('/admin/jurnal', { query: q }),
+    piketFilled: () => request<Journal[]>('/jurnal/piket-filled'),
   },
 
   piket: {
