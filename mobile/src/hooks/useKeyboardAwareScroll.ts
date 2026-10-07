@@ -1,6 +1,6 @@
 /**
  * Android edge-to-edge (Expo SDK 57) tidak mengecilkan layar saat keyboard muncul, sehingga kolom isian
- * di bagian bawah bisa tertutup. Hook ini memberi ruang bawah setinggi keyboard pada ScrollView dan
+ * di bagian bawah bisa tertutup. Hook ini memberi ruang bawah seluas bagian ScrollView yang tertutup keyboard dan
  * menggulir otomatis agar kolom yang sedang diisi berada di atas keyboard (saat keyboard muncul dan
  * saat fokus berpindah ke kolom lain).
  */
@@ -40,8 +40,14 @@ export function useKeyboardAwareScroll(scrollRef: RefObject<ScrollView | null>) 
 
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
-      kbTop.current = e.endCoordinates.screenY || Dimensions.get('screen').height - e.endCoordinates.height;
-      setKeyboardHeight(e.endCoordinates.height);
+      const top = e.endCoordinates.screenY || Dimensions.get('screen').height - e.endCoordinates.height;
+      kbTop.current = top;
+      // Ruang bawah = bagian ScrollView yang benar-benar tertutup keyboard: 0 bila jendela sudah
+      // mengecil (adjustResize), setinggi area tertutup bila tidak (edge-to-edge). Tidak berlebih,
+      // sehingga konten hanya bisa digulir sampai elemen terakhirnya.
+      scrollRef.current?.getNativeScrollRef?.()?.measureInWindow((_x, sy, sw, sh) => {
+        if (sw && sh) setKeyboardHeight(Math.max(0, Math.round(sy + sh - top)));
+      });
       // Ruang bawah perlu ter-render dulu (gulir pertama bisa terpotong panjang konten lama);
       // gulir kedua menghitung ulang dari posisi terkini.
       setTimeout(revealFocused, 80);
@@ -53,7 +59,7 @@ export function useKeyboardAwareScroll(scrollRef: RefObject<ScrollView | null>) 
     });
     const focus = DeviceEventEmitter.addListener(INPUT_FOCUS_EVENT, () => { setTimeout(revealFocused, 120); setTimeout(revealFocused, 400); });
     return () => { show.remove(); hide.remove(); focus.remove(); };
-  }, [revealFocused]);
+  }, [revealFocused, scrollRef]);
 
   return {
     keyboardHeight,
