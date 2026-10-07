@@ -1,9 +1,10 @@
 /**
  * Kerangka halaman sebelum login (Masuk, Lupa Password, Reset Password): latar motif pendidikan
- * (EduBackground), logo, kartu isian, dan catatan kaki. Aman untuk keyboard dan area notch.
+ * (EduBackground), logo, kartu isian, dan catatan kaki. Kolom yang diisi selalu terlihat di atas keyboard
+ * (useKeyboardAwareScroll) dan aman untuk area notch.
  */
-import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useRef } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +14,7 @@ import { EduBackground } from './EduBackground';
 import { Card } from './ui/Card';
 import { IconButton } from './ui/Button';
 import { T } from './ui/Text';
+import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
 export function AuthLayout({ children, back, logoSize = 104, footer }: {
   children: React.ReactNode;
@@ -23,20 +25,25 @@ export function AuthLayout({ children, back, logoSize = 104, footer }: {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  const kb = useKeyboardAwareScroll(scrollRef);
 
   return (
     <EduBackground>
       <StatusBar style="light" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + (back ? 64 : spacing.xxl), paddingBottom: insets.bottom + spacing.xl }]}
+          ref={scrollRef}
+          onScroll={kb.onScroll}
+          scrollEventThrottle={32}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + (back ? 64 : spacing.xxl), paddingBottom: (kb.keyboardHeight || insets.bottom) + spacing.xl }]}
           keyboardShouldPersistTaps="handled"
         >
           <BrandLogo light size={logoSize} />
           <Card style={styles.card}>{children}</Card>
           {footer ? <T variant="small" center color={colors.onBrand} style={{ opacity: 0.8 }}>{footer}</T> : null}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
       {back ? (
         <View style={[styles.back, { top: insets.top + spacing.sm }]}>
           <IconButton name="arrow-back" color="#FFFFFF" bg="rgba(0,0,0,0.18)" accessibilityLabel="Kembali"

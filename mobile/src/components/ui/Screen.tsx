@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { spacing, useTheme } from '@/theme';
 import { T } from './Text';
 import { IconButton } from './Button';
 import { OfflineBanner } from '../OfflineBanner';
+import { useKeyboardAwareScroll } from '@/hooks/useKeyboardAwareScroll';
 
 type Props = {
   title?: string;
@@ -34,11 +35,16 @@ export function Screen({ title, subtitle, back, right, children, scroll = true, 
   const brandHeader = headerTone === 'brand';
   const headerBg = brandHeader ? colors.brand : colors.surface;
   const headerFg = brandHeader ? colors.onBrand : colors.onSurface;
+  const scrollRef = useRef<ScrollView>(null);
+  const kb = useKeyboardAwareScroll(scrollRef);
 
   const content = scroll ? (
     <ScrollView
+      ref={scrollRef}
+      onScroll={kb.onScroll}
+      scrollEventThrottle={32}
       style={{ flex: 1 }}
-      contentContainerStyle={[padded && styles.padded, { paddingBottom: footer ? spacing.md : insets.bottom + spacing.xl }, contentStyle]}
+      contentContainerStyle={[padded && styles.padded, { paddingBottom: kb.keyboardHeight ? kb.keyboardHeight + spacing.xl : footer ? spacing.md : insets.bottom + spacing.xl }, contentStyle]}
       keyboardShouldPersistTaps="handled"
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} colors={[colors.brandPrimary]} /> : undefined}
     >

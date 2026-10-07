@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { DeviceEventEmitter, Pressable, StyleSheet, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { INPUT_FOCUS_EVENT } from '@/hooks/useKeyboardAwareScroll';
 import { fonts, fontSize, radius, spacing, useTheme } from '@/theme';
 import { T } from './Text';
 import { Icon, IconName } from './Icon';
@@ -25,7 +26,7 @@ export function Input({ label, error, hint, icon, containerStyle, right, secureT
         {icon ? <Icon name={icon} size={20} color={focused ? colors.brandPrimary : colors.muted} /> : null}
         <TextInput
           placeholderTextColor={colors.muted}
-          onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
+          onFocus={(e) => { setFocused(true); DeviceEventEmitter.emit(INPUT_FOCUS_EVENT); rest.onFocus?.(e); }}
           onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
           secureTextEntry={hidden}
           multiline={multiline}
