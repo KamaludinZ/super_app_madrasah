@@ -3,7 +3,7 @@
  *   /login          → layar masuk
  *   /(app)/...      → area setelah login (dijaga sesi + kunci aplikasi)
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import { AuthProvider } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { ToastHost } from '@/components/ui/Toast';
 import { ensureChannels } from '@/notifications';
+import { AnimatedSplash, AuthReadyReporter } from '@/components/AnimatedSplash';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -50,26 +51,31 @@ export default function RootLayout() {
     ensureChannels().catch(() => {});
   }, [hydrate]);
 
-  useEffect(() => {
-    if (fontsLoaded && prefsReady) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded, prefsReady]);
-
-  if (!fontsLoaded || !prefsReady) return null;
+  // Layar pembuka beranimasi tampil sampai font, preferensi, dan sesi siap (lihat AnimatedSplash).
+  const [authReady, setAuthReady] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
+  const onAuthReady = useCallback(() => setAuthReady(true), []);
+  const onSplashFinish = useCallback(() => setSplashDone(true), []);
+  const assetsReady = fontsLoaded && prefsReady;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            <NetworkProvider>
-              <AuthProvider>
-                <Navigator />
-                <ToastHost />
-              </AuthProvider>
-            </NetworkProvider>
-          </QueryClientProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#006837' }}>
+      {assetsReady ? (
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <QueryClientProvider client={queryClient}>
+              <NetworkProvider>
+                <AuthProvider>
+                  <AuthReadyReporter onReady={onAuthReady} />
+                  <Navigator />
+                  <ToastHost />
+                </AuthProvider>
+              </NetworkProvider>
+            </QueryClientProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      ) : null}
+      {!splashDone ? <AnimatedSplash ready={assetsReady && authReady} onFinish={onSplashFinish} /> : null}
     </GestureHandlerRootView>
   );
 }
