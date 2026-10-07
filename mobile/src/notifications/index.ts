@@ -3,7 +3,8 @@
  * pengingat mengajar lokal (jalan saat offline), dan penanganan ketukan notifikasi.
  */
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import type * as ExpoNotifications from 'expo-notifications';
+import { getNotifications } from './native';
 import * as Device from 'expo-device';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
@@ -20,11 +21,13 @@ export const CHANNELS = {
   sync: 'sinkron',
 } as const;
 
-const isNative = Platform.OS !== 'web';
+// Null di Expo Go Android/web (lihat ./native); semua fungsi di bawah dijaga `isNative`.
+const Notifications = getNotifications() as typeof ExpoNotifications;
+const isNative = Platform.OS !== 'web' && getNotifications() !== null;
 
 /** Buat channel Android (idempoten). Dipanggil di module scope root layout. */
 export async function ensureChannels() {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || !isNative) return;
   await Promise.all([
     Notifications.setNotificationChannelAsync(CHANNELS.reminder, {
       name: 'Pengingat Mengajar', importance: Notifications.AndroidImportance.HIGH, sound: 'default',

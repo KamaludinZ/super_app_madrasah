@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import { getNotifications } from '@/notifications/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/endpoints';
 import { useAuth } from '@/store/auth';
@@ -78,7 +78,8 @@ export function useAppBootstrap() {
 
   // Ketukan notifikasi (aplikasi terbuka / cold start) → navigasi.
   useEffect(() => {
-    if (Platform.OS === 'web' || !token) return;
+    const Notifications = getNotifications();
+    if (Platform.OS === 'web' || !token || !Notifications) return;
     const go = (data: Record<string, any> | undefined) => {
       const route = routeForNotification(data);
       if (route) setTimeout(() => router.push(route as any), 50);
