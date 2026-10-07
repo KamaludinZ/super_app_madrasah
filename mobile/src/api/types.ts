@@ -346,3 +346,22 @@ export type KelasTugas = {
   my_submission?: { id: string; jawaban: string; file_url?: string | null; submitted_at?: string; updated_at?: string | null } | null;
   created_at?: string;
 };
+
+/** Materi Kelas Digital (GET /kelas/materi, /kelas/materi/{id}). */
+export type KelasMateri = {
+  id: string;
+  judul: string;
+  deskripsi?: string | null;
+  konten?: string | null;
+  file_url?: string | null;
+  subject_id?: string | null;
+  subject_name?: string | null;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  created_at?: string;
+};
+
+export type KehadiranRecord = { id?: string; date: string; status: string; subject_name?: string | null; subject_code?: string | null; teacher_name?: string | null };
+export type KehadiranRekap = { total: number; hadir: number; sakit?: number; izin?: number; alpa?: number; percentage: number };
+/** GET /students/my-attendance/stats */
+export type KehadiranStats = { month: number; year: number; monthly: KehadiranRekap; weekly: KehadiranRekap; daily: KehadiranRekap };

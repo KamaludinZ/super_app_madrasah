@@ -1,7 +1,7 @@
 import { request } from './client';
 import type {
   Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
-  GPSlotDates, GPTeacher, Indikator, Journal, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
+  GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
 } from './types';
 
@@ -36,6 +36,10 @@ export const api = {
 
   students: {
     byClass: (class_id: string) => request<Student[]>('/students', { query: { class_id } }),
+    myAttendance: (month: number, year: number) =>
+      request<{ month: number; year: number; records: KehadiranRecord[] }>('/students/my-attendance', { query: { month, year } }),
+    myAttendanceStats: (month: number, year: number) =>
+      request<KehadiranStats>('/students/my-attendance/stats', { query: { month, year } }),
   },
 
   jurnal: {
@@ -57,6 +61,8 @@ export const api = {
     tugasDetail: (id: string) => request<KelasTugas>(`/kelas/tugas/${id}`),
     submitTugas: (id: string, body: { jawaban: string; file_url?: string | null }) =>
       request<{ message: string; id: string }>(`/kelas/tugas/${id}/submit`, { method: 'POST', body }),
+    materi: () => request<KelasMateri[]>('/kelas/materi'),
+    materiDetail: (id: string) => request<KelasMateri>(`/kelas/materi/${id}`),
   },
 
   akademik: {
