@@ -48,7 +48,7 @@ export function LockScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, zIndex: 999, justifyContent: 'space-between', paddingHorizontal: spacing.xl },
+  root: { ...StyleSheet.absoluteFill, zIndex: 999, justifyContent: 'space-between', paddingHorizontal: spacing.xl },
   center: { alignItems: 'center', gap: spacing.lg, marginTop: spacing.xxxl },
   lockBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: 999 },
   actions: { gap: spacing.xs },

@@ -113,13 +113,13 @@ const ThemeContext = createContext<ThemeCtx>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>('system');
-  const [system, setSystem] = useState<ColorSchemeName>(Appearance.getColorScheme());
+  const [system, setSystem] = useState<ColorSchemeName>(Appearance.getColorScheme() ?? 'light');
 
   useEffect(() => {
     AsyncStorage.getItem(MODE_KEY).then((v) => {
       if (v === 'light' || v === 'dark' || v === 'system') setModeState(v);
     });
-    const sub = Appearance.addChangeListener(({ colorScheme }) => setSystem(colorScheme));
+    const sub = Appearance.addChangeListener(({ colorScheme }) => setSystem(colorScheme ?? 'light'));
     return () => sub.remove();
   }, []);
 

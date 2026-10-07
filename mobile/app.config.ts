@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import fs from 'fs';
 import path from 'path';

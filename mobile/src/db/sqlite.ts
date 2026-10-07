@@ -155,7 +155,7 @@ async function openWeb(): Promise<KV> {
       if (limit) rows = rows.slice(0, parseInt(limit[1], 10));
       return rows.map((r) => ({ ...r })) as any[];
     },
-    first: async (sql, params = []) => (await kv.all(sql, params))[0] ?? null,
+    first: async (sql, params = []) => ((await kv.all(sql, params))[0] ?? null) as any,
   };
   return kv;
 }

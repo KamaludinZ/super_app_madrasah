@@ -7,17 +7,10 @@
     "icon": "./assets/images/icon.png",
     "scheme": "matsandatama",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "backgroundColor": "#006837",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#006837"
-    },
     "android": {
       "package": "id.sch.mtsn2kotamalang.superapps",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#006837"
@@ -62,27 +55,61 @@
           "backgroundColor": "#006837"
         }
       ],
-      ["expo-secure-store", { "configureAndroidBackup": false }],
-      ["expo-local-authentication", { "faceIDPermission": "Buka kunci aplikasi dengan biometrik Anda." }],
-      ["expo-camera", { "cameraPermission": "Pindai QR ruangan untuk mengisi jurnal mengajar.", "recordAudioAndroid": false }],
-      ["expo-location", { "locationWhenInUsePermission": "Memastikan jurnal diisi dari ruang kelas yang benar.", "isAndroidBackgroundLocationEnabled": false }],
-      ["expo-notifications", { "icon": "./assets/images/notification-icon.png", "color": "#006837", "defaultChannel": "pengumuman" }],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Buka kunci aplikasi dengan biometrik Anda."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pindai QR ruangan untuk mengisi jurnal mengajar.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Memastikan jurnal diisi dari ruang kelas yang benar.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#006837",
+          "defaultChannel": "pengumuman"
+        }
+      ],
       "expo-sqlite",
       "expo-background-task",
       "@react-native-vector-icons/ionicons",
-      ["expo-font", { "fonts": [
-        "./assets/fonts/PlusJakartaSans-Regular.ttf",
-        "./assets/fonts/PlusJakartaSans-Medium.ttf",
-        "./assets/fonts/PlusJakartaSans-SemiBold.ttf",
-        "./assets/fonts/PlusJakartaSans-Bold.ttf"
-      ] }]
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/PlusJakartaSans-Regular.ttf",
+            "./assets/fonts/PlusJakartaSans-Medium.ttf",
+            "./assets/fonts/PlusJakartaSans-SemiBold.ttf",
+            "./assets/fonts/PlusJakartaSans-Bold.ttf"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "1ec384ee-328a-4184-bc4a-fc875b311c66"
       }
     }
   }
