@@ -10,8 +10,10 @@ export type GeoFix = { lat: number; lon: number; accuracy: number | null; time: 
 
 export type JournalDraft = {
   qrToken: string | null;
+  /** Token Kelas (XX-XXXX-XXXX) bila jurnal divalidasi lewat token kelas, bukan QR. */
+  classToken: string | null;
   location: GeoFix;
-  /** Hasil POST /jurnal/validate (hanya bila online). */
+  /** Hasil POST /jurnal/validate atau /jurnal/validate-by-class-token (hanya bila online). */
   validation: QRValidation | null;
   /** Izin offline untuk slot ini (bila scan dilakukan offline). */
   permit: StoredPermit | null;
@@ -21,7 +23,7 @@ export type JournalDraft = {
   reset: () => void;
 };
 
-const empty = { qrToken: null, location: null, validation: null, permit: null, timeEvidence: null };
+const empty = { qrToken: null, classToken: null, location: null, validation: null, permit: null, timeEvidence: null };
 
 export const useJournalDraft = create<JournalDraft>((set) => ({
   ...empty,

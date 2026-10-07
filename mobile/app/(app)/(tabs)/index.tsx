@@ -82,7 +82,7 @@ export default function HomeScreen() {
     }
     if (canScan(activeRole) || kind === 'guru') {
       return {
-        label: 'Scan QR & isi jurnal', icon: 'qr-code-outline',
+        label: 'Isi jurnal (QR / Token)', icon: 'qr-code-outline',
         onPress: () => router.push(`/scan?${q({ schedule_id: s.id, date })}` as any),
       };
     }

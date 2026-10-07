@@ -1,6 +1,7 @@
 /**
  * Isi Jurnal Mengajar. Mode (parameter `mode`):
- *  qr          online setelah scan QR      → POST /jurnal
+ *  qr          online setelah scan QR / Token QR → POST /jurnal
+ *  class_token online setelah Token Kelas  → POST /jurnal/by-class-token (perlu online)
  *  offline     scan QR saat offline        → antrean → POST /mobile/journals/offline
  *  substitute  slot guru pengganti         → POST /guru-pengganti/journals  (offline: antrean)
  *  original    slot sendiri yang digantikan → POST /guru-pengganti/journals/original (perlu online)
@@ -38,10 +39,11 @@ import { EmptyState } from '@/components/ui/States';
 import { toast } from '@/components/ui/Toast';
 import { AttendanceList, AttendanceMap, summarize } from '@/components/AttendanceList';
 
-type Mode = 'qr' | 'offline' | 'substitute' | 'original' | 'piket' | 'slot';
+type Mode = 'qr' | 'class_token' | 'offline' | 'substitute' | 'original' | 'piket' | 'slot';
 
 const MODE_INFO: Record<Exclude<Mode, 'slot'>, { title: string; badge: string; tone: 'brand' | 'warning' | 'neutral' }> = {
   qr: { title: 'Isi Jurnal', badge: 'QR tervalidasi', tone: 'brand' },
+  class_token: { title: 'Isi Jurnal', badge: 'Token Kelas', tone: 'brand' },
   offline: { title: 'Isi Jurnal (Offline)', badge: 'Disimpan offline', tone: 'warning' },
   substitute: { title: 'Jurnal Guru Pengganti', badge: 'Guru Pengganti', tone: 'warning' },
   original: { title: 'Jurnal Saya (Digantikan)', badge: 'Tanpa QR', tone: 'neutral' },
@@ -164,8 +166,10 @@ export default function IsiJurnalScreen() {
         if (await enqueue(null)) finish('Jurnal pengganti disimpan di perangkat', 'Akan dikirim otomatis saat online.');
         return;
       }
-      if ((mode === 'original' || mode === 'piket') && !online) {
-        setError(mode === 'piket' ? 'Jurnal piket perlu koneksi internet. Coba lagi saat online.' : 'Jurnal saat digantikan perlu koneksi internet. Coba lagi saat online.');
+      if ((mode === 'original' || mode === 'piket' || mode === 'class_token') && !online) {
+        setError(mode === 'piket' ? 'Jurnal piket perlu koneksi internet. Coba lagi saat online.'
+          : mode === 'class_token' ? 'Jurnal lewat Token Kelas perlu koneksi internet. Coba lagi saat online, atau kembali dan gunakan Scan QR / Token QR.'
+            : 'Jurnal saat digantikan perlu koneksi internet. Coba lagi saat online.');
         return;
       }
       try {
@@ -181,7 +185,21 @@ export default function IsiJurnalScreen() {
             siswa_sakit: counts.sakit,
             siswa_izin: counts.izin,
             siswa_tidak_hadir: counts.alpa,
-            attendance_details: records().map(({ student_id, status }) => ({ student_id, status })),
+            attendance_details: records(),
+          });
+        } else if (mode === 'class_token') {
+          if (!draft.classToken) { setError('Token Kelas belum divalidasi. Kembali dan masukkan ulang token.'); return; }
+          await api.jurnal.createByClassToken({
+            class_token: draft.classToken,
+            user_lat: draft.location?.lat ?? null,
+            user_lon: draft.location?.lon ?? null,
+            materi: materi.trim(),
+            catatan: catatan.trim() || null,
+            siswa_hadir: counts.hadir,
+            siswa_sakit: counts.sakit,
+            siswa_izin: counts.izin,
+            siswa_tidak_hadir: counts.alpa,
+            attendance_details: records().map((r) => ({ ...r, student_name: r.student_name || '-' })),
           });
         } else if (mode === 'piket') {
           const task = (slot as PiketSchedule | null)?.task;
@@ -206,7 +224,7 @@ export default function IsiJurnalScreen() {
         finish('Jurnal tersimpan', `${slot?.class_name ?? ''} · ${slot?.subject_name ?? ''}`);
       } catch (e) {
         // Koneksi putus saat mengirim → alihkan ke antrean offline (QR & guru pengganti).
-        if (isNetworkError(e) && mode !== 'original' && mode !== 'piket') {
+        if (isNetworkError(e) && mode !== 'original' && mode !== 'piket' && mode !== 'class_token') {
           const pm = permit ?? (await getPermit(user.id, scheduleId, date));
           if (await enqueue(pm ? computeTimeEvidence(pm) : null)) {
             finish('Koneksi terputus — jurnal disimpan di perangkat', 'Akan dikirim otomatis saat online.');

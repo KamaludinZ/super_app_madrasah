@@ -417,6 +417,19 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
     }
     _stamp_filled_by(doc, user)
     await db.journals.insert_one(doc)
+
+    # Absensi per siswa juga ke koleksi attendances (sama dengan jurnal QR) agar detail kehadiran,
+    # rekap, dan ekspor tetap lengkap. Ejaan baku 'alpa'; 'alpha' dari klien lama dinormalkan.
+    if req.attendance_details:
+        await db.attendances.insert_many([{
+            'id': str(uuid.uuid4()),
+            'journal_id': j_id,
+            'student_id': a.student_id,
+            'student_name': a.student_name,
+            'status': 'alpa' if a.status == 'alpha' else a.status,
+            'created_at': now_wib().isoformat(),
+        } for a in req.attendance_details])
+
     await log_audit(user, 'create', 'journal', j_id,
                     details={'class_id': sched['class_id'], 'subject_id': sched['subject_id'], 'method': 'class_token'},
                     request=request)
