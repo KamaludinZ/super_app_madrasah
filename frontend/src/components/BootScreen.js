@@ -209,7 +209,7 @@ export default function BootScreen({ onComplete }) {
               {logo ? (
                 <img src={logo} alt="Logo" className="max-w-[80%] max-h-[80%] object-contain" />
               ) : (
-                <Smartphone className="h-12 w-12 text-emerald-600" />
+                <img src="/icon-192.png" alt="Logo MTsN 2 Kota Malang" className="max-w-[85%] max-h-[85%] object-contain" />
               )}
             </div>
             <div className="text-center">
