@@ -1,6 +1,7 @@
 /**
- * Notifikasi: gabungan pengumuman + pesan sistem (GET /notifications), belum dibaca di atas.
- * Ketuk pengumuman → detail (ditandai dibaca). "Tandai semua dibaca" → POST /notifications/mark-all-read.
+ * Notifikasi: gabungan pengumuman, pesan sistem, dan notifikasi pribadi per peran (GET /notifications),
+ * belum dibaca di atas. Ketuk pengumuman → detail; notifikasi pribadi → ditandai dibaca lalu dibuka
+ * (layar native bila ada, selain itu modul web). "Tandai semua dibaca" → POST /notifications/mark-all-read.
  */
 import React, { useState } from 'react';
 import { FlatList, Linking, RefreshControl, StyleSheet, View } from 'react-native';
@@ -13,6 +14,8 @@ import { CacheKeys } from '@/db/cache';
 import { useCached } from '@/hooks/useCached';
 import { useNetwork } from '@/store/network';
 import { WEB_URL } from '@/config';
+import { useAuth } from '@/store/auth';
+import { routeForPath } from '@/menu/routes';
 import { formatRelative } from '@/utils/time';
 import { radius, spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
@@ -30,6 +33,7 @@ export default function NotifikasiScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { online } = useNetwork();
+  const { activeRole } = useAuth();
   const res = useCached<NotificationItem[]>(CacheKeys.notifications, api.notifications.list);
   const [marking, setMarking] = useState(false);
   const items = res.data ?? [];
@@ -55,6 +59,11 @@ export default function NotifikasiScreen() {
   };
 
   const open = (n: NotificationItem) => {
+    if (n.source === 'user') {
+      if (!n.is_read) api.notifications.markRead('user', n.source_id).then(refreshBadges).catch(() => {});
+      router.push(routeForPath(n.link || '/dashboard', activeRole, n.title) as any);
+      return;
+    }
     if (n.source === 'announcement') {
       router.push(`/pengumuman/${n.source_id}` as any);
       return;
@@ -103,10 +112,33 @@ const SEVERITY: Record<string, { icon: IconName; tone: 'brand' | 'warning' | 'su
   danger: { icon: 'alert-circle-outline', tone: 'error' },
 };
 
+/** Ikon per jenis notifikasi pribadi (notify.py di backend). */
+const TYPE_ICON: Record<string, IconName> = {
+  class_task_new: 'clipboard-outline',
+  class_material_new: 'book-outline',
+  teacher_task_new: 'briefcase-outline',
+  teacher_task_accepted: 'checkmark-done-outline',
+  piket_journal_filled: 'create-outline',
+  substitute_assignment: 'swap-horizontal-outline',
+  substitute_assignment_cancelled: 'close-circle-outline',
+  tatib_record: 'shield-outline',
+  verval_new: 'document-text-outline',
+  verval_approved: 'checkmark-circle-outline',
+  verval_rejected: 'close-circle-outline',
+  achievement_new: 'trophy-outline',
+  achievement_verified: 'trophy-outline',
+  damage_report: 'construct-outline',
+  damage_status: 'construct-outline',
+  loan_item: 'cube-outline',
+  loan_room: 'business-outline',
+  bk_response: 'heart-outline',
+};
+
 function NotifRow({ n, onPress }: { n: NotificationItem; onPress: () => void }) {
   const { colors } = useTheme();
   const sev = SEVERITY[n.severity ?? 'info'] ?? SEVERITY.info;
-  const icon: IconName = n.source === 'system' ? 'lock-closed-outline' : sev.icon;
+  const icon: IconName = n.source === 'system' ? 'lock-closed-outline'
+    : n.source === 'user' ? (TYPE_ICON[n.type ?? ''] ?? 'notifications-outline') : sev.icon;
   const fg = { brand: colors.brandPrimary, warning: colors.warning, success: colors.success, error: colors.error }[sev.tone];
   return (
     <Card onPress={onPress} style={[styles.row, !n.is_read && { borderLeftWidth: 4, borderLeftColor: colors.brandPrimary }]}>

@@ -15,6 +15,7 @@ from core import (
     serialize_doc,
 )
 from journal_core import current_day_id, day_started_at_filter, now_wib
+from notify import notify_roles, notify_users, spawn
 from models import (
     AcademicHolidayModel,
     TeacherTaskModel,
@@ -178,6 +179,39 @@ async def list_teacher_tasks(date: Optional[str] = None,
     return enriched
 
 
+async def _slot_label(sch: Dict) -> str:
+    """'7A · Matematika · 07:00–08:20' untuk isi notifikasi."""
+    cls = await db.classes.find_one({'id': sch.get('class_id')}, {'_id': 0, 'name': 1}) or {}
+    sub = await db.subjects.find_one({'id': sch.get('subject_id')}, {'_id': 0, 'name': 1}) or {}
+    return f"{cls.get('name') or 'Kelas'} · {sub.get('name') or '-'} · {sch.get('start_time') or ''}–{sch.get('end_time') or ''}"
+
+
+async def _notify_task_created(sch: Dict, task_id: str, date: str, teacher_name: str):
+    await notify_roles(
+        ['guru_piket'], 'Tugas titipan baru',
+        f"{teacher_name} menitipkan {await _slot_label(sch)} untuk {date}.",
+        type='teacher_task_new', route='/piket/tugas', data={'task_id': task_id, 'date': date},
+    )
+
+
+async def _notify_task_accepted(task: Dict, accepted_by: str):
+    sch = await db.schedules.find_one({'id': task.get('schedule_id')}, {'_id': 0}) or {}
+    await notify_users(
+        [task.get('teacher_id')], 'Tugas titipan diterima guru piket',
+        f"{accepted_by} akan mengisi jurnal {await _slot_label(sch)} pada {task.get('date')}.",
+        type='teacher_task_accepted', route='/piket/tugas', data={'task_id': task.get('id')},
+    )
+
+
+async def _notify_piket_filled(sch: Dict, filled_by: str, by_user_id: str, task_id: Optional[str]):
+    await notify_users(
+        [sch.get('teacher_id')], 'Jurnal Anda diisi guru piket',
+        f"{await _slot_label(sch)} diisi oleh {filled_by}{' (tugas titipan)' if task_id else ''}.",
+        type='piket_journal_filled', route='/jurnal/riwayat', exclude=[by_user_id],
+        data={'schedule_id': sch.get('id'), 'task_id': task_id},
+    )
+
+
 @router.post("/teacher-tasks")
 async def create_teacher_task(payload: Dict, request: Request, user: Dict = Depends(get_current_user)):
     if not payload.get('schedule_id') or not payload.get('date') or not payload.get('task_content'):
@@ -198,6 +232,8 @@ async def create_teacher_task(payload: Dict, request: Request, user: Dict = Depe
     doc['created_at'] = doc['created_at'].isoformat()
     await db.teacher_tasks.insert_one(doc)
     await log_audit(user, 'create', 'teacher_task', task.id, details={'date': task.date}, request=request)
+    teacher = await db.users.find_one({'id': sch.get('teacher_id')}, {'_id': 0, 'full_name': 1}) or {}
+    spawn(_notify_task_created(sch, task.id, task.date, teacher.get('full_name') or 'Guru pengajar'))
     return serialize_doc(doc)
 
 
@@ -251,6 +287,7 @@ async def accept_teacher_task(tid: str, request: Request, user: Dict = Depends(r
         }}
     )
     await log_audit(user, 'accept', 'teacher_task', tid, details={'accepted_by': user.get('full_name')}, request=request)
+    spawn(_notify_task_accepted(existing, user.get('full_name') or user.get('username') or 'Guru piket'))
     doc = await db.teacher_tasks.find_one({'id': tid}, {'_id': 0})
     return serialize_doc(doc)
 
@@ -382,4 +419,5 @@ async def piket_fill_journal(payload: Dict, request: Request,
     await log_audit(user, 'piket_fill_journal', 'journal', j_id, details={
         'schedule_id': schedule_id, 'for_teacher_id': sch['teacher_id'],
     }, request=request)
+    spawn(_notify_piket_filled(sch, user.get('full_name') or user.get('username') or 'Guru piket', user['id'], payload.get('task_id')))
     return serialize_doc(journal_doc)

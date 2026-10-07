@@ -13,6 +13,7 @@ from core import (
     require_role,
     serialize_doc,
 )
+from notify import homeroom_teacher_of, notify_users, spawn
 from models_phase4 import (
     ExtracurricularMemberModel,
     ExtracurricularModel,
@@ -146,6 +147,8 @@ async def create_achievement(payload: Dict, request: Request, user: Dict = Depen
     await db.achievements.insert_one(doc)
     await log_audit(user, 'create', 'achievement', a.id,
                     details={'name': a.name, 'holder_type': holder_type}, request=request)
+    if holder_type == 'siswa' and not doc.get('is_verified'):
+        spawn(_notify_achievement_new(dict(doc), user))
     return serialize_doc(doc)
 
 
@@ -169,6 +172,24 @@ async def update_achievement(aid: str, payload: Dict, request: Request,
     return serialize_doc(doc)
 
 
+async def _notify_achievement_new(doc: Dict, by: Dict):
+    """Prestasi siswa baru → wali kelas untuk diverifikasi."""
+    akun = await db.users.find_one({'id': doc.get('student_id')}, {'_id': 0, 'student_class_id': 1, 'full_name': 1}) or {}
+    wali = await homeroom_teacher_of(akun.get('student_class_id'))
+    nama = akun.get('full_name') or doc.get('holder_name') or 'Siswa'
+    await notify_users([wali], 'Prestasi siswa menunggu verifikasi', f"{nama}: {doc.get('name') or '-'}",
+                       type='achievement_new', route='/prestasi', data={'achievement_id': doc.get('id')},
+                       exclude=[by.get('id')])
+
+
+async def _notify_achievement_verified(doc: Dict, by: Dict):
+    await notify_users([doc.get('submitted_by'), doc.get('student_id'), doc.get('holder_id')],
+                       'Prestasi terverifikasi',
+                       f"{doc.get('name') or 'Prestasi'} diverifikasi {by.get('full_name') or 'petugas'}.",
+                       type='achievement_verified', route='/prestasi', data={'achievement_id': doc.get('id')},
+                       exclude=[by.get('id')])
+
+
 @router.put("/achievements/{aid}/verify")
 async def verify_achievement(aid: str, request: Request,
                              user: Dict = Depends(require_role('admin', 'wali_kelas'))):
@@ -178,6 +199,8 @@ async def verify_achievement(aid: str, request: Request,
     }})
     await log_audit(user, 'verify', 'achievement', aid, request=request)
     doc = await db.achievements.find_one({'id': aid}, {'_id': 0})
+    if doc:
+        spawn(_notify_achievement_verified(dict(doc), user))
     return serialize_doc(doc)
 
 

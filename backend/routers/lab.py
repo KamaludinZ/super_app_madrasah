@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 import io
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit, get_settings
+from notify import notify_roles, notify_users, spawn
 
 router = APIRouter()
 
@@ -784,6 +785,16 @@ async def list_kerusakan(lab_key: str, status: Optional[str] = None, user: Dict 
     return [serialize_doc(i) for i in items]
 
 
+async def _notify_kerusakan_status(before: Dict, after: Dict, by: Dict, route: str):
+    """Status laporan kerusakan berubah → beri tahu pelapor."""
+    if not after or (before.get('status') == after.get('status')):
+        return
+    await notify_users([after.get('pelapor_id')], f"Laporan kerusakan: {after.get('status')}",
+                       f"{after.get('aset_nama') or 'Aset'} · diperbarui {by.get('full_name') or 'petugas'}.",
+                       type='damage_status', route=route, data={'kerusakan_id': after.get('id')},
+                       exclude=[by.get('id')])
+
+
 @router.post("/lab/{lab_key}/kerusakan")
 async def create_kerusakan(lab_key: str, req: LabKerusakanRequest, user: Dict = Depends(get_current_user)):
     lab_key = _require_lab_key(lab_key)
@@ -811,6 +822,10 @@ async def create_kerusakan(lab_key: str, req: LabKerusakanRequest, user: Dict = 
 
     await db.sarpras_kerusakan.insert_one(doc)
     await log_audit(user, f'lab_{lab_key}_kerusakan_create', f"Laporan kerusakan: {aset_nama}")
+    spawn(notify_roles(['waka_sarpras'], f"Laporan kerusakan Lab {room.get('name') or lab_key}",
+                       f"{aset_nama or 'Aset'} · dilaporkan {user.get('full_name') or 'guru lab'}.",
+                       type='damage_report', route='/admin/sarpras/kerusakan', data={'kerusakan_id': doc['id']},
+                       exclude=[user['id']]))
     return serialize_doc(doc)
 
 
@@ -830,6 +845,7 @@ async def update_kerusakan(lab_key: str, item_id: str, req: LabKerusakanRequest,
     await log_audit(user, f'lab_{lab_key}_kerusakan_update', f"Updated laporan kerusakan: {item_id}")
 
     updated = await db.sarpras_kerusakan.find_one({'id': item_id}, {'_id': 0})
+    spawn(_notify_kerusakan_status(existing, updated, user, f'/lab/{lab_key}/kerusakan'))
     return serialize_doc(updated)
 
 

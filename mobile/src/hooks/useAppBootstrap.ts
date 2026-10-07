@@ -14,6 +14,7 @@ import { usePrefs } from '@/store/prefs';
 import { registerBackgroundSync, runSync } from '@/offline/sync';
 import { refreshQueueCounts } from '@/offline/queue';
 import { registerDevice, routeForNotification, setBadge } from '@/notifications';
+import { CacheKeys } from '@/db/cache';
 import { toast } from '@/components/ui/Toast';
 
 export function useAppBootstrap() {
@@ -80,22 +81,34 @@ export function useAppBootstrap() {
   useEffect(() => {
     const Notifications = getNotifications();
     if (Platform.OS === 'web' || !token || !Notifications) return;
-    const go = (data: Record<string, any> | undefined) => {
-      const route = routeForNotification(data);
-      if (route) setTimeout(() => router.push(route as any), 50);
-      if (data?.type === 'announcement' && data.announcement_id) api.notifications.markRead('announcement', data.announcement_id).catch(() => {});
+    const refreshUnread = () => {
+      void qc.invalidateQueries({ queryKey: [CacheKeys.notifications] });
+      void qc.invalidateQueries({ queryKey: [CacheKeys.unread] });
     };
-    const sub = Notifications.addNotificationResponseReceivedListener((resp) => go(resp.notification.request.content.data as any));
+    const go = (data: Record<string, any> | undefined, title?: string | null) => {
+      const route = routeForNotification(data, activeRole);
+      if (route) setTimeout(() => router.push(route as any), 50);
+      if (data?.type === 'announcement' && data.announcement_id) {
+        api.notifications.markRead('announcement', data.announcement_id).then(refreshUnread).catch(() => {});
+      } else if (data?.type && title) {
+        // Notifikasi pribadi: satu push dikirim ke banyak orang, jadi cocokkan item kotak masuk lewat jenis & judul.
+        api.notifications.list().then((items) => {
+          const hit = items.find((n) => n.source === 'user' && !n.is_read && n.type === data.type && n.title === title);
+          return hit ? api.notifications.markRead('user', hit.source_id).then(refreshUnread) : undefined;
+        }).catch(() => {});
+      }
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => go(resp.notification.request.content.data as any, resp.notification.request.content.title));
     const recv = Notifications.addNotificationReceivedListener((n) => {
       const c = n.request.content;
       const type = (c.data as any)?.type;
       if (type === 'teaching_reminder') return; // pengingat lokal sudah menangani
-      toast.info(c.title ?? 'Notifikasi', c.body ?? undefined, { onPress: () => go(c.data as any) });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.info(c.title ?? 'Notifikasi', c.body ?? undefined, { onPress: () => go(c.data as any, c.title) });
+      refreshUnread();
     });
     Notifications.getLastNotificationResponseAsync().then((resp) => {
-      if (resp) go(resp.notification.request.content.data as any);
+      if (resp) go(resp.notification.request.content.data as any, resp.notification.request.content.title);
     }).catch(() => {});
     return () => { sub.remove(); recv.remove(); };
-  }, [token, router, qc]);
+  }, [token, router, qc, activeRole]);
 }

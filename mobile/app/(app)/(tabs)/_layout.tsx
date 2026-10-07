@@ -1,6 +1,6 @@
 /**
  * Tab bawah sesuai peran aktif:
- *  Beranda · Riwayat Jurnal (guru/piket/admin/waka/wali kelas) · Guru Pengganti (hanya bila
+ *  Beranda · Menu (semua fitur peran, sama dengan web) · Riwayat Jurnal (guru/piket/admin/waka/wali kelas) · Guru Pengganti (hanya bila
  *  GET /guru-pengganti/config → can_manage) · Notifikasi (badge belum dibaca) · Profil.
  */
 import React from 'react';
@@ -44,6 +44,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Beranda', tabBarIcon: tabIcon('home-outline', 'home') }} />
+      <Tabs.Screen name="menu" options={{ title: 'Menu', tabBarIcon: tabIcon('apps-outline', 'apps') }} />
       <Tabs.Screen
         name="jurnal"
         options={{ title: 'Jurnal', href: canSeeJournals(activeRole) ? undefined : null, tabBarIcon: tabIcon('book-outline', 'book') }}

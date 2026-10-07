@@ -133,7 +133,13 @@ export type Announcement = {
 
 export type NotificationItem = {
   id: string;
-  source: 'announcement' | 'system' | string;
+  /** announcement · system · user (notifikasi pribadi per peristiwa). */
+  source: 'announcement' | 'system' | 'user' | string;
+  /** Jenis notifikasi pribadi, mis. class_task_new, teacher_task_new, verval_approved. */
+  type?: string | null;
+  /** Path web tujuan (dibuka native bila ada layarnya, selain itu modul web). */
+  link?: string | null;
+  data?: Record<string, unknown>;
   source_id: string;
   title: string;
   body: string;

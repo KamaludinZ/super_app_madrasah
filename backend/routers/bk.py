@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 import uuid
 
 from core import db, get_active_context, get_current_user, require_role, serialize_doc, log_audit, get_settings
+from notify import notify_users, spawn
 from clkb_bank import CLKB_ITEMS, CLKB_PETUNJUK, CLKB_TOTAL_ITEMS
 from pcl_bank import PCL_CATEGORIES, PCL_ESSAY_QUESTIONS, PCL_PETUNJUK, pcl_total_items
 from ai_client import generate_text, AIError
@@ -437,6 +438,10 @@ async def respond_clkb(submission_id: str, req: BKResponseRequest, user: Dict = 
     }
     await db.bk_clkb_submissions.update_one({'id': submission_id}, {'$set': update_data})
     await log_audit(user, 'bk_clkb_respond', f"Responded to CLKB {submission_id}")
+    spawn(notify_users([existing.get('siswa_id')], 'Guru BK menanggapi CLKB Anda',
+                       f"Tanggapan dari {user.get('full_name') or 'Guru BK'}. Buka untuk membaca rekomendasi.",
+                       type='bk_response', route='/siswa/clkb', data={'submission_id': submission_id},
+                       exclude=[user['id']]))
 
     updated = await db.bk_clkb_submissions.find_one({'id': submission_id}, {'_id': 0})
     return serialize_doc(updated)
@@ -694,6 +699,10 @@ async def respond_pcl(submission_id: str, req: BKResponseRequest, user: Dict = D
     }
     await db.bk_pcl_submissions.update_one({'id': submission_id}, {'$set': update_data})
     await log_audit(user, 'bk_pcl_respond', f"Responded to PCL {submission_id}")
+    spawn(notify_users([existing.get('siswa_id')], 'Guru BK menanggapi PCL Anda',
+                       f"Tanggapan dari {user.get('full_name') or 'Guru BK'}. Buka untuk membaca rekomendasi.",
+                       type='bk_response', route='/siswa/pcl', data={'submission_id': submission_id},
+                       exclude=[user['id']]))
 
     updated = await db.bk_pcl_submissions.find_one({'id': submission_id}, {'_id': 0})
     return serialize_doc(updated)

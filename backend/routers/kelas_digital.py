@@ -8,6 +8,8 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from notify import notify_users, spawn, students_of_classes
+
 from auth_utils import create_access_token, verify_password
 from captcha_utils import is_locked, record_login_failure, reset_login_attempts, verify_captcha
 from core import (
@@ -233,6 +235,42 @@ async def get_wali_kelas_info(user: Dict = Depends(get_current_user)):
 # ============================================================
 # MATERI MAPEL - CRUD
 # ============================================================
+async def _content_recipients(target_role, kelas_ids: List[str], target_siswa: List[Dict]) -> List[str]:
+    """Penerima materi/tugas sesuai sasaran: 'kelas' → siswa & akun kelas di target_kelas_ids;
+    'siswa' → target_siswa [{class_id, student_ids: 'all' | [id…]}]."""
+    roles = target_role if isinstance(target_role, list) else [target_role or 'kelas']
+    out: List[str] = []
+    if 'kelas' in roles and kelas_ids:
+        out += await students_of_classes(kelas_ids)
+        kelas_accounts = await db.users.find(
+            {'roles': 'kelas', 'class_id': {'$in': kelas_ids}, 'is_active': {'$ne': False}}, {'_id': 0, 'id': 1},
+        ).to_list(200)
+        out += [u['id'] for u in kelas_accounts]
+    if 'siswa' in roles:
+        for t in target_siswa or []:
+            if not isinstance(t, dict):
+                continue
+            ids = t.get('student_ids')
+            out += await students_of_classes([t.get('class_id')]) if ids == 'all' else [x for x in (ids or []) if isinstance(x, str)]
+    return out
+
+
+async def _notify_class_content(kind: str, item_id: str, judul: str, subject_id: Optional[str], target_role,
+                                kelas_ids: List[str], target_siswa: List[Dict], teacher: Dict, deadline: Optional[str] = None):
+    """Beri tahu siswa (dan akun kelas) sasaran bahwa ada materi/tugas baru."""
+    recipients = await _content_recipients(target_role, kelas_ids, target_siswa)
+    sub = await db.subjects.find_one({'id': subject_id}, {'_id': 0, 'name': 1}) if subject_id else None
+    mapel = (sub or {}).get('name') or 'Mapel'
+    guru = teacher.get('full_name') or teacher.get('username') or 'Guru'
+    if kind == 'tugas':
+        body = f"{mapel} · {guru}" + (f" · tenggat {deadline[:16].replace('T', ' ')}" if deadline else '')
+        await notify_users(recipients, f"Tugas baru: {judul}", body, type='class_task_new',
+                           route='/siswa/tugas', data={'tugas_id': item_id}, exclude=[teacher.get('id')])
+    else:
+        await notify_users(recipients, f"Materi baru: {judul}", f"{mapel} · {guru}", type='class_material_new',
+                           route='/siswa/materi', data={'materi_id': item_id}, exclude=[teacher.get('id')])
+
+
 @router.post("/materi")
 async def create_materi(
     req: MateriTugasCreateRequest,
@@ -267,6 +305,8 @@ async def create_materi(
 
     await db.materi_mapel.insert_one(materi_data.dict())
     await log_audit(user, 'create', 'materi_mapel', materi_data.id, request=request)
+    spawn(_notify_class_content('materi', materi_data.id, req.judul, req.subject_id, req.target_role,
+                                req.target_kelas_ids or [], req.target_siswa or [], user))
 
     return {'message': 'Materi berhasil dibuat', 'id': materi_data.id}
 
@@ -509,6 +549,9 @@ async def create_tugas(
 
     await db.tugas.insert_one(tugas_data.dict())
     await log_audit(user, 'create', 'tugas', tugas_data.id, request=request)
+    spawn(_notify_class_content('tugas', tugas_data.id, req.judul, req.subject_id, req.target_role,
+                                req.target_kelas_ids or [], req.target_siswa or [], user,
+                                deadline=str(req.deadline) if req.deadline else None))
 
     return {'message': 'Tugas berhasil dibuat', 'id': tugas_data.id}
 

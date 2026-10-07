@@ -1,4 +1,4 @@
-"""Announcements (Pengumuman) + Notifications feed + Mark-read."""
+"""Announcements (Pengumuman) + Notifications feed (pengumuman, pesan sistem, notifikasi pribadi) + Mark-read."""
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -192,6 +192,10 @@ async def list_my_announcements(user: Dict = Depends(get_current_user)):
 # ============================================================
 # NOTIFICATIONS FEED (aggregation of announcements + system messages)
 # ============================================================
+FEED_LIMIT = 60
+PERSONAL_FEED_LIMIT = 40
+
+
 @router.get("/notifications")
 async def list_notifications(user: Dict = Depends(get_current_user)):
     """Aggregated notifications for the topbar bell.
@@ -247,10 +251,31 @@ async def list_notifications(user: Dict = Depends(get_current_user)):
             'icon': 'lock',
         })
 
-    # Sort: unread first, pinned first, then newest
-    out.sort(key=lambda x: (x['is_read'], not x.get('is_pinned', False), -1 * len(str(x.get('created_at', '')))),
-             reverse=False)
-    return out[:30]
+    # 3) Notifikasi pribadi (notify.py): tugas titipan, tugas kelas, tatib, verval, prestasi, dll.
+    personal = await db.user_notifications.find(
+        {'user_id': user['id']}, {'_id': 0, 'expire_at': 0},
+    ).sort('created_at', -1).to_list(PERSONAL_FEED_LIMIT)
+    for n in personal:
+        out.append({
+            'id': f"user_{n['id']}",
+            'source': 'user',
+            'source_id': n['id'],
+            'type': n.get('type'),
+            'title': n.get('title'),
+            'body': n.get('body'),
+            'severity': 'info',
+            'is_pinned': False,
+            'is_read': bool(n.get('is_read')),
+            'created_at': n.get('created_at'),
+            'link': n.get('route') or '/dashboard',
+            'data': n.get('data') or {},
+            'icon': 'bell',
+        })
+
+    # Urut: belum dibaca dulu, lalu disematkan, lalu terbaru.
+    out.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
+    out.sort(key=lambda x: (x['is_read'], not x.get('is_pinned', False)))
+    return out[:FEED_LIMIT]
 
 
 @router.get("/notifications/unread-count")
@@ -271,12 +296,18 @@ async def unread_count(user: Dict = Depends(get_current_user)):
     from routers.auth import _password_change_status
     if _password_change_status(user).get('should_prompt'):
         count += 1
+    count += await db.user_notifications.count_documents({'user_id': user['id'], 'is_read': False})
     return {'unread': count}
 
 
 @router.post("/notifications/{source}/{source_id}/read")
 async def mark_notification_read(source: str, source_id: str, user: Dict = Depends(get_current_user)):
-    """Mark a notification as read. Currently supports announcements."""
+    """Tandai satu notifikasi dibaca: pengumuman atau notifikasi pribadi (source 'user')."""
+    if source == 'user':
+        await db.user_notifications.update_one({'id': source_id, 'user_id': user['id']}, {'$set': {
+            'is_read': True, 'read_at': _now_iso(),
+        }})
+        return {'message': 'Marked as read', 'source': source, 'source_id': source_id}
     if source == 'announcement':
         existing = await db.announcement_reads.find_one({'user_id': user['id'], 'announcement_id': source_id})
         if not existing:
@@ -307,4 +338,7 @@ async def mark_all_read(user: Dict = Depends(get_current_user)):
     } for aid in relevant_ids if aid not in existing_ids]
     if new_entries:
         await db.announcement_reads.insert_many(new_entries)
-    return {'marked_read': len(new_entries)}
+    personal = await db.user_notifications.update_many(
+        {'user_id': user['id'], 'is_read': False}, {'$set': {'is_read': True, 'read_at': _now_iso()}},
+    )
+    return {'marked_read': len(new_entries) + personal.modified_count}

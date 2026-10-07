@@ -292,6 +292,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to ensure mobile indexes: {e}")
 
+    # Index notifikasi pribadi (kotak masuk per pengguna, kedaluwarsa 90 hari)
+    try:
+        from notify import ensure_notification_indexes
+        gagal = await ensure_notification_indexes(db)
+        if gagal:
+            logger.error(f"Index notifikasi gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure notification indexes: {e}")
+
     # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
     try:
         from penyimpanan import periksa_penyimpanan

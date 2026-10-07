@@ -6,10 +6,10 @@
  *      slot sendiri digantikan → Isi jurnal saya tanpa QR (mode original)
  *      slot guru pengganti    → Isi jurnal pengganti (mode substitute)
  *  - Guru piket / admin: kartu Tugas Piket (slot hari ini tanpa jurnal & titipan menunggu) → /piket.
- *  - Semua peran: pengumuman terbaru & pintasan.
+ *  - Semua peran: pintasan menu peran (sama dengan menu web) & pengumuman terbaru.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
 import type { Announcement, PiketSchedule, ScheduleItem, TeacherTask } from '@/api/types';
@@ -29,6 +29,7 @@ import { EmptyState, ErrorState } from '@/components/ui/States';
 import { SlotCard, SlotAction } from '@/components/SlotCard';
 import { formatDateLong, formatRelative, greeting, slotStatus, todayISO } from '@/utils/time';
 import { canPiket, canScan, homeKind, roleLabel } from '@/utils/roles';
+import { quickItems, useRoleMenu } from '@/menu';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -40,6 +41,8 @@ export default function HomeScreen() {
 
   const today = useCached<ScheduleItem[]>(CacheKeys.myToday, api.schedules.myToday, { enabled: kind !== 'siswa' });
   const ann = useCached<Announcement[]>(CacheKeys.announcements, api.announcements.list);
+  const menu = useRoleMenu();
+  const shortcuts = quickItems(menu, 8);
   const piketOn = canPiket(activeRole, user?.roles);
   const piket = useCached<PiketSchedule[]>(CacheKeys.piketToday, api.piket.today, { enabled: piketOn });
   const piketTasks = useCached<TeacherTask[]>(`piket.tasks.${todayISO()}`, () => api.piket.tasks({ date: todayISO() }), { enabled: piketOn });
@@ -171,6 +174,26 @@ export default function HomeScreen() {
         </>
       ) : null}
 
+      {shortcuts.length ? (
+        <>
+          <View style={styles.sectionHead}>
+            <T variant="subtitle">Menu {roleLabel(activeRole)}</T>
+            <T variant="label" tone="brand" onPress={() => router.push('/(app)/(tabs)/menu')}>Semua menu</T>
+          </View>
+          <View style={styles.quickGrid}>
+            {shortcuts.map((i) => (
+              <Pressable key={i.key} onPress={() => router.push(i.href as any)} accessibilityRole="button" accessibilityLabel={i.label}
+                style={({ pressed }) => [styles.quick, { opacity: pressed ? 0.7 : 1 }]}>
+                <View style={[styles.quickIcon, { backgroundColor: i.highlight ? colors.brandPrimary : colors.brandTertiary }]}>
+                  <Icon name={i.icon} size={22} color={i.highlight ? colors.onBrandPrimary : colors.onBrandTertiary} />
+                </View>
+                <T variant="small" weight="medium" center numberOfLines={2}>{i.label}</T>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       <View style={styles.sectionHead}>
         <T variant="subtitle">Pengumuman terbaru</T>
         <T variant="label" tone="brand" onPress={() => router.push('/(app)/(tabs)/pengumuman')}>Lihat semua</T>
@@ -214,6 +237,9 @@ const firstName = (n?: string | null) => (n || '').replace(/^(drs?\.?|h\.|hj\.)\
 const stripMd = (s: string) => (s || '').replace(/[#*_`>\[\]]/g, '').replace(/\s+/g, ' ').trim();
 
 const styles = StyleSheet.create({
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md },
+  quick: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  quickIcon: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   piketCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, borderWidth: 1 },
   piketIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   queueCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },

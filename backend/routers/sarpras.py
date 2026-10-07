@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import uuid
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit
+from notify import notify_users, spawn
 
 router = APIRouter()
 
@@ -434,6 +435,10 @@ async def create_peminjaman_barang(req: PeminjamanBarangRequest, user: Dict = De
     }
     await db.sarpras_peminjaman_barang.insert_one(doc)
     await log_audit(user, 'sarpras_peminjaman_barang_create', f"{peminjam.get('full_name')} meminjam {aset_doc.get(name_field)}")
+    kembali = f" · kembali {req.tanggal_kembali_rencana}" if req.tanggal_kembali_rencana else ''
+    spawn(notify_users([peminjam.get('id')], 'Peminjaman barang tercatat',
+                       f"{aset_doc.get(name_field) or 'Barang'} · pinjam {req.tanggal_pinjam}{kembali}.",
+                       type='loan_item', route='/dashboard', data={'peminjaman_id': doc['id']}, exclude=[user['id']]))
     return serialize_doc(doc)
 
 
@@ -500,6 +505,9 @@ async def create_peminjaman_ruangan(req: PeminjamanRuanganRequest, user: Dict = 
     }
     await db.sarpras_peminjaman_ruangan.insert_one(doc)
     await log_audit(user, 'sarpras_peminjaman_ruangan_create', f"{peminjam.get('full_name')} memesan ruangan {room.get('name')}")
+    spawn(notify_users([peminjam.get('id')], 'Pemesanan ruangan tercatat',
+                       f"{room.get('name') or 'Ruangan'} · {req.tanggal} · {req.keperluan}.",
+                       type='loan_room', route='/dashboard', data={'peminjaman_id': doc['id']}, exclude=[user['id']]))
     return serialize_doc(doc)
 
 
@@ -678,6 +686,16 @@ async def list_kerusakan(status: Optional[str] = None, aset_tipe: Optional[str] 
     return [serialize_doc(i) for i in items]
 
 
+async def _notify_kerusakan_status(before: Dict, after: Dict, by: Dict, route: str):
+    """Status laporan kerusakan berubah → beri tahu pelapor."""
+    if not after or (before.get('status') == after.get('status')):
+        return
+    await notify_users([after.get('pelapor_id')], f"Laporan kerusakan: {after.get('status')}",
+                       f"{after.get('aset_nama') or 'Aset'} · diperbarui {by.get('full_name') or 'petugas'}.",
+                       type='damage_status', route=route, data={'kerusakan_id': after.get('id')},
+                       exclude=[by.get('id')])
+
+
 @router.post("/sarpras/kerusakan")
 async def create_kerusakan(req: LaporanKerusakanRequest, user: Dict = Depends(require_role(*SARPRAS_ROLES))):
     aset_doc, _, name_field = await _resolve_aset(req.aset_tipe, req.aset_id)
@@ -718,6 +736,7 @@ async def update_kerusakan(item_id: str, req: LaporanKerusakanRequest, user: Dic
     await log_audit(user, 'sarpras_kerusakan_update', f"Updated laporan kerusakan: {item_id}")
 
     updated = await db.sarpras_kerusakan.find_one({'id': item_id}, {'_id': 0})
+    spawn(_notify_kerusakan_status(existing, updated, user, '/admin/sarpras/kerusakan'))
     return serialize_doc(updated)
 
 

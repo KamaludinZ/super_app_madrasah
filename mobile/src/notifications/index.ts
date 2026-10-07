@@ -13,12 +13,14 @@ import { APP_VERSION, EAS_PROJECT_ID, REMINDER_DAYS_AHEAD } from '@/config';
 import { usePrefs } from '@/store/prefs';
 import { listAllPermits, StoredPermit } from '@/offline/permits';
 import { todayISO, wibInstant } from '@/utils/time';
+import { routeForPath } from '@/menu/routes';
 
 export const CHANNELS = {
   reminder: 'pengingat-mengajar',
   announcement: 'pengumuman',
   substitute: 'guru-pengganti',
   sync: 'sinkron',
+  general: 'umum',
 } as const;
 
 // Null di Expo Go Android/web (lihat ./native); semua fungsi di bawah dijaga `isNative`.
@@ -38,6 +40,10 @@ export async function ensureChannels() {
     }),
     Notifications.setNotificationChannelAsync(CHANNELS.substitute, {
       name: 'Guru Pengganti', importance: Notifications.AndroidImportance.HIGH, sound: 'default', description: 'Penugasan sebagai guru pengganti.',
+    }),
+    Notifications.setNotificationChannelAsync(CHANNELS.general, {
+      name: 'Notifikasi Umum', importance: Notifications.AndroidImportance.DEFAULT, sound: 'default',
+      description: 'Tugas & materi kelas, tugas titipan, tata tertib, verval, prestasi, sarpras, BK, dan lainnya.',
     }),
     Notifications.setNotificationChannelAsync(CHANNELS.sync, {
       name: 'Sinkronisasi', importance: Notifications.AndroidImportance.LOW, description: 'Status pengiriman jurnal offline.',
@@ -208,10 +214,13 @@ export async function setBadge(count: number) {
   try { await Notifications.setBadgeCountAsync(count); } catch { /* abaikan */ }
 }
 
-/** Rute tujuan dari payload data notifikasi (server & lokal). */
-export function routeForNotification(data: Record<string, any> | undefined): string | null {
+/**
+ * Rute tujuan dari payload data notifikasi (server & lokal). Jenis yang punya layar native
+ * diarahkan langsung; notifikasi pribadi lain membawa `route` = path web → layar native bila ada
+ * (mis. /piket/tugas → Tugas Piket), selain itu modul web (sudah masuk).
+ */
+export function routeForNotification(data: Record<string, any> | undefined, role?: string | null): string | null {
   if (!data) return '/(app)/(tabs)/pengumuman';
-  if (typeof data.route === 'string') return data.route;
   switch (data.type) {
     case 'announcement':
       return data.announcement_id ? `/pengumuman/${data.announcement_id}` : '/(app)/(tabs)/pengumuman';
@@ -221,6 +230,7 @@ export function routeForNotification(data: Record<string, any> | undefined): str
     case 'teaching_reminder':
       return data.schedule_id ? `/jurnal/isi?schedule_id=${data.schedule_id}&mode=slot` : '/(app)/(tabs)';
     default:
+      if (typeof data.route === 'string' && data.route.startsWith('/')) return routeForPath(data.route, role);
       return '/(app)/(tabs)/pengumuman';
   }
 }

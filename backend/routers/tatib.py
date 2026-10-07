@@ -8,6 +8,7 @@ import pandas as pd
 import io
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit
+from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
 
@@ -478,6 +479,25 @@ async def get_penanganan(penanganan_id: str, user: Dict = Depends(get_current_us
     return serialize_doc(doc)
 
 
+async def _notify_tatib(doc: Dict, siswa: Dict, poin):
+    """Catatan tata tertib → wali kelas siswa (dan guru BK untuk pelanggaran)."""
+    class_id = siswa.get('class_id') or siswa.get('student_class_id')
+    if not class_id:
+        akun = await db.users.find_one({'id': doc['siswa_id']}, {'_id': 0, 'student_class_id': 1}) or {}
+        class_id = akun.get('student_class_id')
+    wali = await homeroom_teacher_of(class_id, siswa.get('class_name'))
+    is_prestasi = (poin or 0) > 0
+    jenis = 'Prestasi' if is_prestasi else 'Pelanggaran'
+    body = f"{doc.get('tatib_nama') or '-'} ({poin or 0} poin) · dicatat {doc.get('petugas_nama') or '-'}"
+    kelas = f" · {doc['siswa_kelas']}" if doc.get('siswa_kelas') else ''
+    title = f"{jenis} tata tertib: {doc.get('siswa_nama') or 'siswa'}{kelas}"
+    await notify_users([wali], title, body, type='tatib_record', route='/wali-kelas/siswa',
+                       data={'penanganan_id': doc['id']}, exclude=[doc.get('petugas_id')])
+    if not is_prestasi:
+        await notify_roles(['guru_bk'], title, body, type='tatib_record', route='/admin/tatib/data',
+                           data={'penanganan_id': doc['id']}, exclude=[doc.get('petugas_id'), wali])
+
+
 @router.post("/tatib/penanganan")
 async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_current_user)):
     """Record a new pelanggaran or prestasi."""
@@ -517,6 +537,7 @@ async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_cur
     }
 
     await db.tatib_penanganan.insert_one(doc)
+    spawn(_notify_tatib(dict(doc), siswa, tatib.get('poin', 0)))
 
     action_type = "prestasi" if tatib.get('poin', 0) > 0 else "pelanggaran"
     await log_audit(

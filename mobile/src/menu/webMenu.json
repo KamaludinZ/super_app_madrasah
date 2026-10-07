@@ -1,0 +1,3164 @@
+{
+  "generated_at": "2026-10-07T11:39:03.150Z",
+  "source": "frontend/src/components/layout/AppShell.js#navForRole",
+  "labels": {
+    "admin": "Administrator",
+    "siswa": "Siswa",
+    "guru": "Guru Mata Pelajaran",
+    "guru_ipa": "Guru IPA",
+    "guru_ips": "Guru IPS",
+    "guru_bahasa": "Guru Bahasa",
+    "guru_seni": "Guru Seni",
+    "guru_agama": "Guru Agama",
+    "guru_tik": "Guru TIK",
+    "tenaga_kependidikan": "Tenaga Kependidikan",
+    "guru_ekstrakurikuler": "Guru Ekstrakurikuler",
+    "guru_piket": "Guru Piket",
+    "guru_bk": "Guru BK",
+    "wali_kelas": "Wali Kelas",
+    "guru_tata_tertib": "Guru Tata Tertib",
+    "alumni": "Alumni",
+    "kepala_sekolah": "Kepala Sekolah",
+    "kepala_tata_usaha": "Kepala Tata Usaha",
+    "waka_kesiswaan": "Waka Kesiswaan",
+    "waka_kurikulum": "Waka Kurikulum",
+    "waka_sarpras": "Waka Sarana Prasarana",
+    "waka_humas": "Waka Humas",
+    "bendahara": "Bendahara",
+    "kepegawaian": "Kepegawaian",
+    "perpustakaan": "Perpustakaan",
+    "unit_pelayanan": "Unit Pelayanan",
+    "unit_kesehatan": "Unit Kesehatan",
+    "penjamin_mutu": "Penjamin Mutu",
+    "unit_pengaduan": "Unit Pengaduan",
+    "unit_ubudiyah": "Unit Ubudiyah",
+    "unit_olimpiade": "Unit Olimpiade",
+    "unit_tahfidz": "Unit Tahfidz",
+    "unit_kopsis": "Unit Kopsis",
+    "mundhir_mahad": "Mundhir Mahad",
+    "musrif_mahad": "Musrif Mahad",
+    "musrifah_mahad": "Musrifah Mahad",
+    "murabbi_mahad": "Murabbi Mahad",
+    "bendahara_mahad": "Bendahara Mahad"
+  },
+  "roles": {
+    "admin": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      },
+      {
+        "title": "Master App",
+        "items": [
+          {
+            "to": "/admin/tahun-takwim",
+            "label": "Tahun Takwim",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/academic-year",
+            "label": "Tahun Pelajaran",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/semesters",
+            "label": "Semester",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/kurikulum",
+            "label": "Kurikulum",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/subjects",
+            "label": "Mata Pelajaran",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/rooms",
+            "label": "Ruangan",
+            "icon": "Building2"
+          },
+          {
+            "to": "/admin/classes",
+            "label": "Kelas",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/jabatan",
+            "label": "Jabatan",
+            "icon": "Briefcase"
+          },
+          {
+            "to": "/admin/holidays",
+            "label": "Hari Libur",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/qr-generator",
+            "label": "QR Generator",
+            "icon": "QrCode"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Pengguna",
+        "items": [
+          {
+            "to": "/admin/users",
+            "label": "Pengguna (GTK & Staff)",
+            "icon": "Users"
+          },
+          {
+            "to": "/admin/pengguna-siswa",
+            "label": "Pengguna Siswa",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/admin/mutasi",
+            "label": "Data Mutasi",
+            "icon": "ArrowRightLeft"
+          },
+          {
+            "to": "/admin/verval-siswa",
+            "label": "Verval Data Siswa",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/admin/verval-gtk",
+            "label": "Verval Data GTK",
+            "icon": "CheckCircle2"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen GTK",
+        "items": [
+          {
+            "to": "/admin/gtk",
+            "label": "Data GTK",
+            "icon": "Briefcase"
+          },
+          {
+            "to": "/admin/buku-induk-kepegawaian",
+            "label": "Buku Induk Kepegawaian",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/gtk/laporan-absensi",
+            "label": "Laporan Absensi",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/gtk/agenda-guru",
+            "label": "Agenda Guru",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/agenda-tendik",
+            "label": "Agenda Tendik",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Siswa",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/buku-induk",
+            "label": "Buku Induk Siswa",
+            "icon": "FileText"
+          },
+          {
+            "to": "/admin/cetak-absensi-manual",
+            "label": "Cetak Format Absensi Siswa Manual",
+            "icon": "FileText"
+          },
+          {
+            "to": "/admin/pip/penerima",
+            "label": "Data Penerima PIP",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/admin/pip/ajuan",
+            "label": "Daftar Ajuan PIP",
+            "icon": "FileText"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/naik-kelas",
+            "label": "Naik Kelas & Kelulusan",
+            "icon": "ArrowRightLeft"
+          }
+        ]
+      },
+      {
+        "title": "Akademik",
+        "items": [
+          {
+            "to": "/admin/schedules",
+            "label": "Jadwal Pelajaran",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/guru-pengganti",
+            "label": "Guru Pengganti",
+            "icon": "UserRoundCog"
+          },
+          {
+            "to": "/admin/jurnal",
+            "label": "Data Jurnal",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/indikator-materi",
+            "label": "Data Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/tugas",
+            "label": "Tugas Mapel",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/rapor",
+            "label": "E-Rapor Digital",
+            "icon": "FileText"
+          }
+        ]
+      },
+      {
+        "title": "Aktivitas & Program",
+        "items": [
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/ekstrakurikuler",
+            "label": "Ekstrakurikuler",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/kebersihan",
+            "label": "Rekapitulasi Kebersihan",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/laporan",
+            "label": "Data Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Tugas & Piket",
+            "icon": "ListChecks"
+          },
+          {
+            "to": "/admin/pengumuman",
+            "label": "Pengumuman",
+            "icon": "Megaphone"
+          },
+          {
+            "to": "/admin/aplikasi-madrasah",
+            "label": "Aplikasi Madrasah",
+            "icon": "Globe"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/input",
+            "label": "Input Tata Tertib",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/tatib/kategori",
+            "label": "Input Kategori",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/tatib/penanganan",
+            "label": "Input Penanganan",
+            "icon": "ShieldCheck"
+          },
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          }
+        ]
+      },
+      {
+        "title": "Menu BK",
+        "items": [
+          {
+            "to": "/admin/bk/kunjungan",
+            "label": "Kunjungan Konseling",
+            "icon": "HeartHandshake"
+          },
+          {
+            "to": "/admin/bk/clkb",
+            "label": "Cek List Kebiasaan Belajar (CLKB)",
+            "icon": "ClipboardCheck"
+          },
+          {
+            "to": "/admin/bk/pcl",
+            "label": "Problem Cek List (PCL)",
+            "icon": "AlertTriangle"
+          },
+          {
+            "to": "/admin/bk/home-visit",
+            "label": "Jurnal Home Visit",
+            "icon": "Home"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/bk/sekolah-lanjutan",
+            "label": "Data Sekolah Lanjutan",
+            "icon": "School"
+          },
+          {
+            "to": "/admin/bk/laporan",
+            "label": "Laporan BK",
+            "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Menu Perpus",
+        "items": [
+          {
+            "to": "/admin/perpus/peminjaman",
+            "label": "Data Peminjaman Buku",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/perpus/kunjungan",
+            "label": "Data Kunjungan Perpus",
+            "icon": "Users"
+          },
+          {
+            "to": "/admin/perpus/koleksi",
+            "label": "Data Aset & Koleksi Perpus",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/perpus/laporan",
+            "label": "Laporan Perpus",
+            "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Menu UKS",
+        "items": [
+          {
+            "to": "/admin/uks/kunjungan",
+            "label": "Data Kunjungan",
+            "icon": "Stethoscope"
+          },
+          {
+            "to": "/admin/uks/ckg",
+            "label": "Data CKG",
+            "icon": "Syringe"
+          },
+          {
+            "to": "/admin/uks/obat",
+            "label": "Data Obat",
+            "icon": "Pill"
+          },
+          {
+            "to": "/admin/uks/bmhp",
+            "label": "Data BMHP",
+            "icon": "Package"
+          },
+          {
+            "to": "/admin/uks/jenis-penanganan",
+            "label": "Jenis Penanganan",
+            "icon": "ClipboardPlus"
+          },
+          {
+            "to": "/admin/uks/penegakan-diagnosa",
+            "label": "Penegakan Diagnosa",
+            "icon": "ClipboardCheck"
+          },
+          {
+            "to": "/admin/uks/data-siswa-gtk",
+            "label": "Data Siswa dan GTK",
+            "icon": "Users"
+          },
+          {
+            "to": "/admin/uks/aset",
+            "label": "Aset UKS",
+            "icon": "HeartPulse"
+          },
+          {
+            "to": "/admin/uks/laporan",
+            "label": "Laporan UKS",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/uks/laporan-baru",
+            "label": "Laporan UKS Baru",
+            "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Menu Sarpras",
+        "items": [
+          {
+            "to": "/admin/sarpras/aset-tetap",
+            "label": "Data Aset Tetap Komite & BMN",
+            "icon": "Building2"
+          },
+          {
+            "to": "/admin/sarpras/aset-lancar",
+            "label": "Aset Lancar",
+            "icon": "Package"
+          },
+          {
+            "to": "/admin/sarpras/ruangan-aset",
+            "label": "Data Ruangan dan Aset",
+            "icon": "DoorOpen"
+          },
+          {
+            "to": "/admin/sarpras/penghapusan",
+            "label": "Penghapusan Barang",
+            "icon": "Trash"
+          },
+          {
+            "to": "/admin/sarpras/peminjaman-barang",
+            "label": "Peminjaman Barang",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/admin/sarpras/peminjaman-ruangan",
+            "label": "Peminjaman Ruangan",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-ruangan",
+            "label": "Jurnal Penggunaan Ruangan",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-alat",
+            "label": "Jurnal Penggunaan Alat",
+            "icon": "Wrench"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-perawatan",
+            "label": "Jurnal Perawatan Aset",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/sarpras/kerusakan",
+            "label": "Laporan Kerusakan & Perbaikan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      },
+      {
+        "title": "Sistem & Utilitas",
+        "items": [
+          {
+            "to": "/admin/app-info",
+            "label": "Info & Update",
+            "icon": "Info"
+          },
+          {
+            "to": "/admin/import",
+            "label": "Import Excel",
+            "icon": "FileUp"
+          },
+          {
+            "to": "/admin/master-wilayah",
+            "label": "Master Wilayah",
+            "icon": "MapPin"
+          },
+          {
+            "to": "/admin/pencocokan-wilayah",
+            "label": "Pencocokan Wilayah",
+            "icon": "MapPinned"
+          },
+          {
+            "to": "/admin/backup",
+            "label": "Backup & Restore",
+            "icon": "Database"
+          },
+          {
+            "to": "/admin/audit-logs",
+            "label": "Log Aktivitas",
+            "icon": "ShieldCheck"
+          },
+          {
+            "to": "/admin/settings",
+            "label": "Pengaturan",
+            "icon": "Settings"
+          }
+        ]
+      }
+    ],
+    "siswa": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/siswa",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/siswa/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/siswa/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/siswa/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/ekstrakurikuler",
+            "label": "Ekstrakurikuler",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/rapor",
+            "label": "Rapor Saya",
+            "icon": "FileText"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/siswa/clkb",
+            "label": "CLKB",
+            "icon": "ClipboardCheck"
+          },
+          {
+            "to": "/siswa/pcl",
+            "label": "PCL",
+            "icon": "AlertTriangle"
+          }
+        ]
+      }
+    ],
+    "guru": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          },
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Jadwal & Jurnal",
+        "items": [
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          }
+        ]
+      },
+      {
+        "title": "Akademik Kelas",
+        "items": [
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      },
+      {
+        "title": "Kepegawaian",
+        "items": [
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          }
+        ]
+      }
+    ],
+    "guru_ipa": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab IPA",
+        "items": [
+          {
+            "to": "/lab/ipa/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/ipa/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/ipa/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/ipa/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/ipa/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/ipa/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "guru_ips": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab IPS",
+        "items": [
+          {
+            "to": "/lab/ips/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/ips/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/ips/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/ips/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/ips/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/ips/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "guru_bahasa": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab Bahasa",
+        "items": [
+          {
+            "to": "/lab/bahasa/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/bahasa/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/bahasa/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/bahasa/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/bahasa/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/bahasa/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "guru_seni": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab Seni",
+        "items": [
+          {
+            "to": "/lab/seni/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/seni/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/seni/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/seni/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/seni/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/seni/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "guru_agama": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab Agama",
+        "items": [
+          {
+            "to": "/lab/agama/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/agama/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/agama/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/agama/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/agama/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/agama/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "guru_tik": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/jurnal/scan",
+            "label": "Jurnal Presisi",
+            "icon": "ScanLine",
+            "highlight": true
+          }
+        ]
+      },
+      {
+        "title": "Menu Guru",
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Saya",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Saya",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/indikator-materi",
+            "label": "Input Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/guru/laporan",
+            "label": "Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Titipkan Tugas",
+            "icon": "FileText"
+          },
+          {
+            "to": "/nilai/input",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/guru/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/guru/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Menu Lab Komputer",
+        "items": [
+          {
+            "to": "/lab/komputer/alat-bahan",
+            "label": "Alat dan Bahan Lab",
+            "icon": "Package"
+          },
+          {
+            "to": "/lab/komputer/jadwal",
+            "label": "Jadwal Penggunaan Lab",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/lab/komputer/jurnal-penggunaan",
+            "label": "Jurnal Penggunaan Lab",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/lab/komputer/jurnal-pengelolaan",
+            "label": "Jurnal Pengelolaan",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/lab/komputer/peminjaman-alat",
+            "label": "Peminjaman Alat",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/lab/komputer/kerusakan",
+            "label": "Laporan Kerusakan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "tenaga_kependidikan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/tendik",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          }
+        ]
+      },
+      {
+        "title": "Kepegawaian",
+        "items": [
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/gtk/absensi-saya",
+            "label": "Laporan Absensi Saya",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/verval/ajuan-saya",
+            "label": "Ajuan Verval Saya",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      }
+    ],
+    "guru_ekstrakurikuler": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/ekstrakurikuler",
+            "label": "Ekstrakurikuler Saya",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      }
+    ],
+    "guru_piket": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/piket/tugas",
+            "label": "Tugas Hari Ini",
+            "icon": "ListChecks",
+            "highlight": true
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/guru-pengganti",
+            "label": "Guru Pengganti",
+            "icon": "UserRoundCog"
+          },
+          {
+            "to": "/jurnal/riwayat",
+            "label": "Riwayat Jurnal Piket",
+            "icon": "History"
+          },
+          {
+            "to": "/guru/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          }
+        ]
+      }
+    ],
+    "guru_bk": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      },
+      {
+        "title": "Umum",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/input",
+            "label": "Input Tata Tertib",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/tatib/kategori",
+            "label": "Input Kategori",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/tatib/penanganan",
+            "label": "Input Penanganan",
+            "icon": "ShieldCheck"
+          },
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          }
+        ]
+      },
+      {
+        "title": "Menu BK",
+        "items": [
+          {
+            "to": "/admin/bk/kunjungan",
+            "label": "Kunjungan Konseling",
+            "icon": "HeartHandshake"
+          },
+          {
+            "to": "/admin/bk/clkb",
+            "label": "Cek List Kebiasaan Belajar (CLKB)",
+            "icon": "ClipboardCheck"
+          },
+          {
+            "to": "/admin/bk/pcl",
+            "label": "Problem Cek List (PCL)",
+            "icon": "AlertTriangle"
+          },
+          {
+            "to": "/admin/bk/home-visit",
+            "label": "Jurnal Home Visit",
+            "icon": "Home"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/bk/sekolah-lanjutan",
+            "label": "Data Sekolah Lanjutan",
+            "icon": "School"
+          },
+          {
+            "to": "/admin/bk/laporan",
+            "label": "Laporan BK",
+            "icon": "FileBarChart"
+          }
+        ]
+      }
+    ],
+    "wali_kelas": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/wali-kelas",
+            "label": "Dashboard Kelas",
+            "icon": "BookMarked"
+          }
+        ]
+      },
+      {
+        "title": "Data Kelas",
+        "items": [
+          {
+            "to": "/wali-kelas/siswa",
+            "label": "Data Siswa",
+            "icon": "Users"
+          },
+          {
+            "to": "/wali-kelas/jurnal-kelas",
+            "label": "Jurnal Kelas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/wali-kelas/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/wali-kelas/kebersihan",
+            "label": "Kebersihan Kelas",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/wali-kelas/laporan",
+            "label": "Data Laporan",
+            "icon": "FileText"
+          },
+          {
+            "to": "/rapor",
+            "label": "E-Rapor Kelas",
+            "icon": "FileText"
+          }
+        ]
+      },
+      {
+        "title": "Jadwal & Administrasi",
+        "items": [
+          {
+            "to": "/jadwal",
+            "label": "Jadwal Kelas",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/jadwal/atur",
+            "label": "Atur Jadwal Kelas",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/verval-siswa",
+            "label": "Verval Data Siswa",
+            "icon": "CheckCircle2"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      }
+    ],
+    "guru_tata_tertib": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      },
+      {
+        "title": "Umum",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/input",
+            "label": "Input Tata Tertib",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/admin/tatib/kategori",
+            "label": "Input Kategori",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/tatib/penanganan",
+            "label": "Input Penanganan",
+            "icon": "ShieldCheck"
+          },
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          }
+        ]
+      }
+    ],
+    "alumni": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "kepala_sekolah": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Siswa & GTK",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/gtk",
+            "label": "Data GTK",
+            "icon": "Briefcase"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          }
+        ]
+      },
+      {
+        "title": "Kepegawaian",
+        "items": [
+          {
+            "to": "/admin/gtk/agenda-guru",
+            "label": "Agenda Guru",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/agenda-tendik",
+            "label": "Agenda Tendik",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/admin/gtk/laporan-absensi",
+            "label": "Laporan Absensi GTK",
+            "icon": "UserCheck"
+          }
+        ]
+      },
+      {
+        "title": "Akademik & Aktivitas",
+        "items": [
+          {
+            "to": "/admin/jurnal",
+            "label": "Data Jurnal",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/admin/kebersihan",
+            "label": "Rekapitulasi Kebersihan",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          }
+        ]
+      },
+      {
+        "title": "Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          },
+          {
+            "to": "/admin/bk/kunjungan",
+            "label": "Kunjungan Konseling",
+            "icon": "HeartHandshake"
+          },
+          {
+            "to": "/admin/bk/laporan",
+            "label": "Laporan BK",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/bk/sekolah-lanjutan",
+            "label": "Data Sekolah Lanjutan",
+            "icon": "School"
+          }
+        ]
+      },
+      {
+        "title": "Menu UKS",
+        "items": [
+          {
+            "to": "/admin/uks/kunjungan",
+            "label": "Data Kunjungan UKS",
+            "icon": "Stethoscope"
+          },
+          {
+            "to": "/admin/uks/laporan",
+            "label": "Laporan UKS",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/uks/laporan-baru",
+            "label": "Laporan UKS Baru",
+            "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Menu Perpus",
+        "items": [
+          {
+            "to": "/admin/perpus/kunjungan",
+            "label": "Data Kunjungan Perpus",
+            "icon": "Users"
+          },
+          {
+            "to": "/admin/perpus/peminjaman",
+            "label": "Data Peminjaman Perpus",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/perpus/laporan",
+            "label": "Laporan Perpus",
+            "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Menu Sarpras",
+        "items": [
+          {
+            "to": "/admin/sarpras/kerusakan",
+            "label": "Laporan Kerusakan & Perbaikan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      }
+    ],
+    "kepala_tata_usaha": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/tendik",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen GTK",
+        "items": [
+          {
+            "to": "/admin/gtk",
+            "label": "Data GTK",
+            "icon": "Briefcase"
+          },
+          {
+            "to": "/admin/buku-induk-kepegawaian",
+            "label": "Buku Induk Kepegawaian",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/gtk/laporan-absensi",
+            "label": "Laporan Absensi",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/gtk/agenda-guru",
+            "label": "Agenda Guru",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/agenda-tendik",
+            "label": "Agenda Tendik",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          }
+        ]
+      }
+    ],
+    "waka_kesiswaan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Siswa",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/mutasi",
+            "label": "Data Mutasi",
+            "icon": "ArrowRightLeft"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          }
+        ]
+      },
+      {
+        "title": "Aktivitas & Program",
+        "items": [
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/ekstrakurikuler",
+            "label": "Ekstrakurikuler",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/kebersihan",
+            "label": "Rekapitulasi Kebersihan",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/pengumuman",
+            "label": "Pengumuman",
+            "icon": "Megaphone"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          }
+        ]
+      },
+      {
+        "title": "Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          },
+          {
+            "to": "/admin/bk/kunjungan",
+            "label": "Kunjungan Konseling",
+            "icon": "HeartHandshake"
+          },
+          {
+            "to": "/admin/bk/laporan",
+            "label": "Laporan BK",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/bk/sekolah-lanjutan",
+            "label": "Data Sekolah Lanjutan",
+            "icon": "School"
+          }
+        ]
+      }
+    ],
+    "waka_kurikulum": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Siswa",
+        "items": [
+          {
+            "to": "/wakakur/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/wakakur/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/wakakur/buku-induk",
+            "label": "Buku Induk Siswa",
+            "icon": "FileText"
+          },
+          {
+            "to": "/wakakur/cetak-absensi",
+            "label": "Cetak Format Absensi Siswa Manual",
+            "icon": "FileText"
+          },
+          {
+            "to": "/wakakur/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/wakakur/mutasi",
+            "label": "Data Mutasi",
+            "icon": "ArrowRightLeft"
+          },
+          {
+            "to": "/wakakur/naik-kelas",
+            "label": "Naik Kelas & Kelulusan",
+            "icon": "ArrowRightLeft"
+          }
+        ]
+      },
+      {
+        "title": "Akademik",
+        "items": [
+          {
+            "to": "/wakakur/jadwal",
+            "label": "Jadwal Pelajaran",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/wakakur/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/guru-pengganti",
+            "label": "Guru Pengganti",
+            "icon": "UserRoundCog"
+          },
+          {
+            "to": "/wakakur/jurnal",
+            "label": "Data Jurnal",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/wakakur/indikator-materi",
+            "label": "Data Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/wakakur/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/wakakur/tugas",
+            "label": "Tugas Mapel",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/wakakur/nilai",
+            "label": "Input Nilai",
+            "icon": "ClipboardEdit"
+          },
+          {
+            "to": "/wakakur/rapor",
+            "label": "E-Rapor Digital",
+            "icon": "FileText"
+          }
+        ]
+      },
+      {
+        "title": "Aktivitas & Program",
+        "items": [
+          {
+            "to": "/wakakur/kegiatan",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/wakakur/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/wakakur/piket",
+            "label": "Tugas & Piket",
+            "icon": "ListChecks"
+          },
+          {
+            "to": "/wakakur/pengumuman",
+            "label": "Pengumuman",
+            "icon": "Megaphone"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          }
+        ]
+      }
+    ],
+    "waka_sarpras": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Menu Sarpras",
+        "items": [
+          {
+            "to": "/admin/sarpras/aset-tetap",
+            "label": "Data Aset Tetap Komite & BMN",
+            "icon": "Building2"
+          },
+          {
+            "to": "/admin/sarpras/aset-lancar",
+            "label": "Aset Lancar",
+            "icon": "Package"
+          },
+          {
+            "to": "/admin/sarpras/ruangan-aset",
+            "label": "Data Ruangan dan Aset",
+            "icon": "DoorOpen"
+          },
+          {
+            "to": "/admin/sarpras/penghapusan",
+            "label": "Penghapusan Barang",
+            "icon": "Trash"
+          },
+          {
+            "to": "/admin/sarpras/peminjaman-barang",
+            "label": "Peminjaman Barang",
+            "icon": "Handshake"
+          },
+          {
+            "to": "/admin/sarpras/peminjaman-ruangan",
+            "label": "Peminjaman Ruangan",
+            "icon": "CalendarClock"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-ruangan",
+            "label": "Jurnal Penggunaan Ruangan",
+            "icon": "BookOpenCheck"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-alat",
+            "label": "Jurnal Penggunaan Alat",
+            "icon": "Wrench"
+          },
+          {
+            "to": "/admin/sarpras/jurnal-perawatan",
+            "label": "Jurnal Perawatan Aset",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/sarpras/kerusakan",
+            "label": "Laporan Kerusakan & Perbaikan",
+            "icon": "AlertOctagon"
+          }
+        ]
+      },
+      {
+        "title": "Aktivitas & Program",
+        "items": [
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      }
+    ],
+    "waka_humas": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/admin/pengumuman",
+            "label": "Pengumuman",
+            "icon": "Megaphone"
+          },
+          {
+            "to": "/admin/aplikasi-madrasah",
+            "label": "Aplikasi Madrasah",
+            "icon": "Globe"
+          }
+        ]
+      }
+    ],
+    "bendahara": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/admin/pip/penerima",
+            "label": "Data Penerima PIP",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/admin/pip/ajuan",
+            "label": "Daftar Ajuan PIP",
+            "icon": "FileText"
+          }
+        ]
+      }
+    ],
+    "kepegawaian": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "perpustakaan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "unit_pelayanan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/gtk/agenda-guru",
+            "label": "Agenda Guru",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/agenda-tendik",
+            "label": "Agenda Tendik",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/unit-pelayanan/kelas",
+            "label": "Kelas",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          }
+        ]
+      }
+    ],
+    "unit_kesehatan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      },
+      {
+        "title": "Menu UKS",
+        "items": [
+          {
+            "to": "/admin/uks/kunjungan",
+            "label": "Data Kunjungan",
+            "icon": "Stethoscope"
+          },
+          {
+            "to": "/admin/uks/ckg",
+            "label": "Data CKG",
+            "icon": "Syringe"
+          },
+          {
+            "to": "/admin/uks/obat",
+            "label": "Data Obat",
+            "icon": "Pill"
+          },
+          {
+            "to": "/admin/uks/bmhp",
+            "label": "Data BMHP",
+            "icon": "Package"
+          },
+          {
+            "to": "/admin/uks/jenis-penanganan",
+            "label": "Jenis Penanganan",
+            "icon": "ClipboardPlus"
+          },
+          {
+            "to": "/admin/uks/penegakan-diagnosa",
+            "label": "Penegakan Diagnosa",
+            "icon": "ClipboardCheck"
+          },
+          {
+            "to": "/admin/uks/data-siswa-gtk",
+            "label": "Data Siswa dan GTK",
+            "icon": "Users"
+          },
+          {
+            "to": "/admin/uks/aset",
+            "label": "Aset UKS",
+            "icon": "HeartPulse"
+          },
+          {
+            "to": "/admin/uks/laporan",
+            "label": "Laporan UKS",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/uks/laporan-baru",
+            "label": "Laporan UKS Baru",
+            "icon": "FileBarChart"
+          }
+        ]
+      }
+    ],
+    "penjamin_mutu": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/profile/guru",
+            "label": "Profil Saya",
+            "icon": "UserCircle"
+          },
+          {
+            "to": "/my-agenda",
+            "label": "Agenda Saya",
+            "icon": "CalendarDays"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen GTK",
+        "items": [
+          {
+            "to": "/admin/gtk",
+            "label": "Data GTK",
+            "icon": "Briefcase"
+          },
+          {
+            "to": "/admin/buku-induk-kepegawaian",
+            "label": "Buku Induk Kepegawaian",
+            "icon": "BookMarked"
+          },
+          {
+            "to": "/admin/gtk/laporan-absensi",
+            "label": "Laporan Absensi",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/gtk/agenda-guru",
+            "label": "Agenda Guru",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/agenda-tendik",
+            "label": "Agenda Tendik",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/gtk/e-kinerja",
+            "label": "E-Kinerja",
+            "icon": "Target"
+          },
+          {
+            "to": "/admin/gtk/profesionalitas",
+            "label": "Profesionalitas GTK",
+            "icon": "Award"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Siswa",
+        "items": [
+          {
+            "to": "/admin/siswa",
+            "label": "Data Siswa",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          },
+          {
+            "to": "/admin/buku-induk",
+            "label": "Buku Induk Siswa",
+            "icon": "FileText"
+          },
+          {
+            "to": "/admin/cetak-absensi-manual",
+            "label": "Cetak Format Absensi Siswa Manual",
+            "icon": "FileText"
+          },
+          {
+            "to": "/admin/alumni",
+            "label": "Data Alumni",
+            "icon": "GraduationCap"
+          },
+          {
+            "to": "/admin/naik-kelas",
+            "label": "Naik Kelas & Kelulusan",
+            "icon": "ArrowRightLeft"
+          }
+        ]
+      },
+      {
+        "title": "Akademik",
+        "items": [
+          {
+            "to": "/admin/schedules",
+            "label": "Jadwal Pelajaran",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/admin/jadwal-piket",
+            "label": "Jadwal Piket",
+            "icon": "ShieldAlert"
+          },
+          {
+            "to": "/admin/jurnal",
+            "label": "Data Jurnal",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/admin/indikator-materi",
+            "label": "Data Indikator & Materi",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/admin/tugas",
+            "label": "Tugas Mapel",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/rapor",
+            "label": "E-Rapor Digital",
+            "icon": "FileText"
+          }
+        ]
+      },
+      {
+        "title": "Aktivitas & Program",
+        "items": [
+          {
+            "to": "/admin/kegiatan-madrasah",
+            "label": "Kegiatan Madrasah",
+            "icon": "CalendarDays"
+          },
+          {
+            "to": "/admin/dana-rkam",
+            "label": "DANA RKAM",
+            "icon": "DollarSign"
+          },
+          {
+            "to": "/prestasi",
+            "label": "Data Prestasi",
+            "icon": "Trophy"
+          },
+          {
+            "to": "/ekstrakurikuler",
+            "label": "Ekstrakurikuler",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/kebersihan",
+            "label": "Rekapitulasi Kebersihan",
+            "icon": "Sparkles"
+          },
+          {
+            "to": "/admin/pengumuman",
+            "label": "Pengumuman",
+            "icon": "Megaphone"
+          }
+        ]
+      },
+      {
+        "title": "Manajemen Tatib & BK",
+        "items": [
+          {
+            "to": "/admin/tatib/data",
+            "label": "Data Tata Tertib",
+            "icon": "Database"
+          },
+          {
+            "to": "/admin/bk/kunjungan",
+            "label": "Kunjungan Konseling",
+            "icon": "HeartHandshake"
+          },
+          {
+            "to": "/admin/bk/laporan",
+            "label": "Laporan BK",
+            "icon": "FileBarChart"
+          },
+          {
+            "to": "/admin/bk/sekolah-lanjutan",
+            "label": "Data Sekolah Lanjutan",
+            "icon": "School"
+          }
+        ]
+      }
+    ],
+    "unit_pengaduan": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "unit_ubudiyah": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "unit_olimpiade": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "unit_tahfidz": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "unit_kopsis": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "mundhir_mahad": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "musrif_mahad": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "musrifah_mahad": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "murabbi_mahad": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "bendahara_mahad": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          }
+        ]
+      }
+    ],
+    "kelas": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/kelas/siswa",
+            "label": "Data Siswa",
+            "icon": "Users"
+          },
+          {
+            "to": "/kelas/jadwal",
+            "label": "Jadwal Kelas",
+            "icon": "Calendar"
+          },
+          {
+            "to": "/kelas/materi",
+            "label": "Materi Mapel",
+            "icon": "BookOpen"
+          },
+          {
+            "to": "/kelas/tugas",
+            "label": "Tugas",
+            "icon": "ClipboardList"
+          },
+          {
+            "to": "/kelas/jurnal",
+            "label": "Riwayat Jurnal Kelas",
+            "icon": "History"
+          },
+          {
+            "to": "/kelas/kehadiran",
+            "label": "Kehadiran Siswa",
+            "icon": "UserCheck"
+          }
+        ]
+      }
+    ],
+    "orang_tua": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/dashboard",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/dashboard",
+            "label": "Anak Saya",
+            "icon": "Users"
+          }
+        ]
+      }
+    ]
+  }
+}

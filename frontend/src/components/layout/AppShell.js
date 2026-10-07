@@ -36,6 +36,7 @@ import { ChangePasswordDialog } from '@/components/security/ChangePasswordDialog
 import { OfflineQueueBadge } from '@/components/offline/OfflineQueueBadge';
 import { CommandPalette } from '@/components/CommandPalette';
 import { GURU_PENGGANTI_PATH, canManageGuruPengganti } from '@/lib/guruPengganti';
+import { isEmbeddedApp, postToApp } from '@/lib/embed';
 
 /**
  * Build sidebar items based ONLY on activeRole.
@@ -1026,9 +1027,30 @@ export default function AppShell({ children }) {
     }
   };
 
+  // Mode tertanam (aplikasi Android): beri tahu aplikasi rute & judul halaman yang sedang dibuka.
+  const embedded = isEmbeddedApp();
+  useEffect(() => {
+    if (!embedded) return;
+    postToApp({ type: 'route', path: loc.pathname + loc.search, title: document.title });
+  }, [embedded, loc.pathname, loc.search]);
+
   const userInitial = (user?.full_name || user?.username || 'U').substring(0, 2).toUpperCase();
   const appName = settings?.app_name || 'Super Apps MATSANDATAMA';
   const schoolName = settings?.school_name || 'MTsN 2 Kota Malang';
+
+  if (embedded) {
+    // Di dalam aplikasi: hanya isi halaman. Navigasi, peran, notifikasi & keluar ditangani aplikasi.
+    return (
+      <div className="min-h-screen bg-[var(--cream)]" data-testid="app-shell-embedded">
+        <main className="px-3 sm:px-6 py-4 max-w-7xl mx-auto w-full">{children}</main>
+        <ViewContextDialog
+          open={vcDialogOpen}
+          onOpenChange={setVcDialogOpen}
+          onUpdated={() => { refreshViewCtx(); refreshMe?.(); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--cream)] flex">

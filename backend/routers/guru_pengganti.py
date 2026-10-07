@@ -656,38 +656,38 @@ def _fmt_dates(date_strs: List[str]) -> str:
 
 
 async def _notify_assignment(sch: Dict, original_id: str, substitute_id: str, date_strs: List[str]) -> None:
-    """Notifikasi aplikasi mobile ke guru pengganti & guru yang digantikan (best-effort)."""
+    """Notifikasi (kotak masuk + push HP & web) ke guru pengganti & guru yang digantikan (best-effort)."""
     try:
-        from routers.mobile import send_expo_push_to_users
+        from notify import notify_users
         classes = await _resolve_names('classes', [sch.get('class_id')])
         names = {u['id']: u.get('full_name') for u in await db.users.find(
             {'id': {'$in': [original_id, substitute_id]}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(2)}
         kelas = classes.get(sch.get('class_id')) or 'kelas'
         jam = f"{sch.get('start_time')}–{sch.get('end_time')}"
         data = {'type': 'substitute_assignment', 'schedule_id': sch['id'], 'dates': sorted(date_strs)}
-        await send_expo_push_to_users(
+        await notify_users(
             [substitute_id], f'🧑‍🏫 Tugas Guru Pengganti — {kelas}',
             f"Menggantikan {names.get(original_id) or 'guru'} · {jam} · {_fmt_dates(date_strs)}. "
             "Slot muncul di jadwal hari itu.",
-            data, channel_id='guru-pengganti')
-        await send_expo_push_to_users(
+            type='substitute_assignment', route='/dashboard', data=data, channel='guru-pengganti')
+        await notify_users(
             [original_id], f'Slot Anda digantikan — {kelas}',
             f"Diampu {names.get(substitute_id) or 'guru pengganti'} · {jam} · {_fmt_dates(date_strs)}",
-            data, channel_id='guru-pengganti')
+            type='substitute_assignment', route='/dashboard', data=data, channel='guru-pengganti')
     except Exception as e:  # noqa: BLE001
         logging.getLogger('matsandatama').error(f"[guru_pengganti] notifikasi penugasan gagal: {e}")
 
 
 async def _notify_assignment_cancelled(a: Dict) -> None:
     try:
-        from routers.mobile import send_expo_push_to_users
+        from notify import notify_users
         sch = await db.schedules.find_one({'id': a['schedule_id']}, {'_id': 0, 'class_id': 1, 'start_time': 1}) or {}
         kelas = (await _resolve_names('classes', [sch.get('class_id')])).get(sch.get('class_id')) or 'kelas'
-        await send_expo_push_to_users(
+        await notify_users(
             [a['substitute_teacher_id']], f'Penugasan guru pengganti dibatalkan — {kelas}',
             f"{_fmt_dates([a['date']])} pukul {sch.get('start_time') or '-'} tidak perlu digantikan lagi.",
-            {'type': 'substitute_assignment_cancelled', 'assignment_id': a['id'], 'date': a['date']},
-            channel_id='guru-pengganti')
+            type='substitute_assignment_cancelled', route='/dashboard',
+            data={'assignment_id': a['id'], 'date': a['date']}, channel='guru-pengganti')
     except Exception as e:  # noqa: BLE001
         logging.getLogger('matsandatama').error(f"[guru_pengganti] notifikasi pembatalan gagal: {e}")
 

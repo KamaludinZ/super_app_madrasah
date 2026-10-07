@@ -10,6 +10,7 @@ from typing import Dict, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit
+from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 from models import VervalRequestModel
 
 router = APIRouter()
@@ -181,6 +182,7 @@ async def create_verval_request(
     doc['created_at'] = doc['created_at'].isoformat()
 
     await db.verval_requests.insert_one(doc)
+    spawn(_notify_verval_new(dict(doc)))
     await log_audit(
         user,
         'create',
@@ -191,6 +193,37 @@ async def create_verval_request(
     )
 
     return serialize_doc(doc)
+
+
+VERVAL_TYPE_LABEL = {'profile_update': 'perubahan data', 'achievement': 'prestasi'}
+
+
+async def _notify_verval_new(doc: Dict):
+    """Ajuan verval baru → wali kelas (ajuan siswa) atau admin."""
+    jenis = VERVAL_TYPE_LABEL.get(doc.get('request_type'), doc.get('request_type') or 'data')
+    title = f"Ajuan verval {jenis} baru"
+    body = f"Dari {doc.get('submitted_by_name') or 'pengguna'} — menunggu ditinjau."
+    data = {'request_id': doc.get('id')}
+    exclude = [doc.get('submitted_by')]
+    if doc.get('user_type') == 'siswa':
+        akun = await db.users.find_one({'id': doc.get('user_id')}, {'_id': 0, 'student_class_id': 1}) or {}
+        wali = await homeroom_teacher_of(akun.get('student_class_id'))
+        if wali:
+            await notify_users([wali], title, body, type='verval_new', route='/admin/verval-siswa', data=data, exclude=exclude)
+        else:
+            await notify_roles(['admin'], title, body, type='verval_new', route='/admin/verval-siswa', data=data, exclude=exclude)
+    else:
+        await notify_roles(['admin'], title, body, type='verval_new', route='/admin/verval-gtk', data=data, exclude=exclude)
+
+
+async def _notify_verval_result(req: Dict, status: str, notes: Optional[str], reviewer: Dict):
+    jenis = VERVAL_TYPE_LABEL.get(req.get('request_type'), req.get('request_type') or 'data')
+    ok = status == 'approved'
+    title = f"Ajuan verval {jenis} {'disetujui' if ok else 'ditolak'}"
+    body = f"Ditinjau {reviewer.get('full_name') or 'petugas'}" + (f": {notes}" if notes else '.')
+    await notify_users([req.get('user_id'), req.get('submitted_by')], title, body,
+                       type='verval_approved' if ok else 'verval_rejected', route='/verval/ajuan-saya',
+                       data={'request_id': req.get('id')}, exclude=[reviewer.get('id')])
 
 
 @router.post("/verval-requests/{request_id}/approve")
@@ -292,6 +325,7 @@ async def approve_verval_request(
             'admin_notes': payload.get('admin_notes', '')
         }}
     )
+    spawn(_notify_verval_result(verval_req, 'approved', payload.get('admin_notes'), user))
 
     await log_audit(
         user,
@@ -349,6 +383,7 @@ async def reject_verval_request(
             'admin_notes': payload['admin_notes']
         }}
     )
+    spawn(_notify_verval_result(verval_req, 'rejected', payload['admin_notes'], user))
 
     await log_audit(
         user,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, Megaphone, Lock, CheckCheck, Pin, ChevronRight } from 'lucide-react';
+import { Bell, BellRing, Megaphone, Lock, CheckCheck, Pin, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -34,7 +34,7 @@ const SEVERITY_STYLES = {
 };
 
 function NotificationItem({ n, onClick }) {
-  const Icon = n.icon === 'lock' ? Lock : Megaphone;
+  const Icon = n.icon === 'lock' ? Lock : n.source === 'user' ? BellRing : Megaphone;
   const style = SEVERITY_STYLES[n.severity] || SEVERITY_STYLES.info;
   return (
     <button
@@ -61,7 +61,7 @@ function NotificationItem({ n, onClick }) {
           <div className="flex items-center gap-2 mt-1">
             <span className="text-[10px] text-slate-400">{formatRelative(n.created_at)}</span>
             <Badge variant="outline" className="text-[9px] py-0 px-1 capitalize">
-              {n.source === 'announcement' ? 'Pengumuman' : 'Sistem'}
+              {n.source === 'announcement' ? 'Pengumuman' : n.source === 'user' ? 'Untuk Anda' : 'Sistem'}
             </Badge>
           </div>
         </div>
@@ -104,7 +104,7 @@ export function NotificationBell() {
   }, [open]);
 
   const handleClick = async (n) => {
-    if (!n.is_read && n.source === 'announcement') {
+    if (!n.is_read && (n.source === 'announcement' || n.source === 'user')) {
       try { await api.post(`/notifications/${n.source}/${n.source_id}/read`); } catch { /* */ }
     }
     setOpen(false);
@@ -117,7 +117,7 @@ export function NotificationBell() {
   const handleMarkAll = async () => {
     try {
       const { data } = await api.post('/notifications/mark-all-read');
-      toast.success(`${data.marked_read} pengumuman ditandai sudah dibaca`);
+      toast.success(`${data.marked_read} notifikasi ditandai sudah dibaca`);
       fetchList();
       fetchUnread();
     } catch (e) { toast.error('Gagal'); }
@@ -147,7 +147,7 @@ export function NotificationBell() {
             <p className="text-sm font-semibold text-slate-900">Notifikasi</p>
             <p className="text-[10px] text-slate-500">{unread > 0 ? `${unread} belum dibaca` : 'Semua sudah dibaca'}</p>
           </div>
-          {items.some((i) => !i.is_read && i.source === 'announcement') && (
+          {items.some((i) => !i.is_read && (i.source === 'announcement' || i.source === 'user')) && (
             <Button variant="ghost" size="sm" onClick={handleMarkAll} className="h-7 text-xs gap-1" data-testid="btn-mark-all-read">
               <CheckCheck className="h-3.5 w-3.5" /> Tandai semua dibaca
             </Button>
