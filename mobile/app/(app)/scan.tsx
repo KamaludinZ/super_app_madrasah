@@ -1,9 +1,9 @@
 /**
  * Validasi kehadiran di kelas untuk jurnal mengajar — tiga cara (sama dengan web):
  *  Scan QR    : kamera membaca QR ruangan.
- *  Token QR   : tempel token QR (string panjang dari admin/QR Generator) — diproses sama dengan hasil scan.
  *  Token Kelas: ketik token kelas XX-XXXX-XXXX → POST /jurnal/validate-by-class-token → Isi Jurnal
  *               (mode class_token → POST /jurnal/by-class-token). Perlu internet.
+ *  Token QR   : tempel token QR (string panjang dari admin/QR Generator) — diproses sama dengan hasil scan.
  * QR/Token QR online : POST /jurnal/validate (QR + jadwal + GPS) → Isi Jurnal (mode qr).
  * QR/Token QR offline: pakai izin offline slot ini (disimpan saat online) dan catat bukti waktu SAAT SCAN
  *           → Isi Jurnal (mode offline) → antrean → dikirim ke /mobile/journals/offline saat online.
@@ -191,8 +191,8 @@ export default function ScanScreen() {
           <Button title="Izinkan kamera" icon="camera" onPress={requestPerm} fullWidth />
           <T variant="caption" tone="muted" center>Kamera tidak bisa dipakai? Gunakan cara lain:</T>
           <View style={{ flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch' }}>
-            <Button title="Token QR" icon="key-outline" variant="outline" onPress={() => changeMethod('qr_token')} style={{ flex: 1 }} />
             <Button title="Token Kelas" icon="keypad-outline" variant="outline" onPress={() => changeMethod('class_token')} style={{ flex: 1 }} />
+            <Button title="Token QR" icon="key-outline" variant="outline" onPress={() => changeMethod('qr_token')} style={{ flex: 1 }} />
           </View>
         </Card>
       </Screen>
@@ -221,7 +221,7 @@ export default function ScanScreen() {
         </T>
         <SegmentedControl<Method>
           small
-          segments={[{ value: 'qr', label: 'Scan QR' }, { value: 'qr_token', label: 'Token QR' }, { value: 'class_token', label: 'Token Kelas' }]}
+          segments={[{ value: 'qr', label: 'Scan QR' }, { value: 'class_token', label: 'Token Kelas' }, { value: 'qr_token', label: 'Token QR' }]}
           value={method}
           onChange={changeMethod}
           style={{ marginTop: spacing.sm }}

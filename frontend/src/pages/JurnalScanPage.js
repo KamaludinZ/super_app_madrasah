@@ -434,8 +434,8 @@ export default function JurnalScanPage() {
                 <Tabs value={scanMode} onValueChange={setScanMode} className="w-full">
                   <TabsList className="grid grid-cols-3 mb-4">
                     <TabsTrigger value="qr" data-testid="tab-scan-qr"><Camera className="h-3.5 w-3.5 mr-1" /> Scan QR</TabsTrigger>
-                    <TabsTrigger value="qr_token" data-testid="tab-scan-qr-token"><Hash className="h-3.5 w-3.5 mr-1" /> Token QR</TabsTrigger>
                     <TabsTrigger value="class_token" data-testid="tab-scan-class-token"><KeyRound className="h-3.5 w-3.5 mr-1" /> Token Kelas</TabsTrigger>
+                    <TabsTrigger value="qr_token" data-testid="tab-scan-qr-token"><Hash className="h-3.5 w-3.5 mr-1" /> Token QR</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="qr" className="space-y-3 mt-0">
