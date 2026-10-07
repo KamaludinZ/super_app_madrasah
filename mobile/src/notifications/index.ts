@@ -227,6 +227,9 @@ export function routeForNotification(data: Record<string, any> | undefined, role
     case 'substitute_assignment':
     case 'substitute_assignment_cancelled':
       return '/(app)/(tabs)';
+    case 'class_task_new':
+      if (role === 'siswa' && data.tugas_id) return `/siswa/tugas/${data.tugas_id}`;
+      return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
     case 'teaching_reminder':
       return data.schedule_id ? `/jurnal/isi?schedule_id=${data.schedule_id}&mode=slot` : '/(app)/(tabs)';
     default:

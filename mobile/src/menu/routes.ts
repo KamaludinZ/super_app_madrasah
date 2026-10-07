@@ -11,6 +11,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/guru-pengganti') return '/(app)/(tabs)/pengganti';
   if (p === '/pengumuman') return '/(app)/(tabs)/pengumuman';
   if (p === '/piket/tugas' && (role === 'guru_piket' || role === 'admin')) return '/piket';
+  // Fase 1 — Siswa (rencana docs/RENCANA_APLIKASI_NATIVE.md)
+  if (p === '/siswa/tugas' && role === 'siswa') return '/siswa/tugas';
   return null;
 }
 

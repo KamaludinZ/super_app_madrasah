@@ -1,7 +1,7 @@
 import { request } from './client';
 import type {
   Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
-  GPSlotDates, GPTeacher, Indikator, Journal, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
+  GPSlotDates, GPTeacher, Indikator, Journal, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
 } from './types';
 
@@ -50,6 +50,13 @@ export const api = {
     byClass: (class_id: string) => request<Journal[]>(`/jurnal/by-class/${class_id}`),
     admin: (q: { start_date?: string; end_date?: string; class_id?: string; limit?: number }) => request<{ items: Journal[] }>('/admin/jurnal', { query: q }),
     piketFilled: () => request<Journal[]>('/jurnal/piket-filled'),
+  },
+
+  kelas: {
+    tugas: () => request<KelasTugas[]>('/kelas/tugas'),
+    tugasDetail: (id: string) => request<KelasTugas>(`/kelas/tugas/${id}`),
+    submitTugas: (id: string, body: { jawaban: string; file_url?: string | null }) =>
+      request<{ message: string; id: string }>(`/kelas/tugas/${id}/submit`, { method: 'POST', body }),
   },
 
   akademik: {

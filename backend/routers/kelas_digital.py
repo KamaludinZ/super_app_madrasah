@@ -235,6 +235,32 @@ async def get_wali_kelas_info(user: Dict = Depends(get_current_user)):
 # ============================================================
 # MATERI MAPEL - CRUD
 # ============================================================
+def _siswa_target_query(student_id: str, class_id: Optional[str]) -> Dict:
+    """Filter Mongo materi/tugas yang ditujukan ke siswa tertentu. target_siswa berformat
+    [{class_id, student_ids: 'all' | [id…]}] (format form guru); format lama berupa daftar id tetap dicocokkan."""
+    conds: List[Dict] = [
+        {'target_siswa': student_id},
+        {'target_siswa': {'$elemMatch': {'student_ids': student_id}}},
+    ]
+    if class_id:
+        conds.append({'target_siswa': {'$elemMatch': {'class_id': class_id, 'student_ids': 'all'}}})
+    return {'$or': conds}
+
+
+def _targets_student(doc: Dict, student_id: str, class_id: Optional[str]) -> bool:
+    """Apakah materi/tugas `doc` ditujukan ke siswa ini lewat target_siswa (kedua format)."""
+    for t in doc.get('target_siswa') or []:
+        if t == student_id:
+            return True
+        if isinstance(t, dict):
+            ids = t.get('student_ids')
+            if ids == 'all' and class_id and t.get('class_id') == class_id:
+                return True
+            if isinstance(ids, list) and student_id in ids:
+                return True
+    return False
+
+
 async def _content_recipients(target_role, kelas_ids: List[str], target_siswa: List[Dict]) -> List[str]:
     """Penerima materi/tugas sesuai sasaran: 'kelas' → siswa & akun kelas di target_kelas_ids;
     'siswa' → target_siswa [{class_id, student_ids: 'all' | [id…]}]."""
@@ -351,7 +377,7 @@ async def get_materi_list(
         materi_list_siswa = await db.materi_mapel.find({
             'is_active': True,
             'target_role': 'siswa',
-            'target_siswa': student_id
+            **_siswa_target_query(student_id, student_class_id),
         }).sort('created_at', -1).to_list(None)
         logger.info(f"[MATERI-SISWA] Found {len(materi_list_siswa)} materi for siswa")
 
@@ -372,7 +398,8 @@ async def get_materi_list(
             logger.debug(f"[MATERI-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
-        materi_list = materi_list_kelas + materi_list_siswa
+        # Gabung tanpa duplikat (konten bisa ditujukan ke kelas sekaligus siswa tertentu).
+        materi_list = list({m['id']: m for m in materi_list_kelas + materi_list_siswa}.values())
 
         # Enrich with teacher and subject info
         serialized_list = []
@@ -594,7 +621,7 @@ async def get_tugas_list(
         tugas_list_siswa = await db.tugas.find({
             'is_active': True,
             'target_role': 'siswa',
-            'target_siswa': student_id
+            **_siswa_target_query(student_id, student_class_id),
         }).sort('created_at', -1).to_list(None)
         logger.info(f"[TUGAS-SISWA] Found {len(tugas_list_siswa)} tugas for siswa")
 
@@ -615,7 +642,8 @@ async def get_tugas_list(
             logger.debug(f"[TUGAS-SISWA] DEBUG: Looking for student_id: {student_id}")
 
         # Combine both lists
-        tugas_list = tugas_list_kelas + tugas_list_siswa
+        # Gabung tanpa duplikat (tugas bisa ditujukan ke kelas sekaligus siswa tertentu).
+        tugas_list = list({t['id']: t for t in tugas_list_kelas + tugas_list_siswa}.values())
 
         # Enrich with teacher, subject info, and submission status
         serialized_list = []
@@ -689,6 +717,15 @@ async def get_tugas_detail(
     tugas['teacher_name'] = teacher.get('full_name') if teacher else None
     tugas['subject_name'] = subject.get('name') if subject else None
     tugas['_id'] = None
+
+    # Siswa: sertakan pengumpulan miliknya agar jawaban bisa dilihat & diperbarui (aplikasi Android).
+    if active_role == 'siswa':
+        mine = await db.tugas_submissions.find_one(
+            {'tugas_id': tugas_id, 'student_id': user['id']},
+            {'_id': 0, 'id': 1, 'jawaban': 1, 'file_url': 1, 'submitted_at': 1, 'updated_at': 1},
+        )
+        tugas['my_submission'] = serialize_doc(mine) if mine else None
+        tugas['submission_status'] = 'submitted' if mine else 'not_submitted'
 
     return serialize_doc(tugas)
 
@@ -836,7 +873,7 @@ async def submit_tugas(
 
     # Check if tugas is specifically for this student
     if 'siswa' in tugas.get('target_role', []):
-        if student_id in tugas.get('target_siswa', []):
+        if _targets_student(tugas, student_id, student_class_id):
             has_access = True
 
     if not has_access:

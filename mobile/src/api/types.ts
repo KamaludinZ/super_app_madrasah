@@ -326,3 +326,23 @@ export type Indikator = { id: string; kode?: string | null; nama?: string | null
 
 /** Materi/Pokok Bahasan mapel (GET /materi?mapel_id&semester_id) — opsional di jurnal. */
 export type MateriPokok = { id: string; nama: string; deskripsi?: string | null; indikator_id?: string | null };
+
+/** Tugas Kelas Digital (GET /kelas/tugas, /kelas/tugas/{id}). */
+export type KelasTugas = {
+  id: string;
+  judul: string;
+  deskripsi?: string | null;
+  /** Isi tugas (HTML dari editor guru). */
+  konten?: string | null;
+  file_url?: string | null;
+  /** ISO lokal WIB tanpa zona, mis. 2026-10-10T23:59. */
+  deadline?: string | null;
+  subject_id?: string | null;
+  subject_name?: string | null;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  target_role?: string[] | string;
+  submission_status?: 'submitted' | 'not_submitted';
+  my_submission?: { id: string; jawaban: string; file_url?: string | null; submitted_at?: string; updated_at?: string | null } | null;
+  created_at?: string;
+};

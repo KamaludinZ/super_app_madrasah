@@ -157,3 +157,16 @@ export function monthRange(month: string): { start: string; end: string; days: n
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return { start: `${month}-01`, end: `${month}-${pad(days)}`, days };
 }
+
+/** Status tenggat untuk daftar tugas: lewat, hari ini, besok, atau n hari lagi (WIB). */
+export function dueInfo(deadline?: string | null, now = Date.now()): { label: string; tone: 'error' | 'warning' | 'neutral' | 'brand'; overdue: boolean } | null {
+  if (!deadline) return null;
+  const t = parseISO(deadline).getTime();
+  if (Number.isNaN(t)) return null;
+  const jam = formatTime(t);
+  if (t < now) return { label: `Tenggat lewat · ${formatDateShort(t)}`, tone: 'error', overdue: true };
+  const days = Math.round((parseISO(toISODate(t)).getTime() - parseISO(toISODate(now)).getTime()) / 86_400_000);
+  if (days === 0) return { label: `Hari ini ${jam}`, tone: 'warning', overdue: false };
+  if (days === 1) return { label: `Besok ${jam}`, tone: 'warning', overdue: false };
+  return { label: `${days} hari lagi · ${formatDateShort(t)}`, tone: days <= 3 ? 'brand' : 'neutral', overdue: false };
+}
