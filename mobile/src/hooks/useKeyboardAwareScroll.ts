@@ -20,31 +20,38 @@ export function useKeyboardAwareScroll(scrollRef: RefObject<ScrollView | null>) 
 
   const revealFocused = useCallback(() => {
     const input = TextInput.State.currentlyFocusedInput?.();
-    const scroll = scrollRef.current;
+    const scroll = scrollRef.current?.getNativeScrollRef?.();
     const keyboardTop = kbTop.current;
     if (!input || !scroll || keyboardTop == null) return;
-    const node = scroll.getInnerViewNode?.() ?? scroll;
-    // Hanya gulir ScrollView yang berisi kolom fokus (layar tab lain tetap terpasang di belakang).
-    input.measureLayout(node as never, () => {
-      input.measureInWindow((_x, y, _w, h) => {
-        const overlap = y + h + GAP - keyboardTop;
+    // Hanya ScrollView yang tampil & memuat kolom fokus yang digulir (layar tab lain tetap terpasang
+    // di belakang dengan ukuran nol / di luar layar).
+    scroll.measureInWindow((sx, sy, sw, sh) => {
+      if (!sw || !sh) return;
+      input.measureInWindow((x, y, _w, h) => {
+        if (x < sx || x > sx + sw || y < sy - h || y > sy + sh + h) return;
+        // Batas bawah area terlihat: bila jendela mengecil saat keyboard muncul (adjustResize), tepi bawah
+        // ScrollView sudah di atas keyboard; bila tidak (edge-to-edge), tepi atas keyboard yang membatasi.
+        const visibleBottom = Math.min(sy + sh, keyboardTop);
+        const overlap = y + h + GAP - visibleBottom;
         if (overlap > 0) scrollRef.current?.scrollTo({ y: offsetY.current + overlap, animated: true });
       });
-    }, () => { /* bukan anak ScrollView ini */ });
+    });
   }, [scrollRef]);
 
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
       kbTop.current = e.endCoordinates.screenY || Dimensions.get('screen').height - e.endCoordinates.height;
       setKeyboardHeight(e.endCoordinates.height);
-      // Tunggu ruang bawah ter-render dulu, baru gulir.
-      setTimeout(revealFocused, 60);
+      // Ruang bawah perlu ter-render dulu (gulir pertama bisa terpotong panjang konten lama);
+      // gulir kedua menghitung ulang dari posisi terkini.
+      setTimeout(revealFocused, 80);
+      setTimeout(revealFocused, 350);
     });
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
       kbTop.current = null;
       setKeyboardHeight(0);
     });
-    const focus = DeviceEventEmitter.addListener(INPUT_FOCUS_EVENT, () => setTimeout(revealFocused, 120));
+    const focus = DeviceEventEmitter.addListener(INPUT_FOCUS_EVENT, () => { setTimeout(revealFocused, 120); setTimeout(revealFocused, 400); });
     return () => { show.remove(); hide.remove(); focus.remove(); };
   }, [revealFocused]);
 
