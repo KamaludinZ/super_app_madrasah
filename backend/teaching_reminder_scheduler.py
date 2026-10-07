@@ -167,11 +167,15 @@ async def send_push_notification(
         # Send notification to user
         result = await send_push_to_users([teacher_id], payload)
 
-        # Check if sent successfully
-        if result.get('sent', 0) > 0:
-            return True
+        # Aplikasi mobile: hanya perangkat yang TIDAK menjadwalkan pengingat lokal sendiri
+        # (pengingat lokal tetap berbunyi saat offline dan tidak boleh dobel).
+        from routers.mobile import send_expo_push_to_users
+        mobile = await send_expo_push_to_users(
+            [teacher_id], title, body, {**(data or {}), 'type': 'teaching_reminder'},
+            channel_id='pengingat-mengajar', skip_local_reminder_devices=True,
+        )
 
-        return False
+        return result.get('sent', 0) > 0 or mobile.get('sent', 0) > 0
 
     except Exception as e:
         logger.error(f"Failed to send push notification: {e}")

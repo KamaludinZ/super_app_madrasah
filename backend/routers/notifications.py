@@ -119,6 +119,16 @@ async def admin_create_announcement(payload: Dict, request: Request,
             })
 
             logger.info(f"✅ Push sent: {result.get('sent', 0)} succeeded, {result.get('failed', 0)} failed")
+
+            # Aplikasi mobile (Expo Push → FCM/APNs)
+            from routers.mobile import send_expo_push_to_roles
+            await send_expo_push_to_roles(
+                ann.target_roles,
+                f'📢 Pengumuman: {ann.title}',
+                (ann.body or '')[:180],
+                {'type': 'announcement', 'announcement_id': ann.id},
+                channel_id='pengumuman',
+            )
         except Exception as e:
             try:
                 from core import logger

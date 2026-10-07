@@ -650,6 +650,48 @@ def _raise_first_problem(problems: Dict[str, tuple], sch_day: str):
         raise HTTPException(status, f"{prefix}: " + '; '.join(f"{d} ({r})" for d, r in hits))
 
 
+def _fmt_dates(date_strs: List[str]) -> str:
+    labels = [date_cls.fromisoformat(d).strftime('%d/%m') for d in sorted(date_strs)]
+    return ', '.join(labels[:4]) + (f' (+{len(labels) - 4} lagi)' if len(labels) > 4 else '')
+
+
+async def _notify_assignment(sch: Dict, original_id: str, substitute_id: str, date_strs: List[str]) -> None:
+    """Notifikasi aplikasi mobile ke guru pengganti & guru yang digantikan (best-effort)."""
+    try:
+        from routers.mobile import send_expo_push_to_users
+        classes = await _resolve_names('classes', [sch.get('class_id')])
+        names = {u['id']: u.get('full_name') for u in await db.users.find(
+            {'id': {'$in': [original_id, substitute_id]}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(2)}
+        kelas = classes.get(sch.get('class_id')) or 'kelas'
+        jam = f"{sch.get('start_time')}–{sch.get('end_time')}"
+        data = {'type': 'substitute_assignment', 'schedule_id': sch['id'], 'dates': sorted(date_strs)}
+        await send_expo_push_to_users(
+            [substitute_id], f'🧑‍🏫 Tugas Guru Pengganti — {kelas}',
+            f"Menggantikan {names.get(original_id) or 'guru'} · {jam} · {_fmt_dates(date_strs)}. "
+            "Slot muncul di jadwal hari itu.",
+            data, channel_id='guru-pengganti')
+        await send_expo_push_to_users(
+            [original_id], f'Slot Anda digantikan — {kelas}',
+            f"Diampu {names.get(substitute_id) or 'guru pengganti'} · {jam} · {_fmt_dates(date_strs)}",
+            data, channel_id='guru-pengganti')
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger('matsandatama').error(f"[guru_pengganti] notifikasi penugasan gagal: {e}")
+
+
+async def _notify_assignment_cancelled(a: Dict) -> None:
+    try:
+        from routers.mobile import send_expo_push_to_users
+        sch = await db.schedules.find_one({'id': a['schedule_id']}, {'_id': 0, 'class_id': 1, 'start_time': 1}) or {}
+        kelas = (await _resolve_names('classes', [sch.get('class_id')])).get(sch.get('class_id')) or 'kelas'
+        await send_expo_push_to_users(
+            [a['substitute_teacher_id']], f'Penugasan guru pengganti dibatalkan — {kelas}',
+            f"{_fmt_dates([a['date']])} pukul {sch.get('start_time') or '-'} tidak perlu digantikan lagi.",
+            {'type': 'substitute_assignment_cancelled', 'assignment_id': a['id'], 'date': a['date']},
+            channel_id='guru-pengganti')
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger('matsandatama').error(f"[guru_pengganti] notifikasi pembatalan gagal: {e}")
+
+
 @router.post("/guru-pengganti/assignments")
 async def create_assignments(payload: AssignmentCreate, request: Request,
                              user: Dict = Depends(require_guru_pengganti_manager)):
@@ -711,6 +753,8 @@ async def create_assignments(payload: AssignmentCreate, request: Request,
         'substitute_teacher_id': payload.substitute_teacher_id,
         'assigned_by_role': assigned_role,
     }, request)
+
+    await _notify_assignment(sch, docs[0]['original_teacher_id'], payload.substitute_teacher_id, date_strs)
 
     return {
         'created': [serialize_doc(d) for d in docs],
@@ -835,6 +879,7 @@ async def cancel_assignment(assignment_id: str, request: Request,
         'cancelled_at': now_wib().isoformat(),
         'cancelled_by_user_id': user['id'],
     }})
+    await _notify_assignment_cancelled(a)
     await log_audit(user, 'cancel', 'substitute_assignment', assignment_id, {
         'schedule_id': a['schedule_id'], 'date': a['date'],
         'substitute_teacher_id': a['substitute_teacher_id'],

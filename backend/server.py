@@ -29,6 +29,7 @@ from routers import (
     data_gtk,
     gtk_berkas,
     guru_pengganti,
+    mobile,
     dokumen_siswa,
     ekinerja,
     events,
@@ -124,6 +125,7 @@ api_router.include_router(uks.router)
 api_router.include_router(sarpras.router)
 api_router.include_router(lab.router)
 api_router.include_router(guru_pengganti.router)
+api_router.include_router(mobile.router)
 
 api_router.include_router(kelas_digital.router)
 
@@ -280,6 +282,15 @@ async def startup_event():
             logger.error(f"Index guru pengganti gagal: {gagal}")
     except Exception as e:
         logger.error(f"Failed to ensure substitute assignment indexes: {e}")
+
+    # Index aplikasi mobile (perangkat Expo Push & idempotensi jurnal offline)
+    try:
+        from routers.mobile import ensure_mobile_indexes
+        gagal = await ensure_mobile_indexes(db)
+        if gagal:
+            logger.error(f"Index mobile gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure mobile indexes: {e}")
 
     # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
     try:

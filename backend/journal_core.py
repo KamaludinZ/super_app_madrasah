@@ -72,6 +72,16 @@ def decrypt_qr_payload(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def decrypt_qr_payload_raw(token: str) -> Optional[Dict[str, Any]]:
+    """Dekripsi QR TANPA memeriksa masa berlaku (ttl). Dipakai untuk jurnal yang dipindai offline:
+    waktu pindai dibuktikan dari `issued_at` di dalam QR, bukan dari waktu sinkron."""
+    try:
+        payload = json.loads(Fernet(_derive_key()).decrypt(token.encode()).decode())
+    except Exception:
+        return None
+    return payload if payload.get('school_id') == SCHOOL_ID else None
+
+
 def generate_qr_image_b64(data: str, size: int = 10) -> str:
     qr = qrcode.QRCode(
         version=None,
