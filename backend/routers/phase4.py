@@ -385,6 +385,54 @@ async def submit_extra_grades(eid: str, payload: Dict, request: Request,
     return {'success': inserted}
 
 
+@router.get("/ekstrakurikuler/student/{student_id}")
+async def get_student_extracurriculars(student_id: str, semester: Optional[str] = None,
+                                       user: Dict = Depends(get_current_user)):
+    """Ekstrakurikuler yang diikuti siswa beserta predikat & keterangan nilai (bagian E-Rapor).
+    Akses sama dengan rapor: admin, siswa sendiri, atau wali kelasnya."""
+    student = await db.users.find_one({'id': student_id}, {'_id': 0, 'student_class_id': 1})
+    if not student:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    cls = await db.classes.find_one({'id': student.get('student_class_id')}, {'_id': 0, 'homeroom_teacher_id': 1})
+    if not ('admin' in user.get('roles', []) or user['id'] == student_id
+            or (cls and cls.get('homeroom_teacher_id') == user['id'])):
+        raise HTTPException(403, "Tidak diizinkan")
+    members = await db.extracurricular_members.find(
+        {'student_id': student_id, 'is_active': True}, {'_id': 0, 'extracurricular_id': 1},
+    ).to_list(50)
+    ids = [m['extracurricular_id'] for m in members]
+    if not ids:
+        return []
+    extras = {e['id']: e for e in await db.extracurriculars.find({'id': {'$in': ids}}, {'_id': 0}).to_list(50)}
+    ay = await get_active_academic_year()
+    gq = {'student_id': student_id, 'extracurricular_id': {'$in': ids}}
+    if semester:
+        gq['semester'] = semester
+    if ay:
+        gq['academic_year_id'] = ay['id']
+    grades = {g['extracurricular_id']: g for g in await db.extracurricular_grades.find(gq, {'_id': 0}).to_list(100)}
+    out = []
+    for eid in ids:
+        e = extras.get(eid)
+        if not e:
+            continue
+        g = grades.get(eid) or {}
+        out.append({
+            'id': eid,
+            'extracurricular_id': eid,
+            'name': e.get('name'),
+            'activity_description': e.get('description'),
+            'schedule_day': e.get('schedule_day'),
+            'schedule_start': e.get('schedule_start'),
+            'schedule_end': e.get('schedule_end'),
+            'location': e.get('location'),
+            'predicate': g.get('predicate'),
+            'description': g.get('description'),
+            'semester': g.get('semester') or semester,
+        })
+    return out
+
+
 @router.get("/extracurriculars/{eid}/grades")
 async def get_extra_grades(eid: str, semester: Optional[str] = None, user: Dict = Depends(get_current_user)):
     q = {'extracurricular_id': eid}

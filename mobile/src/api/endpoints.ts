@@ -2,7 +2,7 @@ import { request } from './client';
 import type {
   Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
-  MateriPokok, PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
+  MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
 
 export const api = {
@@ -63,6 +63,15 @@ export const api = {
       request<{ message: string; id: string }>(`/kelas/tugas/${id}/submit`, { method: 'POST', body }),
     materi: () => request<KelasMateri[]>('/kelas/materi'),
     materiDetail: (id: string) => request<KelasMateri>(`/kelas/materi/${id}`),
+  },
+
+  rapor: {
+    get: (studentId: string, semester: string) => request<Rapor>(`/grades/rapor/${studentId}`, { query: { semester } }),
+    ekskul: (studentId: string, semester: string) => request<RaporEkskul[]>(`/ekstrakurikuler/student/${studentId}`, { query: { semester } }),
+  },
+
+  verval: {
+    mine: () => request<VervalRequest[]>('/verval-requests'),
   },
 
   akademik: {

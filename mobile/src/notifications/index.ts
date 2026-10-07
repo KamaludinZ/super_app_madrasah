@@ -227,6 +227,9 @@ export function routeForNotification(data: Record<string, any> | undefined, role
     case 'substitute_assignment':
     case 'substitute_assignment_cancelled':
       return '/(app)/(tabs)';
+    case 'verval_approved':
+    case 'verval_rejected':
+      return '/verval';
     case 'class_material_new':
       if (role === 'siswa' && data.materi_id) return `/siswa/materi/${data.materi_id}`;
       return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';

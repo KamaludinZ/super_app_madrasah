@@ -15,6 +15,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/siswa/tugas' && role === 'siswa') return '/siswa/tugas';
   if (p === '/siswa/materi' && role === 'siswa') return '/siswa/materi';
   if (p === '/siswa/kehadiran' && role === 'siswa') return '/siswa/kehadiran';
+  if (p === '/rapor' && role === 'siswa') return '/siswa/rapor';
+  if (p === '/verval/ajuan-saya') return '/verval';
   // Jadwal: siswa (kelasnya), wali kelas (kelas wali), guru & lainnya (jadwal mengajarnya)
   if (p === '/jadwal') return '/jadwal';
   return null;

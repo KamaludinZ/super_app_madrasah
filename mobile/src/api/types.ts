@@ -365,3 +365,30 @@ export type KehadiranRecord = { id?: string; date: string; status: string; subje
 export type KehadiranRekap = { total: number; hadir: number; sakit?: number; izin?: number; alpa?: number; percentage: number };
 /** GET /students/my-attendance/stats */
 export type KehadiranStats = { month: number; year: number; monthly: KehadiranRekap; weekly: KehadiranRekap; daily: KehadiranRekap };
+
+/** GET /grades/rapor/{student_id}?semester — nilai E-Rapor semester (TP aktif). */
+export type RaporGrade = {
+  id: string; subject_id: string; subject_name?: string | null; subject_code?: string | null; teacher_name?: string | null;
+  semester: string; nilai_pengetahuan?: number | null; nilai_keterampilan?: number | null; nilai_akhir?: number | null;
+  predicate?: string | null; description?: string | null;
+};
+export type Rapor = {
+  student: { id: string; full_name?: string; nisn?: string | null; nis?: string | null };
+  class?: { id: string; name?: string } | null;
+  academic_year?: { id: string; name?: string } | null;
+  grades: RaporGrade[];
+  average: number;
+};
+/** GET /ekstrakurikuler/student/{student_id}?semester */
+export type RaporEkskul = {
+  id: string; name?: string | null; activity_description?: string | null; schedule_day?: string | null;
+  schedule_start?: string | null; schedule_end?: string | null; location?: string | null;
+  predicate?: string | null; description?: string | null;
+};
+
+/** GET /verval-requests — ajuan perubahan data / prestasi. */
+export type VervalRequest = {
+  id: string; user_id: string; user_type?: string; request_type?: string; status: 'pending' | 'approved' | 'rejected' | string;
+  old_data?: Record<string, unknown> | null; new_data?: Record<string, unknown> | null;
+  admin_notes?: string | null; submitted_at?: string; created_at?: string; reviewed_at?: string | null; reviewed_by_name?: string | null;
+};
