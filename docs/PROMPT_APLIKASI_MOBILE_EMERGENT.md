@@ -1,4 +1,4 @@
-# Prompt & Panduan Aplikasi Mobile (Android & iPhone) — Super Apps MATSANDATAMA
+# Prompt & Panduan Aplikasi Mobile (Gratis) — Super Apps MATSANDATAMA
 
 Dokumen ini berisi:
 
@@ -6,10 +6,14 @@ Dokumen ini berisi:
 - **Bagian B** — **PROMPT LENGKAP** untuk ditempel ke Emergent (emergent.sh).
 - **Bagian C** — perubahan backend yang diperlukan (dikerjakan di repo ini, bukan di Emergent).
 - **Bagian D** — penyiapan Firebase (gratis) untuk notifikasi Android.
-- **Bagian E** — penyiapan iPhone (Apple) & distribusi aplikasi.
+- **Bagian E** — build & distribusi gratis (APK Android) dan iPhone lewat web app (PWA).
 - **Bagian F** — daftar uji sebelum dibagikan ke guru.
 
-Web aplikasi: **https://super.mtsn2kotamalang.sch.id** — API: **https://super.mtsn2kotamalang.sch.id/api**
+Web aplikasi: **https://super.mtsn2kotamalang.sch.id** — API: **https://api.super.mtsn2kotamalang.sch.id/api**
+(cek: https://api.super.mtsn2kotamalang.sch.id/api/health → `{"status":"healthy"}`)
+
+**Semua jalur di dokumen ini GRATIS:** Android dibagikan sebagai file APK (tanpa Play Store), iPhone memakai
+web app (PWA) yang sudah ada (tanpa akun Apple berbayar), Firebase paket Spark, Expo paket gratis.
 
 > Dokumen ini menggantikan asumsi di `docs/MOBILE_APP_EXPO_SETUP.md` bahwa backend tidak perlu diubah.
 > Tambahan backend untuk offline yang akurat & notifikasi native **sudah tersedia** (Bagian C, `backend/routers/mobile.py`).
@@ -20,20 +24,25 @@ Web aplikasi: **https://super.mtsn2kotamalang.sch.id** — API: **https://super.
 
 | Kebutuhan | Pilihan | Alasan |
 |---|---|---|
-| Kerangka aplikasi | **Expo (React Native) + EAS Build** | Satu kode untuk Android & iPhone; Emergent membangun aplikasi mobile dengan Expo. |
-| Notifikasi saat online (pengumuman, penugasan guru pengganti, dll.) | **Expo Push Service** → FCM (Android) & APNs (iPhone) | Gratis, tidak perlu server push sendiri; backend cukup memanggil 1 URL Expo. |
+| Kerangka aplikasi | **Expo (React Native) + EAS Build**, target **Android (APK)** | Emergent membangun aplikasi mobile dengan Expo; APK bisa dibagikan langsung tanpa Play Store. |
+| iPhone | **Web app (PWA)** https://super.mtsn2kotamalang.sch.id dipasang ke Layar Utama | Aplikasi iPhone native wajib akun Apple berbayar; PWA gratis dan mendukung notifikasi (iOS 16.4+). |
+| Notifikasi saat online (pengumuman, penugasan guru pengganti, dll.) | Android: **Expo Push Service** → FCM. iPhone (PWA): **Web Push** yang sudah ada | Gratis; backend mengirim ke keduanya otomatis. |
 | Pengingat mengajar saat **offline** | **Notifikasi lokal terjadwal di HP** (`expo-notifications`) dari jadwal yang tersimpan | Tetap berbunyi walau HP tanpa internet; tidak bergantung server. |
 | Data terakhir saat offline | **SQLite lokal** (`expo-sqlite`) + label "Terakhir diperbarui …" | Bisa membaca jadwal, jurnal, pengumuman terakhir tanpa internet. |
 | Keamanan data di HP | Token di **SecureStore** (Keychain/Keystore), kunci aplikasi **biometrik/PIN**, hapus semua data saat logout | Token & data siswa tidak bisa dibaca aplikasi lain. |
 | Jurnal offline yang akurat | **Izin offline bertanda tangan server** + jam monoton HP (Bagian C) | QR dinamis kedaluwarsa ±1 menit dan validasi jadwal memakai waktu sinkron — tanpa izin offline, jurnal yang disinkron setelah jam pelajaran usai akan ditolak. |
 | Firebase | **Hanya Cloud Messaging, paket Spark (gratis)** | Tidak perlu Firestore/Functions/Hosting. FCM gratis tanpa batas pesan. |
 
-**Biaya yang tidak bisa dihindari (bukan dari Firebase):**
+**Yang sengaja TIDAK dipakai (berbayar):** Google Play Console (USD 25) dan Apple Developer Program (USD 99/tahun).
 
-- **Google Play Console**: USD 25 sekali bayar (untuk publikasi di Play Store). Uji internal/APK langsung tanpa Play Store: gratis.
-- **Apple Developer Program**: USD 99/tahun — **wajib** untuk memasang aplikasi iPhone di luar mode uji dan untuk notifikasi push iPhone.
-  Alternatif gratis untuk iPhone: pakai **web app (PWA)** yang sudah ada — buka situs di Safari → Bagikan → *Tambahkan ke Layar Utama*; iOS 16.4+ mendukung Web Push. Fitur offline penuh & pengingat lokal tetap paling andal di aplikasi native.
-- **Expo/EAS**: paket gratis cukup (kuota build bulanan terbatas; antre lebih lama).
+Konsekuensi yang perlu diketahui guru:
+
+- **Android**: aplikasi dipasang dari file APK; HP perlu mengizinkan *Instal aplikasi tidak dikenal* sekali saja.
+  Pembaruan aplikasi = unduh APK versi baru; admin mengumumkannya lewat menu Pengumuman (otomatis jadi notifikasi).
+- **iPhone**: memakai web app (PWA). Notifikasi pengumuman, guru pengganti, dan pengingat mengajar tetap datang
+  saat **online** (Web Push dari server). Yang tidak tersedia di iPhone: pengingat yang berbunyi saat **offline**
+  dan antrean jurnal offline seandal aplikasi Android — guru iPhone sebaiknya mengisi jurnal saat ada sinyal/Wi-Fi madrasah.
+- **Expo/EAS** paket gratis: kuota build bulanan terbatas & antre lebih lama — cukup untuk rilis sesekali.
 
 ---
 
@@ -42,16 +51,22 @@ Web aplikasi: **https://super.mtsn2kotamalang.sch.id** — API: **https://super.
 Salin seluruh isi kotak di bawah ke Emergent. Endpoint di bagian 9 prompt sudah tersedia di backend.
 
 ````text
-Buatkan aplikasi mobile Android & iOS bernama "Super Apps MATSANDATAMA" untuk MTsN 2 Kota Malang,
-menggunakan Expo (React Native, TypeScript, Expo Router) dan siap dibangun dengan EAS Build.
+Buatkan aplikasi mobile ANDROID bernama "Super Apps MATSANDATAMA" untuk MTsN 2 Kota Malang,
+menggunakan Expo (React Native, TypeScript, Expo Router) dan siap dibangun dengan EAS Build menjadi
+file APK yang dibagikan langsung (TIDAK lewat Play Store; tidak perlu build iOS — pengguna iPhone
+memakai web app). Jangan memakai layanan berbayar apa pun.
 Aplikasi ini adalah klien untuk backend yang SUDAH ADA (FastAPI). JANGAN membuat backend baru,
 database sendiri, atau logika bisnis tiruan. Semua data berasal dari REST API di bawah.
 
 === 1. KONFIGURASI DASAR ===
-- API base URL: https://super.mtsn2kotamalang.sch.id/api  (simpan di app.config / EXPO_PUBLIC_API_URL)
+- API base URL: https://api.super.mtsn2kotamalang.sch.id/api  (simpan di app.config / EXPO_PUBLIC_API_URL)
+  Cek koneksi: GET /health → { status: "healthy", time_wib }.
+- Tautan "Buka versi web": https://super.mtsn2kotamalang.sch.id
 - Bahasa antarmuka: Bahasa Indonesia. Zona waktu acuan: WIB (Asia/Jakarta) untuk semua tampilan tanggal/jam.
 - Warna utama #006837 (hijau Kemenag), aksen #0B7A3B, latar terang; dukung mode gelap.
-- bundleIdentifier/package: id.sch.mtsn2kotamalang.superapps
+- Android package: id.sch.mtsn2kotamalang.superapps
+- Tampilkan versi aplikasi (app.json version) di halaman Profil. Pembaruan APK diumumkan admin lewat
+  Pengumuman (berisi tautan unduh APK); jadikan tautan di isi pengumuman bisa diketuk.
 - Autentikasi: header "Authorization: Bearer <access_token>" di setiap request.
 - Semua request dengan timeout 15 detik; tampilkan pesan error dari field "detail" respons API bila ada.
 
@@ -214,9 +229,10 @@ Channel Android yang dipakai server: "pengumuman", "guru-pengganti", "pengingat-
 === 10. KUALITAS ===
 - Layar memuat, kosong, dan error di setiap halaman; tarik-untuk-segarkan.
 - Ukuran teks mengikuti pengaturan aksesibilitas HP; target sentuh minimal 44px.
-- Berjalan baik di Android 8+ dan iOS 15+.
-- Sertakan README: cara set EXPO_PUBLIC_API_URL, eas.json (preview: apk, production: aab/ipa),
-  dan langkah memasukkan kredensial FCM & APNs ke EAS.
+- Berjalan baik di Android 8+ (HP guru beragam, termasuk spesifikasi rendah); ukuran APK sekecil mungkin.
+- Sertakan README: cara set EXPO_PUBLIC_API_URL, eas.json dengan profil "preview" dan "production"
+  yang keduanya menghasilkan APK (android.buildType = "apk"), dan langkah memasukkan kredensial FCM ke EAS.
+- Hanya izin Android yang benar-benar dipakai: kamera, lokasi, notifikasi, biometrik, jaringan.
 ````
 
 ---
@@ -238,6 +254,9 @@ Rincian implementasi:
    `https://exp.host/--/api/v2/push/send` (batch maks 100, buang token `DeviceNotRegistered`).
    Dipanggil berdampingan dengan Web Push yang sudah ada pada:
    - pengumuman baru (`routers/notifications.py`, saat `send_push_to_roles`);
+   - Web Push untuk PWA (dipakai iPhone) **diperbaiki** ke enkripsi standar `aes128gcm` (RFC 8291) dan header
+     VAPID standar (RFC 8292). Sebelumnya memakai skema lama `aesgcm` tanpa header `Encryption`, sehingga
+     ditolak layanan push ("Missing Encryption header") dan tidak pernah bisa sampai ke iPhone;
    - penugasan guru pengganti baru/dibatalkan (`routers/guru_pengganti.py`) ke guru pengganti & guru asli;
    - pengingat mengajar (`teaching_reminder_scheduler.py`) — **dilewati** untuk perangkat dengan
      `local_reminders = true` agar tidak dobel.
@@ -284,41 +303,54 @@ Batasan paket gratis yang relevan: FCM gratis tanpa batas jumlah pesan. Expo Pus
 
 ---
 
-## E. Penyiapan iPhone & distribusi
+## E. Build & distribusi gratis
 
-**Akun yang dibutuhkan**
+**Akun yang dibutuhkan (gratis):** Firebase (Bagian D) dan **Expo** di https://expo.dev.
 
-1. **Akun Expo** (gratis) di https://expo.dev — hubungkan ke proyek (`eas init`).
-2. **Apple Developer Program** (USD 99/tahun, daftar atas nama madrasah/instansi agar nama penerbit resmi).
-3. **Google Play Console** (USD 25 sekali) bila ingin rilis di Play Store.
-
-**Notifikasi iPhone (APNs)** — tidak memakai Firebase:
-jalankan `eas credentials` → iOS → biarkan EAS membuat **Push Notification Key (APNs .p8)** otomatis
-dengan login Apple Developer. Tidak perlu `GoogleService-Info.plist`.
-
-**Build**
+**Build APK Android (gratis, di server Expo)**
 
 ```bash
 npm i -g eas-cli
 eas login
-eas build:configure
-eas build -p android --profile preview      # APK untuk uji/dibagikan langsung
-eas build -p android --profile production   # AAB untuk Play Store
-eas build -p ios --profile production       # untuk TestFlight/App Store
-eas submit -p ios                           # kirim ke TestFlight
+eas init                                     # hubungkan proyek ke akun Expo
+eas build -p android --profile preview      # hasil: tautan unduh file .apk
 ```
 
-**Distribusi ke guru**
+`eas.json` minimal:
 
-- Android: bagikan APK dari tautan EAS (uji internal) atau rilis lewat Play Store (jalur *Internal testing* dulu).
-- iPhone: **TestFlight** (hingga 10.000 penguji, gratis setelah akun Apple aktif) atau App Store.
-- Tanpa akun Apple: guru iPhone memakai PWA di Safari (lihat Bagian A).
+```json
+{
+  "build": {
+    "preview":    { "android": { "buildType": "apk" }, "distribution": "internal" },
+    "production": { "android": { "buildType": "apk" } }
+  }
+}
+```
+
+**Membagikan APK ke guru (gratis)**
+
+1. Unggah APK ke **GitHub Releases** repo ini (lihat `docs/deployment/SETUP_GITHUB_RELEASES.md`) atau Google Drive
+   madrasah, lalu bagikan tautannya di grup guru.
+2. Di HP: buka tautan → unduh → izinkan *Instal aplikasi tidak dikenal* untuk browser/File Manager → pasang.
+3. Versi baru: naikkan `version` & `android.versionCode` di `app.json`, build ulang, unggah APK baru, lalu
+   terbitkan **Pengumuman** berisi tautan unduhnya (guru menerima notifikasi).
+   APK harus ditandatangani dengan **keystore yang sama** (EAS menyimpannya otomatis — jangan dihapus), agar
+   bisa dipasang menimpa versi lama tanpa menghapus data.
+
+**iPhone — pakai web app (PWA), gratis**
+
+1. Buka https://super.mtsn2kotamalang.sch.id di **Safari** (bukan Chrome).
+2. Ketuk **Bagikan** → **Tambahkan ke Layar Utama** → **Tambah**.
+3. Buka aplikasi dari ikon di Layar Utama, login, lalu ketuk **Aktifkan Notifikasi** dan pilih **Izinkan**.
+   (Notifikasi hanya bisa diaktifkan dari ikon Layar Utama, bukan dari tab Safari biasa; perlu iOS/iPadOS 16.4+.)
 
 **Konfigurasi server (sekali saja)**
 
-- Pastikan `https://super.mtsn2kotamalang.sch.id/api` dapat diakses publik dengan sertifikat SSL valid.
-- Atur jadwal pengiriman pengingat (`teaching_reminder_scheduler.py`) tetap aktif untuk Web Push;
-  aplikasi mobile memakai pengingat lokal.
+- API `https://api.super.mtsn2kotamalang.sch.id/api` sudah dapat diakses publik dengan SSL (health: healthy).
+- Pastikan `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, dan `VAPID_SUBJECT` (mis. `mailto:admin@mtsn2kotamalang.sch.id`)
+  terisi di server — dipakai notifikasi web/iPhone.
+- Penjadwal pengingat (`teaching_reminder_scheduler.py`) tetap aktif: iPhone/web menerima pengingat dari server,
+  Android memakai pengingat lokal (server tidak mengirim dobel).
 - Perbarui **semester aktif** di menu Semester agar izin offline & penugasan tanggal mendatang berlaku.
 
 ---
@@ -338,7 +370,8 @@ eas submit -p ios                           # kirim ke TestFlight
 
 - [ ] Mode pesawat → pengingat "10 menit lagi mengajar — {kelas}" tetap muncul tepat waktu.
 - [ ] Ketuk pengingat → langsung ke layar scan/isi jurnal slot itu.
-- [ ] Admin menerbitkan pengumuman → notifikasi muncul di HP (Android & iPhone) saat online, dan badge bertambah.
+- [ ] Admin menerbitkan pengumuman → notifikasi muncul di aplikasi Android dan di iPhone (PWA dari Layar Utama) saat online; badge bertambah.
+- [ ] iPhone (PWA): 10 menit sebelum mengajar, notifikasi pengingat dari server muncul saat online.
 - [ ] Admin menugaskan guru pengganti → guru pengganti menerima notifikasi; slot muncul di jadwal hari itu dengan badge.
 - [ ] Tidak ada pengingat ganda (lokal + server) untuk slot yang sama.
 - [ ] Hari libur akademik → tidak ada pengingat.
@@ -346,4 +379,5 @@ eas submit -p ios                           # kirim ke TestFlight
 **Keamanan**
 
 - [ ] Token tidak ada di AsyncStorage/log; aplikasi terkunci biometrik setelah tidak aktif.
+- [ ] APK versi baru bisa dipasang menimpa versi lama tanpa kehilangan antrean jurnal.
 - [ ] Guru mapel tidak melihat menu Guru Pengganti; endpoint ditolak 403 bila dipanggil paksa.

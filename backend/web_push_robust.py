@@ -47,7 +47,7 @@ def _create_vapid_headers(subscription_info: Dict) -> Dict[str, str]:
         subscription_info: Push subscription object with 'endpoint' key
 
     Returns:
-        Dictionary with 'Authorization' and 'Crypto-Key' headers
+        Dictionary with the RFC 8292 'Authorization' header
     """
     import jwt
     import time
@@ -96,17 +96,11 @@ def _create_vapid_headers(subscription_info: Dict) -> Dict[str, str]:
     if isinstance(token, bytes):
         token = token.decode('utf-8')
 
-    # Create headers
-    # Modern VAPID format uses only Authorization header with JWT
-    # Public key is in the JWT itself
-    headers = {
-        "Authorization": f"WebPush {token}"
+    # Header VAPID standar (RFC 8292): "vapid t=<jwt>, k=<kunci publik>".
+    # Skema lama "WebPush <jwt>" + Crypto-Key tidak diterima Apple Web Push (iPhone/iPad).
+    return {
+        "Authorization": f"vapid t={token}, k={public_key_b64.rstrip('=')}"
     }
-
-    # Note: For aesgcm encoding, Crypto-Key header is added separately
-    # with encryption metadata (dh=... parameter)
-
-    return headers
 
 
 def _encrypt_payload_with_headers(subscription_info: Dict, data: str) -> Dict:
@@ -134,12 +128,6 @@ def _encrypt_payload_with_headers(subscription_info: Dict, data: str) -> Dict:
 
     private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
 
-    # Get public key bytes for Crypto-Key header
-    public_key_bytes = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.X962,
-        format=serialization.PublicFormat.UncompressedPoint
-    )
-
     # Decode base64url encoded keys
     from base64 import urlsafe_b64decode, urlsafe_b64encode
 
@@ -153,20 +141,19 @@ def _encrypt_payload_with_headers(subscription_info: Dict, data: str) -> Dict:
     p256dh_bytes = urlsafe_b64decode(add_padding(p256dh))
     auth_bytes = urlsafe_b64decode(add_padding(auth))
 
-    # Encrypt using http_ece
+    # Enkripsi aes128gcm (RFC 8291): salt & kunci publik pengirim ikut di header badan pesan,
+    # sehingga tidak perlu header Encryption/Crypto-Key. Wajib untuk Apple Web Push.
     encrypted = encrypt(
         data.encode('utf-8') if isinstance(data, str) else data,
         private_key=private_key,
         dh=p256dh_bytes,
         auth_secret=auth_bytes,
-        version="aesgcm"
+        version="aes128gcm"
     )
 
-    # Create headers with encryption metadata
     headers = {
-        "Content-Encoding": "aesgcm",
+        "Content-Encoding": "aes128gcm",
         "Content-Type": "application/octet-stream",
-        "Crypto-Key": f"dh={urlsafe_b64encode(public_key_bytes).decode('utf-8').rstrip('=')}"
     }
 
     return {
@@ -212,13 +199,13 @@ def _encrypt_payload(subscription_info: Dict, data: str) -> bytes:
     p256dh_bytes = urlsafe_b64decode(add_padding(p256dh))
     auth_bytes = urlsafe_b64decode(add_padding(auth))
 
-    # Encrypt using http_ece
+    # Encrypt using http_ece (aes128gcm, RFC 8291)
     encrypted = encrypt(
         data.encode('utf-8') if isinstance(data, str) else data,
         private_key=private_key,
         dh=p256dh_bytes,
         auth_secret=auth_bytes,
-        version="aesgcm"
+        version="aes128gcm"
     )
 
     return encrypted
@@ -256,22 +243,12 @@ async def send_web_push(subscription_info: Dict, payload: Dict, ttl: int = 86400
         except Exception as e:
             return {"ok": False, "gone": False, "error": f"VAPID signing failed: {e}"}
 
-        # Merge encryption headers with VAPID headers
-        # If both have Crypto-Key, merge them
         headers = {
             "TTL": str(ttl),
+            "Urgency": "high",
             **encrypted_result['headers'],
             **vapid_headers
         }
-
-        # Always add VAPID public key to Crypto-Key header
-        # Format: "dh=<ephemeral_key>;p256ecdsa=<vapid_public_key>"
-        # Note: VAPID public key should NOT have padding
-        vapid_public_key = _get_vapid_public_key().rstrip('=')
-        if 'Crypto-Key' in encrypted_result['headers']:
-            headers['Crypto-Key'] = f"{encrypted_result['headers']['Crypto-Key']};p256ecdsa={vapid_public_key}"
-        else:
-            headers['Crypto-Key'] = f"p256ecdsa={vapid_public_key}"
 
         # Debug: log headers
         logger.debug(f"Sending push to: {endpoint[:60]}...")
