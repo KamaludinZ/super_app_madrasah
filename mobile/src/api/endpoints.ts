@@ -1,8 +1,8 @@
 import { request } from './client';
 import type {
-  Announcement, Captcha, GPAssignment, GPCandidate, GPConfig, GPDate, GPPeriod, GPSlot, GPTeacher, Journal,
-  LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule, PublicSettings, QRValidation,
-  ScheduleItem, Student, User,
+  Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  GPSlotDates, GPTeacher, Journal, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
+  PublicSettings, QRValidation, ScheduleItem, Student, TeacherTask, User,
 } from './types';
 
 export const api = {
@@ -54,7 +54,13 @@ export const api = {
 
   piket: {
     today: () => request<PiketSchedule[]>('/piket/schedules/today'),
-    fill: (body: Record<string, unknown>) => request<Journal>('/piket/fill-journal', { method: 'POST', body }),
+    fill: (body: {
+      schedule_id: string; task_id?: string | null; materi: string; catatan?: string | null; piket_note?: string | null;
+      jenis_izin?: string | null; siswa_hadir: number; siswa_sakit: number; siswa_izin: number; siswa_tidak_hadir: number;
+      attendance_records: { student_id: string; student_name?: string; status: string }[];
+    }) => request<Journal>('/piket/fill-journal', { method: 'POST', body }),
+    tasks: (q: { date?: string; status?: string } = {}) => request<TeacherTask[]>('/teacher-tasks', { query: q }),
+    acceptTask: (id: string) => request<TeacherTask>(`/teacher-tasks/${id}/accept`, { method: 'PUT' }),
   },
 
   announcements: {
@@ -73,15 +79,15 @@ export const api = {
     period: () => request<GPPeriod>('/guru-pengganti/period'),
     teachers: (q?: string) => request<GPTeacher[]>('/guru-pengganti/teachers', { query: { q } }),
     teacherSlots: (teacher_id: string) => request<GPSlot[]>(`/guru-pengganti/teachers/${teacher_id}/slots`),
-    slotDates: (schedule_id: string, month: string) => request<GPDate[] | { dates: GPDate[] }>(`/guru-pengganti/slots/${schedule_id}/dates`, { query: { month } }),
-    candidates: (schedule_id: string, dates: string[]) =>
-      request<GPCandidate[]>('/guru-pengganti/substitute-candidates', { query: { schedule_id, dates: dates.join(',') } }),
-    assignments: (q: { from?: string; to?: string; status?: string; q?: string; teacher_id?: string }) =>
+    slotDates: (schedule_id: string, month: string) => request<GPSlotDates>(`/guru-pengganti/slots/${schedule_id}/dates`, { query: { month } }),
+    candidates: (schedule_id: string, dates: string[], q?: string) =>
+      request<GPCandidate[]>('/guru-pengganti/substitute-candidates', { query: { schedule_id, dates: dates.join(',') || undefined, q } }),
+    assignments: (q: { from?: string; to?: string; status?: 'active' | 'cancelled' | 'all'; q?: string; teacher_id?: string; limit?: number }) =>
       request<GPAssignment[]>('/guru-pengganti/assignments', { query: q }),
-    assign: (body: { schedule_id: string; dates: string[]; substitute_teacher_id: string; reason?: string }) =>
-      request<GPAssignment[] | GPAssignment>('/guru-pengganti/assignments', { method: 'POST', body }),
-    cancel: (id: string) => request<unknown>(`/guru-pengganti/assignments/${id}`, { method: 'DELETE' }),
-    assignmentJournals: (id: string) => request<{ assignment?: GPAssignment; journals?: Journal[] } | Journal[]>(`/guru-pengganti/assignments/${id}/journals`),
+    assign: (body: { schedule_id: string; dates: string[]; substitute_teacher_id: string; reason?: string | null; skip_invalid?: boolean }) =>
+      request<GPAssignResult>('/guru-pengganti/assignments', { method: 'POST', body }),
+    cancel: (id: string) => request<{ ok: boolean }>(`/guru-pengganti/assignments/${id}`, { method: 'DELETE' }),
+    assignmentJournals: (id: string) => request<GPSideBySide>(`/guru-pengganti/assignments/${id}/journals`),
     fillJournal: (body: { assignment_id: string; materi: string; catatan?: string; attendance_records: { student_id: string; student_name?: string; status: string }[] }) =>
       request<Journal>('/guru-pengganti/journals', { method: 'POST', body }),
     fillOriginal: (body: { assignment_id: string; materi: string; catatan?: string }) =>

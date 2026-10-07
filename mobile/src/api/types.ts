@@ -155,34 +155,113 @@ export type GPPeriod = {
   holidays: { date: string; end_date?: string | null; name: string }[];
 };
 
-export type GPTeacher = { id: string; full_name: string; username?: string; roles?: string[]; slot_count?: number };
+/** GET /guru-pengganti/teachers — guru yang punya jadwal di semester aktif. */
+export type GPTeacher = {
+  id: string;
+  name: string;
+  nip_nuptk?: string | null;
+  subject: string;
+  subjects: string[];
+  schedule_count: number;
+  days: string[];
+};
 
-export type GPSlot = ScheduleItem & { jam_ke?: string };
+/** GET /guru-pengganti/teachers/{id}/slots */
+export type GPSlot = {
+  id: string;
+  teacher_id: string;
+  day: string;
+  start_time: string;
+  end_time: string;
+  jam_ke: string;
+  class_id?: string | null;
+  class_name: string;
+  subject_id?: string | null;
+  subject_name: string;
+  room_id?: string | null;
+  room_name: string;
+  semester_id?: string | null;
+};
 
-export type GPDate = { date: string; selectable: boolean; reason?: string | null; day?: string; assigned?: boolean };
+export type GPDate = {
+  date: string;
+  selectable: boolean;
+  reason: string | null;
+  assignment: { id: string; substitute_teacher_id: string; substitute_teacher_name?: string | null } | null;
+};
 
-export type GPCandidate = { id: string; full_name: string; available: boolean; reason?: string | null; roles?: string[] };
+/** GET /guru-pengganti/slots/{schedule_id}/dates?month=YYYY-MM */
+export type GPSlotDates = {
+  schedule_id: string;
+  day: string;
+  month: string;
+  period: { name?: string | null; start_date?: string | null; end_date?: string | null };
+  dates: GPDate[];
+};
 
+/** GET /guru-pengganti/substitute-candidates */
+export type GPCandidate = {
+  id: string;
+  name: string;
+  nip_nuptk?: string | null;
+  subject: string;
+  available: boolean;
+  unavailable: string | null;
+};
+
+export type GPJournalStatus = 'filled' | 'pending' | 'missing';
+
+/** GET /guru-pengganti/assignments */
 export type GPAssignment = {
   id: string;
   schedule_id: string;
   date: string;
-  status: 'active' | 'cancelled' | string;
-  original_teacher_id: string;
-  original_teacher_name?: string | null;
-  substitute_teacher_id: string;
-  substitute_teacher_name?: string | null;
-  class_name?: string | null;
-  subject_name?: string | null;
+  day: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  jam_ke?: string;
+  class_name: string;
+  subject_name: string;
   room_name?: string | null;
-  start_time?: string;
-  end_time?: string;
+  original_teacher_id: string;
+  original_teacher_name: string;
+  substitute_teacher_id: string;
+  substitute_teacher_name: string;
   reason?: string | null;
+  status: 'active' | 'cancelled' | string;
+  journal_status?: GPJournalStatus;
   assigned_by_name?: string | null;
-  journal_filled?: boolean;
-  original_journal_filled?: boolean;
-  created_at?: string;
-  [k: string]: unknown;
+  assigned_by_role?: string | null;
+  assigned_at?: string | null;
+  cancelled_at?: string | null;
+};
+
+/** POST /guru-pengganti/assignments */
+export type GPAssignResult = {
+  created: { id: string; date: string }[];
+  count: number;
+  skipped: { date: string; reason: string }[];
+};
+
+export type GPJournalView = {
+  id: string;
+  materi: string;
+  catatan?: string | null;
+  started_at: string;
+  fill_mode?: string;
+  filled_by_name?: string | null;
+  qr_mode?: string;
+  siswa_hadir: number;
+  siswa_sakit: number;
+  siswa_izin: number;
+  siswa_tidak_hadir: number;
+};
+
+/** GET /guru-pengganti/assignments/{id}/journals */
+export type GPSideBySide = {
+  assignment: GPAssignment;
+  original_journal: GPJournalView | null;
+  substitute_journal: GPJournalView | null;
 };
 
 export type OfflinePermit = {
@@ -209,8 +288,29 @@ export type OfflinePermitsResponse = {
   permits: OfflinePermit[];
 };
 
+/** Tugas titipan guru pengajar untuk guru piket (GET /teacher-tasks). */
+export type TeacherTask = {
+  id: string;
+  schedule_id: string;
+  teacher_id: string;
+  teacher_name?: string | null;
+  date: string;
+  task_content: string;
+  notes?: string | null;
+  leave_type?: 'sakit' | 'cuti' | 'dinas_luar' | 'lainnya' | string | null;
+  status: 'pending' | 'accepted' | 'completed' | 'cancelled' | string;
+  accepted_by_name?: string | null;
+  class_name?: string | null;
+  subject_name?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  [k: string]: unknown;
+};
+
+/** GET /piket/schedules/today — jadwal hari ini (semua guru) + status jurnal & titipan. */
 export type PiketSchedule = ScheduleItem & {
   has_journal: boolean;
+  journal_info?: { schedule_id: string; fill_mode?: string; filled_by_user_id?: string } | null;
   teacher_name?: string | null;
-  task?: { id: string; jenis_izin?: string; note?: string } | null;
+  task?: TeacherTask | null;
 };

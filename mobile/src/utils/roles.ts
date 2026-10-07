@@ -52,6 +52,10 @@ export function homeKind(activeRole?: string | null): HomeKind {
 
 export const isGuru = (role?: string | null) => homeKind(role) === 'guru';
 export const canScan = (role?: string | null) => homeKind(role) === 'guru';
+/** Tugas Piket (GET /piket/schedules/today): peran aktif guru piket, atau akun ber-peran admin. */
+export const canPiket = (activeRole?: string | null, roles?: string[] | null) =>
+  activeRole === 'guru_piket' || activeRole === 'admin' || !!roles?.includes('admin');
+
 export const canSeeJournals = (role?: string | null) => ['guru', 'piket', 'manager', 'walas'].includes(homeKind(role));
 
 export function initials(name?: string | null): string {

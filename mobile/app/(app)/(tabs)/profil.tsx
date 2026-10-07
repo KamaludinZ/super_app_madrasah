@@ -18,7 +18,7 @@ import { ListItem } from '@/components/ui/ListItem';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/components/ui/Toast';
-import { initials, roleLabel } from '@/utils/roles';
+import { canPiket, initials, roleLabel } from '@/utils/roles';
 import { APP_VERSION, WEB_URL } from '@/config';
 import { cancelAllReminders, unregisterDevice } from '@/notifications';
 import { unregisterBackgroundSync } from '@/offline/sync';
@@ -124,6 +124,9 @@ export default function ProfilScreen() {
       </Section>
 
       <Section title="Lainnya">
+        {canPiket(activeRole, user?.roles) ? (
+          <ListItem icon="shield-checkmark-outline" title="Tugas Piket" subtitle="Jadwal tanpa jurnal & tugas titipan hari ini" onPress={() => router.push('/piket' as any)} />
+        ) : null}
         <ListItem
           icon="cloud-upload-outline"
           title="Antrean jurnal offline"

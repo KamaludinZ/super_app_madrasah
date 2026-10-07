@@ -5,13 +5,14 @@
  *      slot sendiri           → Scan QR & isi jurnal (online/offline)
  *      slot sendiri digantikan → Isi jurnal saya tanpa QR (mode original)
  *      slot guru pengganti    → Isi jurnal pengganti (mode substitute)
+ *  - Guru piket / admin: kartu Tugas Piket (slot hari ini tanpa jurnal & titipan menunggu) → /piket.
  *  - Semua peran: pengumuman terbaru & pintasan.
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
-import type { Announcement, ScheduleItem } from '@/api/types';
+import type { Announcement, PiketSchedule, ScheduleItem, TeacherTask } from '@/api/types';
 import { CacheKeys } from '@/db/cache';
 import { useCached } from '@/hooks/useCached';
 import { useAuth } from '@/store/auth';
@@ -27,7 +28,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { SlotCard, SlotAction } from '@/components/SlotCard';
 import { formatDateLong, formatRelative, greeting, slotStatus, todayISO } from '@/utils/time';
-import { canScan, homeKind, roleLabel } from '@/utils/roles';
+import { canPiket, canScan, homeKind, roleLabel } from '@/utils/roles';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -39,6 +40,9 @@ export default function HomeScreen() {
 
   const today = useCached<ScheduleItem[]>(CacheKeys.myToday, api.schedules.myToday, { enabled: kind !== 'siswa' });
   const ann = useCached<Announcement[]>(CacheKeys.announcements, api.announcements.list);
+  const piketOn = canPiket(activeRole, user?.roles);
+  const piket = useCached<PiketSchedule[]>(CacheKeys.piketToday, api.piket.today, { enabled: piketOn });
+  const piketTasks = useCached<TeacherTask[]>(`piket.tasks.${todayISO()}`, () => api.piket.tasks({ date: todayISO() }), { enabled: piketOn });
 
   // Slot yang jurnalnya masih di antrean offline (agar tidak tampil "belum diisi").
   const [queued, setQueued] = useState<Set<string>>(new Set());
@@ -82,8 +86,13 @@ export default function HomeScreen() {
     return null;
   };
 
-  const refreshing = today.refreshing || ann.refreshing;
-  const onRefresh = () => { void today.refresh(); void ann.refresh(); };
+  const refreshing = today.refreshing || ann.refreshing || piket.refreshing;
+  const onRefresh = () => {
+    void today.refresh(); void ann.refresh();
+    if (piketOn) { void piket.refresh(); void piketTasks.refresh(); }
+  };
+  const piketMissing = (piket.data ?? []).filter((x) => !x.has_journal && slotStatus(x.start_time, x.end_time) !== 'upcoming').length;
+  const piketPendingTasks = (piketTasks.data ?? []).filter((t) => t.status === 'pending' || t.status === 'accepted').length;
   const latestAnn = (ann.data ?? []).slice(0, 3);
   const showSchedule = kind !== 'siswa' && (kind === 'guru' || slots.length > 0);
 
@@ -107,6 +116,22 @@ export default function HomeScreen() {
               {failedCount ? 'Ketuk untuk melihat alasannya.' : 'Akan terkirim otomatis saat online.'}
             </T>
           </View>
+          <Icon name="chevron-forward" size={18} color={colors.muted} />
+        </Card>
+      ) : null}
+
+      {piketOn ? (
+        <Card onPress={() => router.push('/piket' as any)} style={[styles.piketCard, { borderColor: colors.brandPrimary }]}>
+          <View style={[styles.piketIcon, { backgroundColor: colors.brandTertiary }]}>
+            <Icon name="shield-checkmark-outline" size={24} color={colors.onBrandTertiary} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <T weight="semibold">Tugas Piket hari ini</T>
+            <T variant="caption" tone="secondary">
+              {piket.loading ? 'Memuat…' : `${piketMissing} slot belum berjurnal · ${piketPendingTasks} titipan`}
+            </T>
+          </View>
+          {piketMissing + piketPendingTasks > 0 ? <Badge label={String(piketMissing + piketPendingTasks)} tone="error" small /> : null}
           <Icon name="chevron-forward" size={18} color={colors.muted} />
         </Card>
       ) : null}
@@ -189,6 +214,8 @@ const firstName = (n?: string | null) => (n || '').replace(/^(drs?\.?|h\.|hj\.)\
 const stripMd = (s: string) => (s || '').replace(/[#*_`>\[\]]/g, '').replace(/\s+/g, ' ').trim();
 
 const styles = StyleSheet.create({
+  piketCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, borderWidth: 1 },
+  piketIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   queueCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
   stats: { flexDirection: 'row', gap: spacing.sm },
   stat: { flex: 1, alignItems: 'flex-start', gap: 2, paddingVertical: spacing.md },

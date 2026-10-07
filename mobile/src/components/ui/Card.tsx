@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
+import { Pressable, StyleProp, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
-type Props = ViewProps & { onPress?: () => void; padded?: boolean; tone?: 'surface' | 'secondary' | 'brand' | 'warning' | 'error'; style?: ViewStyle | ViewStyle[] };
+type Props = ViewProps & { onPress?: () => void; padded?: boolean; tone?: 'surface' | 'secondary' | 'brand' | 'warning' | 'error'; style?: StyleProp<ViewStyle> };
 
 /** Kartu dasar: sudut 12, bayangan tipis (tier 1), warna dari tema. */
 export function Card({ onPress, padded = true, tone = 'surface', style, children, ...rest }: Props) {

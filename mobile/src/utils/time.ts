@@ -127,3 +127,33 @@ export function greeting(now = Date.now()): string {
 }
 
 export const nowISO = () => new Date().toISOString();
+
+/** "Sen, 7 Okt" — label tanggal ringkas untuk daftar & chip. */
+export function formatDayShort(isoDate: string): string {
+  const p = wibParts(isoDate);
+  if (Number.isNaN(p.year)) return '-';
+  return `${DAY_LABELS[DAY_KEYS[p.weekday]].slice(0, 3)}, ${p.day} ${MONTHS[p.month]}`;
+}
+
+/** "2026-10" dari tanggal ISO. */
+export const monthOf = (isoDate: string) => isoDate.slice(0, 7);
+
+/** "Oktober 2026" dari "2026-10". */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map((x) => parseInt(x, 10));
+  return `${MONTHS_LONG[(m || 1) - 1]} ${y}`;
+}
+
+/** Geser bulan "YYYY-MM" sebanyak n. */
+export function addMonths(month: string, n: number): string {
+  const [y, m] = month.split('-').map((x) => parseInt(x, 10));
+  const idx = y * 12 + (m - 1) + n;
+  return `${Math.floor(idx / 12)}-${pad((idx % 12) + 1)}`;
+}
+
+/** Tanggal pertama & terakhir sebuah bulan "YYYY-MM". */
+export function monthRange(month: string): { start: string; end: string; days: number } {
+  const [y, m] = month.split('-').map((x) => parseInt(x, 10));
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { start: `${month}-01`, end: `${month}-${pad(days)}`, days };
+}
