@@ -170,6 +170,10 @@ Menu Guru Pengganti HANYA tampil bila GET /guru-pengganti/config → can_manage 
 - Ambil Expo push token (getExpoPushTokenAsync dengan projectId EAS) lalu POST /mobile/devices
   { device_id (uuid tersimpan di SecureStore), expo_push_token, platform, app_version,
   local_reminders: true }. Ulangi saat token berubah, saat login, dan saat switch role.
+- Halaman "Tentang & Diagnostik" (dari Profil): versi aplikasi, status izin notifikasi, Expo push token
+  (bisa disalin), status koneksi ke API (GET /health), jumlah antrean jurnal, dan waktu sinkron terakhir.
+- Tombol "Buka pengaturan baterai" yang mengarahkan pengguna menonaktifkan optimasi baterai untuk aplikasi
+  (agar pengingat tepat waktu di HP Xiaomi/Oppo/Vivo/Realme).
 
 7b. Pengingat mengajar yang tetap jalan saat OFFLINE (notifikasi lokal)
 - Dari jadwal mingguan + slot guru pengganti yang tersimpan, jadwalkan notifikasi lokal untuk
@@ -280,6 +284,9 @@ Rincian implementasi:
 ---
 
 ## D. Penyiapan Firebase (gratis, paket Spark) — untuk notifikasi Android
+
+> Panduan langkah demi langkah yang lebih lengkap (Firebase + Expo + build APK + uji + masalah umum):
+> **`docs/PANDUAN_SETUP_FIREBASE_EXPO.md`**.
 
 Firebase hanya dipakai sebagai jalur pengiriman notifikasi Android (FCM). Tidak perlu Firestore, Functions,
 Hosting, atau kartu kredit.
