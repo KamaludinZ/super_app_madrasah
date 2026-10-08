@@ -6,6 +6,8 @@
 /** Rute native untuk path web tertentu (bergantung peran), atau null. */
 export function nativeRoute(path: string, role?: string | null): string | null {
   const p = path.split('?')[0];
+  // Lab (guru IPA/IPS/Bahasa/Seni/Agama/TIK): rute native sama dengan web /lab/{lab}/{menu}.
+  if (/^\/lab\/(ipa|ips|bahasa|seni|agama|komputer)\/(alat-bahan|jadwal|jurnal-penggunaan|jurnal-pengelolaan|peminjaman-alat|kerusakan)$/.test(p)) return p;
   // Dashboard web = Beranda aplikasi (ringkasan per peran, jadwal hari ini, pintasan, pengumuman).
   if (p === '/dashboard') return '/(app)/(tabs)';
   if (p === '/jurnal/scan') return '/scan';
