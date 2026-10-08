@@ -50,7 +50,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pilih foto prestasi dan sertifikat dari galeri untuk diunggah.",
+          "photosPermission": false,
           "cameraPermission": "Ambil foto prestasi dan sertifikat untuk diunggah."
         }
       ],

@@ -4,7 +4,7 @@
  * POST /achievements/upload/{jenis}). Dikirim sebagai ajuan verval (POST /verval-requests, prestasi_create).
  */
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,6 +27,8 @@ import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SelectField } from '@/components/ui/SelectField';
+import { DateField } from '@/components/ui/DateField';
+import { todayISO } from '@/utils/time';
 import { toast } from '@/components/ui/Toast';
 import { AuthedImage } from '@/components/AuthedImage';
 
@@ -61,8 +63,11 @@ export default function TambahPrestasi() {
 
   const pick = (jenis: Jenis) => {
     const run = async (camera: boolean) => {
-      const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { toast.error(camera ? 'Izin kamera ditolak' : 'Izin galeri ditolak', 'Aktifkan di Pengaturan aplikasi.'); return; }
+      // Galeri memakai pemilih foto sistem (hanya foto yang dipilih yang dibagikan) → tanpa izin akses seluruh media.
+      if (camera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { toast.error('Izin kamera ditolak', 'Aktifkan di Pengaturan aplikasi.'); return; }
+      }
       const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6, exif: false };
       const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       const asset = r.canceled ? null : r.assets[0];
@@ -70,9 +75,7 @@ export default function TambahPrestasi() {
       if (asset.fileSize && asset.fileSize > MAX_BYTES) { toast.error('Berkas terlalu besar', 'Ukuran maksimal 2 MB.'); return; }
       setUploading(jenis);
       try {
-        const type = asset.mimeType || 'image/jpeg';
-        const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : 'jpg';
-        const { url } = await api.achievements.upload(jenis, { uri: asset.uri, name: asset.fileName || `${jenis}-${Date.now()}.${ext}`, type });
+        const { url } = await api.achievements.upload(jenis, asset.uri);
         setF((p) => ({ ...p, [jenis === 'photo' ? 'photo_url' : 'certificate_url']: url }));
       } catch (e) {
         toast.error(errorMessage(e, 'Gagal mengunggah berkas.'));
@@ -80,6 +83,7 @@ export default function TambahPrestasi() {
         setUploading(null);
       }
     };
+    Keyboard.dismiss(); // cegah fokus isian terakhir kembali (keyboard muncul) setelah pemilih foto ditutup
     Alert.alert(jenis === 'photo' ? 'Foto prestasi' : 'Sertifikat', 'Ambil dari mana?', [
       { text: 'Batal', style: 'cancel' },
       { text: 'Galeri', onPress: () => void run(false) },
@@ -88,12 +92,19 @@ export default function TambahPrestasi() {
   };
 
   const submit = async () => {
-    if (!f.name.trim()) return fail('Nama lomba wajib diisi.');
-    if (f.date && !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return fail('Tanggal lomba ditulis TTTT-BB-HH, mis. 2026-08-17.');
+    // Isian wajib sama dengan form web (AchievementsPage REQUIRED_FIELDS).
+    const REQUIRED: [keyof typeof f, string][] = [
+      ['name', 'Nama lomba'], ['bidang_lomba', 'Bidang lomba'], ['date', 'Tanggal lomba'], ['academic_year_label', 'Tahun pelajaran'],
+      ['jenis_penyelenggara', 'Jenis penyelenggara'], ['organizer', 'Nama penyelenggara'], ['tempat_pelaksanaan', 'Tempat pelaksanaan'],
+      ['nama_pembina', 'Nama pembina'],
+    ];
+    const missing = REQUIRED.find(([k]) => !String(f[k] ?? '').trim());
+    if (missing) return fail(`${missing[1]} wajib diisi.`);
     const year = parseInt(f.year || f.date.slice(0, 4), 10);
     if (!year || year < 2000 || year > 2099) return fail('Tahun wajib diisi (2000–2099).');
     if (!hadiah.length) return fail('Pilih minimal satu penerimaan hadiah.');
     if (!f.photo_url) return fail('Foto memegang sertifikat/piala wajib diunggah.');
+    if (!f.certificate_url) return fail('Sertifikat wajib diunggah.');
     if (!user || !access.canAdd) return;
     setError(null);
     setBusy(true);
@@ -128,17 +139,17 @@ export default function TambahPrestasi() {
         <Card style={{ gap: spacing.md }}>
           <T variant="label" tone="muted">LOMBA</T>
           <Input label="Nama lomba *" value={f.name} onChangeText={set('name')} placeholder="mis. Olimpiade Sains Nasional" />
-          <Input label="Bidang lomba" value={f.bidang_lomba} onChangeText={set('bidang_lomba')} placeholder="mis. Matematika, Pidato, Futsal" />
+          <Input label="Bidang lomba *" value={f.bidang_lomba} onChangeText={set('bidang_lomba')} placeholder="mis. Matematika, Pidato, Futsal" />
           <SelectField label="Kategori" value={f.category} options={CATEGORIES} onChange={set('category')} allowNone={false} icon="pricetag-outline" />
           <SelectField label="Tingkat" value={f.level} options={LEVELS} onChange={set('level')} allowNone={false} icon="podium-outline" />
           <SelectField label="Peringkat" value={f.rank} options={RANKS.map((r) => ({ value: r, label: r }))} onChange={set('rank')} allowNone={false} icon="medal-outline" />
           <View style={styles.two}>
-            <Input label="Tanggal" value={f.date} placeholder="TTTT-BB-HH" keyboardType="numbers-and-punctuation" maxLength={10} containerStyle={{ flex: 3 }}
-              onChangeText={(d) => setF((p) => ({ ...p, date: d, year: /^\d{4}/.test(d) ? d.slice(0, 4) : p.year }))} />
+            <DateField label="Tanggal *" value={f.date || null} max={todayISO()} style={{ flex: 3 }}
+              onChange={(d) => setF((p) => ({ ...p, date: d ?? '', year: d ? d.slice(0, 4) : p.year }))} />
             <Input label="Tahun *" value={f.year} onChangeText={set('year')} keyboardType="number-pad" maxLength={4} containerStyle={{ flex: 2 }} />
           </View>
-          <SelectField label="Tahun pelajaran" value={f.academic_year_label || null} options={(years.data ?? []).map((y) => ({ value: y.name, label: y.name }))}
-            onChange={set('academic_year_label')} icon="calendar-outline" />
+          <SelectField label="Tahun pelajaran *" value={f.academic_year_label || null} options={(years.data ?? []).map((y) => ({ value: y.name, label: y.name }))}
+            onChange={set('academic_year_label')} allowNone={false} icon="calendar-outline" />
           <View style={{ gap: 6 }}>
             <T variant="label" tone="secondary">Jenis lomba</T>
             <SegmentedControl small segments={JENIS_LOMBA} value={f.jenis_lomba} onChange={set('jenis_lomba')} />
@@ -147,15 +158,15 @@ export default function TambahPrestasi() {
 
         <Card style={{ gap: spacing.md }}>
           <T variant="label" tone="muted">PENYELENGGARAAN</T>
-          <Input label="Nama penyelenggara" value={f.organizer} onChangeText={set('organizer')} />
-          <SelectField label="Jenis penyelenggara" value={f.jenis_penyelenggara || null} options={JENIS_PENYELENGGARA} onChange={set('jenis_penyelenggara')} icon="business-outline" />
+          <Input label="Nama penyelenggara *" value={f.organizer} onChangeText={set('organizer')} />
+          <SelectField label="Jenis penyelenggara *" value={f.jenis_penyelenggara || null} options={JENIS_PENYELENGGARA} onChange={set('jenis_penyelenggara')} allowNone={false} icon="business-outline" />
           <View style={{ gap: 6 }}>
             <T variant="label" tone="secondary">Mode pelaksanaan</T>
             <SegmentedControl small segments={MODE_PELAKSANAAN} value={f.mode_pelaksanaan} onChange={set('mode_pelaksanaan')} />
           </View>
-          <Input label="Tempat pelaksanaan" value={f.tempat_pelaksanaan} onChangeText={set('tempat_pelaksanaan')} />
+          <Input label="Tempat pelaksanaan *" value={f.tempat_pelaksanaan} onChangeText={set('tempat_pelaksanaan')} />
           <SelectField label="Diikuti secara" value={f.cara_mengikuti} options={CARA_MENGIKUTI} onChange={set('cara_mengikuti')} allowNone={false} icon="flag-outline" />
-          <Input label="Nama pembina" value={f.nama_pembina} onChangeText={set('nama_pembina')} />
+          <Input label="Nama pembina *" value={f.nama_pembina} onChangeText={set('nama_pembina')} />
         </Card>
 
         <Card style={{ gap: spacing.md }}>
@@ -173,7 +184,7 @@ export default function TambahPrestasi() {
           <T variant="label" tone="muted">BERKAS (JPG/PNG, MAKS 2 MB)</T>
           <View style={styles.two}>
             <FileSlot title="Foto memegang sertifikat/piala *" url={f.photo_url} uploading={uploading === 'photo'} onPick={() => pick('photo')} onClear={() => set('photo_url')('')} />
-            <FileSlot title="Sertifikat" url={f.certificate_url} uploading={uploading === 'certificate'} onPick={() => pick('certificate')} onClear={() => set('certificate_url')('')} />
+            <FileSlot title="Sertifikat *" url={f.certificate_url} uploading={uploading === 'certificate'} onPick={() => pick('certificate')} onClear={() => set('certificate_url')('')} />
           </View>
         </Card>
 

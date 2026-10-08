@@ -1,3 +1,4 @@
+import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
   AcademicYear, Achievement, Announcement, ClassHistoryItem, CLKBForm, CLKBSubmission, Extracurricular, Kelengkapan, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
@@ -85,9 +86,10 @@ export const api = {
   achievements: {
     list: () => request<Achievement[]>('/achievements'),
     /** Unggah sertifikat/foto (maks 2 MB) → {url} untuk payload prestasi. */
-    upload: (jenis: 'certificate' | 'photo', file: { uri: string; name: string; type: string }) => {
+    upload: (jenis: 'certificate' | 'photo', uri: string) => {
+      // fetch Expo (expo/fetch) tidak menerima bagian FormData {uri}; File expo-file-system dibaca sebagai bytes.
       const form = new FormData();
-      form.append('file', file as unknown as Blob);
+      form.append('file', new FsFile(uri) as unknown as Blob);
       return request<{ url: string }>(`/achievements/upload/${jenis}`, { method: 'POST', form, timeoutMs: 60_000 });
     },
   },

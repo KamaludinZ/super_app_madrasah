@@ -3,7 +3,7 @@
  * opsi "Tidak memilih" (bila allowNone), dan daftar pilihan dengan keterangan.
  */
 import React, { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, View, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, spacing, useTheme } from '@/theme';
 import { T } from './Text';
@@ -41,7 +41,7 @@ export function SelectField({ label, value, options, onChange, placeholder = 'Pi
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`}
-        onPress={() => setOpen(true)}
+        onPress={() => { Keyboard.dismiss(); setOpen(true); }}
         style={({ pressed }) => [styles.field, { borderColor: colors.borderStrong, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 }]}
       >
         {icon ? <Icon name={icon} size={18} color={colors.muted} /> : null}
