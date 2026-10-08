@@ -43,6 +43,13 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   // Pembina & admin mengelola anggota/absensi/nilai ekskul → tetap di modul web (Fase 2).
   if (p === '/ekstrakurikuler' && role !== 'admin' && role !== 'guru_ekstrakurikuler') return '/ekskul';
   if (p === '/prestasi' && !['admin', 'wali_kelas', 'waka_kesiswaan'].includes(role ?? '')) return '/prestasi';
+  // Poin Tata Tertib (lihat): siswa → miliknya, wali kelas → kelasnya, pimpinan → rekap & catatan.
+  // Pencatatan poin (admin, guru tata tertib, waka kesiswaan) tetap di modul web.
+  if (p === '/siswa/poin' && role === 'siswa') return '/tatib/poin';
+  if (p === '/wali-kelas/poin-tatib' && role === 'wali_kelas') return '/tatib/walikelas';
+  if (p === '/tatib/rekap' && role !== 'admin') return '/tatib/rekap';
+  if ((p === '/admin/tatib/data' || p === '/admin/tatib/penanganan')
+    && ['guru_bk', 'kepala_sekolah', 'penjamin_mutu', 'kepala_tata_usaha', 'waka_kurikulum'].includes(role ?? '')) return '/tatib/rekap';
   // Fase 4 — pemantauan Kepala Madrasah (hanya lihat; admin tetap mengelola di modul web).
   if (role === 'kepala_sekolah') {
     const pantau: Record<string, string> = {
