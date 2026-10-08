@@ -23,7 +23,7 @@ export function RingkasanPoinCard({ r, batas }: { r: RangkumanPoin; batas?: numb
   const kotak = [
     { label: 'Kebaikan', value: fmtPoin(r.total_plus), sub: `${r.jumlah_kebaikan} catatan`, color: colors.success },
     { label: 'Pelanggaran', value: String(r.total_minus), sub: `${r.jumlah_pelanggaran} catatan`, color: colors.error },
-    { label: 'Saldo', value: fmtPoin(r.saldo), sub: 'kebaikan + pelanggaran', color: r.saldo < 0 ? colors.error : colors.onSurface },
+    { label: 'Saldo', value: fmtPoin(r.saldo), sub: 'total poin', color: r.saldo < 0 ? colors.error : colors.onSurface },
   ];
   return (
     <Card style={{ gap: spacing.md }}>
