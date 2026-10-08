@@ -14,9 +14,12 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
+// Tanggal hari ini menurut WIB (toISOString memakai UTC → sebelum pukul 07.00 tercatat kemarin).
+const hariIniWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
 const emptyObatForm = { nama_obat: '', jenis: '', satuan: 'pcs', untuk_penanganan: '', dosis: '', stok_minimum: 0, keterangan: '' };
-const emptyMasukForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, tanggal_kadaluarsa: '', sumber: '', keterangan: '' };
-const emptyKeluarForm = { obat_id: '', tanggal: new Date().toISOString().split('T')[0], jumlah: 1, keterangan: '' };
+const emptyMasukForm = { obat_id: '', tanggal: hariIniWIB(), jumlah: 1, tanggal_kadaluarsa: '', sumber: '', keterangan: '' };
+const emptyKeluarForm = { obat_id: '', tanggal: hariIniWIB(), jumlah: 1, keterangan: '' };
 
 export default function AdminUKSObatPage() {
   const [tab, setTab] = useState('daftar');

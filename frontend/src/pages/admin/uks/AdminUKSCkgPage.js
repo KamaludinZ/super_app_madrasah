@@ -18,6 +18,9 @@ import TemplateCkgDialog from './TemplateCkgDialog';
 import ImportCkgDialog from './ImportCkgDialog';
 import { FILTER_GTK, FILTER_SEMUA, KOLOM_CKG, cocokCariCkg, cocokFilterCkg, nilaiCkg, opsiKelasCkg } from '@/lib/ckgKolom';
 
+// Tanggal hari ini menurut WIB (toISOString memakai UTC → sebelum pukul 07.00 tercatat kemarin).
+const hariIniWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
 const emptyPatientPicker = {
   jenis_pasien: 'siswa', // 'siswa' or 'gtk'
   gtk_kategori: 'guru',
@@ -28,7 +31,7 @@ const emptyPatientPicker = {
 
 const emptyCkgForm = {
   ...emptyPatientPicker,
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   tinggi_badan: '',
   berat_badan: '',
   tekanan_darah: '',
@@ -55,7 +58,7 @@ export const OPSI_FUNGSI_PENDENGARAN = ['Normal', 'Gangguan Telinga Kanan', 'Gan
 
 const emptyImunisasiForm = {
   ...emptyPatientPicker,
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   jenis_vaksin: '',
   dosis_ke: '',
   petugas_pemberi: '',

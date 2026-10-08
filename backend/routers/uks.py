@@ -2090,8 +2090,20 @@ async def export_laporan_baru_pdf(
     )
 
 
+def _cek_tanggal_kunjungan(tanggal: str) -> None:
+    """Tanggal kunjungan wajib YYYY-MM-DD dan tidak boleh setelah hari ini (WIB). Dulu tanggal masa depan
+    (salah ketik, mis. 26 Okt saat masih 8 Okt) diterima sehingga kunjungan hilang dari laporan berjalan."""
+    try:
+        tgl = datetime.strptime((tanggal or '')[:10], '%Y-%m-%d').date()
+    except ValueError:
+        raise HTTPException(400, "Format tanggal kunjungan harus YYYY-MM-DD")
+    if tgl > _today_wib().date():
+        raise HTTPException(400, "Tanggal kunjungan tidak boleh melewati hari ini")
+
+
 @router.post("/uks/kunjungan")
 async def create_kunjungan(req: KunjunganUKSRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
+    _cek_tanggal_kunjungan(req.tanggal)
     pasien = await _get_user_or_404(req.pasien_id)
 
     doc = {
@@ -2137,6 +2149,7 @@ async def update_kunjungan(kunjungan_id: str, req: KunjunganUKSRequest, user: Di
     if not existing:
         raise HTTPException(404, "Data kunjungan tidak ditemukan")
 
+    _cek_tanggal_kunjungan(req.tanggal)
     update_data = req.model_dump()
     update_data['keluhan'] = _clean_keluhan(req.keluhan)
 

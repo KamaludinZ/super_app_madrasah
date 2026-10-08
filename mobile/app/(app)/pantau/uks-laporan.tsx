@@ -1,19 +1,22 @@
 /**
  * Laporan UKS Baru (Kepala Madrasah, hanya lihat) — native, pengganti /admin/uks/laporan-baru.
- * Per bulan: tab Diagnosa (GET /uks/laporan-baru/diagnosa — ringkasan & diagnosa terbanyak, dipisah siswa/GTK)
+ * Per bulan: tab Diagnosa (GET /uks/laporan-baru/diagnosa — ringkasan & diagnosa terbanyak, dipisah siswa/GTK;
+ * ketuk diagnosa untuk daftar kunjungannya, GET /uks/laporan-baru/diagnosa/{id}/kunjungan)
  * dan tab Opname (GET /uks/laporan-baru/opname — stok awal/masuk/keluar/akhir obat & BMHP, status menipis/habis).
  * Ekspor Excel/PDF tetap di web.
  */
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { request, errorMessage } from '@/api/client';
-import { Bars, bulanIni, Counts, MonthBar, pecahBulan } from '@/pantau/ui';
+import { bulanIni, Counts, MonthBar, pecahBulan } from '@/pantau/ui';
 import { useCached } from '@/hooks/useCached';
 import { spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { T } from '@/components/ui/Text';
 import { Badge, BadgeTone } from '@/components/ui/Badge';
+import { Icon } from '@/components/ui/Icon';
+import { formatDateShort } from '@/utils/time';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
@@ -29,8 +32,30 @@ type RekapOpname = {
 type Tab = 'diagnosa' | 'opname';
 const STATUS: Record<string, BadgeTone> = { Aman: 'success', Menipis: 'warning', Habis: 'error' };
 
-function Diagnosa({ judul, d }: { judul: string; d: RekapDx }) {
+type Periode = { periode: string; tahun: string; bulan: string };
+type KunjunganDx = { id: string; tanggal?: string; waktu?: string | null; pasien_nama?: string | null; pasien_kelas?: string | null; keluhan?: string | null; peran: 'utama' | 'tambahan' };
+
+function RincianDx({ id, tipe, per }: { id: string; tipe: 'siswa' | 'gtk'; per: Periode }) {
   const { colors } = useTheme();
+  const res = useCached<{ items: KunjunganDx[] }>(`pantau.uks.dx.${per.tahun}-${per.bulan}.${tipe}.${id}`,
+    () => request(`/uks/laporan-baru/diagnosa/${id}/kunjungan`, { query: { ...per, pasien_tipe: tipe } }));
+  if (res.loading) return <CardSkeleton lines={2} />;
+  if (!res.data) return <T variant="caption" tone="muted">{errorMessage(res.error, 'Rincian belum bisa dimuat.')}</T>;
+  return (
+    <View style={{ gap: spacing.xs, paddingLeft: spacing.sm, borderLeftWidth: 2, borderLeftColor: colors.border }}>
+      {res.data.items.map((k) => (
+        <View key={k.id} style={{ gap: 1 }}>
+          <T variant="caption" weight="medium">{k.pasien_nama ?? '-'}{k.peran === 'tambahan' ? ' · tambahan' : ''}</T>
+          <T variant="small" tone="muted">{[k.tanggal ? formatDateShort(k.tanggal) : null, k.waktu, k.pasien_kelas ? `Kelas ${k.pasien_kelas}` : null, k.keluhan].filter(Boolean).join(' · ')}</T>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Diagnosa({ judul, d, tipe, per }: { judul: string; d: RekapDx; tipe: 'siswa' | 'gtk'; per: Periode }) {
+  const { colors } = useTheme();
+  const [buka, setBuka] = useState<string | null>(null);
   return (
     <Card style={{ gap: spacing.sm }}>
       <T weight="semibold">{judul}</T>
@@ -38,7 +63,22 @@ function Diagnosa({ judul, d }: { judul: string; d: RekapDx }) {
         { label: 'Kunjungan', value: d.ringkasan.total_kunjungan, color: colors.brandPrimary }, { label: 'Pasien', value: d.ringkasan.pasien_unik },
         { label: 'Terdiagnosa', value: d.ringkasan.dengan_diagnosa }, { label: 'Tanpa dx', value: d.ringkasan.tanpa_diagnosa },
       ]} />
-      <Bars max={10} data={d.items.map((x) => ({ label: `${x.kode ? `${x.kode} ` : ''}${x.nama ?? '-'}`, value: x.total }))} />
+      {d.items.length === 0 ? <T variant="caption" tone="muted">Belum ada diagnosa.</T> : d.items.map((x, i) => {
+        const terbuka = buka === x.diagnosa_id;
+        return (
+          <View key={x.diagnosa_id} style={[{ gap: spacing.xs }, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider, paddingTop: spacing.sm }]}>
+            <Pressable onPress={() => setBuka(terbuka ? null : x.diagnosa_id)} accessibilityRole="button" accessibilityState={{ expanded: terbuka }} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <T variant="caption" weight="medium">{x.kode ? `${x.kode} · ` : ''}{x.nama ?? '-'}</T>
+                <T variant="small" tone="muted">{x.utama} utama · {x.tambahan} tambahan · {x.jumlah_pasien} pasien</T>
+              </View>
+              <T weight="bold">{x.total}</T>
+              <Icon name={terbuka ? 'chevron-up' : 'chevron-down'} size={16} color={colors.muted} />
+            </Pressable>
+            {terbuka ? <RincianDx id={x.diagnosa_id} tipe={tipe} per={per} /> : null}
+          </View>
+        );
+      })}
     </Card>
   );
 }
@@ -82,8 +122,8 @@ export default function UksLaporanBaru() {
           <ErrorState message={errorMessage(res.error, 'Laporan belum bisa dimuat.')} onRetry={res.refresh} compact />
         ) : tab === 'diagnosa' && dx.data ? (
           <>
-            <Diagnosa judul="Siswa" d={dx.data.siswa} />
-            <Diagnosa judul="Guru & tendik" d={dx.data.gtk} />
+            <Diagnosa judul="Siswa" d={dx.data.siswa} tipe="siswa" per={q} />
+            <Diagnosa judul="Guru & tendik" d={dx.data.gtk} tipe="gtk" per={q} />
           </>
         ) : op.data ? (
           <>

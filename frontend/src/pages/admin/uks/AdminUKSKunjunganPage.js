@@ -19,6 +19,9 @@ import SuratKeteranganUKS, { JUDUL_SURAT } from './SuratKeteranganUKS';
 import { saveBlob } from './laporanExport';
 import RiwayatKunjunganPanel, { filterRiwayatSetahun } from './RiwayatKunjunganPanel';
 
+// Tanggal hari ini menurut WIB (toISOString memakai UTC → sebelum pukul 07.00 tercatat kemarin).
+const hariIniWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
 const KONDISI_PULANG_LIST = ['Membaik', 'Dirujuk', 'Dijemput Orang Tua', 'Istirahat di UKS', 'Istirahat di Mahad'];
 
 const CATATAN_SURAT_MAX = 1000;
@@ -40,7 +43,7 @@ const emptyIntakeForm = {
   tingkat: '',
   kelas_id: '',
   pasien_id: '',
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   waktu: '',
   keluhan: '',
   tinggi_badan: '',
@@ -727,7 +730,7 @@ export default function AdminUKSKunjunganPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tanggal <span className="text-rose-500">*</span></Label>
-                  <Input type="date" value={intakeForm.tanggal} onChange={(e) => setIntakeForm({ ...intakeForm, tanggal: e.target.value })} />
+                  <Input type="date" max={hariIniWIB()} value={intakeForm.tanggal} onChange={(e) => setIntakeForm({ ...intakeForm, tanggal: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Waktu</Label>
@@ -739,7 +742,7 @@ export default function AdminUKSKunjunganPage() {
                         const now = new Date();
                         setIntakeForm({
                           ...intakeForm,
-                          tanggal: now.toISOString().split('T')[0],
+                          tanggal: hariIniWIB(),
                           waktu: now.toTimeString().slice(0, 5),
                         });
                       }}
@@ -1196,7 +1199,7 @@ export default function AdminUKSKunjunganPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tanggal <span className="text-rose-500">*</span></Label>
-                  <Input type="date" value={editForm.tanggal} onChange={(e) => setEditForm({ ...editForm, tanggal: e.target.value })} />
+                  <Input type="date" max={hariIniWIB()} value={editForm.tanggal} onChange={(e) => setEditForm({ ...editForm, tanggal: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Waktu</Label>
