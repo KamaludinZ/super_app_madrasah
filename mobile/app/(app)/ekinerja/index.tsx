@@ -28,17 +28,18 @@ import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { toast } from '@/components/ui/Toast';
 import { openUrl } from '@/components/RichText';
+import { PERIODE_TRIWULAN, Pengumpulan, triwulanSekarang } from '@/ekinerja/Pengumpulan';
 
 export const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-type Tab = 'jurnal' | 'lckb' | 'rhk' | 'link';
+type Tab = 'jurnal' | 'lckb' | 'rhk' | 'unggah' | 'link';
 
 export default function EKinerja() {
   const [tab, setTab] = useState<Tab>('jurnal');
   return (
     <Screen title="E-Kinerja" subtitle="Jurnal harian, LCKB & bukti dukung" back>
       <View style={{ gap: spacing.md }}>
-        <SegmentedControl<Tab> small segments={[{ value: 'jurnal', label: 'Jurnal' }, { value: 'lckb', label: 'LCKB' }, { value: 'rhk', label: 'RHK' }, { value: 'link', label: 'Link' }]} value={tab} onChange={setTab} />
-        {tab === 'jurnal' ? <Jurnal /> : tab === 'lckb' ? <Lckb /> : tab === 'rhk' ? <Rhk /> : <Links />}
+        <SegmentedControl<Tab> small segments={[{ value: 'jurnal', label: 'Jurnal' }, { value: 'lckb', label: 'LCKB' }, { value: 'rhk', label: 'RHK' }, { value: 'unggah', label: 'Unggah' }, { value: 'link', label: 'Link' }]} value={tab} onChange={setTab} />
+        {tab === 'jurnal' ? <Jurnal /> : tab === 'lckb' ? <Lckb /> : tab === 'rhk' ? <Rhk /> : tab === 'unggah' ? <Unggah /> : <Links />}
       </View>
     </Screen>
   );
@@ -210,6 +211,27 @@ function Rhk() {
             : <Button title="Ambil RHK" icon="hand-left-outline" variant="outline" size="sm" loading={busy === r.id} disabled={!online} onPress={() => void act(r, true)} />}
         </Card>
       ))}
+    </>
+  );
+}
+
+/** Pengumpulan PDF dokumen kinerja: triwulanan (SKP, Angka Kredit, PAK) & bulanan (Absensi, LCKB). */
+function Unggah() {
+  const takwim = useCached<{ year?: number } | null>('ekinerja.takwim', api.ekinerja.tahunTakwim, { staleTime: 60 * 60_000 });
+  const year = takwim.data?.year ?? wibParts(Date.now()).year;
+  const [tw, setTw] = useState(triwulanSekarang());
+  const [bulan, setBulan] = useState(BULAN[wibParts(Date.now()).month]);
+  const twLabel = PERIODE_TRIWULAN.find((p) => p.value === tw)?.label ?? tw;
+  return (
+    <>
+      <T variant="caption" tone="muted">Unggah PDF lewat tautan yang disiapkan admin/KTU, lalu tandai “Sudah upload”.</T>
+      <SelectField label="Triwulan" value={tw} options={PERIODE_TRIWULAN} allowNone={false} icon="calendar-outline" onChange={(v) => v && setTw(v)} />
+      <Pengumpulan type="skp" label="SKP" year={year} period={tw} periodLabel={twLabel} />
+      <Pengumpulan type="angka_kredit" label="Angka Kredit" year={year} period={tw} periodLabel={twLabel} />
+      <Pengumpulan type="pak" label="PAK" year={year} period={tw} periodLabel={twLabel} />
+      <SelectField label="Bulan" value={bulan} options={BULAN.map((b) => ({ value: b, label: b }))} allowNone={false} icon="calendar-outline" onChange={(v) => v && setBulan(v)} />
+      <Pengumpulan type="absensi" label="Absensi" year={year} period={bulan} periodLabel={bulan} />
+      <Pengumpulan type="lckb" label="LCKB" year={year} period={bulan} periodLabel={bulan} />
     </>
   );
 }

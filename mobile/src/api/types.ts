@@ -501,3 +501,5 @@ export type RhkItem = {
   id: string; year: number; leading_sektor?: string | null; rhk_atasan?: string | null; indikator_kinerja_individu?: string | null;
   target?: string | null; satuan_hasil?: string | null; bulan_berlaku?: string[]; is_locked?: boolean; claimed_by?: string | null; claimed_by_name?: string | null;
 };
+export type PengumpulanStatus = { link_url?: string | null; sudah_upload?: boolean; confirmed_at?: string | null };
+export type SertifikasiRecord = { id: string; year: number; period: string; nama_kegiatan: string; penyelenggara?: string | null; tanggal_mulai?: string | null; tanggal_selesai?: string | null; jumlah_jam?: string | null };

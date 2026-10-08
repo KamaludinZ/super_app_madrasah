@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, LckbRow, RhkItem, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, LckbRow, PengumpulanStatus, RhkItem, SertifikasiRecord, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -166,6 +166,13 @@ export const api = {
     linkCreate: (body: { label: string; url: string }) => request<JurnalLink>('/ekinerja/jurnal-harian/link', { method: 'POST', body }),
     linkUpdate: (id: string, body: { label: string; url: string }) => request<JurnalLink>(`/ekinerja/jurnal-harian/link/${id}`, { method: 'PUT', body }),
     linkDelete: (id: string) => request<{ message: string }>(`/ekinerja/jurnal-harian/link/${id}`, { method: 'DELETE' }),
+    pengumpulan: (type: string, year: number, period: string) => request<PengumpulanStatus>('/ekinerja/pengumpulan/status', { query: { type, year, period } }),
+    konfirmasi: (type: string, year: number, period: string, sudah: boolean) =>
+      request<unknown>('/ekinerja/pengumpulan/confirm', { method: sudah ? 'PUT' : 'DELETE', query: { type, year, period } }),
+    sertifikasiMy: (year: number, period: string) => request<SertifikasiRecord[]>('/ekinerja/sertifikasi/my', { query: { year, period } }),
+    sertifikasiSave: (id: string | null, body: Omit<SertifikasiRecord, 'id'>) =>
+      request<SertifikasiRecord>(id ? `/ekinerja/sertifikasi/${id}` : '/ekinerja/sertifikasi', { method: id ? 'PUT' : 'POST', body }),
+    sertifikasiDelete: (id: string) => request<{ message: string }>(`/ekinerja/sertifikasi/${id}`, { method: 'DELETE' }),
     rhk: (year: number) => request<RhkItem[]>('/ekinerja/rhk', { query: { year } }),
     rhkClaim: (id: string) => request<RhkItem>(`/ekinerja/rhk/${id}/claim`, { method: 'PUT' }),
     rhkUnclaim: (id: string) => request<RhkItem>(`/ekinerja/rhk/${id}/unclaim`, { method: 'PUT' }),

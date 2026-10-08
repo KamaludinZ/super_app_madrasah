@@ -27,6 +27,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/gtk/absensi-saya') return '/absensi-saya';
   if (p === '/my-agenda') return '/agenda';
   // Penyusun E-Kinerja (admin, kepala, KTU) mengelola RHK/rekap di web; GTK mengisi jurnal & LCKB di aplikasi.
+  if (p === '/admin/gtk/profesionalitas' && !['admin', 'kepala_sekolah', 'kepala_tata_usaha'].includes(role ?? '')) return '/profesionalitas';
   if (p === '/admin/gtk/e-kinerja' && !['admin', 'kepala_sekolah', 'kepala_tata_usaha'].includes(role ?? '')) return '/ekinerja';
   if (p === '/guru/kebersihan') return '/kebersihan';
   if (p === '/guru/laporan') return '/laporan';
