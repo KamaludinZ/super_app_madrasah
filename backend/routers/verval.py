@@ -484,7 +484,8 @@ async def delete_verval_request(
     if not is_owner:
         raise HTTPException(403, "Tidak memiliki akses untuk membatalkan request ini")
 
-    if verval_req.get('status') != 'pending':
+    # Pemilik boleh membatalkan ajuan yang menunggu, atau menghapus dari daftar ajuan yang ditolak.
+    if verval_req.get('status') not in ('pending', 'rejected'):
         raise HTTPException(400, f"Request tidak bisa dibatalkan karena status sudah {verval_req.get('status')}")
 
     await db.verval_requests.update_one(

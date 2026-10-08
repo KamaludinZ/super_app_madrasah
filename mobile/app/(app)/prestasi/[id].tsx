@@ -44,14 +44,15 @@ export default function PrestasiDetail() {
 
   const cancel = () => {
     if (!a?._vervalRequestId) return;
-    Alert.alert('Batalkan ajuan?', `Ajuan prestasi “${a.name}” akan dibatalkan.`, [
+    const tolak = a._vervalStatus === 'rejected';
+    Alert.alert(tolak ? 'Hapus dari daftar?' : 'Batalkan ajuan?', tolak ? `Ajuan “${a.name}” yang ditolak akan dihapus dari daftar.` : `Ajuan prestasi “${a.name}” akan dibatalkan.`, [
       { text: 'Tidak', style: 'cancel' },
       {
-        text: 'Batalkan ajuan', style: 'destructive', onPress: async () => {
+        text: tolak ? 'Hapus' : 'Batalkan ajuan', style: 'destructive', onPress: async () => {
           setBusy(true);
           try {
             await api.verval.cancel(a._vervalRequestId!);
-            toast.success('Ajuan prestasi dibatalkan');
+            toast.success(tolak ? 'Ajuan dihapus dari daftar' : 'Ajuan prestasi dibatalkan');
             await qc.invalidateQueries({ predicate: (q) => /^(prestasi|verval)\./.test(String(q.queryKey[0])) });
             router.back();
           } catch (e) {
@@ -74,12 +75,13 @@ export default function PrestasiDetail() {
 
   const st = statusOf(a);
   const holderLabel = HOLDERS.find((h) => h.value === holderOf(a))?.label ?? '-';
-  const canCancel = a._vervalStatus === 'pending' && a._vervalOwner === user?.id;
+  const ditolak = a._vervalStatus === 'rejected';
+  const canCancel = (a._vervalStatus === 'pending' || ditolak) && a._vervalOwner === user?.id;
 
   return (
     <Screen title="Detail Prestasi" back refreshing={res.refreshing} onRefresh={res.refresh}
       offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}
-      footer={canCancel ? <Button title="Batalkan ajuan" icon="close-circle-outline" variant="outline" fullWidth loading={busy} disabled={!online} onPress={cancel} /> : undefined}>
+      footer={canCancel ? <Button title={ditolak ? 'Hapus dari daftar' : 'Batalkan ajuan'} icon={ditolak ? 'trash-outline' : 'close-circle-outline'} variant="outline" fullWidth loading={busy} disabled={!online} onPress={cancel} /> : undefined}>
       <View style={{ gap: spacing.md }}>
         <Card style={{ gap: spacing.sm }}>
           <T variant="title">{a.name}</T>

@@ -27,6 +27,7 @@ const STATUS: Record<string, { label: string; tone: BadgeTone; icon: React.Compo
   pending: { label: 'Menunggu review', tone: 'warning', icon: 'time-outline' },
   approved: { label: 'Disetujui', tone: 'success', icon: 'checkmark-circle-outline' },
   rejected: { label: 'Ditolak', tone: 'error', icon: 'close-circle-outline' },
+  cancelled: { label: 'Dibatalkan', tone: 'neutral', icon: 'remove-circle-outline' },
 };
 type Filter = 'semua' | 'pending' | 'selesai';
 

@@ -24,7 +24,8 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 
-type Status = 'all' | 'pending' | 'verified';
+type Status = 'all' | 'pending' | 'rejected' | 'verified';
+const isRejected = (a: Achievement) => a._vervalStatus === 'rejected';
 const LEVEL_STATS = ['kab_kota', 'provinsi', 'nasional', 'internasional'];
 
 export default function PrestasiScreen() {
@@ -41,15 +42,19 @@ export default function PrestasiScreen() {
   const list = useMemo(() => {
     const s = search.trim().toLowerCase();
     return byHolder.filter((a) => {
-      if (status === 'pending' && a.is_verified) return false;
+      if (status === 'pending' && (a.is_verified || isRejected(a))) return false;
+      if (status === 'rejected' && !isRejected(a)) return false;
       if (status === 'verified' && !a.is_verified) return false;
       if (!s) return true;
       return [a.name, a.holder_full_name, a.holder_name, a.organizer, a.bidang_lomba, a.class_name]
         .some((x) => (x ?? '').toLowerCase().includes(s));
     });
   }, [byHolder, status, search]);
-  const pending = byHolder.filter((a) => !a.is_verified).length;
-  const verified = byHolder.length - pending;
+  // Ajuan yang ditolak bukan prestasi: tidak dihitung di total/tingkat, punya filter sendiri.
+  const counted = byHolder.filter((a) => !isRejected(a));
+  const rejected = byHolder.length - counted.length;
+  const pending = counted.filter((a) => !a.is_verified).length;
+  const verified = counted.length - pending;
   const canAdd = access.canAdd === holder;
 
   const header = (
@@ -63,18 +68,22 @@ export default function PrestasiScreen() {
           text="Prestasi yang Anda ajukan ditinjau Admin/Wali Kelas lebih dulu sebelum berstatus Terverifikasi. Ajuan yang menunggu atau ditolak tetap tampil di daftar." />
       ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        <Stat label="Total" value={byHolder.length} color={colors.brandPrimary} />
-        {LEVEL_STATS.map((l) => <Stat key={l} label={levelLabel(l)} value={byHolder.filter((a) => a.level === l).length} color={colors.onSurface} />)}
+        <Stat label="Total" value={counted.length} color={colors.brandPrimary} />
+        {LEVEL_STATS.map((l) => <Stat key={l} label={levelLabel(l)} value={counted.filter((a) => a.level === l).length} color={colors.onSurface} />)}
       </ScrollView>
       <SegmentedControl<Status> small
-        segments={[{ value: 'all', label: `Semua (${byHolder.length})` }, { value: 'pending', label: `Menunggu (${pending})` }, { value: 'verified', label: `Terverifikasi (${verified})` }]}
+        segments={[
+          { value: 'all', label: `Semua (${byHolder.length})` }, { value: 'pending', label: `Menunggu (${pending})` },
+          ...(rejected ? [{ value: 'rejected' as Status, label: `Ditolak (${rejected})` }] : []),
+          { value: 'verified', label: `Terverifikasi (${verified})` },
+        ]}
         value={status} onChange={setStatus} />
       <Input icon="search-outline" placeholder="Cari lomba, nama, penyelenggara…" value={search} onChangeText={setSearch} returnKeyType="search" />
     </View>
   );
 
   return (
-    <Screen title="Data Prestasi" subtitle={`${byHolder.length} prestasi${pending ? ` · ${pending} menunggu` : ''}`} back scroll={false}
+    <Screen title="Data Prestasi" subtitle={`${counted.length} prestasi${pending ? ` · ${pending} menunggu` : ''}${rejected ? ` · ${rejected} ditolak` : ''}`} back scroll={false}
       offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}
       footer={canAdd ? <Button title="Ajukan prestasi" icon="add-circle-outline" size="lg" fullWidth onPress={() => router.push('/prestasi/tambah')} /> : undefined}>
       <FlatList

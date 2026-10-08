@@ -140,6 +140,11 @@ function levelLabel(l) {
   return LEVELS.find((x) => x.value === l)?.label || l || '-';
 }
 
+// Ajuan prestasi yang ditolak peninjau (masih tampil agar pengaju tahu alasannya) — bukan "Menunggu".
+function isRejected(a) {
+  return a._isPendingRequest && a._vervalStatus === 'rejected';
+}
+
 function holderTypeOf(a) {
   if (a.holder_type) return a.holder_type;
   // Legacy backward compat
@@ -426,10 +431,11 @@ export default function AchievementsPage() {
 
   const handleDelete = async (a) => {
     if (a._isPendingRequest) {
-      if (!(await confirmDialog(`Batalkan pengajuan prestasi "${a.name}"?`))) return;
+      const ditolak = isRejected(a);
+      if (!(await confirmDialog(ditolak ? `Hapus ajuan "${a.name}" yang ditolak dari daftar?` : `Batalkan pengajuan prestasi "${a.name}"?`))) return;
       try {
         await api.delete(`/verval-requests/${a._vervalRequestId}`);
-        toast.success('Pengajuan prestasi dibatalkan');
+        toast.success(ditolak ? 'Ajuan yang ditolak dihapus dari daftar' : 'Pengajuan prestasi dibatalkan');
         await refresh();
       } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal membatalkan pengajuan'); }
       return;
@@ -474,7 +480,8 @@ export default function AchievementsPage() {
 
   const filtered = useMemo(() => {
     return filteredByHolder.filter((a) => {
-      if (statusTab === 'pending' && a.is_verified) return false;
+      if (statusTab === 'pending' && (a.is_verified || isRejected(a))) return false;
+      if (statusTab === 'rejected' && !isRejected(a)) return false;
       if (statusTab === 'verified' && !a.is_verified) return false;
       if (filterYear !== 'all' && a.year !== parseInt(filterYear)) return false;
       if (filterLevel !== 'all' && a.level !== filterLevel) return false;
@@ -491,7 +498,8 @@ export default function AchievementsPage() {
   }, [filteredByHolder, statusTab, search, filterYear, filterLevel]);
 
   const stats = useMemo(() => {
-    const all = filteredByHolder;
+    // Ajuan yang ditolak bukan prestasi: tidak dihitung di total/tingkat/tahun (punya tab sendiri).
+    const all = filteredByHolder.filter((a) => !isRejected(a));
     const byLevel = {};
     const byYear = {};
 
@@ -508,7 +516,8 @@ export default function AchievementsPage() {
 
     return {
       total: all.length,
-      pending: all.filter((a) => !a.is_verified).length,
+      pending: all.filter((a) => !a.is_verified && !isRejected(a)).length,
+      rejected: filteredByHolder.filter(isRejected).length,
       verified: all.filter((a) => a.is_verified).length,
       by_level: byLevel,
       by_year: byYear,
@@ -689,6 +698,9 @@ export default function AchievementsPage() {
               <TabsList className="bg-white border border-slate-200">
                 <TabsTrigger value="all" data-testid="status-tab-all">Semua</TabsTrigger>
                 <TabsTrigger value="pending" data-testid="status-tab-pending">Menunggu {stats.pending > 0 && <Badge className="ml-1.5 px-1.5 py-0 text-xs bg-amber-100 text-amber-800 border-amber-200">{stats.pending}</Badge>}</TabsTrigger>
+                {stats.rejected > 0 && (
+                  <TabsTrigger value="rejected" data-testid="status-tab-rejected">Ditolak <Badge className="ml-1.5 px-1.5 py-0 text-xs bg-rose-100 text-rose-800 border-rose-200">{stats.rejected}</Badge></TabsTrigger>
+                )}
                 <TabsTrigger value="verified" data-testid="status-tab-verified">Terverifikasi {stats.verified > 0 && <Badge className="ml-1.5 px-1.5 py-0 text-xs bg-emerald-100 text-emerald-800 border-emerald-200">{stats.verified}</Badge>}</TabsTrigger>
                 <TabsTrigger value="gallery" data-testid="status-tab-gallery">Galeri</TabsTrigger>
               </TabsList>
@@ -805,8 +817,8 @@ export default function AchievementsPage() {
                                       <Pencil className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {(a._isPendingRequest ? (a._vervalStatus === 'pending' && (isAdmin || a.submitted_by === user?.id)) : (isAdmin || (isKesiswaan && holderTypeOf(a) === 'siswa') || (a.submitted_by === user?.id && !a.is_verified))) && (
-                                    <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title={a._isPendingRequest ? 'Batalkan Pengajuan' : 'Hapus'} data-testid={`delete-achievement-${a.id}`}>
+                                  {(a._isPendingRequest ? ((a._vervalStatus === 'pending' && isAdmin) || a.submitted_by === user?.id) : (isAdmin || (isKesiswaan && holderTypeOf(a) === 'siswa') || (a.submitted_by === user?.id && !a.is_verified))) && (
+                                    <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title={a._isPendingRequest ? (isRejected(a) ? 'Hapus ajuan ditolak' : 'Batalkan Pengajuan') : 'Hapus'} data-testid={`delete-achievement-${a.id}`}>
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
                                   )}

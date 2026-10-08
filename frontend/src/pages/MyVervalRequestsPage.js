@@ -38,6 +38,7 @@ export default function MyVervalRequestsPage() {
     if (status === 'pending') return <Badge className="bg-amber-100 text-amber-800"><Clock className="h-3 w-3 mr-1" /> Menunggu Review</Badge>;
     if (status === 'approved') return <Badge className="bg-emerald-100 text-emerald-800"><CheckCircle className="h-3 w-3 mr-1" /> Disetujui</Badge>;
     if (status === 'rejected') return <Badge className="bg-rose-100 text-rose-800"><XCircle className="h-3 w-3 mr-1" /> Ditolak</Badge>;
+    if (status === 'cancelled') return <Badge variant="secondary">Dibatalkan</Badge>;
     return <Badge variant="secondary">{status}</Badge>;
   };
 
