@@ -3,6 +3,20 @@ import { api } from '@/lib/api';
 // Masterplan / Denah Sekolah: pemanggil API (backend/routers/masterplan.py).
 // Gambar denah dikirim endpoint ber-autentikasi, jadi diambil sebagai blob lalu dijadikan object URL.
 
+// Kode ruang penanda: huruf besar/angka/titik/tanda hubung, maks 12 karakter (sama dengan server).
+export const POLA_KODE_RUANG = /^[A-Z0-9][A-Z0-9.-]{0,11}$/;
+export const rapikanKode = (kode) => (kode || '').replace(/\s+/g, '').toUpperCase();
+
+// Saran kode berikutnya berpola R-01, R-02, ... yang belum dipakai penanda lain.
+export function sarankanKodeRuang(markers = []) {
+  const terpakai = new Set(markers.map((m) => m.kode_ruang).filter(Boolean));
+  for (let i = 1; i < 1000; i += 1) {
+    const kode = `R-${String(i).padStart(2, '0')}`;
+    if (!terpakai.has(kode)) return kode;
+  }
+  return '';
+}
+
 const pesanGalat = (e, cadangan) => {
   const d = e?.response?.data?.detail;
   return new Error(typeof d === 'string' ? d : cadangan);

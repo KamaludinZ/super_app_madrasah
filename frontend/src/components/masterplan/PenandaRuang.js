@@ -12,7 +12,7 @@ export default function PenandaRuang({ marker, aktif = false, sorot = false, tam
       style={{ left: `${marker.posisi_x}%`, top: `calc(${marker.posisi_y}% - 7px)`, zIndex: tegas ? 20 : 10 }}
       onClick={() => onPilih?.(marker)}
       onPointerDown={onMulaiGeser ? (e) => onMulaiGeser(e, marker) : undefined}
-      aria-label={`Ruang ${marker.nama_ruang}`}
+      aria-label={`Ruang ${marker.kode_ruang ? `${marker.kode_ruang} ` : ''}${marker.nama_ruang}`}
       aria-pressed={aktif}
       data-testid={`masterplan-marker-${marker.id}`}
       data-penanda
@@ -23,13 +23,15 @@ export default function PenandaRuang({ marker, aktif = false, sorot = false, tam
         }`}
         aria-hidden
       />
-      {(tampilNama || tegas) && (
+      {(tampilNama || tegas || marker.kode_ruang) && (
         <span
           className={`mt-0.5 block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm sm:text-xs ${
             tegas ? 'bg-amber-500 text-white' : 'bg-white/90 text-slate-800 group-hover:bg-white'
           }`}
         >
-          {marker.nama_ruang}
+          {marker.kode_ruang && <span className="font-mono font-bold">{marker.kode_ruang}</span>}
+          {marker.kode_ruang && tampilNama && <span className="mx-1 opacity-50">·</span>}
+          {(tampilNama || !marker.kode_ruang) && <span>{marker.nama_ruang}</span>}
         </span>
       )}
     </button>

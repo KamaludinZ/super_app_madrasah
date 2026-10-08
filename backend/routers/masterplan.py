@@ -6,6 +6,7 @@ ber-autentikasi. Posisi penanda dalam persen (0–100) terhadap gambar denah.
 """
 import io
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -65,7 +66,7 @@ async def lihat_masterplan(user: Dict = Depends(get_current_user)):
     nama = {r['id']: r.get('name') for r in await db.rooms.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(ids) or 1)}
     for m in markers:
         m['nama_ruang'] = nama.get(m.get('room_id')) or m.get('nama_ruang')
-    markers.sort(key=lambda m: m.get('nama_ruang') or '')
+    markers.sort(key=lambda m: (m.get('kode_ruang') or '~', m.get('nama_ruang') or ''))
     return {'denah': _denah_tampil(denah), 'markers': markers}
 
 
@@ -143,8 +144,26 @@ async def hapus_denah(request: Request, user: Dict = Depends(require_role('admin
 
 class MarkerRequest(BaseModel):
     room_id: Optional[str] = None
+    kode_ruang: Optional[str] = Field(None, max_length=20)
     posisi_x: Optional[float] = Field(None, ge=0, le=100)
     posisi_y: Optional[float] = Field(None, ge=0, le=100)
+
+
+POLA_KODE = re.compile(r'^[A-Z0-9][A-Z0-9.-]{0,11}$')
+
+
+def _kode_ruang(kode: Optional[str]) -> str:
+    """Kode ruang pada penanda: huruf besar/angka/titik/tanda hubung, maks 12 karakter (mis. R-07A)."""
+    kode = re.sub(r'\s+', '', (kode or '')).upper()
+    if not POLA_KODE.match(kode):
+        raise HTTPException(400, "Kode ruang wajib diisi: 1–12 karakter huruf/angka, boleh titik atau tanda hubung (mis. R-07A)")
+    return kode
+
+
+async def _cek_kode_unik(kode: str, kecuali_id: Optional[str] = None) -> None:
+    ada = await db[KOLEKSI_MARKER].find_one({'denah_id': ID_DENAH_AKTIF, 'kode_ruang': kode}, {'_id': 0, 'id': 1})
+    if ada and ada['id'] != kecuali_id:
+        raise HTTPException(409, f"Kode ruang {kode} sudah dipakai penanda lain")
 
 
 def _persen(v: float) -> float:
@@ -172,7 +191,10 @@ async def tambah_marker(req: MarkerRequest, request: Request, user: Dict = Depen
         raise HTTPException(400, "Ruang dan posisi penanda wajib diisi")
     ruang = await _ruang(req.room_id)
     await _cek_ruang_belum_ditandai(ruang['id'])
+    kode = _kode_ruang(req.kode_ruang)
+    await _cek_kode_unik(kode)
     doc = {'id': str(uuid.uuid4()), 'denah_id': ID_DENAH_AKTIF, 'room_id': ruang['id'], 'nama_ruang': ruang.get('name'),
+           'kode_ruang': kode,
            'posisi_x': _persen(req.posisi_x), 'posisi_y': _persen(req.posisi_y), 'created_at': _sekarang(), 'updated_at': _sekarang()}
     await db[KOLEKSI_MARKER].insert_one(doc)
     doc.pop('_id', None)
@@ -182,7 +204,7 @@ async def tambah_marker(req: MarkerRequest, request: Request, user: Dict = Depen
 
 @router.put("/masterplan/markers/{marker_id}")
 async def ubah_marker(marker_id: str, req: MarkerRequest, request: Request, user: Dict = Depends(require_role('admin'))):
-    """Geser posisi dan/atau ganti ruang penanda."""
+    """Geser posisi, ganti ruang, dan/atau ubah kode ruang penanda."""
     marker = await db[KOLEKSI_MARKER].find_one({'id': marker_id}, {'_id': 0})
     if not marker:
         raise HTTPException(404, "Penanda tidak ditemukan")
@@ -191,6 +213,11 @@ async def ubah_marker(marker_id: str, req: MarkerRequest, request: Request, user
         ruang = await _ruang(req.room_id)
         await _cek_ruang_belum_ditandai(ruang['id'], kecuali_id=marker_id)
         ubah.update({'room_id': ruang['id'], 'nama_ruang': ruang.get('name')})
+    if req.kode_ruang is not None:
+        kode = _kode_ruang(req.kode_ruang)
+        if kode != marker.get('kode_ruang'):
+            await _cek_kode_unik(kode, kecuali_id=marker_id)
+        ubah['kode_ruang'] = kode
     if req.posisi_x is not None:
         ubah['posisi_x'] = _persen(req.posisi_x)
     if req.posisi_y is not None:

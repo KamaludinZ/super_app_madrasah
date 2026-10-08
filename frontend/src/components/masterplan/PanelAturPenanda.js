@@ -6,15 +6,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, MapPin, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
-import { ubahPenanda, hapusPenanda } from '@/lib/masterplan';
+import { Input } from '@/components/ui/input';
+import { ubahPenanda, hapusPenanda, POLA_KODE_RUANG, rapikanKode } from '@/lib/masterplan';
 
 // Panel atur satu penanda (admin, mode atur): ganti ruang dari master ruangan atau hapus penanda.
 // Menggeser posisi dilakukan langsung dengan menyeret penanda di denah.
 export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [], onBerubah, onTerhapus, onTutup }) {
   const [roomId, setRoomId] = useState(marker.room_id);
+  const [kode, setKode] = useState(marker.kode_ruang || '');
   const [proses, setProses] = useState('');
 
   useEffect(() => setRoomId(marker.room_id), [marker.id, marker.room_id]);
+  useEffect(() => setKode(marker.kode_ruang || ''), [marker.id, marker.kode_ruang]);
+
+  const kodeRapi = rapikanKode(kode);
+  const galatKode = !kodeRapi ? 'Kode ruang wajib diisi' : !POLA_KODE_RUANG.test(kodeRapi)
+    ? 'Huruf/angka, boleh titik atau tanda hubung, maks 12 karakter'
+    : markers.some((m) => m.id !== marker.id && m.kode_ruang === kodeRapi) ? `Kode ${kodeRapi} sudah dipakai penanda lain` : '';
+  const berubah = roomId !== marker.room_id || kodeRapi !== (marker.kode_ruang || '');
 
   const terpakai = new Set(markers.filter((m) => m.id !== marker.id).map((m) => m.room_id));
   const pilihan = daftarRuang.filter((r) => !terpakai.has(r.id)).sort((a, b) => a.name.localeCompare(b.name, 'id', { numeric: true }));
@@ -22,8 +31,8 @@ export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [
   const gantiRuang = async () => {
     setProses('ganti');
     try {
-      const hasil = await ubahPenanda(marker.id, { room_id: roomId });
-      toast.success(`Penanda diganti menjadi ${hasil.nama_ruang}`);
+      const hasil = await ubahPenanda(marker.id, { room_id: roomId, kode_ruang: kodeRapi });
+      toast.success(`Penanda disimpan: ${hasil.kode_ruang} · ${hasil.nama_ruang}`);
       onBerubah(hasil);
     } catch (e) {
       toast.error(e.message);
@@ -33,7 +42,7 @@ export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [
   };
 
   const hapus = async () => {
-    const yakin = await confirmDialog(`Penanda ${marker.nama_ruang} akan dihapus dari denah. Data ruang di master ruangan tidak terhapus.`, {
+    const yakin = await confirmDialog(`Penanda ${marker.kode_ruang ? `${marker.kode_ruang} · ` : ''}${marker.nama_ruang} akan dihapus dari denah. Data ruang di master ruangan tidak terhapus.`, {
       title: 'Hapus penanda ruang?',
       confirmText: 'Ya, hapus penanda',
     });
@@ -59,7 +68,10 @@ export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [
               <MapPin className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <h2 className="truncate font-semibold text-slate-900">{marker.nama_ruang}</h2>
+              <h2 className="truncate font-semibold text-slate-900">
+                {marker.kode_ruang && <span className="mr-1.5 font-mono">{marker.kode_ruang}</span>}
+                {marker.nama_ruang}
+              </h2>
               <p className="text-xs text-slate-500">Posisi {marker.posisi_x}% · {marker.posisi_y}% — seret di denah untuk menggeser</p>
             </div>
           </div>
@@ -69,7 +81,18 @@ export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="ganti-ruang">Ruang</Label>
+          <Label htmlFor="kode-ruang-atur">Kode ruang</Label>
+          <Input
+            id="kode-ruang-atur"
+            value={kode}
+            onChange={(e) => setKode(e.target.value.toUpperCase())}
+            maxLength={12}
+            className="font-mono uppercase"
+            aria-invalid={!!galatKode || undefined}
+            data-testid="masterplan-atur-kode"
+          />
+          {galatKode && <p className="text-xs text-red-600" role="alert">{galatKode}</p>}
+          <Label htmlFor="ganti-ruang" className="block pt-2">Nama ruang</Label>
           <Select value={roomId} onValueChange={setRoomId}>
             <SelectTrigger id="ganti-ruang" data-testid="masterplan-ganti-ruang"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -81,11 +104,11 @@ export default function PanelAturPenanda({ marker, daftarRuang = [], markers = [
             variant="outline"
             className="w-full"
             onClick={gantiRuang}
-            disabled={!!proses || roomId === marker.room_id}
+            disabled={!!proses || !berubah || !!galatKode}
             data-testid="masterplan-simpan-ganti-ruang"
           >
             {proses === 'ganti' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Simpan ruang
+            Simpan perubahan
           </Button>
         </div>
 

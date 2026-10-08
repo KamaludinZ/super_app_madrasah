@@ -137,6 +137,11 @@ async def _masterplan(db):
     return await migrate(db)
 
 
+async def _masterplan_kode(db):
+    from migrations.migrate_masterplan_kode import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -148,6 +153,7 @@ MIGRASI = [
     ('2026-10-08_tatib_aturan_kondisi', _tatib_aturan_kondisi),
     ('2026-10-08_simpan_akun', _simpan_akun),
     ('2026-10-08_masterplan', _masterplan),
+    ('2026-10-08_masterplan_kode', _masterplan_kode),
 ]
 
 

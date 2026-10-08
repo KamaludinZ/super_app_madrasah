@@ -16,6 +16,8 @@ import { ambilMasterplan, hapusDenah as hapusDenahApi, ambilDaftarRuang, ambilGa
 import PenandaRuang from '@/components/masterplan/PenandaRuang';
 import PanelDetailRuang from '@/components/masterplan/PanelDetailRuang';
 import PanelAturPenanda from '@/components/masterplan/PanelAturPenanda';
+import KeteranganRuang from '@/components/masterplan/KeteranganRuang';
+import TombolUnduhDenah from '@/components/masterplan/TombolUnduhDenah';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
@@ -204,6 +206,16 @@ export default function MasterplanPage() {
             modeAtur={modeAtur}
             onModeAtur={setModeAtur}
           />
+          {denah && markers.some((m) => !m.kode_ruang) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="masterplan-tanpa-kode">
+              <span>
+                {markers.filter((m) => !m.kode_ruang).length} penanda belum punya kode ruang. Kode tampil di penanda dan di keterangan saat denah diunduh.
+              </span>
+              {!modeAtur && (
+                <Button size="sm" variant="outline" className="h-7 bg-white" onClick={() => setModeAtur(true)}>Lengkapi kode</Button>
+              )}
+            </div>
+          )}
           {modeAtur && denah && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="masterplan-petunjuk-atur">
               <Info className="h-4 w-4 shrink-0 mt-0.5" />
@@ -288,30 +300,15 @@ export default function MasterplanPage() {
               <p className="text-xs text-slate-500">
                 {markers.length ? `${markers.length} ruang ditandai` : 'Belum ada ruang yang ditandai pada denah ini.'}
               </p>
-              <div className="flex items-center gap-2">
-                <Switch id="tampil-nama-ruang" checked={tampilNama} onCheckedChange={setTampilNama} />
-                <Label htmlFor="tampil-nama-ruang" className="text-xs text-slate-600">Tampilkan nama ruang</Label>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Switch id="tampil-nama-ruang" checked={tampilNama} onCheckedChange={setTampilNama} />
+                  <Label htmlFor="tampil-nama-ruang" className="text-xs text-slate-600">Tampilkan nama ruang</Label>
+                </div>
+                <TombolUnduhDenah gambarUrl={gambarUrl} markers={markers} disabled={gagalGambar} />
               </div>
             </div>
-            {markers.length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Daftar ruang di denah" data-testid="masterplan-daftar-ruang">
-                {[...markers].sort((x, y) => x.nama_ruang.localeCompare(y.nama_ruang, 'id', { numeric: true })).map((m) => (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => setDipilih(m)}
-                      onMouseEnter={() => setSorot(m.id)}
-                      onMouseLeave={() => setSorot(null)}
-                      onFocus={() => setSorot(m.id)}
-                      onBlur={() => setSorot(null)}
-                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${dipilih?.id === m.id ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      {m.nama_ruang}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <KeteranganRuang markers={markers} dipilihId={dipilih?.id} onPilih={setDipilih} onSorot={setSorot} />
           </CardContent>
         </Card>
         <PenandaBaruDialog

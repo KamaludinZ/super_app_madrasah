@@ -113,22 +113,31 @@ def test_validasi_gambar():
 def test_unggah_ganti_hapus_denah_dan_penanda(db, tmp_path):
     assert asyncio.run(api.lihat_masterplan({'id': 'g'})) == {'denah': None, 'markers': []}
     with pytest.raises(HTTPException):
-        asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r1', posisi_x=10, posisi_y=10), None, ADMIN))
+        asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r1', kode_ruang='R-01', posisi_x=10, posisi_y=10), None, ADMIN))
 
     denah = asyncio.run(api.unggah_denah(None, _Berkas(_gambar(ukuran=(400, 200))), ADMIN))
     assert (denah['lebar'], denah['tinggi']) == (400, 200) and denah['image_url'].startswith('/api/masterplan/denah/gambar')
     berkas_awal = os.listdir(tmp_path)
     assert len(berkas_awal) == 1
 
-    m = asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r1', posisi_x=99.98, posisi_y=33.333), None, ADMIN))
+    m = asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r1', kode_ruang=' r-7a ', posisi_x=99.98, posisi_y=33.333), None, ADMIN))
     assert (m['nama_ruang'], m['posisi_x'], m['posisi_y']) == ('Kelas 7A', 100.0, 33.3)
-    for req, kode in ((api.MarkerRequest(room_id='r1', posisi_x=1, posisi_y=1), 409),
-                      (api.MarkerRequest(room_id='tidak-ada', posisi_x=1, posisi_y=1), 404),
+    assert m['kode_ruang'] == 'R-7A'
+    for req, kode in ((api.MarkerRequest(room_id='r1', kode_ruang='X1', posisi_x=1, posisi_y=1), 409),
+                      (api.MarkerRequest(room_id='tidak-ada', kode_ruang='X2', posisi_x=1, posisi_y=1), 404),
                       (api.MarkerRequest(room_id='r2'), 400)):
         with pytest.raises(HTTPException) as e:
             asyncio.run(api.tambah_marker(req, None, ADMIN))
         assert e.value.status_code == kode
-    m2 = asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r2', posisi_x=50, posisi_y=50), None, ADMIN))
+    for kode, status in (('R-7A', 409), ('', 400), ('ABCDEFGHIJKLM', 400), ('#1', 400)):
+        with pytest.raises(HTTPException) as e:  # kode wajib, unik, dan berformat
+            asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r2', kode_ruang=kode, posisi_x=5, posisi_y=5), None, ADMIN))
+        assert e.value.status_code == status, kode
+    m2 = asyncio.run(api.tambah_marker(api.MarkerRequest(room_id='r2', kode_ruang='LAB-1', posisi_x=50, posisi_y=50), None, ADMIN))
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(api.ubah_marker(m2['id'], api.MarkerRequest(kode_ruang='r-7a'), None, ADMIN))
+    assert e.value.status_code == 409
+    assert asyncio.run(api.ubah_marker(m2['id'], api.MarkerRequest(kode_ruang='lab-ipa'), None, ADMIN))['kode_ruang'] == 'LAB-IPA'
     with pytest.raises(HTTPException) as e:  # ganti ke ruang yang sudah ditandai
         asyncio.run(api.ubah_marker(m2['id'], api.MarkerRequest(room_id='r1'), None, ADMIN))
     assert e.value.status_code == 409
@@ -137,7 +146,7 @@ def test_unggah_ganti_hapus_denah_dan_penanda(db, tmp_path):
 
     db['rooms'].docs[0]['name'] = 'Kelas 7A Baru'  # nama mengikuti master ruangan terkini
     lihat = asyncio.run(api.lihat_masterplan({'id': 'g'}))
-    assert [x['nama_ruang'] for x in lihat['markers']] == ['Kelas 7A Baru', 'Lab IPA']
+    assert [(x['kode_ruang'], x['nama_ruang']) for x in lihat['markers']] == [('LAB-IPA', 'Lab IPA'), ('R-7A', 'Kelas 7A Baru')]  # urut kode
 
     asyncio.run(api.unggah_denah(None, _Berkas(_gambar('WEBP', (800, 400))), ADMIN))  # ganti: berkas lama terhapus
     assert len(os.listdir(tmp_path)) == 1 and os.listdir(tmp_path) != berkas_awal

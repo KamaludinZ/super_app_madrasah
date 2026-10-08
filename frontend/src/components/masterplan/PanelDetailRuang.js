@@ -44,8 +44,13 @@ export default function PanelDetailRuang({ marker, onTutup }) {
               <DoorOpen className="h-5 w-5" />
             </span>
             <div className="min-w-0">
+              {marker.kode_ruang && (
+                <span className="mb-0.5 inline-block rounded bg-[#006837] px-1.5 py-0.5 font-mono text-xs font-bold text-white" data-testid="masterplan-detail-kode">
+                  {marker.kode_ruang}
+                </span>
+              )}
               <h2 className="truncate font-semibold text-slate-900">{detail?.room?.name || marker.nama_ruang}</h2>
-              <p className="text-xs text-slate-500">Ruang di denah sekolah</p>
+              <p className="text-xs text-slate-500">{marker.kode_ruang ? `Kode ruang ${marker.kode_ruang}` : 'Ruang di denah sekolah'}</p>
             </div>
           </div>
           <Button size="icon" variant="ghost" onClick={onTutup} aria-label="Tutup rincian ruang">
