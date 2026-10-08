@@ -24,7 +24,7 @@ fitur tetap bisa dipakai selama pengerjaan bertahap.
 | Fase | Fokus | Isi |
 |---|---|---|
 | 1 ✅ selesai | **Siswa** (harian, ringan) | Jadwal, Tugas (lihat & kumpulkan), Materi, Kehadiran, Rapor, Prestasi, Ekstrakurikuler, CLKB, PCL, Profil, Ajuan Verval |
-| 2 | **Guru & Tendik harian** | Agenda Saya, Titipkan Tugas, Tugas & Materi kelas (buat, lihat pengumpulan, nilai), Input Nilai, Kebersihan Kelas, Laporan, Absensi Saya, Jadwal Piket, Profil |
+| 2 ✅ selesai | **Guru & Tendik harian** | Agenda Saya, Titipkan Tugas, Tugas & Materi kelas (buat, lihat pengumpulan, nilai), Input Nilai, Kebersihan Kelas, Laporan, Absensi Saya, Jadwal Piket, Profil |
 | 3 | **Kepegawaian & akademik lanjutan** | E-Kinerja (RHK, SKP, LCKB, jurnal harian), Profesionalitas GTK, Input Indikator & Materi, Atur Jadwal Saya |
 | 4 | **Kepala Madrasah** (pemantauan) | Data Jurnal, Kehadiran Siswa, Data Siswa & GTK (cari + detail), Agenda Guru/Tendik, Laporan Absensi GTK, Kegiatan, Kebersihan, DANA RKAM, Tata Tertib, BK, UKS, Perpus, Sarpras, Alumni |
 | 5 | **Dashboard native per peran** | Ringkasan & grafik per peran menggantikan Dashboard web |
@@ -49,17 +49,17 @@ Perkiraan: fase 1–2 adalah prioritas pemakaian harian; fase 4 berisi banyak ha
 | ✅ sudah | Jadwal Saya (`/jadwal`) | Guru, Siswa | 713 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /schedules`<br>+7 lagi |
 | ✅ sudah (lihat; ubah data via web) | Profil Saya (`/profile/siswa`) | Siswa | 1261 baris | `GET /achievements`<br>`GET /students/{id}/class-history`<br>`GET /students/{id}/detail`<br>`POST /students/detail/upload/{id}`<br>+3 lagi |
 | ✅ sudah (admin & wali kelas via web) | Data Prestasi (`/prestasi`) | Guru, Tendik, Siswa, Kepala | 1298 baris | `DELETE /achievements/{id}`<br>`DELETE /verval-requests/{id}`<br>`GET /academic-years`<br>`GET /achievements`<br>+8 lagi |
-| 2 | Profil Saya (`/profile/tendik`) | Tendik | 7 baris | (komponen bersama) |
-| 2 | Profil Saya (`/profile/guru`) | Guru, Kepala | 12 baris | (komponen bersama) |
-| 2 | Input Nilai (`/nilai/input`) | Guru | 307 baris | `GET /academic-years/active`<br>`GET /classes`<br>`GET /grades`<br>`GET /schedules`<br>+3 lagi |
-| 2 | Laporan Absensi Saya (`/gtk/absensi-saya`) | Guru, Tendik | 315 baris | `DELETE /gtk/izin/{id}`<br>`GET /gtk/absensi/my`<br>`GET /gtk/izin/my`<br>`POST /gtk/izin`<br>+1 lagi |
-| 2 | Laporan (`/guru/laporan`) | Guru | 449 baris | `DELETE /reports/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /reports`<br>+3 lagi |
-| 2 | Jadwal Piket (`/admin/jadwal-piket`) | Guru, Tendik, Piket | 514 baris | `DELETE /ibadah-schedules/{id}`<br>`DELETE /piket-schedules/{id}`<br>`GET /ibadah-schedules`<br>`GET /ibadah-schedules/today`<br>+7 lagi |
-| 2 | Agenda Saya (`/my-agenda`) | Guru, Tendik, Kepala | 547 baris | `DELETE /staff-events/{id}`<br>`GET /staff-events`<br>`GET /staff-events/stats/duration`<br>`POST /staff-events`<br>+1 lagi |
-| 2 | Kebersihan Kelas (`/guru/kebersihan`) | Guru, Piket | 599 baris | `GET /academic-years/active`<br>`GET /classes`<br>`GET /cleanliness/class/{id}`<br>`GET /cleanliness/guru/classes/all`<br>+3 lagi |
-| 2 | Titipkan Tugas (`/piket/tugas`) | Guru, Piket | 727 baris | `DELETE /teacher-tasks/{id}`<br>`GET /piket/schedules/today`<br>`GET /schedules`<br>`GET /students`<br>+5 lagi |
-| 2 | Materi Mapel (`/guru/materi`) | Guru | 883 baris | `DELETE /kelas/materi/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/materi`<br>+3 lagi |
-| 2 | Tugas (`/guru/tugas`) | Guru | 1013 baris | `DELETE /kelas/tugas/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/tugas`<br>+4 lagi |
+| ✅ sudah (lihat; ubah data via web) | Profil Saya (`/profile/tendik`) | Tendik | 7 baris | (komponen bersama) |
+| ✅ sudah (lihat; ubah data via web) | Profil Saya (`/profile/guru`) | Guru, Kepala | 12 baris | (komponen bersama) |
+| ✅ sudah | Input Nilai (`/nilai/input`) | Guru | 307 baris | `GET /academic-years/active`<br>`GET /classes`<br>`GET /grades`<br>`GET /schedules`<br>+3 lagi |
+| ✅ sudah | Laporan Absensi Saya (`/gtk/absensi-saya`) | Guru, Tendik | 315 baris | `DELETE /gtk/izin/{id}`<br>`GET /gtk/absensi/my`<br>`GET /gtk/izin/my`<br>`POST /gtk/izin`<br>+1 lagi |
+| ✅ sudah | Laporan (`/guru/laporan`) | Guru | 449 baris | `DELETE /reports/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /reports`<br>+3 lagi |
+| ✅ sudah (lihat; admin kelola via web) | Jadwal Piket (`/admin/jadwal-piket`) | Guru, Tendik, Piket | 514 baris | `DELETE /ibadah-schedules/{id}`<br>`DELETE /piket-schedules/{id}`<br>`GET /ibadah-schedules`<br>`GET /ibadah-schedules/today`<br>+7 lagi |
+| ✅ sudah | Agenda Saya (`/my-agenda`) | Guru, Tendik, Kepala | 547 baris | `DELETE /staff-events/{id}`<br>`GET /staff-events`<br>`GET /staff-events/stats/duration`<br>`POST /staff-events`<br>+1 lagi |
+| ✅ sudah | Kebersihan Kelas (`/guru/kebersihan`) | Guru, Piket | 599 baris | `GET /academic-years/active`<br>`GET /classes`<br>`GET /cleanliness/class/{id}`<br>`GET /cleanliness/guru/classes/all`<br>+3 lagi |
+| ✅ sudah | Titipkan Tugas (`/piket/tugas`) | Guru, Piket | 727 baris | `DELETE /teacher-tasks/{id}`<br>`GET /piket/schedules/today`<br>`GET /schedules`<br>`GET /students`<br>+5 lagi |
+| ✅ sudah | Materi Mapel (`/guru/materi`) | Guru | 883 baris | `DELETE /kelas/materi/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/materi`<br>+3 lagi |
+| ✅ sudah | Tugas (`/guru/tugas`) | Guru | 1013 baris | `DELETE /kelas/tugas/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/tugas`<br>+4 lagi |
 | 3 | Profesionalitas GTK (`/admin/gtk/profesionalitas`) | Guru, Tendik, Kepala | 343 baris | `DELETE /ekinerja/sertifikasi/{id}`<br>`GET /ekinerja/pengumpulan/meta`<br>`GET /ekinerja/sertifikasi`<br>`GET /ekinerja/sertifikasi/my`<br>+3 lagi |
 | 3 | Input Indikator & Materi (`/guru/indikator-materi`) | Guru | 874 baris | `DELETE /indikator/{id}`<br>`DELETE /materi/{id}`<br>`GET /indikator`<br>`GET /materi`<br>+9 lagi |
 | 3 | Atur Jadwal Saya (`/jadwal/atur`) | Guru | 916 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /rooms`<br>+7 lagi |
