@@ -48,6 +48,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pilih foto prestasi dan sertifikat dari galeri untuk diunggah.",
+          "cameraPermission": "Ambil foto prestasi dan sertifikat untuk diunggah."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

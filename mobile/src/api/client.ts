@@ -51,6 +51,8 @@ export function errorMessage(e: unknown, fallback = 'Terjadi kesalahan. Coba lag
 type Options = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: unknown;
+  /** Kirim multipart/form-data (unggah berkas); Content-Type diatur otomatis beserta boundary. */
+  form?: FormData;
   query?: Record<string, string | number | boolean | undefined | null>;
   token?: string | null;
   timeoutMs?: number;
@@ -72,7 +74,7 @@ export async function request<T>(path: string, opts: Options = {}): Promise<T> {
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? REQUEST_TIMEOUT_MS);
   const token = opts.token === undefined ? authToken : opts.token;
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (opts.body !== undefined && !opts.form) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let res: Response;
@@ -80,7 +82,7 @@ export async function request<T>(path: string, opts: Options = {}): Promise<T> {
     res = await fetch(`${API_URL}${path}${buildQuery(opts.query)}`, {
       method: opts.method ?? 'GET',
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.form ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
       signal: controller.signal,
     });
   } catch (e: any) {

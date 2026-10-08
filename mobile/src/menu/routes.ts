@@ -19,6 +19,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/verval/ajuan-saya') return '/verval';
   // Jadwal: siswa (kelasnya), wali kelas (kelas wali), guru & lainnya (jadwal mengajarnya)
   if (p === '/jadwal') return '/jadwal';
+  // Admin & wali kelas memverifikasi/menginput prestasi siswa → tetap di modul web (Fase 2).
+  if (p === '/prestasi' && role !== 'admin' && role !== 'wali_kelas') return '/prestasi';
   return null;
 }
 

@@ -392,3 +392,16 @@ export type VervalRequest = {
   old_data?: Record<string, unknown> | null; new_data?: Record<string, unknown> | null;
   admin_notes?: string | null; submitted_at?: string; created_at?: string; reviewed_at?: string | null; reviewed_by_name?: string | null;
 };
+
+/** Prestasi (GET /achievements) — juga dipakai untuk pengajuan prestasi yang masih di verval (_verval*). */
+export type Achievement = {
+  id: string; holder_type?: 'siswa' | 'guru' | 'tendik' | 'madrasah' | string; holder_id?: string | null; student_id?: string | null;
+  holder_name?: string | null; holder_full_name?: string | null; student_name?: string | null; class_name?: string | null;
+  name: string; bidang_lomba?: string | null; category?: string | null; level?: string | null; rank?: string | null;
+  organizer?: string | null; date?: string | null; year?: number | null; academic_year_label?: string | null;
+  jenis_lomba?: string | null; jenis_penyelenggara?: string | null; mode_pelaksanaan?: string | null; tempat_pelaksanaan?: string | null;
+  cara_mengikuti?: string | null; jenis_hadiah?: string[] | null; nama_pembina?: string | null; description?: string | null;
+  certificate_url?: string | null; photo_url?: string | null; is_verified?: boolean; verifier_name?: string | null;
+  _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null;
+};
+export type AcademicYear = { id: string; name: string; is_active?: boolean };

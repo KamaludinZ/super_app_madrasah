@@ -1,6 +1,6 @@
 import { request } from './client';
 import type {
-  Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -72,7 +72,24 @@ export const api = {
 
   verval: {
     mine: () => request<VervalRequest[]>('/verval-requests'),
+    prestasi: (reviewer = false) =>
+      request<VervalRequest[]>('/verval-requests', { query: { request_type: 'prestasi_create', reviewer_view: reviewer || undefined } }),
+    create: (body: { user_id: string; user_type: string; request_type: 'prestasi_create' | 'profile_update'; target_collection?: string; target_id?: string | null; old_data: Record<string, unknown>; new_data: Record<string, unknown> }) =>
+      request<VervalRequest>('/verval-requests', { method: 'POST', body }),
+    cancel: (id: string) => request<{ message: string }>(`/verval-requests/${id}`, { method: 'DELETE' }),
   },
+
+  achievements: {
+    list: () => request<Achievement[]>('/achievements'),
+    /** Unggah sertifikat/foto (maks 2 MB) → {url} untuk payload prestasi. */
+    upload: (jenis: 'certificate' | 'photo', file: { uri: string; name: string; type: string }) => {
+      const form = new FormData();
+      form.append('file', file as unknown as Blob);
+      return request<{ url: string }>(`/achievements/upload/${jenis}`, { method: 'POST', form, timeoutMs: 60_000 });
+    },
+  },
+
+  academicYears: () => request<AcademicYear[]>('/academic-years'),
 
   akademik: {
     indikator: (q: { mapel_id: string; semester_id?: string | null }) =>
