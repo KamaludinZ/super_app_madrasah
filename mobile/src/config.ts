@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 
 const trimSlash = (s: string) => s.replace(/\/+$/, '');
@@ -9,7 +10,11 @@ export const API_URL = trimSlash(
 export const WEB_URL = trimSlash(process.env.EXPO_PUBLIC_WEB_URL || 'https://super.mtsn2kotamalang.sch.id');
 export const APP_NAME = 'Super Apps MATSANDATAMA';
 export const SCHOOL_NAME = 'MTsN 2 Kota Malang';
-export const APP_VERSION: string = Constants.expoConfig?.version ?? '1.0.0';
+/** Versi + nomor build (versionCode) agar APK yang terpasang mudah dicocokkan dengan build EAS. */
+export const APP_VERSION: string = [
+  Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '1.0.0',
+  Application.nativeBuildVersion ? `(build ${Application.nativeBuildVersion})` : '',
+].filter(Boolean).join(' ');
 export const ANDROID_PACKAGE = 'id.sch.mtsn2kotamalang.superapps';
 export const EAS_PROJECT_ID: string | undefined = Constants.expoConfig?.extra?.eas?.projectId || undefined;
 export const REQUEST_TIMEOUT_MS = 15_000;
