@@ -331,7 +331,8 @@ function MembersTab({ extra, canManage }) {
     (async () => {
       await refresh();
       if (canManage) {
-        const { data } = await api.get('/users', { params: { role: 'siswa' } });
+        // Endpoint khusus pembina/admin (GET /users menolak peran pembina ekskul).
+        const { data } = await api.get(`/extracurriculars/${extra.id}/kandidat-siswa`);
         setAllStudents(data || []);
       }
     })();

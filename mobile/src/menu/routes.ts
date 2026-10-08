@@ -45,7 +45,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/admin/jadwal-piket' && role !== 'admin') return '/jadwal-piket';
   // Admin, Waka Kesiswaan & wali kelas memproses/memverifikasi prestasi siswa → modul web (Fase 2).
   // Pembina & admin mengelola anggota/absensi/nilai ekskul → tetap di modul web (Fase 2).
-  if (p === '/ekstrakurikuler' && role !== 'admin' && role !== 'guru_ekstrakurikuler') return '/ekskul';
+  if (p === '/ekstrakurikuler' && role === 'guru_ekstrakurikuler') return '/pembina/ekskul';
+  if (p === '/ekstrakurikuler' && role !== 'admin') return '/ekskul';
   if (p === '/prestasi' && !['admin', 'wali_kelas', 'waka_kesiswaan'].includes(role ?? '')) return '/prestasi';
   // Poin Tata Tertib (lihat): siswa → miliknya, wali kelas → kelasnya, pimpinan → rekap & catatan.
   // Pencatatan poin (admin, guru tata tertib, waka kesiswaan) tetap di modul web.

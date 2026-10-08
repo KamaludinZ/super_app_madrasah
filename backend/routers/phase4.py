@@ -1,4 +1,5 @@
 """Phase 4 endpoints: Achievements, Extracurriculars, Grades (E-Rapor)."""
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
@@ -306,6 +307,24 @@ async def list_extra_members(eid: str, user: Dict = Depends(get_current_user)):
             m['class_name'] = cls.get('name') if cls else None
         enriched.append(serialize_doc(m))
     return enriched
+
+
+# Daftar siswa aktif untuk dipilih menjadi anggota — khusus pembina ekskul itu & admin. Dulu web memakai
+# GET /users?role=siswa yang menolak peran guru_ekstrakurikuler sehingga pembina tidak bisa menambah anggota.
+@router.get("/extracurriculars/{eid}/kandidat-siswa")
+async def kandidat_anggota_extra(eid: str, search: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    extra = await db.extracurriculars.find_one({'id': eid}, {'_id': 0, 'coach_id': 1})
+    if not extra:
+        raise HTTPException(404, "Ekskul tidak ditemukan")
+    if not ('admin' in user.get('roles', []) or extra.get('coach_id') == user['id']):
+        raise HTTPException(403, "Tidak diizinkan")
+    q: Dict = {'roles': 'siswa', 'mutation_type': {'$ne': 'keluar'}, 'is_active': {'$ne': False}}
+    if search and search.strip():
+        q['full_name'] = {'$regex': re.escape(search.strip()), '$options': 'i'}
+    siswa = await db.users.find(q, {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'student_class_id': 1}).sort('full_name', 1).to_list(3000)
+    kelas = {c['id']: c.get('name') for c in await db.classes.find(
+        {'id': {'$in': list({s.get('student_class_id') for s in siswa if s.get('student_class_id')})}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(500)}
+    return [{'id': s['id'], 'full_name': s.get('full_name'), 'nisn': s.get('nisn'), 'class_name': kelas.get(s.get('student_class_id'))} for s in siswa]
 
 
 @router.post("/extracurriculars/{eid}/members")
