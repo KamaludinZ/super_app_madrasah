@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, LckbRow, PengumpulanStatus, RhkItem, SertifikasiRecord, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, IndikatorFull, LckbRow, MateriFull, PengumpulanStatus, SemesterItem, RhkItem, SertifikasiRecord, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -192,6 +192,15 @@ export const api = {
   academicYears: () => request<AcademicYear[]>('/academic-years'),
 
   akademik: {
+    semesters: () => request<SemesterItem[]>('/semesters'),
+    indikatorSaya: (semester_id: string) => request<IndikatorFull[]>('/indikator', { query: { semester_id } }),
+    materiSaya: (semester_id: string) => request<MateriFull[]>('/materi', { query: { semester_id } }),
+    indikatorSave: (id: string | null, body: { kode: string; nama: string; mapel_id: string; semester_id: string; tingkat_kelas: string | null }) =>
+      request<IndikatorFull>(id ? `/indikator/${id}` : '/indikator', { method: id ? 'PUT' : 'POST', body }),
+    materiSave: (id: string | null, body: { nama: string; deskripsi: string | null; mapel_id: string; semester_id: string; tingkat_kelas: string | null; indikator_id: string | null }) =>
+      request<MateriFull>(id ? `/materi/${id}` : '/materi', { method: id ? 'PUT' : 'POST', body }),
+    indikatorDelete: (id: string) => request<unknown>(`/indikator/${id}`, { method: 'DELETE' }),
+    materiDelete: (id: string) => request<unknown>(`/materi/${id}`, { method: 'DELETE' }),
     indikator: (q: { mapel_id: string; semester_id?: string | null }) =>
       request<Indikator[]>('/indikator', { query: { mapel_id: q.mapel_id, semester_id: q.semester_id || undefined } }),
     materi: (q: { mapel_id: string; semester_id?: string | null }) =>

@@ -31,6 +31,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/admin/gtk/e-kinerja' && !['admin', 'kepala_sekolah', 'kepala_tata_usaha'].includes(role ?? '')) return '/ekinerja';
   if (p === '/guru/kebersihan') return '/kebersihan';
   if (p === '/guru/laporan') return '/laporan';
+  if (p === '/guru/indikator-materi') return '/indikator-materi';
   if (p === '/guru/materi') return '/guru/konten?jenis=materi';
   if (p === '/guru/tugas') return '/guru/konten?jenis=tugas';
   // Admin menginput nilai semua kelas di web; guru mengampu kelasnya di aplikasi.

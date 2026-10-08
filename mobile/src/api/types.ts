@@ -503,3 +503,6 @@ export type RhkItem = {
 };
 export type PengumpulanStatus = { link_url?: string | null; sudah_upload?: boolean; confirmed_at?: string | null };
 export type SertifikasiRecord = { id: string; year: number; period: string; nama_kegiatan: string; penyelenggara?: string | null; tanggal_mulai?: string | null; tanggal_selesai?: string | null; jumlah_jam?: string | null };
+export type SemesterItem = { id: string; name?: string | null; code?: string | null; is_active?: boolean; academic_year_name?: string | null };
+export type IndikatorFull = Indikator & { tingkat_kelas?: string | null; created_at?: string };
+export type MateriFull = MateriPokok & { mapel_id?: string; semester_id?: string; tingkat_kelas?: string | null; created_at?: string };
