@@ -59,6 +59,8 @@ export default function AdminDashboard() {
           { to: '/admin/dana-rkam', icon: Calendar, label: 'DANA RKAM', testid: 'qa-rkam' },
           { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
           { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
+          { to: '/admin/tatib/penanganan', icon: ShieldCheck, label: 'Poin Tata Tertib', testid: 'qa-tatib-poin' },
+          { to: '/tatib/rekap', icon: ShieldCheck, label: 'Rekap Pengawas', testid: 'qa-tatib-rekap' },
         ];
       case 'waka_sarpras':
         return [
@@ -76,6 +78,7 @@ export default function AdminDashboard() {
           { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
           { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
           { to: '/admin/mutasi', icon: ArrowRightLeft, label: 'Data Mutasi', testid: 'qa-mutasi' },
+          { to: '/admin/tatib/penanganan', icon: ShieldCheck, label: 'Catat Poin Tatib', testid: 'qa-tatib-poin' },
         ];
       case 'waka_kurikulum':
         return [
@@ -84,6 +87,7 @@ export default function AdminDashboard() {
           { to: '/admin/subjects', icon: BookMarked, label: 'Mata Pelajaran', testid: 'qa-subjects' },
           { to: '/admin/kegiatan-madrasah', icon: CalendarDays, label: 'Kegiatan Madrasah', testid: 'qa-kegiatan' },
           { to: '/prestasi', icon: Trophy, label: 'Data Prestasi', testid: 'qa-prestasi' },
+          { to: '/tatib/rekap', icon: ShieldCheck, label: 'Rekap Pengawas', testid: 'qa-tatib-rekap' },
         ];
       case 'waka_humas':
         return [

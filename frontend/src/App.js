@@ -81,6 +81,8 @@ import AdminPIPReceiverPage from '@/pages/admin/AdminPIPReceiverPage';
 import AdminPIPProposalPage from '@/pages/admin/AdminPIPProposalPage';
 import ReportPage from '@/pages/ReportPage';
 import WaliKelasReportsPage from '@/pages/WaliKelasReportsPage';
+import WaliKelasPoinTatibPage from '@/pages/WaliKelasPoinTatibPage';
+import TatibRekapPage from '@/pages/TatibRekapPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -160,6 +162,7 @@ import SiswaMateriPage from '@/pages/siswa/SiswaMateriPage';
 import SiswaTugasPage from '@/pages/siswa/SiswaTugasPage';
 import SiswaCLKBPage from '@/pages/siswa/SiswaCLKBPage';
 import SiswaPCLPage from '@/pages/siswa/SiswaPCLPage';
+import SiswaPoinPage from '@/pages/siswa/SiswaPoinPage';
 import KelasJurnalPage from '@/pages/kelas/KelasJurnalPage';
 import KelasKehadiranPage from '@/pages/kelas/KelasKehadiranPage';
 
@@ -300,6 +303,7 @@ function App() {
             <Route path="/wali-kelas/kehadiran" element={<WaliKelasAttendanceReportPage />} />
             <Route path="/wali-kelas/kebersihan" element={<WaliKelasCleanlinessReportPage />} />
             <Route path="/wali-kelas/laporan" element={<WaliKelasReportsPage />} />
+            <Route path="/wali-kelas/poin-tatib" element={<WaliKelasPoinTatibPage />} />
             <Route path="/siswa/kehadiran" element={<StudentAttendancePage />} />
             <Route path="/guru/kebersihan" element={<KebersihanPage />} />
             <Route path="/guru/laporan" element={<ReportPage />} />
@@ -365,6 +369,7 @@ function App() {
             <Route path="/admin/tatib/input" element={<AdminTatibInputPage />} />
             <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
+            <Route path="/tatib/rekap" element={<TatibRekapPage />} />
             <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
             <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
             <Route path="/admin/bk/pcl" element={<AdminBKPclPage />} />
@@ -434,6 +439,7 @@ function App() {
             <Route path="/siswa/tugas" element={<SiswaTugasPage />} />
             <Route path="/siswa/clkb" element={<SiswaCLKBPage />} />
             <Route path="/siswa/pcl" element={<SiswaPCLPage />} />
+            <Route path="/siswa/poin" element={<SiswaPoinPage />} />
             {/* Waka Kurikulum Routes */}
             <Route path="/wakakur/siswa" element={<WakaKurSiswaPage />} />
             <Route path="/wakakur/jadwal" element={<WakaKurSchedulesPage />} />

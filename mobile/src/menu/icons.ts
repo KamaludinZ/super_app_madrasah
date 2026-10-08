@@ -6,6 +6,7 @@ const MAP: Record<string, IconName> = {
   AlertTriangle: 'alert-circle-outline',
   ArrowRightLeft: 'swap-horizontal-outline',
   Award: 'ribbon-outline',
+  BarChart3: 'stats-chart-outline',
   BookMarked: 'bookmarks-outline',
   BookOpen: 'book-outline',
   BookOpenCheck: 'reader-outline',

@@ -60,6 +60,7 @@ from routers import (
     subjects,
     tahun_takwim,
     tatib,
+    tatib_poin,
     uks,
     users,
     verval,
@@ -115,6 +116,7 @@ api_router.include_router(ekinerja.router)
 api_router.include_router(absensi_gtk.router)
 api_router.include_router(indikator_materi.router)
 api_router.include_router(tatib.router)
+api_router.include_router(tatib_poin.router)
 api_router.include_router(events.router)
 api_router.include_router(rkam.router)
 api_router.include_router(school_apps.router)

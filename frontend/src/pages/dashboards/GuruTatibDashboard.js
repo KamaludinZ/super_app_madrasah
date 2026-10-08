@@ -188,8 +188,8 @@ export default function GuruTatibDashboard() {
       <Card>
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Aktivitas Penanganan Terbaru</CardTitle>
-          <Link to="/admin/tatib/data" className="text-xs text-[#006837] font-semibold flex items-center gap-1 hover:underline">
-            Lihat Semua <ArrowRight className="h-3 w-3" />
+          <Link to="/admin/tatib/penanganan" className="text-xs text-[#006837] font-semibold flex items-center gap-1 hover:underline" data-testid="tatib-dash-catat-poin">
+            Catat Poin <ArrowRight className="h-3 w-3" />
           </Link>
         </CardHeader>
         <CardContent className="space-y-2">

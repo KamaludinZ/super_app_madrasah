@@ -19,6 +19,7 @@ import {
   MapPinned, UserRoundCog,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
+import { menuTatib } from '@/lib/aksesTatib';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -173,6 +174,7 @@ function navForRole(role, userRoles = []) {
           { to: '/wali-kelas/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-wk-kehadiran' },
           { to: '/wali-kelas/kebersihan', label: 'Kebersihan Kelas', icon: Sparkles, testid: 'nav-wk-kebersihan' },
           { to: '/wali-kelas/laporan', label: 'Data Laporan', icon: FileText, testid: 'nav-wk-laporan' },
+          ...menuTatib('wali_kelas', 'nav-wk'),
           { to: '/rapor', label: 'E-Rapor Kelas', icon: FileText, testid: 'nav-rapor-wk' },
         ],
       },
@@ -208,10 +210,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Manajemen Tatib & BK',
         items: [
-          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-bk-tatib-input' },
-          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-bk-tatib-kategori' },
-          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-bk-tatib-penanganan' },
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-bk-tatib-data' },
+          ...menuTatib('guru_bk', 'nav-bk'),
         ],
       },
       {
@@ -242,10 +241,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Manajemen Tatib & BK',
         items: [
-          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-tatib-tatib-input' },
-          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-tatib-tatib-kategori' },
-          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-tatib-tatib-penanganan' },
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-tatib-tatib-data' },
+          ...menuTatib('guru_tata_tertib', 'nav-tatib'),
         ],
       },
     ];
@@ -271,7 +267,7 @@ function navForRole(role, userRoles = []) {
       },
     ];
   } else if (role === 'kepala_tata_usaha') {
-    // Kepala Tata Usaha: grup Manajemen GTK yang sama seperti admin.
+    // Kepala Tata Usaha: grup Manajemen GTK yang sama seperti admin + Tata Tertib (lihat saja).
     return [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
       { to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-ktu' },
@@ -289,6 +285,10 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-ktu-rkam' },
         ],
       },
+      {
+        title: 'Tata Tertib',
+        items: menuTatib('kepala_tata_usaha', 'nav-ktu'),
+      },
     ];
   } else if (role === 'siswa') {
     items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
@@ -296,6 +296,7 @@ function navForRole(role, userRoles = []) {
     items.push({ to: '/siswa/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-siswa-materi' });
     items.push({ to: '/siswa/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-siswa-tugas' });
     items.push({ to: '/siswa/kehadiran', label: 'Kehadiran Siswa', icon: UserCheck, testid: 'nav-siswa-kehadiran' });
+    items.push(...menuTatib('siswa', 'nav-siswa'));
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-siswa' });
     items.push({ to: '/ekstrakurikuler', label: 'Ekstrakurikuler', icon: Sparkles, testid: 'nav-ekstra-siswa' });
     items.push({ to: '/rapor', label: 'Rapor Saya', icon: FileText, testid: 'nav-rapor-siswa' });
@@ -358,7 +359,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Tatib & BK',
         items: [
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-kepsek-tatib-data' },
+          ...menuTatib('kepala_sekolah', 'nav-kepsek'),
           { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-kepsek-bk-kunjungan' },
           { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-kepsek-bk-laporan' },
           { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-kepsek-sekolah-lanjutan' },
@@ -499,10 +500,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Manajemen Tatib & BK',
         items: [
-          { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: 'nav-admin-tatib-input' },
-          { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: 'nav-admin-tatib-kategori' },
-          { to: '/admin/tatib/penanganan', label: 'Input Penanganan', icon: ShieldCheck, testid: 'nav-admin-tatib-penanganan' },
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-admin-tatib-data' },
+          ...menuTatib('admin', 'nav-admin'),
         ],
       },
       {
@@ -609,6 +607,10 @@ function navForRole(role, userRoles = []) {
           { to: '/admin/dana-rkam', label: 'DANA RKAM', icon: DollarSign, testid: 'nav-wakakur-rkam' },
         ],
       },
+      {
+        title: 'Tata Tertib',
+        items: menuTatib('waka_kurikulum', 'nav-wakakur'),
+      },
     ];
   } else if (role === 'waka_sarpras') {
     // Waka Sarana Prasarana: grup Sarpras yang sama seperti admin (view + kelola aset/ruangan/peminjaman).
@@ -641,7 +643,7 @@ function navForRole(role, userRoles = []) {
       },
     ];
   } else if (role === 'waka_kesiswaan') {
-    // Waka Kesiswaan: grup Manajemen Siswa, Aktivitas & Program, dan Tatib & BK (view-only untuk Tatib/BK).
+    // Waka Kesiswaan: grup Manajemen Siswa, Aktivitas & Program, dan Tatib & BK (boleh mencatat poin tatib; BK view-only).
     return [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
       { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-waka-kesiswaan' },
@@ -669,7 +671,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Tatib & BK',
         items: [
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-waka-kesiswaan-tatib-data' },
+          ...menuTatib('waka_kesiswaan', 'nav-waka-kesiswaan'),
           { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-waka-kesiswaan-bk-kunjungan' },
           { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-waka-kesiswaan-bk-laporan' },
           { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-waka-kesiswaan-sekolah-lanjutan' },
@@ -731,7 +733,7 @@ function navForRole(role, userRoles = []) {
       {
         title: 'Manajemen Tatib & BK',
         items: [
-          { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: 'nav-mutu-tatib-data' },
+          ...menuTatib('penjamin_mutu', 'nav-mutu'),
           { to: '/admin/bk/kunjungan', label: 'Kunjungan Konseling', icon: HeartHandshake, testid: 'nav-mutu-bk-kunjungan' },
           { to: '/admin/bk/laporan', label: 'Laporan BK', icon: FileBarChart, testid: 'nav-mutu-bk-laporan' },
           { to: '/admin/bk/sekolah-lanjutan', label: 'Data Sekolah Lanjutan', icon: School, testid: 'nav-mutu-sekolah-lanjutan' },

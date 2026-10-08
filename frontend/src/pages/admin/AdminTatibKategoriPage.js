@@ -13,8 +13,13 @@ import { BookMarked, FileText, Plus, Pencil, Trash2, Loader2, Save, ShieldAlert 
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { useAuth } from '@/lib/AuthContext';
+import { bolehInputTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 
 export default function AdminTatibKategoriPage() {
+  const { activeRole } = useAuth();
+  const bolehInput = bolehInputTatib(activeRole);
   const [tab, setTab] = useState('kategori');
   const [kategoriList, setKategoriList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
@@ -64,6 +69,7 @@ export default function AdminTatibKategoriPage() {
 
   // Kategori handlers
   const openKategoriModal = (item = null) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (item) {
       setEditingKategori(item);
       setKategoriForm({
@@ -83,6 +89,7 @@ export default function AdminTatibKategoriPage() {
   };
 
   const handleSaveKategori = async () => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!kategoriForm.nama) {
       toast.error('Nama kategori wajib diisi');
       return;
@@ -100,25 +107,27 @@ export default function AdminTatibKategoriPage() {
       setShowKategoriModal(false);
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menyimpan kategori');
+      toast.error(pesanGalatTatib(e, 'Gagal menyimpan kategori'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteKategori = async (id) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!(await confirmDialog('Yakin ingin menghapus kategori ini?'))) return;
     try {
       await api.delete(`/tatib/kategori/${id}`);
       toast.success('Kategori dihapus');
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menghapus kategori');
+      toast.error(pesanGalatTatib(e, 'Gagal menghapus kategori'));
     }
   };
 
   // Jenis handlers
   const openJenisModal = (item = null) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (item) {
       setEditingJenis(item);
       setJenisForm({
@@ -140,6 +149,7 @@ export default function AdminTatibKategoriPage() {
   };
 
   const handleSaveJenis = async () => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!jenisForm.kategori_id || !jenisForm.nama) {
       toast.error('Kategori dan nama jenis wajib diisi');
       return;
@@ -157,20 +167,21 @@ export default function AdminTatibKategoriPage() {
       setShowJenisModal(false);
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menyimpan jenis');
+      toast.error(pesanGalatTatib(e, 'Gagal menyimpan jenis'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteJenis = async (id) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!(await confirmDialog('Yakin ingin menghapus jenis ini?'))) return;
     try {
       await api.delete(`/tatib/jenis/${id}`);
       toast.success('Jenis dihapus');
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menghapus jenis');
+      toast.error(pesanGalatTatib(e, 'Gagal menghapus jenis'));
     }
   };
 
@@ -183,6 +194,8 @@ export default function AdminTatibKategoriPage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Input Kategori & Jenis</h1>
         <p className="text-sm text-slate-600 mt-1">Kelola Kategori dan Jenis Tata Tertib</p>
       </div>
+
+      {!bolehInput && <BannerModeLihat />}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-white border border-slate-200">
@@ -197,12 +210,14 @@ export default function AdminTatibKategoriPage() {
         </TabsList>
 
         <TabsContent value="kategori" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openKategoriModal()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
-              <Plus className="h-4 w-4" />
-              Tambah Kategori
-            </Button>
-          </div>
+          {bolehInput && (
+            <div className="flex justify-end">
+              <Button onClick={() => openKategoriModal()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
+                <Plus className="h-4 w-4" />
+                Tambah Kategori
+              </Button>
+            </div>
+          )}
 
           <Card>
             <CardContent className="p-0">
@@ -242,6 +257,7 @@ export default function AdminTatibKategoriPage() {
                             </TableCell>
                             <TableCell className="text-center font-mono">{item.urutan}</TableCell>
                             <TableCell className="text-right">
+                              {bolehInput ? (
                               <div className="flex justify-end gap-1">
                                 <Button
                                   size="icon"
@@ -260,6 +276,7 @@ export default function AdminTatibKategoriPage() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
+                              ) : <span className="text-slate-400">-</span>}
                             </TableCell>
                           </TableRow>
                         ))
@@ -273,12 +290,14 @@ export default function AdminTatibKategoriPage() {
         </TabsContent>
 
         <TabsContent value="jenis" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openJenisModal()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
-              <Plus className="h-4 w-4" />
-              Tambah Jenis
-            </Button>
-          </div>
+          {bolehInput && (
+            <div className="flex justify-end">
+              <Button onClick={() => openJenisModal()} className="gap-2 bg-[#006837] hover:bg-[#005830]">
+                <Plus className="h-4 w-4" />
+                Tambah Jenis
+              </Button>
+            </div>
+          )}
 
           <Card>
             <CardContent className="p-0">
@@ -322,6 +341,7 @@ export default function AdminTatibKategoriPage() {
                             </TableCell>
                             <TableCell className="text-center font-mono">{item.urutan}</TableCell>
                             <TableCell className="text-right">
+                              {bolehInput ? (
                               <div className="flex justify-end gap-1">
                                 <Button
                                   size="icon"
@@ -340,6 +360,7 @@ export default function AdminTatibKategoriPage() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
+                              ) : <span className="text-slate-400">-</span>}
                             </TableCell>
                           </TableRow>
                         ))

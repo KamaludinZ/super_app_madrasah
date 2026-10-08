@@ -11,6 +11,8 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
+from tatib_poin import JENIS_POIN, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, normalisasi_kondisi
+from routers.tatib_poin import batasi_query_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
 
@@ -34,6 +36,13 @@ class JenisTatibRequest(BaseModel):
     urutan: Optional[int] = 0
 
 
+class KondisiPoinItem(BaseModel):
+    """Satu kondisi pelaksanaan aturan beserta nilainya (tanda dipaksa sesuai jenis_poin)."""
+    id: Optional[str] = None
+    label: str
+    poin: int
+
+
 class TatibRequest(BaseModel):
     """Request model for creating/updating tata tertib."""
     kategori_id: str
@@ -44,6 +53,8 @@ class TatibRequest(BaseModel):
     poin: int  # Positive for prestasi, negative for pelanggaran
     tingkat_kelas: Optional[str] = None  # e.g., "7", "8", "9", or empty for all
     is_active: bool = True
+    jenis_poin: Optional[str] = None  # 'kebaikan' | 'pelanggaran'; kosong -> dari tanda poin
+    kondisi: Optional[List[KondisiPoinItem]] = None  # nilai per kondisi; kosong -> satu kondisi bawaan
 
 
 class PenangananRequest(BaseModel):
@@ -56,6 +67,28 @@ class PenangananRequest(BaseModel):
     semester: Optional[str] = None
     catatan: Optional[str] = None
     bukti_url: Optional[str] = None  # Photo/document evidence
+    kondisi_id: Optional[str] = None  # kondisi pelaksanaan; nilai poin dihitung dari aturan + kondisi
+    semester_id: Optional[str] = None
+
+
+class TindakLanjutRequest(BaseModel):
+    tanggal: str
+    uraian: str
+
+
+def _skema_aturan(req: TatibRequest) -> Dict:
+    """jenis_poin, kondisi (rapi), dan poin aturan (= nilai kondisi pertama) dari request."""
+    if req.jenis_poin and req.jenis_poin not in JENIS_POIN:
+        raise HTTPException(400, "jenis_poin harus 'kebaikan' atau 'pelanggaran'")
+    jenis = req.jenis_poin or jenis_dari_poin(req.poin)
+    kondisi = normalisasi_kondisi([k.model_dump() for k in (req.kondisi or [])], jenis, req.poin)
+    return {'jenis_poin': jenis, 'kondisi': kondisi, 'poin': kondisi[0]['poin']}
+
+
+def _aturan_tampil(doc: Dict) -> Dict:
+    """Aturan untuk respons: selalu ada jenis_poin & kondisi (aturan lama -> kondisi bawaan)."""
+    return serialize_doc({**doc, 'jenis_poin': doc.get('jenis_poin') or jenis_dari_poin(doc.get('poin')),
+                          'kondisi': kondisi_aturan(doc)})
 
 
 # ============================================================
@@ -79,7 +112,7 @@ async def get_kategori(kategori_id: str, user: Dict = Depends(get_current_user))
 
 
 @router.post("/tatib/kategori")
-async def create_kategori(req: KategoriTatibRequest, user: Dict = Depends(require_role('admin'))):
+async def create_kategori(req: KategoriTatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Create a new kategori tata tertib."""
     doc = {
         'id': str(uuid.uuid4()),
@@ -97,7 +130,7 @@ async def create_kategori(req: KategoriTatibRequest, user: Dict = Depends(requir
 
 
 @router.put("/tatib/kategori/{kategori_id}")
-async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dict = Depends(require_role('admin'))):
+async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Update a kategori."""
     existing = await db.tatib_kategori.find_one({'id': kategori_id})
     if not existing:
@@ -114,7 +147,7 @@ async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dic
 
 
 @router.delete("/tatib/kategori/{kategori_id}")
-async def delete_kategori(kategori_id: str, user: Dict = Depends(require_role('admin'))):
+async def delete_kategori(kategori_id: str, user: Dict = Depends(wajib_input_tatib)):
     """Delete a kategori."""
     existing = await db.tatib_kategori.find_one({'id': kategori_id})
     if not existing:
@@ -148,7 +181,7 @@ async def list_jenis(kategori_id: Optional[str] = None, user: Dict = Depends(get
 
 
 @router.post("/tatib/jenis")
-async def create_jenis(req: JenisTatibRequest, user: Dict = Depends(require_role('admin'))):
+async def create_jenis(req: JenisTatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Create a new jenis tata tertib."""
     # Verify kategori exists
     kategori = await db.tatib_kategori.find_one({'id': req.kategori_id})
@@ -173,7 +206,7 @@ async def create_jenis(req: JenisTatibRequest, user: Dict = Depends(require_role
 
 
 @router.put("/tatib/jenis/{jenis_id}")
-async def update_jenis(jenis_id: str, req: JenisTatibRequest, user: Dict = Depends(require_role('admin'))):
+async def update_jenis(jenis_id: str, req: JenisTatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Update a jenis."""
     existing = await db.tatib_jenis.find_one({'id': jenis_id})
     if not existing:
@@ -202,7 +235,7 @@ async def update_jenis(jenis_id: str, req: JenisTatibRequest, user: Dict = Depen
 
 
 @router.delete("/tatib/jenis/{jenis_id}")
-async def delete_jenis(jenis_id: str, user: Dict = Depends(require_role('admin'))):
+async def delete_jenis(jenis_id: str, user: Dict = Depends(wajib_input_tatib)):
     """Delete a jenis."""
     existing = await db.tatib_jenis.find_one({'id': jenis_id})
     if not existing:
@@ -227,10 +260,15 @@ async def list_aturan(
     kategori_id: Optional[str] = None,
     jenis_id: Optional[str] = None,
     is_active: Optional[bool] = None,
+    jenis_poin: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
-    """List all tata tertib rules."""
+    """List all tata tertib rules (opsional per jalur jenis_poin: kebaikan/pelanggaran)."""
     query = {}
+    if jenis_poin == 'pelanggaran':
+        query['$or'] = [{'jenis_poin': 'pelanggaran'}, {'jenis_poin': None, 'poin': {'$lt': 0}}]
+    elif jenis_poin == 'kebaikan':
+        query['$or'] = [{'jenis_poin': 'kebaikan'}, {'jenis_poin': None, 'poin': {'$gte': 0}}]
     if kategori_id:
         query['kategori_id'] = kategori_id
     if jenis_id:
@@ -239,7 +277,7 @@ async def list_aturan(
         query['is_active'] = is_active
 
     items = await db.tatib_aturan.find(query, {'_id': 0}).sort([('kategori_id', 1), ('jenis_id', 1), ('kode', 1)]).to_list(1000)
-    return [serialize_doc(i) for i in items]
+    return [_aturan_tampil(i) for i in items]
 
 
 @router.get("/tatib/aturan/{aturan_id}")
@@ -248,11 +286,11 @@ async def get_aturan(aturan_id: str, user: Dict = Depends(get_current_user)):
     doc = await db.tatib_aturan.find_one({'id': aturan_id}, {'_id': 0})
     if not doc:
         raise HTTPException(404, "Aturan tidak ditemukan")
-    return serialize_doc(doc)
+    return _aturan_tampil(doc)
 
 
 @router.post("/tatib/aturan")
-async def create_aturan(req: TatibRequest, user: Dict = Depends(require_role('admin'))):
+async def create_aturan(req: TatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Create a new tata tertib rule."""
     # Verify kategori and jenis exist
     kategori = await db.tatib_kategori.find_one({'id': req.kategori_id})
@@ -277,7 +315,7 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(require_role('ad
         'kode': req.kode,
         'nama_aturan': req.nama_aturan,
         'deskripsi': req.deskripsi,
-        'poin': req.poin,
+        **_skema_aturan(req),
         'tingkat_kelas': req.tingkat_kelas,
         'is_active': req.is_active,
         'created_by': user['id'],
@@ -287,11 +325,12 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(require_role('ad
 
     await db.tatib_aturan.insert_one(doc)
     await log_audit(user, 'tatib_aturan_create', f"Created aturan: {req.kode} - {req.nama_aturan}")
-    return serialize_doc(doc)
+    doc.pop('_id', None)
+    return _aturan_tampil(doc)
 
 
 @router.put("/tatib/aturan/{aturan_id}")
-async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(require_role('admin'))):
+async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(wajib_input_tatib)):
     """Update a tata tertib rule."""
     existing = await db.tatib_aturan.find_one({'id': aturan_id})
     if not existing:
@@ -317,18 +356,19 @@ async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(
             raise HTTPException(404, "Jenis tidak ditemukan")
         update_data['jenis_nama'] = jenis.get('nama')
 
-    update_data.update(req.model_dump(exclude_unset=True))
+    update_data.update(req.model_dump(exclude_unset=True, exclude={'kondisi', 'jenis_poin', 'poin'}))
+    update_data.update(_skema_aturan(req))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_aturan.update_one({'id': aturan_id}, {'$set': update_data})
     await log_audit(user, 'tatib_aturan_update', f"Updated aturan: {aturan_id}")
 
     updated = await db.tatib_aturan.find_one({'id': aturan_id}, {'_id': 0})
-    return serialize_doc(updated)
+    return _aturan_tampil(updated)
 
 
 @router.delete("/tatib/aturan/{aturan_id}")
-async def delete_aturan(aturan_id: str, user: Dict = Depends(require_role('admin'))):
+async def delete_aturan(aturan_id: str, user: Dict = Depends(wajib_input_tatib)):
     """Delete a tata tertib rule."""
     existing = await db.tatib_aturan.find_one({'id': aturan_id})
     if not existing:
@@ -351,7 +391,7 @@ async def delete_aturan(aturan_id: str, user: Dict = Depends(require_role('admin
 @router.post("/tatib/aturan/import")
 async def import_aturan_excel(
     file: UploadFile = File(...),
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(wajib_input_tatib)
 ):
     """
     Import tata tertib rules from Excel.
@@ -465,6 +505,7 @@ async def list_penanganan(
         if date_query:
             query['tanggal'] = date_query
 
+    await batasi_query_tatib(user, query)  # siswa: miliknya; wali kelas: kelasnya; peran lain tanpa akses: 403
     await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.tatib_penanganan.find(query, {'_id': 0}).sort('tanggal', -1).to_list(1000)
     return [serialize_doc(i) for i in items]
@@ -476,6 +517,7 @@ async def get_penanganan(penanganan_id: str, user: Dict = Depends(get_current_us
     doc = await db.tatib_penanganan.find_one({'id': penanganan_id}, {'_id': 0})
     if not doc:
         raise HTTPException(404, "Penanganan tidak ditemukan")
+    await batasi_query_tatib(user, {'siswa_id': doc.get('siswa_id')})
     return serialize_doc(doc)
 
 
@@ -498,18 +540,39 @@ async def _notify_tatib(doc: Dict, siswa: Dict, poin):
                            data={'penanganan_id': doc['id']}, exclude=[doc.get('petugas_id'), wali])
 
 
-@router.post("/tatib/penanganan")
-async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_current_user)):
-    """Record a new pelanggaran or prestasi."""
-    # Verify siswa exists
-    siswa = await db.students.find_one({'id': req.siswa_id})
+async def _cari_siswa(siswa_id: str) -> Optional[Dict]:
+    """Akun siswa (users, dipakai /students & seluruh aplikasi); cadangan: koleksi lama `students`."""
+    akun = await db.users.find_one({'id': siswa_id, 'roles': 'siswa'},
+                                   {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nisn': 1, 'student_class_id': 1})
+    if akun:
+        kelas = None
+        if akun.get('student_class_id'):
+            kelas = await db.classes.find_one({'id': akun['student_class_id']}, {'_id': 0, 'name': 1})
+        return {**akun, 'class_id': akun.get('student_class_id'), 'class_name': (kelas or {}).get('name')}
+    return await db.students.find_one({'id': siswa_id}, {'_id': 0})
+
+
+def _nilai_atau_400(tatib: Dict, kondisi_id: Optional[str]) -> Dict:
+    try:
+        return hitung_poin_aturan(tatib, kondisi_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[str] = None) -> Dict:
+    """Simpan satu catatan poin. Nilai SELALU dihitung server dari aturan + kondisi;
+    `jenis_wajib` memastikan aturan sesuai jalur (kebaikan/pelanggaran)."""
+    siswa = await _cari_siswa(req.siswa_id)
     if not siswa:
         raise HTTPException(404, "Siswa tidak ditemukan")
-
-    # Verify tatib exists
-    tatib = await db.tatib_aturan.find_one({'id': req.tatib_id})
+    tatib = await db.tatib_aturan.find_one({'id': req.tatib_id}, {'_id': 0})
     if not tatib:
         raise HTTPException(404, "Aturan tata tertib tidak ditemukan")
+    if tatib.get('is_active') is False:
+        raise HTTPException(400, "Aturan tata tertib ini sudah tidak aktif")
+    nilai = _nilai_atau_400(tatib, req.kondisi_id)
+    if jenis_wajib and nilai['jenis_poin'] != jenis_wajib:
+        raise HTTPException(400, f"Aturan ini bukan untuk jalur poin {jenis_wajib}")
 
     doc = {
         'id': str(uuid.uuid4()),
@@ -522,12 +585,15 @@ async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_cur
         'tatib_kode': tatib.get('kode'),
         'tatib_nama': tatib.get('nama_aturan'),
         'tatib_poin': tatib.get('poin'),
+        **nilai,
+        'tindak_lanjut': [],
         'kategori_nama': tatib.get('kategori_nama'),
         'jenis_nama': tatib.get('jenis_nama'),
         'tanggal': req.tanggal,
         'tahun_takwim_id': req.tahun_takwim_id,
         'tahun_pelajaran_id': req.tahun_pelajaran_id,
         'semester': req.semester,
+        'semester_id': req.semester_id,
         'catatan': req.catatan,
         'bukti_url': req.bukti_url,
         'petugas_id': user['id'],
@@ -537,20 +603,62 @@ async def create_penanganan(req: PenangananRequest, user: Dict = Depends(get_cur
     }
 
     await db.tatib_penanganan.insert_one(doc)
-    spawn(_notify_tatib(dict(doc), siswa, tatib.get('poin', 0)))
-
-    action_type = "prestasi" if tatib.get('poin', 0) > 0 else "pelanggaran"
+    spawn(_notify_tatib(dict(doc), siswa, nilai['poin']))
     await log_audit(
         user,
         'tatib_penanganan_create',
-        f"Recorded {action_type} for {siswa.get('full_name')}: {tatib.get('nama_aturan')}"
+        f"Recorded {nilai['jenis_poin']} ({nilai['poin']}) for {siswa.get('full_name')}: {tatib.get('nama_aturan')}"
     )
-
+    doc.pop('_id', None)
     return serialize_doc(doc)
 
 
+@router.post("/tatib/penanganan")
+async def create_penanganan(req: PenangananRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Record a new pelanggaran or kebaikan (nilai dari aturan + kondisi)."""
+    return await catat_poin(req, user)
+
+
+@router.post("/tatib/poin/{jenis}")
+async def catat_poin_jalur(jenis: str, req: PenangananRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Jalur pencatatan terpisah: /tatib/poin/kebaikan (PLUS) atau /tatib/poin/pelanggaran (MINUS).
+    Poin kebaikan tidak terhubung ke data prestasi siswa."""
+    if jenis not in JENIS_POIN:
+        raise HTTPException(404, "Jalur poin tidak dikenal")
+    return await catat_poin(req, user, jenis_wajib=jenis)
+
+
+@router.post("/tatib/penanganan/{penanganan_id}/tindak-lanjut")
+async def tambah_tindak_lanjut(penanganan_id: str, req: TindakLanjutRequest,
+                               user: Dict = Depends(wajib_input_tatib)):
+    """Tambah tindak lanjut penanganan pada catatan PELANGGARAN (menumpang endpoint penanganan)."""
+    doc = await db.tatib_penanganan.find_one({'id': penanganan_id}, {'_id': 0})
+    if not doc:
+        raise HTTPException(404, "Penanganan tidak ditemukan")
+    nilai = doc.get('poin') if doc.get('poin') is not None else doc.get('tatib_poin')
+    if (doc.get('jenis_poin') or jenis_dari_poin(nilai)) != 'pelanggaran':
+        raise HTTPException(400, "Tindak lanjut hanya untuk catatan pelanggaran")
+    uraian = (req.uraian or '').strip()
+    if not uraian or not req.tanggal:
+        raise HTTPException(400, "Tanggal dan uraian tindak lanjut wajib diisi")
+    item = {
+        'id': str(uuid.uuid4()),
+        'tanggal': req.tanggal,
+        'uraian': uraian,
+        'petugas_id': user['id'],
+        'petugas_nama': user.get('full_name', user.get('username')),
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    await db.tatib_penanganan.update_one(
+        {'id': penanganan_id},
+        {'$push': {'tindak_lanjut': item}, '$set': {'updated_at': datetime.utcnow().isoformat()}})
+    await log_audit(user, 'tatib_tindak_lanjut_create', f"Tindak lanjut penanganan {penanganan_id}")
+    updated = await db.tatib_penanganan.find_one({'id': penanganan_id}, {'_id': 0})
+    return serialize_doc(updated)
+
+
 @router.put("/tatib/penanganan/{penanganan_id}")
-async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Dict = Depends(get_current_user)):
+async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Dict = Depends(wajib_input_tatib)):
     """Update a penanganan record."""
     existing = await db.tatib_penanganan.find_one({'id': penanganan_id})
     if not existing:
@@ -560,7 +668,7 @@ async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Di
     update_data = {}
 
     if req.siswa_id != existing.get('siswa_id'):
-        siswa = await db.students.find_one({'id': req.siswa_id})
+        siswa = await _cari_siswa(req.siswa_id)
         if not siswa:
             raise HTTPException(404, "Siswa tidak ditemukan")
         update_data.update({
@@ -570,19 +678,22 @@ async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Di
             'siswa_kelas': siswa.get('class_name'),
         })
 
-    if req.tatib_id != existing.get('tatib_id'):
-        tatib = await db.tatib_aturan.find_one({'id': req.tatib_id})
+    kondisi_berubah = 'kondisi_id' in req.model_fields_set and req.kondisi_id != existing.get('kondisi_id')
+    if req.tatib_id != existing.get('tatib_id') or kondisi_berubah:
+        tatib = await db.tatib_aturan.find_one({'id': req.tatib_id}, {'_id': 0})
         if not tatib:
             raise HTTPException(404, "Aturan tidak ditemukan")
+        kondisi_id = req.kondisi_id if 'kondisi_id' in req.model_fields_set else None
         update_data.update({
             'tatib_kode': tatib.get('kode'),
             'tatib_nama': tatib.get('nama_aturan'),
             'tatib_poin': tatib.get('poin'),
+            **_nilai_atau_400(tatib, kondisi_id),
             'kategori_nama': tatib.get('kategori_nama'),
             'jenis_nama': tatib.get('jenis_nama'),
         })
 
-    update_data.update(req.model_dump(exclude_unset=True))
+    update_data.update(req.model_dump(exclude_unset=True, exclude={'kondisi_id'}))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_penanganan.update_one({'id': penanganan_id}, {'$set': update_data})
@@ -618,6 +729,7 @@ async def get_siswa_stats(
 ):
     """Get tatib statistics for a specific student."""
     query = {'siswa_id': siswa_id}
+    await batasi_query_tatib(user, query)
     if tahun_takwim_id:
         query['tahun_takwim_id'] = tahun_takwim_id
     if tahun_pelajaran_id:
@@ -657,7 +769,7 @@ async def get_summary_stats(
     tahun_pelajaran_id: Optional[str] = None,
     semester: Optional[str] = None,
     kelas: Optional[str] = None,
-    user: Dict = Depends(require_role('admin', 'guru_bk', 'guru_tata_tertib', 'kepala_sekolah', 'penjamin_mutu'))
+    user: Dict = Depends(wajib_lihat_tatib)
 ):
     """Get overall tatib statistics summary."""
     query = {}

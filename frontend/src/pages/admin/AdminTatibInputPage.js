@@ -13,8 +13,15 @@ import { Edit2, Trash2, Upload, Plus, Download, Loader2, AlertCircle } from 'luc
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { useAuth } from '@/lib/AuthContext';
+import { bolehInputTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import BannerModeLihat from '@/components/tatib/BannerModeLihat';
+import EditorKondisiAturan, { KONDISI_BAWAAN, kondisiKePayload } from '@/components/tatib/EditorKondisiAturan';
+import { formatPoin } from '@/components/tatib/RingkasanPoin';
 
 const AdminTatibInputPage = () => {
+  const { activeRole } = useAuth();
+  const bolehInput = bolehInputTatib(activeRole);
   const [aturanList, setAturanList] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
@@ -39,7 +46,8 @@ const AdminTatibInputPage = () => {
     nama_aturan: '',
     kategori_id: '',
     jenis_id: '',
-    poin: 0,
+    jenis_poin: 'pelanggaran',
+    kondisi: KONDISI_BAWAAN,
     tingkat_kelas: '',
     deskripsi: '',
   });
@@ -78,6 +86,7 @@ const AdminTatibInputPage = () => {
   };
 
   const handleOpenModal = (aturan = null) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (aturan) {
       setEditingAturan(aturan);
       setAturanForm({
@@ -85,7 +94,9 @@ const AdminTatibInputPage = () => {
         nama_aturan: aturan.nama_aturan,
         kategori_id: aturan.kategori_id,
         jenis_id: aturan.jenis_id,
-        poin: aturan.poin,
+        jenis_poin: aturan.jenis_poin || ((aturan.poin || 0) < 0 ? 'pelanggaran' : 'kebaikan'),
+        kondisi: (aturan.kondisi?.length ? aturan.kondisi : [{ label: 'Setiap kejadian', poin: aturan.poin }])
+          .map((k) => ({ id: k.id, label: k.label, poin: Math.abs(Number(k.poin) || 0) })),
         tingkat_kelas: aturan.tingkat_kelas || '',
         deskripsi: aturan.deskripsi || '',
       });
@@ -96,7 +107,8 @@ const AdminTatibInputPage = () => {
         nama_aturan: '',
         kategori_id: '',
         jenis_id: '',
-        poin: 0,
+        jenis_poin: 'pelanggaran',
+        kondisi: KONDISI_BAWAAN,
         tingkat_kelas: '',
         deskripsi: '',
       });
@@ -105,41 +117,53 @@ const AdminTatibInputPage = () => {
   };
 
   const handleSaveAturan = async () => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!aturanForm.kode || !aturanForm.nama_aturan || !aturanForm.kategori_id || !aturanForm.jenis_id) {
       toast.error('Kode, nama aturan, kategori, dan jenis wajib diisi');
       return;
     }
 
+    const kondisi = kondisiKePayload(aturanForm.jenis_poin, aturanForm.kondisi);
+    if (kondisi.length === 0) {
+      toast.error('Isi minimal satu kondisi beserta nilainya');
+      return;
+    }
+    // Nilai bawaan aturan = kondisi pertama; server menghitung ulang & memaksa tanda sesuai jalur.
+    const { kondisi: _kondisiForm, ...isian } = aturanForm;
+    const payload = { ...isian, kondisi, poin: kondisi[0].poin };
+
     setSaving(true);
     try {
       if (editingAturan) {
-        await api.put(`/tatib/aturan/${editingAturan.id}`, aturanForm);
+        await api.put(`/tatib/aturan/${editingAturan.id}`, payload);
         toast.success('Aturan berhasil diperbarui');
       } else {
-        await api.post('/tatib/aturan', aturanForm);
+        await api.post('/tatib/aturan', payload);
         toast.success('Aturan berhasil ditambahkan');
       }
       setShowModal(false);
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menyimpan aturan');
+      toast.error(pesanGalatTatib(e, 'Gagal menyimpan aturan'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteAturan = async (id) => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!(await confirmDialog('Yakin ingin menghapus aturan ini?'))) return;
     try {
       await api.delete(`/tatib/aturan/${id}`);
       toast.success('Aturan berhasil dihapus');
       loadData();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal menghapus aturan');
+      toast.error(pesanGalatTatib(e, 'Gagal menghapus aturan'));
     }
   };
 
   const handleImportExcel = async () => {
+    if (tolakUbahTatib(activeRole)) return;
     if (!importFile) {
       toast.error('Pilih file Excel terlebih dahulu');
       return;
@@ -163,7 +187,7 @@ const AdminTatibInputPage = () => {
         toast.warning(`${res.data.errors.length} baris gagal diimpor`);
       }
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal mengimpor data');
+      toast.error(pesanGalatTatib(e, 'Gagal mengimpor data'));
     } finally {
       setUploading(false);
     }
@@ -202,6 +226,7 @@ const AdminTatibInputPage = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Input Tata Tertib</h1>
+        {bolehInput && (
         <div className="flex gap-2">
           <Button onClick={() => setShowImportModal(true)} variant="outline">
             <Upload className="h-4 w-4 mr-2" />
@@ -212,7 +237,10 @@ const AdminTatibInputPage = () => {
             Tambah Aturan
           </Button>
         </div>
+        )}
       </div>
+
+      {!bolehInput && <BannerModeLihat />}
 
       {/* Filters */}
       <Card>
@@ -296,11 +324,15 @@ const AdminTatibInputPage = () => {
                     <TableCell>{getJenisName(a.jenis_id)}</TableCell>
                     <TableCell className="text-right">
                       <Badge variant={a.poin >= 0 ? 'default' : 'destructive'}>
-                        {a.poin >= 0 ? `+${a.poin}` : a.poin}
+                        {a.kondisi?.length > 1
+                          ? `${formatPoin(a.kondisi[0].poin)} … ${formatPoin(a.kondisi[a.kondisi.length - 1].poin)}`
+                          : formatPoin(a.poin)}
                       </Badge>
+                      {a.kondisi?.length > 1 && <div className="mt-1 text-[11px] text-slate-500">{a.kondisi.length} kondisi</div>}
                     </TableCell>
                     <TableCell>{a.tingkat_kelas || 'Semua'}</TableCell>
                     <TableCell>
+                      {bolehInput ? (
                       <div className="flex gap-2">
                         <Button size="sm" variant="ghost" onClick={() => handleOpenModal(a)}>
                           <Edit2 className="h-4 w-4" />
@@ -309,6 +341,7 @@ const AdminTatibInputPage = () => {
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
+                      ) : <span className="text-slate-400">-</span>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -381,11 +414,22 @@ const AdminTatibInputPage = () => {
             </div>
 
             <div>
-              <Label>Poin (positif untuk prestasi, negatif untuk pelanggaran)*</Label>
-              <Input
-                type="number"
-                value={aturanForm.poin}
-                onChange={(e) => setAturanForm({ ...aturanForm, poin: parseInt(e.target.value) || 0 })}
+              <Label>Jalur poin*</Label>
+              <Select value={aturanForm.jenis_poin} onValueChange={(v) => setAturanForm({ ...aturanForm, jenis_poin: v })}>
+                <SelectTrigger data-testid="aturan-jalur"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pelanggaran">Pelanggaran (poin minus)</SelectItem>
+                  <SelectItem value="kebaikan">Kebaikan (poin plus)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Kondisi &amp; nilai poin*</Label>
+              <EditorKondisiAturan
+                jenis={aturanForm.jenis_poin}
+                kondisi={aturanForm.kondisi}
+                onChange={(kondisi) => setAturanForm({ ...aturanForm, kondisi })}
               />
             </div>
 

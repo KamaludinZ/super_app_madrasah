@@ -506,7 +506,13 @@ def parse_gtk_combined_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
 def _make_export_workbook(sheet_name: str, headers: List[str],
                           rows: List[List[Any]], col_widths: List[int]) -> bytes:
     wb = Workbook()
-    ws = wb.active
+    _isi_sheet_ekspor(wb.active, sheet_name, headers, rows, col_widths)
+    return workbook_to_bytes(wb)
+
+
+def _isi_sheet_ekspor(ws, sheet_name: str, headers: List[str],
+                      rows: List[List[Any]], col_widths: List[int]) -> None:
+    """Isi satu sheet ekspor: header berwarna brand, data, lebar kolom, baris header dibekukan."""
     ws.title = sheet_name
     ws.append(headers)
     for cell in ws[1]:
@@ -521,7 +527,6 @@ def _make_export_workbook(sheet_name: str, headers: List[str],
         letter = ws.cell(row=1, column=idx + 1).column_letter
         ws.column_dimensions[letter].width = w
     ws.freeze_panes = 'A2'
-    return workbook_to_bytes(wb)
 
 
 def export_users_xlsx(users: List[Dict[str, Any]]) -> bytes:
@@ -949,3 +954,30 @@ def parse_student_account_bulk_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
         })
 
     return rows
+
+
+def export_rekap_tatib_xlsx(rekap: Dict[str, Any], keterangan: str = '') -> bytes:
+    """Ekspor Rekap Pengawas poin tata tertib: sheet per kelas (+ baris total) dan aturan terbanyak."""
+    wb = Workbook()
+    headers = ['Kelas', 'Jumlah Siswa', 'Catatan Kebaikan', 'Poin Kebaikan', 'Catatan Pelanggaran',
+               'Poin Pelanggaran', 'Saldo', 'Siswa Perlu Perhatian']
+    kolom = ['jumlah_siswa', 'jumlah_kebaikan', 'total_plus', 'jumlah_pelanggaran', 'total_minus', 'saldo',
+             'siswa_perlu_perhatian']
+    per_kelas = rekap.get('per_kelas') or []
+    rows = [[k.get('kelas')] + [k.get(c, 0) for c in kolom] for k in per_kelas]
+    rows.append(['TOTAL'] + [sum(k.get(c, 0) or 0 for k in per_kelas) for c in kolom])
+    ws = wb.active
+    _isi_sheet_ekspor(ws, 'Rekap per Kelas', headers, rows, [12, 14, 18, 15, 20, 17, 10, 22])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    if keterangan:
+        ws.append([])
+        ws.append([keterangan])
+
+    teratas = [['Pelanggaran', t.get('kode') or '', t.get('nama'), t.get('kategori_nama') or '', t.get('jumlah')]
+               for t in rekap.get('teratas_pelanggaran') or []]
+    teratas += [['Kebaikan', t.get('kode') or '', t.get('nama'), t.get('kategori_nama') or '', t.get('jumlah')]
+                for t in rekap.get('teratas_kebaikan') or []]
+    _isi_sheet_ekspor(wb.create_sheet(), 'Aturan Terbanyak', ['Jenis', 'Kode', 'Aturan', 'Kategori', 'Jumlah'],
+                      teratas, [14, 10, 40, 18, 10])
+    return workbook_to_bytes(wb)

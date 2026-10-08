@@ -36,6 +36,7 @@ const ROLE_TABS = [
   { value: 'guru_ekstrakurikuler', label: 'Ekstra' },
   { value: 'kepala_sekolah', label: 'Kepsek' },
   { value: 'kepala_tata_usaha', label: 'KTU' },
+  { value: 'penjamin_mutu', label: 'Penjamin Mutu' },
   { value: 'waka_kesiswaan', label: 'Waka Kesiswaan' },
   { value: 'waka_kurikulum', label: 'Waka Kurikulum' },
   { value: 'bendahara', label: 'Bendahara' },

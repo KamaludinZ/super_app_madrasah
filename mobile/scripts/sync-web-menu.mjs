@@ -22,7 +22,12 @@ const start = shell.indexOf('const SUBJECT_TEACHER_ROLES');
 const navStart = shell.indexOf('function navForRole(');
 const navEnd = shell.indexOf('\n  return items;\n}\n', navStart);
 if (start < 0 || navStart < 0 || navEnd < 0) throw new Error('Struktur navForRole di AppShell.js tidak dikenali');
-const code = shell.slice(start, navEnd + '\n  return items;\n}\n'.length);
+// Menu Tata Tertib per peran berasal dari frontend/src/lib/aksesTatib.js (menuTatib) — ikut dievaluasi
+// tanpa baris import/export agar navForRole bisa memanggilnya.
+const aksesTatib = readLf(path.join(root, 'frontend', 'src', 'lib', 'aksesTatib.js'))
+  .replace(/^import .*$/gm, '')
+  .replace(/^export (const|function) /gm, '$1 ');
+const code = aksesTatib + '\n' + shell.slice(start, navEnd + '\n  return items;\n}\n'.length);
 
 // Nama yang didefinisikan di potongan kode tidak boleh dibayangi proxy.
 const defined = new Set([...code.matchAll(/(?:const|function)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]));
