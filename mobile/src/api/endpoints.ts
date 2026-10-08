@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, LckbRow, RhkItem, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -152,6 +152,26 @@ export const api = {
     create: (body: Pick<GuruReport, 'type' | 'title' | 'description' | 'class_id' | 'student_id' | 'location' | 'priority'>) =>
       request<GuruReport>('/reports', { method: 'POST', body }),
     remove: (id: string) => request<{ message: string }>(`/reports/${id}`, { method: 'DELETE' }),
+  },
+
+  ekinerja: {
+    tahunTakwim: () => request<{ year?: number } | null>('/tahun-takwim/active'),
+    jurnalMy: () => request<JurnalHarian[]>('/ekinerja/jurnal-harian/my'),
+    jurnalCreate: (body: { uraian_kegiatan: string; volume: string | null; satuan_hasil: string | null; link_id: string | null }) =>
+      request<JurnalHarian>('/ekinerja/jurnal-harian', { method: 'POST', body }),
+    jurnalUpdate: (id: string, body: { uraian_kegiatan: string; volume: string | null; satuan_hasil: string | null; link_id: string | null }) =>
+      request<JurnalHarian>(`/ekinerja/jurnal-harian/${id}`, { method: 'PUT', body }),
+    jurnalDelete: (id: string) => request<{ message: string }>(`/ekinerja/jurnal-harian/${id}`, { method: 'DELETE' }),
+    links: () => request<JurnalLink[]>('/ekinerja/jurnal-harian/link'),
+    linkCreate: (body: { label: string; url: string }) => request<JurnalLink>('/ekinerja/jurnal-harian/link', { method: 'POST', body }),
+    linkUpdate: (id: string, body: { label: string; url: string }) => request<JurnalLink>(`/ekinerja/jurnal-harian/link/${id}`, { method: 'PUT', body }),
+    linkDelete: (id: string) => request<{ message: string }>(`/ekinerja/jurnal-harian/link/${id}`, { method: 'DELETE' }),
+    rhk: (year: number) => request<RhkItem[]>('/ekinerja/rhk', { query: { year } }),
+    rhkClaim: (id: string) => request<RhkItem>(`/ekinerja/rhk/${id}/claim`, { method: 'PUT' }),
+    rhkUnclaim: (id: string) => request<RhkItem>(`/ekinerja/rhk/${id}/unclaim`, { method: 'PUT' }),
+    lckbMy: (year: number, month: string) => request<LckbRow[]>('/ekinerja/lckb/my', { query: { year, month } }),
+    lckbSave: (body: { rhk_id: string; year: number; month: string; realisasi_volume: string | null; keterangan: string | null }) =>
+      request<unknown>('/ekinerja/lckb/realisasi', { method: 'PUT', body }),
   },
 
   agenda: {

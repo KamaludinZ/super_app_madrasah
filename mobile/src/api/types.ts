@@ -489,3 +489,15 @@ export type GuruKontenInput = {
 export type TugasSubmissionItem = { id?: string; student_id: string; student_name?: string | null; student_nis?: string | null; jawaban?: string; file_url?: string | null; submitted_at?: string; updated_at?: string | null };
 export type SubjectItem = { id: string; name: string; code?: string | null };
 export type GtkKelengkapan = { kelengkapan: Kelengkapan; jenis?: string };
+
+/** E-Kinerja GTK: jurnal harian, link bukti dukung, LCKB (realisasi bulanan RHK yang diambil). */
+export type JurnalHarian = { id: string; tanggal: string; uraian_kegiatan: string; volume?: string | null; satuan_hasil?: string | null; link_id?: string | null; link_label?: string | null; link_url?: string | null };
+export type JurnalLink = { id: string; label: string; url: string };
+export type LckbRow = {
+  rhk_id: string; month: string; year: number; leading_sektor?: string | null; rhk_atasan?: string | null; indikator_kinerja_individu?: string | null;
+  target?: string | null; satuan_hasil?: string | null; output_url?: string | null; realisasi_volume?: string | null; keterangan?: string | null; realisasi_updated_at?: string | null;
+};
+export type RhkItem = {
+  id: string; year: number; leading_sektor?: string | null; rhk_atasan?: string | null; indikator_kinerja_individu?: string | null;
+  target?: string | null; satuan_hasil?: string | null; bulan_berlaku?: string[]; is_locked?: boolean; claimed_by?: string | null; claimed_by_name?: string | null;
+};
