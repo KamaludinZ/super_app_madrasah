@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -119,6 +119,16 @@ export const api = {
   jadwalPiket: {
     piket: () => request<PiketGuru[]>('/piket-schedules'),
     ibadah: () => request<IbadahSchedule[]>('/ibadah-schedules'),
+  },
+
+  kebersihan: {
+    guruClasses: () => request<ClassItem[]>('/cleanliness/guru/classes/all'),
+    activeYear: () => request<AcademicYear | null>('/academic-years/active'),
+    classes: (academic_year_id?: string) => request<ClassItem[]>('/classes', { query: { academic_year_id } }),
+    guruHistory: () => request<CleanlinessRecord[]>('/cleanliness/guru/history'),
+    classHistory: (classId: string) => request<CleanlinessRecord[]>(`/cleanliness/class/${classId}`),
+    submit: (body: Omit<CleanlinessRecord, 'id' | 'class_name' | 'recorded_by' | 'recorded_at'>) =>
+      request<CleanlinessRecord>('/cleanliness/class', { method: 'POST', body }),
   },
 
   agenda: {

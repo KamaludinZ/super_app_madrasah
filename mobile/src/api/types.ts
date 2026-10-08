@@ -453,3 +453,10 @@ export type StaffEventStats = { total_events: number; avg_duration_days: number;
 /** Jadwal piket guru (/piket-schedules) & piket ibadah/keputrian/imam (/ibadah-schedules). */
 export type PiketGuru = { id: string; day: string; shift?: string; start_time?: string; end_time?: string; teacher_id?: string; teacher_name?: string | null; notes?: string | null; is_active?: boolean };
 export type IbadahSchedule = { id: string; kategori: string; hari?: string | null; jenis_ibadah?: string | null; waktu?: string | null; petugas_id?: string; petugas_name?: string | null; notes?: string | null; is_active?: boolean };
+
+/** Kebersihan kelas (/cleanliness/...). */
+export type ClassItem = { id: string; name: string; grade?: string | number | null };
+export type CleanlinessRecord = {
+  id?: string; class_id: string; class_name?: string | null; date: string; rating?: number; condition?: string;
+  notes?: string | null; piket_students?: string[]; recorded_by?: string; recorded_at?: string;
+};

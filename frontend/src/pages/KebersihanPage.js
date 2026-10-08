@@ -22,12 +22,14 @@ const CONDITION_OPTIONS = [
 
 export default function KebersihanPage() {
   const { activeRole, user } = useAuth();
-  const isGuru = activeRole === 'guru';
+  // Guru mapel (semua peran guru_* pengajar): kelas yang diajar & hanya hari ini. Guru piket/wali kelas: semua kelas.
+  const isGuru = ['guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik'].includes(activeRole);
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
   // Always use today's date for guru
-  const today = new Date().toISOString().slice(0, 10);
+  // Tanggal hari ini menurut WIB (toISOString memakai UTC: sebelum 07.00 WIB masih tanggal kemarin).
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
   const [date, setDate] = useState(today);
   const [form, setForm] = useState({ rating: 3, condition: 'bersih', notes: '', piket_students: [] });
   const [history, setHistory] = useState([]);

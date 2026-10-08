@@ -29,6 +29,7 @@ from excel_io import (
 )
 from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_SISWA, selaraskan_alamat
 from data_master_service import alasan_siswa_kosong, jumlah_siswa_per_tingkat, normalisasi_tingkat, siswa_per_tingkat
+from journal_core import now_wib
 from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, tambah_keterangan_kosong, workbook_bytes
 from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
@@ -217,8 +218,13 @@ async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru
     return result
 
 
+# Guru mapel (semua peran guru_* pengajar) — dulu hanya peran aktif 'guru' sehingga guru IPA/IPS/agama/
+# bahasa/seni/TIK ditolak walau menu Kebersihan Kelas tampil untuk mereka.
+GURU_MAPEL_ROLES = ('guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik')
+
+
 @router.get("/cleanliness/guru/classes/all")
-async def get_guru_all_classes(user: Dict = Depends(require_role('guru'))):
+async def get_guru_all_classes(user: Dict = Depends(require_role(*GURU_MAPEL_ROLES))):
     """Guru: get all classes they teach (from their schedules), filtered by user's view context (semester)."""
     # Get active semester context
     ctx = await get_active_context(user)
@@ -247,7 +253,7 @@ async def get_guru_all_classes(user: Dict = Depends(require_role('guru'))):
 
 
 @router.get("/cleanliness/guru/classes")
-async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_role('guru'))):
+async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_role(*GURU_MAPEL_ROLES))):
     """Guru: get classes they teach on a specific date based on schedule."""
     # Parse date to get day of week
     try:
@@ -285,7 +291,7 @@ async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_rol
 
 
 @router.get("/cleanliness/guru/history")
-async def get_guru_cleanliness_history(limit: int = 100, user: Dict = Depends(require_role('guru'))):
+async def get_guru_cleanliness_history(limit: int = 100, user: Dict = Depends(require_role(*GURU_MAPEL_ROLES, 'guru_piket'))):
     """Get cleanliness history filled by this teacher across all classes, filtered by user's view context (semester)."""
     # Get user's view context for semester filtering
     ctx = await get_active_context(user)
@@ -340,18 +346,23 @@ async def get_class_cleanliness(class_id: str, limit: int = 30,
 async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request,
                                    user: Dict = Depends(get_current_user)):
     """Submit cleanliness record. For guru: validates schedule on that date."""
-    is_guru = 'guru' in user.get('roles', []) and 'admin' not in user.get('roles', []) and 'wali_kelas' not in user.get('roles', [])
+    roles = user.get('roles', [])
+    is_admin = 'admin' in roles
+    # Guru piket menilai kebersihan kelas mana pun (bukan hanya kelas yang diajar), tetap hanya untuk hari ini.
+    is_piket = user.get('active_role') == 'guru_piket' and not is_admin
+    is_guru = not is_piket and any(r in GURU_MAPEL_ROLES for r in roles) and not is_admin and 'wali_kelas' not in roles
 
-    # For guru: validate they teach this class (on any day) and can only fill for today's date
-    if is_guru:
-        # Parse date and ensure it's today
+    if is_guru or is_piket:
+        # Hari ini menurut WIB (dulu jam server UTC: isian pukul 00.00–07.00 WIB ditolak).
         try:
             date_obj = datetime.strptime(req.date, '%Y-%m-%d')
-            today = datetime.now().date()
-            if date_obj.date() != today:
-                raise HTTPException(403, "Guru hanya dapat mengisi kebersihan untuk hari ini")
         except ValueError:
             raise HTTPException(400, "Format tanggal salah")
+        if date_obj.date() != now_wib().date():
+            raise HTTPException(403, "Guru hanya dapat mengisi kebersihan untuk hari ini")
+
+    # For guru: validate they teach this class (on any day)
+    if is_guru:
 
         # Get active semester context
         ctx = await get_active_context(user)
