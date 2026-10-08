@@ -35,7 +35,7 @@ export default function PrestasiDetail() {
   const router = useRouter();
   const qc = useQueryClient();
   const { colors } = useTheme();
-  const { activeRole } = useAuth();
+  const { activeRole, user } = useAuth();
   const { online } = useNetwork();
   const access = holderAccess(activeRole);
   const res = useCached<Achievement[]>(prestasiKey(activeRole), () => loadPrestasi(access.reviewer));
@@ -107,7 +107,7 @@ export default function PrestasiDetail() {
         <Card style={{ gap: spacing.sm }}>
           <T variant="label" tone="muted">PEMEGANG</T>
           <Row label="Jenis" value={holderLabel} />
-          <Row label="Nama" value={a.holder_full_name || a.holder_name || a.student_name} />
+          <Row label="Nama" value={a.holder_full_name || a.holder_name || a.student_name || (a.holder_id === user?.id ? user?.full_name : null)} />
           <Row label="Kelas" value={a.class_name} />
           <Row label="Jenis lomba" value={a.jenis_lomba ? jenisLombaLabel(a.jenis_lomba) : null} />
         </Card>

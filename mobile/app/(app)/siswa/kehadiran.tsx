@@ -44,6 +44,9 @@ export default function SiswaKehadiranScreen() {
   }, [list.data]);
 
   const mon = stats.data?.monthly;
+  // Belum ada pertemuan → netral (bukan 0% merah).
+  const pctColor = (x: { total: number; percentage: number }) =>
+    !x.total ? colors.border : x.percentage >= 90 ? colors.success : x.percentage >= 75 ? colors.warning : colors.error;
   const refreshing = stats.refreshing || list.refreshing;
 
   return (
@@ -64,15 +67,15 @@ export default function SiswaKehadiranScreen() {
         ) : mon ? (
           <Card style={{ gap: spacing.md }}>
             <View style={styles.pctRow}>
-              <View style={[styles.pct, { borderColor: mon.percentage >= 90 ? colors.success : mon.percentage >= 75 ? colors.warning : colors.error }]}>
-                <T variant="title" color={mon.percentage >= 90 ? colors.success : mon.percentage >= 75 ? colors.warning : colors.error}>{Math.round(mon.percentage)}%</T>
+              <View style={[styles.pct, { borderColor: pctColor(mon) }]}>
+                <T variant="title" color={pctColor(mon)}>{mon.total ? `${Math.round(mon.percentage)}%` : '—'}</T>
                 <T variant="small" tone="muted">hadir</T>
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <T weight="semibold">{mon.hadir} dari {mon.total} pertemuan</T>
+                <T weight="semibold">{mon.total ? `${mon.hadir} dari ${mon.total} pertemuan` : 'Belum ada pertemuan tercatat'}</T>
                 {month === thisMonth && stats.data ? (
                   <T variant="caption" tone="muted">
-                    Minggu ini {Math.round(stats.data.weekly.percentage)}% · Hari ini {stats.data.daily.total ? `${Math.round(stats.data.daily.percentage)}%` : '—'}
+                    Minggu ini {stats.data.weekly.total ? `${Math.round(stats.data.weekly.percentage)}%` : '—'} · Hari ini {stats.data.daily.total ? `${Math.round(stats.data.daily.percentage)}%` : '—'}
                   </T>
                 ) : null}
               </View>
