@@ -66,6 +66,10 @@ export default function ProfilGtk() {
   const judul = lain ? 'Data GTK' : 'Profil Saya';
   const res = useCached<Obj>(lain ? `pantau.gtk.${gid}` : 'gtk.profil', lain ? () => api.gtk.user(gid) : api.gtk.profil);
   const kel = useCached<GtkKelengkapan>(lain ? `pantau.gtk.${gid}.kelengkapan` : 'gtk.kelengkapan', () => api.gtk.kelengkapan(gid), { enabled: !!gid });
+  // Peran GTK yang dilihat (bukan peran aktif pengguna yang membuka).
+  const peranLabel = lain
+    ? (((res.data?.roles as string[] | undefined) ?? []).slice(0, 2).map((r) => roleLabel(r)).join(', ') || '-')
+    : roleLabel(activeRole ?? '');
   const [open, setOpen] = useState<string | null>('diri');
   const [reveal, setReveal] = useState(false);
   const d = res.data ?? {};
@@ -105,7 +109,7 @@ export default function ProfilGtk() {
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <T variant="subtitle">{d.full_name}</T>
-            <T variant="caption" tone="secondary">{[d.nip ? `NIP ${d.nip}` : null, d.nuptk ? `NUPTK ${d.nuptk}` : null, d.peg_id ? `Peg ID ${d.peg_id}` : null].filter(Boolean).join(' · ') || roleLabel(activeRole ?? '')}</T>
+            <T variant="caption" tone="secondary">{[d.nip ? `NIP ${d.nip}` : null, d.nuptk ? `NUPTK ${d.nuptk}` : null, d.peg_id ? `Peg ID ${d.peg_id}` : null].filter(Boolean).join(' · ') || peranLabel}</T>
             {d.status_kepegawaian ? <T variant="caption" tone="muted">{String(d.status_kepegawaian).replace(/_/g, ' ')}</T> : null}
           </View>
         </Card>
