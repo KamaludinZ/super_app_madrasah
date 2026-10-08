@@ -234,7 +234,8 @@ async def get_guru_all_classes(user: Dict = Depends(require_role(*GURU_MAPEL_ROL
     schedules = await db.schedules.find({
         'teacher_id': user['id'],
         'semester_id': semester_id,
-        'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
+        # Jadwal aktif = bukan draft (jadwal input admin berstatus 'submitted', data lama tanpa status).
+        'status': {'$ne': 'draft'}
     }, {'_id': 0, 'class_id': 1}).to_list(500)
 
     # Get unique class IDs
@@ -272,7 +273,8 @@ async def get_guru_teachable_classes(date: str, user: Dict = Depends(require_rol
         'teacher_id': user['id'],
         'day': day,
         'semester_id': semester_id,
-        'status': {'$in': ['approved', 'locked']}  # Only approved/locked schedules
+        # Jadwal aktif = bukan draft (jadwal input admin berstatus 'submitted', data lama tanpa status).
+        'status': {'$ne': 'draft'}
     }, {'_id': 0, 'class_id': 1}).to_list(500)
 
     # Get unique class IDs
@@ -373,7 +375,7 @@ async def submit_class_cleanliness(req: ClassCleanlinessSubmit, request: Request
             'teacher_id': user['id'],
             'class_id': req.class_id,
             'semester_id': semester_id,
-            'status': {'$in': ['approved', 'locked']}
+            'status': {'$ne': 'draft'}
         })
 
         if not schedule:

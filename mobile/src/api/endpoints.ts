@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -119,6 +119,8 @@ export const api = {
   gtk: {
     absensiMy: (date_from: string, date_to: string) => request<GTKAbsensiMy>('/gtk/absensi/my', { query: { date_from, date_to } }),
     izinMy: () => request<GTKIzin[]>('/gtk/izin/my'),
+    profil: () => request<Record<string, any>>('/users/me/profile'),
+    kelengkapan: (id: string) => request<GtkKelengkapan>(`/gtk/${id}/kelengkapan`),
     izinCreate: (body: Omit<GTKIzin, 'id'>) => request<GTKIzin>('/gtk/izin', { method: 'POST', body }),
     izinUpdate: (id: string, body: Omit<GTKIzin, 'id'>) => request<GTKIzin>(`/gtk/izin/${id}`, { method: 'PUT', body }),
     izinDelete: (id: string) => request<{ message: string }>(`/gtk/izin/${id}`, { method: 'DELETE' }),

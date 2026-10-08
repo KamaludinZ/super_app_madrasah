@@ -488,3 +488,4 @@ export type GuruKontenInput = {
 };
 export type TugasSubmissionItem = { id?: string; student_id: string; student_name?: string | null; student_nis?: string | null; jawaban?: string; file_url?: string | null; submitted_at?: string; updated_at?: string | null };
 export type SubjectItem = { id: string; name: string; code?: string | null };
+export type GtkKelengkapan = { kelengkapan: Kelengkapan; jenis?: string };

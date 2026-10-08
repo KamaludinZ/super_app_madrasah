@@ -126,6 +126,8 @@ export default function ProfilScreen() {
       <Section title="Lainnya">
         {activeRole === 'siswa' ? (
           <ListItem icon="id-card-outline" title="Data diri lengkap" subtitle="Data siswa, orang tua, alamat, berkas & kelengkapan" onPress={() => router.push('/profil-siswa')} />
+        ) : activeRole && activeRole !== 'admin' && activeRole !== 'kelas' ? (
+          <ListItem icon="id-card-outline" title="Data diri lengkap" subtitle="Data GTK, kepegawaian, riwayat, berkas & kelengkapan" onPress={() => router.push('/profil-gtk')} />
         ) : null}
         {canPiket(activeRole, user?.roles) ? (
           <ListItem icon="shield-checkmark-outline" title="Tugas Piket" subtitle="Jadwal tanpa jurnal & tugas titipan hari ini" onPress={() => router.push('/piket' as any)} />
