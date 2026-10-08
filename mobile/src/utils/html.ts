@@ -25,3 +25,9 @@ export function htmlToText(html?: string | null): { text: string; links: { label
     .trim();
   return { text: s, links };
 }
+
+/** Teks biasa dari aplikasi → HTML sederhana untuk konten materi/tugas (paragraf & baris baru, aman di-escape). */
+export function textToHtml(text: string): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return text.trim().split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+}

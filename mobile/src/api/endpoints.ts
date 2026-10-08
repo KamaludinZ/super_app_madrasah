@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GradeEntry, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -67,6 +67,14 @@ export const api = {
       request<{ message: string; id: string }>(`/kelas/tugas/${id}/submit`, { method: 'POST', body }),
     materi: () => request<KelasMateri[]>('/kelas/materi'),
     materiDetail: (id: string) => request<KelasMateri>(`/kelas/materi/${id}`),
+    /** Guru: daftar milik sendiri, buat/ubah/hapus materi & tugas, pengumpulan tugas. */
+    guruList: (jenis: 'materi' | 'tugas') => request<GuruKonten[]>(`/kelas/${jenis}`),
+    guruCreate: (jenis: 'materi' | 'tugas', body: GuruKontenInput) => request<{ message: string; id: string }>(`/kelas/${jenis}`, { method: 'POST', body }),
+    guruUpdate: (jenis: 'materi' | 'tugas', id: string, body: GuruKontenInput) => request<{ message: string }>(`/kelas/${jenis}/${id}`, { method: 'PUT', body }),
+    guruDelete: (jenis: 'materi' | 'tugas', id: string) => request<{ message: string }>(`/kelas/${jenis}/${id}`, { method: 'DELETE' }),
+    submissions: (tugasId: string) => request<{ total_submissions: number; submissions: TugasSubmissionItem[] }>(`/kelas/tugas/${tugasId}/submissions`),
+    classStudents: (classId: string) => request<{ id: string; full_name: string; nis?: string | null }[]>(`/classes/${classId}/students`),
+    subjects: () => request<SubjectItem[]>('/subjects'),
   },
 
   rapor: {

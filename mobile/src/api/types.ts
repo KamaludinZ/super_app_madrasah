@@ -474,3 +474,17 @@ export type GradeEntry = {
   nilai_pengetahuan?: number | null; nilai_keterampilan?: number | null; nilai_akhir?: number | null; predicate?: string | null; description?: string | null;
 };
 export type GradeInput = { student_id: string; nilai_pengetahuan: number | null; nilai_keterampilan: number | null; description: string };
+
+/** Materi/tugas buatan guru (Kelas Digital) beserta sasaran. */
+export type TargetSiswa = { class_id: string; student_ids: string[] | 'all' };
+export type GuruKonten = {
+  id: string; judul: string; deskripsi?: string | null; konten?: string | null; file_url?: string | null; deadline?: string | null;
+  subject_id?: string | null; subject_name?: string | null; target_role?: string[] | string; target_kelas_ids?: string[];
+  target_siswa?: TargetSiswa[]; created_at?: string; teacher_id?: string;
+};
+export type GuruKontenInput = {
+  judul: string; deskripsi: string | null; konten: string; file_url: string | null; deadline?: string | null;
+  subject_id: string; target_role: string[]; target_kelas_ids: string[]; target_siswa: TargetSiswa[];
+};
+export type TugasSubmissionItem = { id?: string; student_id: string; student_name?: string | null; student_nis?: string | null; jawaban?: string; file_url?: string | null; submitted_at?: string; updated_at?: string | null };
+export type SubjectItem = { id: string; name: string; code?: string | null };
