@@ -22,10 +22,10 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/verval/ajuan-saya') return '/verval';
   // Jadwal: siswa (kelasnya), wali kelas (kelas wali), guru & lainnya (jadwal mengajarnya)
   if (p === '/jadwal') return '/jadwal';
-  // Admin & wali kelas memverifikasi/menginput prestasi siswa → tetap di modul web (Fase 2).
+  // Admin, Waka Kesiswaan & wali kelas memproses/memverifikasi prestasi siswa → modul web (Fase 2).
   // Pembina & admin mengelola anggota/absensi/nilai ekskul → tetap di modul web (Fase 2).
   if (p === '/ekstrakurikuler' && role !== 'admin' && role !== 'guru_ekstrakurikuler') return '/ekskul';
-  if (p === '/prestasi' && role !== 'admin' && role !== 'wali_kelas') return '/prestasi';
+  if (p === '/prestasi' && !['admin', 'wali_kelas', 'waka_kesiswaan'].includes(role ?? '')) return '/prestasi';
   return null;
 }
 

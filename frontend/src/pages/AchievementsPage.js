@@ -151,19 +151,37 @@ export default function AchievementsPage() {
   const { activeRole, user } = useAuth();
   const [academicYears, setAcademicYears] = useState([]);
   const activeAcademicYear = useMemo(() => academicYears.find((ay) => ay.is_active), [academicYears]);
+  // Peran (sama dengan backend routers/prestasi_akses.py):
+  // - admin: kelola semua. - Waka Kesiswaan: pemegang data prestasi SISWA (proses ajuan, verifikasi,
+  //   tambah/ubah/hapus prestasi siswa). - Wali kelas: proses & verifikasi prestasi siswa kelasnya.
+  // - Pemantau (kepala, penjamin mutu, waka lain, unit pelayanan): lihat semua tanpa aksi.
+  // - Guru (semua peran guru_*), tendik, siswa: ajukan prestasi sendiri lewat verval.
   const isAdmin = activeRole === 'admin';
   const isWaliKelas = activeRole === 'wali_kelas';
+  const isKesiswaan = activeRole === 'waka_kesiswaan';
   const isSiswa = activeRole === 'siswa';
-  const isGuru = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'].includes(activeRole);
+  const isGuru = activeRole === 'guru' || isWaliKelas || (activeRole || '').startsWith('guru_');
   const isTendik = activeRole === 'tenaga_kependidikan';
-  const canVerify = isAdmin || isWaliKelas;
-  const submitsViaVerval = !isAdmin;
   // Guru BK's "Data Prestasi" menu item is meant to browse student achievements
   // (like admin's reporting view), not just their own guru submissions.
   const isGuruBk = activeRole === 'guru_bk';
+  const isPemantau = ['kepala_sekolah', 'penjamin_mutu', 'waka_kurikulum', 'waka_humas', 'waka_sarpras', 'unit_pelayanan'].includes(activeRole);
+  const canVerify = isAdmin || isWaliKelas || isKesiswaan;
+  const submitsViaVerval = !(isAdmin || isWaliKelas || isKesiswaan);
+  const isReviewer = isAdmin || isWaliKelas || isKesiswaan || isGuruBk || isPemantau;
+  // Aksi kelola untuk satu prestasi/ajuan (backend tetap memeriksa, mis. wali kelas hanya kelasnya).
+  const canManageItem = (a) => isAdmin || ((isKesiswaan || isWaliKelas) && holderTypeOf(a) === 'siswa');
 
-  // Default tab based on role
-  const defaultHolder = isSiswa ? 'siswa' : isGuruBk ? 'siswa' : isGuru ? 'guru' : isTendik ? 'tendik' : 'siswa';
+  // Tab pemegang yang tampil per peran; tab pertama menjadi bawaan.
+  const visibleHolderTabs = HOLDER_TABS.filter((t) => {
+    if (isAdmin || isPemantau) return true;
+    if (isWaliKelas || isKesiswaan || isSiswa) return t.value === 'siswa';
+    if (isGuruBk) return t.value === 'siswa' || t.value === 'guru';
+    if (isGuru) return t.value === 'guru';
+    if (isTendik) return t.value === 'tendik';
+    return t.value === 'siswa';
+  });
+  const defaultHolder = visibleHolderTabs[0]?.value || 'siswa';
 
   const [holderTab, setHolderTab] = useState(defaultHolder);
   // Default to "Semua" so admin/wali kelas don't land on an empty "Menunggu"
@@ -196,7 +214,6 @@ export default function AchievementsPage() {
       //   miliknya sendiri), agar bisa memantau status "Menunggu" di tab Data Prestasi.
       // - role lain: hanya pengajuan milik sendiri.
       try {
-        const isReviewer = isAdmin || isWaliKelas || isGuruBk;
         const { data: vReqs } = await api.get('/verval-requests', {
           params: {
             request_type: 'prestasi_create',
@@ -207,6 +224,8 @@ export default function AchievementsPage() {
           .filter((r) => r.status === 'pending' || r.status === 'rejected')
           .map((r) => ({
             ...(r.new_data || {}),
+            holder_full_name: r.holder_full_name || r.new_data?.holder_full_name || r.submitted_by_name,
+            class_name: r.class_name || r.new_data?.class_name,
             id: `verval-${r.id}`,
             is_verified: false,
             submitted_by: r.submitted_by,
@@ -235,7 +254,11 @@ export default function AchievementsPage() {
           setAcademicYears(data || []);
         } catch (e) { /* non-fatal */ }
         if (canVerify || isAdmin) {
-          if (isWaliKelas) {
+          if (isKesiswaan) {
+            // Waka Kesiswaan memilih dari seluruh siswa aktif.
+            const { data } = await api.get('/students');
+            setStudents((data || []).filter((u) => u.is_active !== false && u.mutation_type !== 'keluar'));
+          } else if (isWaliKelas) {
             // Wali kelas uses /students endpoint with their homeroom_class_id
             const myClassId = user?.homeroom_class_id;
             console.log('Wali Kelas - homeroom_class_id:', myClassId);
@@ -272,7 +295,7 @@ export default function AchievementsPage() {
     let initialHolder = holderTab;
     let initialId = '';
     if (isSiswa) { initialHolder = 'siswa'; initialId = user?.id || ''; }
-    else if (isWaliKelas) { initialHolder = 'siswa'; initialId = ''; } // Wali kelas always creates for siswa
+    else if (isWaliKelas || isKesiswaan) { initialHolder = 'siswa'; initialId = ''; } // selalu untuk siswa
     else if (isGuru && !isWaliKelas) { initialHolder = 'guru'; initialId = user?.id || ''; }
     else if (isTendik) { initialHolder = 'tendik'; initialId = user?.id || ''; }
     setForm({ ...EMPTY, holder_type: initialHolder, holder_id: initialId, academic_year_label: activeAcademicYear?.name || '' });
@@ -337,9 +360,9 @@ export default function AchievementsPage() {
       if (editing) {
         await api.put(`/achievements/${editing.id}`, payload);
         toast.success('Prestasi diperbarui');
-      } else if (isAdmin) {
+      } else if (isAdmin || isKesiswaan || isWaliKelas) {
         await api.post('/achievements', payload);
-        toast.success('Prestasi disimpan');
+        toast.success(isAdmin ? 'Prestasi disimpan' : 'Prestasi disimpan. Jangan lupa verifikasi.');
       } else {
         // Non-admin (siswa, guru, tendik, wali_kelas) - submit via verval request
         await api.post('/verval-requests', {
@@ -358,6 +381,39 @@ export default function AchievementsPage() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan');
     }
+  };
+
+  // Proses ajuan prestasi (verval) langsung dari halaman ini: setujui → prestasi tercatat terverifikasi;
+  // tolak → wajib catatan, pengaju menerima notifikasi.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [processing, setProcessing] = useState(null);
+  const canProcess = (a) => a._isPendingRequest && a._vervalStatus === 'pending' && canManageItem(a);
+
+  const handleApprove = async (a) => {
+    if (!(await confirmDialog(`Setujui ajuan prestasi "${a.name}"? Prestasi akan tercatat terverifikasi.`))) return;
+    setProcessing(a.id);
+    try {
+      await api.post(`/verval-requests/${a._vervalRequestId}/approve`, {});
+      toast.success('Ajuan prestasi disetujui');
+      setDetail(null);
+      await refresh();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal menyetujui ajuan'); }
+    finally { setProcessing(null); }
+  };
+
+  const handleReject = async () => {
+    const a = rejecting;
+    if (!a) return;
+    if (!rejectNotes.trim()) { toast.error('Catatan penolakan wajib diisi'); return; }
+    setProcessing(a.id);
+    try {
+      await api.post(`/verval-requests/${a._vervalRequestId}/reject`, { admin_notes: rejectNotes.trim() });
+      toast.success('Ajuan prestasi ditolak');
+      setRejecting(null); setRejectNotes(''); setDetail(null);
+      await refresh();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'Gagal menolak ajuan'); }
+    finally { setProcessing(null); }
   };
 
   const handleVerify = async (a) => {
@@ -470,20 +526,9 @@ export default function AchievementsPage() {
 
   if (loading) return <div className="text-sm text-slate-500">Memuat...</div>;
 
-  // Decide which holder tabs to show: siswa always; others if admin or pure tendik/guru
-  const visibleHolderTabs = HOLDER_TABS.filter((t) => {
-    if (isAdmin) return true; // Admin sees all tabs
-    if (isWaliKelas) return t.value === 'siswa'; // Wali kelas only sees siswa tab
-    if (isSiswa) return t.value === 'siswa';
-    if (isGuruBk) return t.value === 'siswa' || t.value === 'guru'; // Guru BK browses siswa prestasi too
-    if (isGuru && !isWaliKelas) return t.value === 'guru'; // Pure guru (not wali kelas)
-    if (isTendik) return t.value === 'tendik';
-    return false;
-  });
-
   const canAddInTab = () => {
-    if (holderTab === 'siswa') return isSiswa || isAdmin || isWaliKelas;
-    if (holderTab === 'guru') return isGuru || isAdmin;
+    if (holderTab === 'siswa') return isSiswa || isAdmin || isWaliKelas || isKesiswaan;
+    if (holderTab === 'guru') return (isGuru && !isWaliKelas) || isAdmin;
     if (holderTab === 'tendik') return isTendik || isAdmin;
     if (holderTab === 'madrasah') return isAdmin;
     return false;
@@ -740,17 +785,27 @@ export default function AchievementsPage() {
                               </TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex justify-end gap-1">
-                                  {canVerify && !a.is_verified && !a._isPendingRequest && (
+                                  {canProcess(a) && (
+                                    <>
+                                      <Button size="icon" variant="ghost" disabled={processing === a.id} onClick={() => handleApprove(a)} className="text-emerald-600 hover:text-emerald-700" title="Setujui ajuan" data-testid={`approve-request-${a.id}`}>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" disabled={processing === a.id} onClick={() => { setRejecting(a); setRejectNotes(''); }} className="text-rose-600 hover:text-rose-700" title="Tolak ajuan" data-testid={`reject-request-${a.id}`}>
+                                        <XCircle className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {canVerify && canManageItem(a) && !a.is_verified && !a._isPendingRequest && (
                                     <Button size="icon" variant="ghost" onClick={() => handleVerify(a)} className="text-emerald-600 hover:text-emerald-700" title="Verifikasi" data-testid={`verify-achievement-${a.id}`}>
                                       <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {!a._isPendingRequest && (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
+                                  {!a._isPendingRequest && (canManageItem(a) || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified)) && (
                                     <Button size="icon" variant="ghost" onClick={() => openEdit(a)} title="Edit" data-testid={`edit-achievement-${a.id}`}>
                                       <Pencil className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {(a._isPendingRequest ? (a._vervalStatus === 'pending' && (isAdmin || a.submitted_by === user?.id)) : (isAdmin || ((a.submitted_by === user?.id || (a.holder_id || a.student_id) === user?.id) && !a.is_verified))) && (
+                                  {(a._isPendingRequest ? (a._vervalStatus === 'pending' && (isAdmin || a.submitted_by === user?.id)) : (isAdmin || (isKesiswaan && holderTypeOf(a) === 'siswa') || (a.submitted_by === user?.id && !a.is_verified))) && (
                                     <Button size="icon" variant="ghost" onClick={() => handleDelete(a)} className="text-rose-600 hover:text-rose-700" title={a._isPendingRequest ? 'Batalkan Pengajuan' : 'Hapus'} data-testid={`delete-achievement-${a.id}`}>
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -789,7 +844,7 @@ export default function AchievementsPage() {
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
             {/* Holder Type selector - locked for siswa/guru/tendik unless admin - hidden for wali_kelas */}
-            {!isWaliKelas && (
+            {!isWaliKelas && !isKesiswaan && (
               <div className="sm:col-span-2">
                 <Label>Kategori Pemegang Prestasi *</Label>
                 <Select
@@ -808,7 +863,7 @@ export default function AchievementsPage() {
             )}
 
             {/* Holder ID/Name selector based on type */}
-            {form.holder_type === 'siswa' && (isAdmin || isWaliKelas) && (
+            {form.holder_type === 'siswa' && (isAdmin || ((isWaliKelas || isKesiswaan) && !editing)) && (
               <div className="sm:col-span-2">
                 <Label>Siswa * {isWaliKelas && students.length > 0 && `(${students.length} siswa di kelas Anda)`}</Label>
                 <Select value={form.holder_id || ''} onValueChange={(v) => setForm({ ...form, holder_id: v })}>
@@ -1137,7 +1192,17 @@ export default function AchievementsPage() {
                 ) : (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-200">Menunggu Verifikasi</Badge>
                 )}
-                {canVerify && !detail.is_verified && !detail._isPendingRequest && (
+                {canProcess(detail) && (
+                  <div className="flex gap-2">
+                    <Button variant="outline" disabled={processing === detail.id} onClick={() => { setRejecting(detail); setRejectNotes(''); }} className="gap-2 text-rose-700 border-rose-200 hover:bg-rose-50" data-testid="reject-from-detail">
+                      <XCircle className="h-4 w-4" /> Tolak
+                    </Button>
+                    <Button disabled={processing === detail.id} onClick={() => handleApprove(detail)} className="bg-emerald-600 hover:bg-emerald-700 gap-2" data-testid="approve-from-detail">
+                      <CheckCircle2 className="h-4 w-4" /> Setujui
+                    </Button>
+                  </div>
+                )}
+                {canVerify && canManageItem(detail) && !detail.is_verified && !detail._isPendingRequest && (
                   <Button onClick={() => { handleVerify(detail); setDetail(null); }} className="bg-emerald-600 hover:bg-emerald-700 gap-2" data-testid="verify-from-detail">
                     <CheckCircle2 className="h-4 w-4" /> Verifikasi Sekarang
                   </Button>
@@ -1145,6 +1210,29 @@ export default function AchievementsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tolak ajuan prestasi */}
+      <Dialog open={!!rejecting} onOpenChange={(o) => { if (!o) { setRejecting(null); setRejectNotes(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tolak Ajuan Prestasi</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <p className="text-sm text-slate-600">
+              {rejecting?.name}{rejecting?.holder_full_name || rejecting?.holder_name ? ` — ${rejecting?.holder_full_name || rejecting?.holder_name}` : ''}
+            </p>
+            <Label>Catatan penolakan *</Label>
+            <Textarea value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} rows={3}
+              placeholder="Jelaskan yang perlu diperbaiki agar pengaju dapat mengajukan ulang..." data-testid="reject-notes" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejecting(null); setRejectNotes(''); }}>Batal</Button>
+            <Button onClick={handleReject} disabled={processing === rejecting?.id} className="bg-rose-600 hover:bg-rose-700" data-testid="reject-confirm">
+              Tolak Ajuan
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -74,12 +74,12 @@ export const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_
 /** Tab pemegang yang tampil & tab tempat peran boleh mengajukan prestasi (mengikuti web). */
 export function holderAccess(role: string | null | undefined) {
   if (role === 'siswa') return { tabs: ['siswa'] as Holder[], canAdd: 'siswa' as Holder, reviewer: false };
-  if (role === 'wali_kelas') return { tabs: ['siswa'] as Holder[], canAdd: null, reviewer: true };
+  if (role === 'wali_kelas' || role === 'waka_kesiswaan') return { tabs: ['siswa'] as Holder[], canAdd: null, reviewer: true };
   if (role === 'guru_bk') return { tabs: ['siswa', 'guru'] as Holder[], canAdd: 'guru' as Holder, reviewer: true };
-  if (role && GURU_ROLES.includes(role)) return { tabs: ['guru'] as Holder[], canAdd: 'guru' as Holder, reviewer: false };
+  if (role && (GURU_ROLES.includes(role) || role.startsWith('guru_'))) return { tabs: ['guru'] as Holder[], canAdd: 'guru' as Holder, reviewer: false };
   if (role === 'tenaga_kependidikan') return { tabs: ['tendik'] as Holder[], canAdd: 'tendik' as Holder, reviewer: false };
-  // Kepala madrasah, waka, dll.: lihat seluruh prestasi (tanpa mengajukan dari aplikasi).
-  return { tabs: ['siswa', 'guru', 'tendik', 'madrasah'] as Holder[], canAdd: null, reviewer: false };
+  // Pemantau (kepala madrasah, waka, penjamin mutu, unit pelayanan): seluruh prestasi termasuk ajuan menunggu.
+  return { tabs: ['siswa', 'guru', 'tendik', 'madrasah'] as Holder[], canAdd: null, reviewer: true };
 }
 
 export const holderOf = (a: Achievement): Holder =>
@@ -99,6 +99,7 @@ export async function loadPrestasi(reviewer: boolean): Promise<Achievement[]> {
         id: `verval-${r.id}`,
         is_verified: false,
         _vervalRequestId: r.id,
+        _vervalOwner: r.user_id,
         _vervalStatus: r.status,
         _adminNotes: r.admin_notes ?? null,
       }));

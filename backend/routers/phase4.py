@@ -21,6 +21,7 @@ from models_phase4 import (
 )
 
 from routers._shared import sembunyikan_siswa_nonaktif
+from routers.prestasi_akses import peran_prestasi, siswa_kelas_wali
 
 router = APIRouter()
 
@@ -55,6 +56,9 @@ async def list_achievements(student_id: Optional[str] = None,
     if is_pure_siswa and not is_admin and not is_wk:
         if not student_id and not holder_id:
             q['$or'] = [{'student_id': user['id']}, {'holder_id': user['id']}]
+    elif peran_prestasi(user) == 'wali_kelas' and not student_id and not holder_id:
+        # Wali kelas memantau & memverifikasi prestasi siswa kelas binaannya saja.
+        q['student_id'] = {'$in': await siswa_kelas_wali(user)}
     await sembunyikan_siswa_nonaktif(q, 'student_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.achievements.find(q, {'_id': 0}).sort([('year', -1), ('date', -1)]).to_list(1000)
     enriched = []
@@ -98,13 +102,18 @@ async def create_achievement(payload: Dict, request: Request, user: Dict = Depen
         raise HTTPException(400, "holder_type tidak valid")
     holder_id = payload.get('holder_id') or payload.get('student_id')
     is_admin = 'admin' in user.get('roles', [])
-    is_wk = 'wali_kelas' in user.get('roles', [])
+    peran = peran_prestasi(user)
     if holder_type == 'siswa':
-        if 'siswa' in user.get('roles', []) and not (is_admin or is_wk):
+        if peran in ('admin', 'kesiswaan'):
+            if not holder_id:
+                raise HTTPException(400, "Pilih siswa pemegang prestasi")
+        elif peran == 'wali_kelas':
+            if not holder_id or holder_id not in await siswa_kelas_wali(user):
+                raise HTTPException(403, "Wali kelas hanya bisa input prestasi siswa kelas binaannya")
+        else:
+            # Siswa (atau peran lain) hanya untuk diri sendiri; ajuan siswa normalnya lewat verval.
             if holder_id and holder_id != user['id']:
-                raise HTTPException(403, "Siswa hanya bisa input prestasi sendiri")
-            holder_id = user['id']
-        if not holder_id and not (is_admin or is_wk):
+                raise HTTPException(403, "Anda hanya bisa input prestasi sendiri")
             holder_id = user['id']
     elif holder_type in ('guru', 'tendik'):
         if not is_admin:
@@ -152,18 +161,35 @@ async def create_achievement(payload: Dict, request: Request, user: Dict = Depen
     return serialize_doc(doc)
 
 
+async def _boleh_kelola_prestasi(user: Dict, ach: Dict, hapus: bool = False) -> bool:
+    """Admin: semua. Waka Kesiswaan: prestasi siswa. Wali kelas: verifikasi/ubah prestasi siswa kelasnya
+    (menghapus prestasi hanya admin & Waka Kesiswaan)."""
+    peran = peran_prestasi(user)
+    if peran == 'admin':
+        return True
+    is_siswa = (ach.get('holder_type') or ('siswa' if ach.get('student_id') else 'madrasah')) == 'siswa'
+    if peran == 'kesiswaan':
+        return is_siswa
+    if peran == 'wali_kelas' and is_siswa and not hapus:
+        return ach.get('student_id') in await siswa_kelas_wali(user)
+    return False
+
+
 @router.put("/achievements/{aid}")
 async def update_achievement(aid: str, payload: Dict, request: Request,
                              user: Dict = Depends(get_current_user)):
     existing = await db.achievements.find_one({'id': aid})
     if not existing:
         raise HTTPException(404, "Tidak ditemukan")
-    is_admin = 'admin' in user.get('roles', [])
     holder_uid = existing.get('holder_id') or existing.get('student_id')
     is_owner = existing.get('submitted_by') == user['id'] or holder_uid == user['id']
-    if not (is_admin or is_owner):
+    if not (await _boleh_kelola_prestasi(user, existing) or (is_owner and not existing.get('is_verified'))):
         raise HTTPException(403, "Tidak diizinkan")
     payload.pop('_id', None); payload.pop('id', None)
+    # Status verifikasi & pemilik tidak bisa diubah lewat edit biasa.
+    for k in ('is_verified', 'verified_by', 'verified_at', 'submitted_by', 'student_id', 'holder_id', 'holder_type'):
+        if peran_prestasi(user) != 'admin':
+            payload.pop(k, None)
     if 'date' in payload and not payload.get('year'):
         payload['year'] = _derive_year_from_date(payload.get('date'))
     await db.achievements.update_one({'id': aid}, {'$set': payload})
@@ -192,7 +218,12 @@ async def _notify_achievement_verified(doc: Dict, by: Dict):
 
 @router.put("/achievements/{aid}/verify")
 async def verify_achievement(aid: str, request: Request,
-                             user: Dict = Depends(require_role('admin', 'wali_kelas'))):
+                             user: Dict = Depends(require_role('admin', 'wali_kelas', 'waka_kesiswaan'))):
+    existing = await db.achievements.find_one({'id': aid}, {'_id': 0})
+    if not existing:
+        raise HTTPException(404, "Tidak ditemukan")
+    if not await _boleh_kelola_prestasi(user, existing):
+        raise HTTPException(403, "Anda tidak berwenang memverifikasi prestasi ini")
     await db.achievements.update_one({'id': aid}, {'$set': {
         'is_verified': True, 'verified_by': user['id'],
         'verified_at': datetime.utcnow().isoformat(),
@@ -209,9 +240,8 @@ async def delete_achievement(aid: str, request: Request, user: Dict = Depends(ge
     existing = await db.achievements.find_one({'id': aid})
     if not existing:
         raise HTTPException(404, "Tidak ditemukan")
-    is_admin = 'admin' in user.get('roles', [])
-    is_owner = existing.get('submitted_by') == user['id']
-    if not (is_admin or is_owner):
+    is_owner = existing.get('submitted_by') == user['id'] and not existing.get('is_verified')
+    if not (await _boleh_kelola_prestasi(user, existing, hapus=True) or is_owner):
         raise HTTPException(403, "Tidak diizinkan")
     await db.achievements.delete_one({'id': aid})
     await log_audit(user, 'delete', 'achievement', aid, request=request)

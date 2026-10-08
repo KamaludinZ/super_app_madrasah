@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 from models import VervalRequestModel
+from routers.prestasi_akses import peran_prestasi, pemegang_siswa_ajuan, rapikan_pemegang, siswa_kelas_wali
 
 router = APIRouter()
 
@@ -34,6 +35,27 @@ async def _wali_kelas_student_ids(user: Dict) -> List[str]:
         {'_id': 0, 'id': 1}
     ).to_list(2000)
     return [s['id'] for s in students if s.get('id')]
+
+
+async def _cek_peninjau(user: Dict, verval_req: Dict) -> str:
+    """Peran peninjau untuk ajuan ini (admin / kesiswaan / wali_kelas) atau 403.
+    Waka Kesiswaan hanya memproses ajuan prestasi siswa; wali kelas hanya ajuan siswa kelas binaannya
+    (termasuk ajuan prestasi yang diajukan atas nama siswa tersebut)."""
+    peran = peran_prestasi(user)
+    if peran == 'admin':
+        return 'admin'
+    siswa_id = pemegang_siswa_ajuan(verval_req)
+    if peran == 'kesiswaan':
+        if verval_req.get('request_type') != 'prestasi_create' or not siswa_id:
+            raise HTTPException(403, "Waka Kesiswaan hanya memproses ajuan prestasi siswa")
+        return 'waka_kesiswaan'
+    if peran == 'wali_kelas':
+        if not siswa_id:
+            raise HTTPException(403, "Wali kelas hanya dapat memproses ajuan siswa")
+        if siswa_id not in await siswa_kelas_wali(user):
+            raise HTTPException(403, "Anda hanya bisa mereview siswa di kelas binaan Anda")
+        return 'wali_kelas'
+    raise HTTPException(403, "Tidak berwenang memproses ajuan ini")
 
 
 @router.get("/verval-requests")
@@ -60,17 +82,20 @@ async def list_verval_requests(
     query: Dict = {}
 
     is_admin = 'admin' in user.get('roles', [])
-    is_guru_bk_prestasi_view = (
-        reviewer_view and user.get('active_role') == 'guru_bk'
-        and request_type == 'prestasi_create'
-    )
+    peran = peran_prestasi(user)
+    prestasi_view = reviewer_view and request_type == 'prestasi_create'
 
-    if is_admin or is_guru_bk_prestasi_view:
-        pass  # no scoping — see everything, same as admin
+    if is_admin or (prestasi_view and peran == 'viewer'):
+        pass  # no scoping — see everything, same as admin (pemantau prestasi: lihat saja)
+    elif prestasi_view and peran == 'kesiswaan':
+        # Waka Kesiswaan memegang data prestasi siswa: semua ajuan prestasi untuk siswa.
+        query['$or'] = [{'user_type': 'siswa'}, {'new_data.holder_type': 'siswa'}]
     elif reviewer_view and _reviewer_role(user) == 'wali_kelas':
         student_ids = await _wali_kelas_student_ids(user)
-        query['user_id'] = {'$in': student_ids}
-        query['user_type'] = 'siswa'
+        query['$or'] = [
+            {'user_id': {'$in': student_ids}, 'user_type': 'siswa'},
+            {'request_type': 'prestasi_create', 'new_data.holder_type': 'siswa', 'new_data.holder_id': {'$in': student_ids}},
+        ]
     else:
         query['user_id'] = user['id']
 
@@ -82,7 +107,30 @@ async def list_verval_requests(
         query['request_type'] = request_type
 
     requests = await db.verval_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    await _lengkapi_pemegang_prestasi(requests)
     return [serialize_doc(r) for r in requests]
+
+
+async def _lengkapi_pemegang_prestasi(requests: List[Dict]) -> None:
+    """Ajuan prestasi: tambahkan nama pemegang & kelas (siswa) agar peninjau tahu milik siapa."""
+    users: Dict[str, Dict] = {}
+    kelas: Dict[str, Optional[str]] = {}
+    for r in requests:
+        if r.get('request_type') != 'prestasi_create':
+            continue
+        uid = pemegang_siswa_ajuan(r) or (r.get('new_data') or {}).get('holder_id') or r.get('user_id')
+        if not uid:
+            continue
+        if uid not in users:
+            users[uid] = await db.users.find_one({'id': uid}, {'_id': 0, 'full_name': 1, 'student_class_id': 1}) or {}
+        u = users[uid]
+        r['holder_full_name'] = u.get('full_name')
+        cid = u.get('student_class_id')
+        if cid:
+            if cid not in kelas:
+                c = await db.classes.find_one({'id': cid}, {'_id': 0, 'name': 1})
+                kelas[cid] = c.get('name') if c else None
+            r['class_name'] = kelas[cid]
 
 
 @router.get("/verval-requests/{request_id}")
@@ -102,12 +150,19 @@ async def get_verval_request(request_id: str, user: Dict = Depends(get_current_u
     if role == 'admin':
         return serialize_doc(req)
 
-    # wali kelas reviewer hanya untuk siswa binaannya
+    # ajuan prestasi: Waka Kesiswaan (prestasi siswa) & pemantau prestasi boleh melihat
+    peran = peran_prestasi(user)
+    if req.get('request_type') == 'prestasi_create' and (
+        peran == 'viewer' or (peran == 'kesiswaan' and pemegang_siswa_ajuan(req))
+    ):
+        return serialize_doc(req)
+
+    # wali kelas reviewer hanya untuk siswa binaannya (termasuk ajuan prestasi atas nama siswa tsb)
     if role == 'wali_kelas':
-        if req.get('user_type') != 'siswa':
+        siswa_id = pemegang_siswa_ajuan(req)
+        if not siswa_id:
             raise HTTPException(403, "Wali kelas hanya dapat mereview request siswa")
-        student_ids = await _wali_kelas_student_ids(user)
-        if req['user_id'] in student_ids:
+        if siswa_id in await _wali_kelas_student_ids(user):
             return serialize_doc(req)
 
     raise HTTPException(403, "Tidak ada akses")
@@ -231,7 +286,7 @@ async def approve_verval_request(
     request_id: str,
     payload: Dict,
     req: Request,
-    user: Dict = Depends(require_role('admin', 'wali_kelas'))
+    user: Dict = Depends(require_role('admin', 'wali_kelas', 'waka_kesiswaan'))
 ):
     """
     Approve verval request dan apply perubahan berdasarkan request_type.
@@ -243,13 +298,7 @@ async def approve_verval_request(
     if verval_req['status'] != 'pending':
         raise HTTPException(400, f"Request sudah {verval_req['status']}")
 
-    role = _reviewer_role(user)
-    if role == 'wali_kelas':
-        if verval_req.get('user_type') != 'siswa':
-            raise HTTPException(403, "Wali kelas hanya dapat approve request siswa")
-        student_ids = await _wali_kelas_student_ids(user)
-        if verval_req['user_id'] not in student_ids:
-            raise HTTPException(403, "Anda hanya bisa mereview siswa di kelas binaan Anda")
+    role = await _cek_peninjau(user, verval_req)
 
     request_type = verval_req.get('request_type', 'profile_update')
 
@@ -304,14 +353,14 @@ async def approve_verval_request(
         ach['is_verified'] = True
         ach['verified_by'] = user['id']
         ach['verified_at'] = datetime.utcnow().isoformat()
-        # fallback student ownership
-        if not ach.get('student_id'):
-            ach['student_id'] = verval_req.get('user_id')
+        # Pemilik prestasi: siswa → student_id, guru/tendik → holder_id (dulu prestasi guru ikut tercatat
+        # sebagai student_id, dan ajuan wali kelas atas nama siswa tercatat milik wali kelas).
+        rapikan_pemegang(ach, verval_req.get('user_id'))
         await db.achievements.insert_one(ach)
     else:
         raise HTTPException(400, "request_type tidak didukung")
 
-    reviewed_by_role = role or 'admin'
+    reviewed_by_role = role
 
     # Update verval request status
     await db.verval_requests.update_one(
@@ -345,7 +394,7 @@ async def reject_verval_request(
     request_id: str,
     payload: Dict,
     req: Request,
-    user: Dict = Depends(require_role('admin', 'wali_kelas'))
+    user: Dict = Depends(require_role('admin', 'wali_kelas', 'waka_kesiswaan'))
 ):
     """
     Reject verval request dengan catatan.
@@ -362,15 +411,9 @@ async def reject_verval_request(
     if verval_req['status'] != 'pending':
         raise HTTPException(400, f"Request sudah {verval_req['status']}")
 
-    role = _reviewer_role(user)
-    if role == 'wali_kelas':
-        if verval_req.get('user_type') != 'siswa':
-            raise HTTPException(403, "Wali kelas hanya dapat reject request siswa")
-        student_ids = await _wali_kelas_student_ids(user)
-        if verval_req['user_id'] not in student_ids:
-            raise HTTPException(403, "Anda hanya bisa mereview siswa di kelas binaan Anda")
+    role = await _cek_peninjau(user, verval_req)
 
-    reviewed_by_role = role or 'admin'
+    reviewed_by_role = role
 
     await db.verval_requests.update_one(
         {'id': request_id},

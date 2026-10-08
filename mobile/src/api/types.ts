@@ -402,7 +402,7 @@ export type Achievement = {
   jenis_lomba?: string | null; jenis_penyelenggara?: string | null; mode_pelaksanaan?: string | null; tempat_pelaksanaan?: string | null;
   cara_mengikuti?: string | null; jenis_hadiah?: string[] | null; nama_pembina?: string | null; description?: string | null;
   certificate_url?: string | null; photo_url?: string | null; is_verified?: boolean; verifier_name?: string | null;
-  _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null;
+  _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null _vervalOwner?: string;
 };
 export type AcademicYear = { id: string; name: string; is_active?: boolean };
 export type Extracurricular = {

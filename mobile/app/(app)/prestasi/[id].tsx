@@ -74,7 +74,7 @@ export default function PrestasiDetail() {
 
   const st = statusOf(a);
   const holderLabel = HOLDERS.find((h) => h.value === holderOf(a))?.label ?? '-';
-  const canCancel = a._vervalStatus === 'pending' && access.canAdd != null;
+  const canCancel = a._vervalStatus === 'pending' && a._vervalOwner === user?.id;
 
   return (
     <Screen title="Detail Prestasi" back refreshing={res.refreshing} onRefresh={res.refresh}
