@@ -23,7 +23,7 @@ fitur tetap bisa dipakai selama pengerjaan bertahap.
 ## Fase
 | Fase | Fokus | Isi |
 |---|---|---|
-| 1 | **Siswa** (harian, ringan) | Jadwal, Tugas (lihat & kumpulkan), Materi, Kehadiran, Rapor, Prestasi, Ekstrakurikuler, CLKB, PCL, Profil, Ajuan Verval |
+| 1 ✅ selesai | **Siswa** (harian, ringan) | Jadwal, Tugas (lihat & kumpulkan), Materi, Kehadiran, Rapor, Prestasi, Ekstrakurikuler, CLKB, PCL, Profil, Ajuan Verval |
 | 2 | **Guru & Tendik harian** | Agenda Saya, Titipkan Tugas, Tugas & Materi kelas (buat, lihat pengumpulan, nilai), Input Nilai, Kebersihan Kelas, Laporan, Absensi Saya, Jadwal Piket, Profil |
 | 3 | **Kepegawaian & akademik lanjutan** | E-Kinerja (RHK, SKP, LCKB, jurnal harian), Profesionalitas GTK, Input Indikator & Materi, Atur Jadwal Saya |
 | 4 | **Kepala Madrasah** (pemantauan) | Data Jurnal, Kehadiran Siswa, Data Siswa & GTK (cari + detail), Agenda Guru/Tendik, Laporan Absensi GTK, Kegiatan, Kebersihan, DANA RKAM, Tata Tertib, BK, UKS, Perpus, Sarpras, Alumni |
@@ -38,17 +38,17 @@ Perkiraan: fase 1–2 adalah prioritas pemakaian harian; fase 4 berisi banyak ha
 | ✅ sudah | Guru Pengganti (`/guru-pengganti`) | Piket | 292 baris | (komponen bersama) |
 | ✅ sudah | Riwayat Jurnal (`/jurnal/riwayat`) | Guru, Piket | 1035 baris | `GET /journals/{id}/attendance`<br>`PUT /admin/jurnal/{id}` |
 | ✅ sudah | Jurnal Presisi (`/jurnal/scan`) | Guru | 1204 baris | `GET /indikator`<br>`GET /materi`<br>`GET /students`<br>`POST /jurnal/validate`<br>+1 lagi |
-| 1 | Kehadiran Siswa (`/siswa/kehadiran`) | Siswa | 322 baris | `GET /students/my-attendance`<br>`GET /students/my-attendance/stats` |
-| 1 | PCL (`/siswa/pcl`) | Siswa | 391 baris | `GET /bk/pcl/form`<br>`GET /bk/pcl/my-history`<br>`POST /bk/pcl/submit` |
-| 1 | Materi Mapel (`/siswa/materi`) | Siswa | 399 baris | `GET /kelas/materi`<br>`GET /kelas/materi/{id}` |
-| 1 | CLKB (`/siswa/clkb`) | Siswa | 408 baris | `GET /bk/clkb/form`<br>`GET /bk/clkb/my-history`<br>`POST /bk/clkb/submit` |
-| 1 | Ajuan Verval Saya (`/verval/ajuan-saya`) | Guru, Tendik, Siswa | 410 baris | `GET /verval-requests` |
-| 1 | Rapor Saya (`/rapor`) | Siswa | 422 baris | `GET /ekstrakurikuler/student/{id}`<br>`GET /grades/rapor/{id}`<br>`GET /grades/student/{id}` |
-| 1 | Tugas (`/siswa/tugas`) | Siswa | 560 baris | `GET /kelas/tugas`<br>`GET /kelas/tugas/{id}`<br>`POST /kelas/tugas/{id}/submit` |
-| 1 | Ekstrakurikuler (`/ekstrakurikuler`) | Siswa | 709 baris | `DELETE /extracurriculars/{id}`<br>`DELETE /extracurriculars/{id}/members/{id}`<br>`GET /academic-years/active`<br>`GET /extracurriculars`<br>+9 lagi |
-| 1 | Jadwal Saya (`/jadwal`) | Guru, Siswa | 713 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /schedules`<br>+7 lagi |
-| 1 | Profil Saya (`/profile/siswa`) | Siswa | 1261 baris | `GET /achievements`<br>`GET /students/{id}/class-history`<br>`GET /students/{id}/detail`<br>`POST /students/detail/upload/{id}`<br>+3 lagi |
-| 1 | Data Prestasi (`/prestasi`) | Guru, Tendik, Siswa, Kepala | 1298 baris | `DELETE /achievements/{id}`<br>`DELETE /verval-requests/{id}`<br>`GET /academic-years`<br>`GET /achievements`<br>+8 lagi |
+| ✅ sudah | Kehadiran Siswa (`/siswa/kehadiran`) | Siswa | 322 baris | `GET /students/my-attendance`<br>`GET /students/my-attendance/stats` |
+| ✅ sudah | PCL (`/siswa/pcl`) | Siswa | 391 baris | `GET /bk/pcl/form`<br>`GET /bk/pcl/my-history`<br>`POST /bk/pcl/submit` |
+| ✅ sudah | Materi Mapel (`/siswa/materi`) | Siswa | 399 baris | `GET /kelas/materi`<br>`GET /kelas/materi/{id}` |
+| ✅ sudah | CLKB (`/siswa/clkb`) | Siswa | 408 baris | `GET /bk/clkb/form`<br>`GET /bk/clkb/my-history`<br>`POST /bk/clkb/submit` |
+| ✅ sudah | Ajuan Verval Saya (`/verval/ajuan-saya`) | Guru, Tendik, Siswa | 410 baris | `GET /verval-requests` |
+| ✅ sudah | Rapor Saya (`/rapor`) | Siswa | 422 baris | `GET /ekstrakurikuler/student/{id}`<br>`GET /grades/rapor/{id}`<br>`GET /grades/student/{id}` |
+| ✅ sudah | Tugas (`/siswa/tugas`) | Siswa | 560 baris | `GET /kelas/tugas`<br>`GET /kelas/tugas/{id}`<br>`POST /kelas/tugas/{id}/submit` |
+| ✅ sudah (pembina via web) | Ekstrakurikuler (`/ekstrakurikuler`) | Siswa | 709 baris | `DELETE /extracurriculars/{id}`<br>`DELETE /extracurriculars/{id}/members/{id}`<br>`GET /academic-years/active`<br>`GET /extracurriculars`<br>+9 lagi |
+| ✅ sudah | Jadwal Saya (`/jadwal`) | Guru, Siswa | 713 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /schedules`<br>+7 lagi |
+| ✅ sudah (lihat; ubah data via web) | Profil Saya (`/profile/siswa`) | Siswa | 1261 baris | `GET /achievements`<br>`GET /students/{id}/class-history`<br>`GET /students/{id}/detail`<br>`POST /students/detail/upload/{id}`<br>+3 lagi |
+| ✅ sudah (admin & wali kelas via web) | Data Prestasi (`/prestasi`) | Guru, Tendik, Siswa, Kepala | 1298 baris | `DELETE /achievements/{id}`<br>`DELETE /verval-requests/{id}`<br>`GET /academic-years`<br>`GET /achievements`<br>+8 lagi |
 | 2 | Profil Saya (`/profile/tendik`) | Tendik | 7 baris | (komponen bersama) |
 | 2 | Profil Saya (`/profile/guru`) | Guru, Kepala | 12 baris | (komponen bersama) |
 | 2 | Input Nilai (`/nilai/input`) | Guru | 307 baris | `GET /academic-years/active`<br>`GET /classes`<br>`GET /grades`<br>`GET /schedules`<br>+3 lagi |
