@@ -20,12 +20,15 @@ import { NoPrestasiEmptyState } from '@/components/ui/EmptyState';
 const REFRESH_INTERVAL = 30000; // 30s
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
+// Kunci = kode tingkat yang tersimpan di data prestasi (sama dengan form Data Prestasi).
 const LEVEL_ICONS = {
-  'Kabupaten/Kota': { icon: Award, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
-  'Provinsi': { icon: Medal, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-  'Nasional': { icon: Trophy, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
-  'Internasional': { icon: Star, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
+  kab_kota: { label: 'Kabupaten/Kota', icon: Award, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+  provinsi: { label: 'Provinsi', icon: Medal, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+  nasional: { label: 'Nasional', icon: Trophy, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
+  internasional: { label: 'Internasional', icon: Star, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
 };
+const LEVEL_LABELS = { sekolah: 'Sekolah/Madrasah', kecamatan: 'Kecamatan', kota: 'Kab/Kota', kabupaten: 'Kab/Kota' };
+const levelLabel = (v) => LEVEL_ICONS[v]?.label || LEVEL_LABELS[v] || v;
 
 const HOLDER_TYPE_LABELS = {
   'siswa': 'Siswa',
@@ -258,7 +261,7 @@ export default function PublicPrestasi() {
             return (
               <div key={level} className={`rounded-xl border p-3 ${config.bg} ${config.border}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide">{level}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide">{config.label}</span>
                   <Icon className={`h-4 w-4 ${config.color}`} />
                 </div>
                 <div className="text-2xl font-extrabold tabular-nums">{count}</div>
@@ -343,7 +346,7 @@ export default function PublicPrestasi() {
                     <SelectContent>
                       <SelectItem value="all">Semua Tingkat</SelectItem>
                       {Object.keys(LEVEL_ICONS).map(lvl => (
-                        <SelectItem key={lvl} value={lvl}>{lvl}</SelectItem>
+                        <SelectItem key={lvl} value={lvl}>{LEVEL_ICONS[lvl].label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -476,8 +479,8 @@ export default function PublicPrestasi() {
                               {achievement.student_name && (
                                 <div>
                                   {achievement.student_name}
-                                  {achievement.student_nisn && (
-                                    <span className="text-xs text-slate-500 ml-1">({achievement.student_nisn})</span>
+                                  {achievement.class_name && (
+                                    <span className="text-xs text-slate-500 ml-1">(Kelas {achievement.class_name})</span>
                                   )}
                                 </div>
                               )}
@@ -496,7 +499,7 @@ export default function PublicPrestasi() {
                               {achievement.level ? (
                                 <Badge className={`${levelConfig.bg} ${levelConfig.color} border ${levelConfig.border} gap-1.5 px-2.5 py-1 font-semibold`}>
                                   <Icon className="h-3.5 w-3.5" />
-                                  {achievement.level}
+                                  {levelLabel(achievement.level)}
                                 </Badge>
                               ) : '-'}
                             </TableCell>
@@ -605,7 +608,7 @@ function AchievementCard({ achievement }) {
         </div>
         <div className="flex-1 min-w-0">
           <Badge className={`text-[10px] mb-1 ${levelConfig.bg} ${levelConfig.color} border-0`}>
-            {achievement.level}
+            {levelLabel(achievement.level)}
           </Badge>
           <h3 className="font-bold text-slate-900 leading-tight line-clamp-2">{achievement.title}</h3>
         </div>
@@ -629,7 +632,7 @@ function AchievementCard({ achievement }) {
             {achievement.student_name && (
               <div className="text-sm text-slate-900">
                 {achievement.student_name}
-                {achievement.student_nisn && <span className="text-xs text-slate-500 ml-1">({achievement.student_nisn})</span>}
+                {achievement.class_name && <span className="text-xs text-slate-500 ml-1">(Kelas {achievement.class_name})</span>}
               </div>
             )}
             {achievement.teacher_name && (

@@ -250,7 +250,7 @@ async def create_verval_request(
     return serialize_doc(doc)
 
 
-VERVAL_TYPE_LABEL = {'profile_update': 'perubahan data', 'achievement': 'prestasi'}
+VERVAL_TYPE_LABEL = {'profile_update': 'perubahan data', 'prestasi_create': 'prestasi', 'achievement': 'prestasi'}
 
 
 async def _notify_verval_new(doc: Dict):
@@ -258,8 +258,22 @@ async def _notify_verval_new(doc: Dict):
     jenis = VERVAL_TYPE_LABEL.get(doc.get('request_type'), doc.get('request_type') or 'data')
     title = f"Ajuan verval {jenis} baru"
     body = f"Dari {doc.get('submitted_by_name') or 'pengguna'} — menunggu ditinjau."
-    data = {'request_id': doc.get('id')}
+    data = {'request_id': doc.get('id'), 'request_type': doc.get('request_type')}
     exclude = [doc.get('submitted_by')]
+    if doc.get('request_type') == 'prestasi_create':
+        # Ajuan prestasi diproses di halaman Data Prestasi: prestasi siswa → wali kelasnya & Waka Kesiswaan
+        # (pemegang data prestasi siswa); prestasi guru/tendik → admin.
+        siswa_id = pemegang_siswa_ajuan(doc)
+        if siswa_id:
+            akun = await db.users.find_one({'id': siswa_id}, {'_id': 0, 'student_class_id': 1}) or {}
+            wali = await homeroom_teacher_of(akun.get('student_class_id'))
+            if wali:
+                await notify_users([wali], title, body, type='verval_new', route='/prestasi', data=data, exclude=exclude)
+            await notify_roles(['waka_kesiswaan'] if wali else ['waka_kesiswaan', 'admin'], title, body,
+                               type='verval_new', route='/prestasi', data=data, exclude=exclude)
+        else:
+            await notify_roles(['admin'], title, body, type='verval_new', route='/prestasi', data=data, exclude=exclude)
+        return
     if doc.get('user_type') == 'siswa':
         akun = await db.users.find_one({'id': doc.get('user_id')}, {'_id': 0, 'student_class_id': 1}) or {}
         wali = await homeroom_teacher_of(akun.get('student_class_id'))
@@ -276,9 +290,11 @@ async def _notify_verval_result(req: Dict, status: str, notes: Optional[str], re
     ok = status == 'approved'
     title = f"Ajuan verval {jenis} {'disetujui' if ok else 'ditolak'}"
     body = f"Ditinjau {reviewer.get('full_name') or 'petugas'}" + (f": {notes}" if notes else '.')
-    await notify_users([req.get('user_id'), req.get('submitted_by')], title, body,
-                       type='verval_approved' if ok else 'verval_rejected', route='/verval/ajuan-saya',
-                       data={'request_id': req.get('id')}, exclude=[reviewer.get('id')])
+    prestasi = req.get('request_type') == 'prestasi_create'
+    await notify_users([req.get('user_id'), req.get('submitted_by'), pemegang_siswa_ajuan(req) if prestasi else None], title, body,
+                       type='verval_approved' if ok else 'verval_rejected',
+                       route='/prestasi' if prestasi else '/verval/ajuan-saya',
+                       data={'request_id': req.get('id'), 'request_type': req.get('request_type')}, exclude=[reviewer.get('id')])
 
 
 @router.post("/verval-requests/{request_id}/approve")

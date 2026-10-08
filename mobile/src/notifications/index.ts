@@ -229,7 +229,7 @@ export function routeForNotification(data: Record<string, any> | undefined, role
       return '/(app)/(tabs)';
     case 'verval_approved':
     case 'verval_rejected':
-      return '/verval';
+      return data.request_type === 'prestasi_create' ? routeForPath('/prestasi', role) : '/verval';
     case 'class_material_new':
       if (role === 'siswa' && data.materi_id) return `/siswa/materi/${data.materi_id}`;
       return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';

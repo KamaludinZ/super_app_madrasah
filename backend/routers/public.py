@@ -1,5 +1,5 @@
 """Public endpoints (no auth): monitoring + holidays today."""
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter
 
@@ -190,16 +190,27 @@ async def public_achievements(
         q, {'_id': 0}
     ).sort([('year', -1), ('date', -1)]).limit(limit).to_list(limit)
 
-    # Enrich with student/teacher/extracurricular names
+    # Enrich with student/teacher/extracurricular names. Halaman ini publik (tanpa login): hanya nama & kelas
+    # yang ditampilkan — NISN dan ID internal pengguna tidak dikirim.
+    kelas_cache: Dict[str, Optional[str]] = {}
+
+    async def _isi_siswa(a: Dict, sid: str):
+        student = await db.users.find_one({'id': sid}, {'_id': 0, 'full_name': 1, 'student_class_id': 1})
+        if not student:
+            return
+        a['student_name'] = student.get('full_name')
+        cid = student.get('student_class_id')
+        if cid:
+            if cid not in kelas_cache:
+                c = await db.classes.find_one({'id': cid}, {'_id': 0, 'name': 1})
+                kelas_cache[cid] = c.get('name') if c else None
+            a['class_name'] = kelas_cache[cid]
+
     for a in achievements:
         # Handle holder_id based on holder_type
         if a.get('holder_id'):
             if a.get('holder_type') == 'siswa':
-                # For siswa holder_type, enrich student fields
-                student = await db.users.find_one({'id': a['holder_id']}, {'_id': 0, 'full_name': 1, 'nisn': 1})
-                if student:
-                    a['student_name'] = student.get('full_name')
-                    a['student_nisn'] = student.get('nisn')
+                await _isi_siswa(a, a['holder_id'])
             elif a.get('holder_type') in ('guru', 'tendik'):
                 # For guru/tendik holder_type, enrich teacher fields
                 holder = await db.users.find_one({'id': a['holder_id']}, {'_id': 0, 'full_name': 1})
@@ -208,10 +219,7 @@ async def public_achievements(
 
         # Handle legacy student_id (for backward compatibility)
         if a.get('student_id') and not a.get('student_name'):
-            student = await db.users.find_one({'id': a['student_id']}, {'_id': 0, 'full_name': 1, 'nisn': 1})
-            if student:
-                a['student_name'] = student.get('full_name')
-                a['student_nisn'] = student.get('nisn')
+            await _isi_siswa(a, a['student_id'])
 
         # Handle legacy teacher_id
         if a.get('teacher_id') and not a.get('teacher_name'):
@@ -224,6 +232,9 @@ async def public_achievements(
             if ekskul:
                 a['extracurricular_name'] = ekskul.get('name')
 
+        for k in ('student_id', 'holder_id', 'teacher_id', 'submitted_by', 'verified_by'):
+            a.pop(k, None)
+
     # Get stats
     stats = {
         'total': await db.achievements.count_documents({'is_verified': True}),
@@ -232,9 +243,10 @@ async def public_achievements(
         'by_year': {}
     }
 
-    levels = ['Kabupaten/Kota', 'Provinsi', 'Nasional', 'Internasional']
-    for lvl in levels:
-        stats['by_level'][lvl] = await db.achievements.count_documents({'is_verified': True, 'level': lvl})
+    # Kode tingkat sesuai data (kab_kota juga menghitung data lama 'kota'/'kabupaten').
+    for lvl, kode in (('kab_kota', ['kab_kota', 'kota', 'kabupaten']), ('provinsi', ['provinsi']),
+                      ('nasional', ['nasional']), ('internasional', ['internasional'])):
+        stats['by_level'][lvl] = await db.achievements.count_documents({'is_verified': True, 'level': {'$in': kode}})
 
     holder_types = ['siswa', 'guru', 'tendik', 'madrasah']
     for ht in holder_types:
