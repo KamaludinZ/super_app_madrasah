@@ -25,7 +25,7 @@ export default function PiketTasksPage() {
   const { user, activeRole } = useAuth();
   const isPiket = activeRole === 'guru_piket';
   const isAdmin = activeRole === 'admin';
-  const isTeacher = ['guru', 'wali_kelas'].includes(activeRole);
+  const isTeacher = ['guru', 'wali_kelas', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik'].includes(activeRole);
   const canFill = isPiket || isAdmin;
 
   const [tab, setTab] = useState(isTeacher ? 'mine' : 'today');
@@ -35,7 +35,7 @@ export default function PiketTasksPage() {
   const [loading, setLoading] = useState(true);
   const [taskOpen, setTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [taskForm, setTaskForm] = useState({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '', leave_type: '' });
+  const [taskForm, setTaskForm] = useState({ schedule_id: '', date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), task_content: '', notes: '', leave_type: '' });
   const [fillOpen, setFillOpen] = useState(false);
   const [fillTarget, setFillTarget] = useState(null);
   const [fillForm, setFillForm] = useState({ materi: '', catatan: '', piket_note: '', jenis_izin: '', ...ATTENDANCE_DEFAULT });
@@ -62,7 +62,7 @@ export default function PiketTasksPage() {
 
   const openCreateTask = () => {
     setEditingTask(null);
-    setTaskForm({ schedule_id: '', date: new Date().toISOString().slice(0, 10), task_content: '', notes: '', leave_type: '' });
+    setTaskForm({ schedule_id: '', date: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), task_content: '', notes: '', leave_type: '' });
     setTaskOpen(true);
   };
   const openEditTask = (t) => {

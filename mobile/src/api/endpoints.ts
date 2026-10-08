@@ -170,6 +170,12 @@ export const api = {
     }) => request<Journal>('/piket/fill-journal', { method: 'POST', body }),
     tasks: (q: { date?: string; status?: string } = {}) => request<TeacherTask[]>('/teacher-tasks', { query: q }),
     acceptTask: (id: string) => request<TeacherTask>(`/teacher-tasks/${id}/accept`, { method: 'PUT' }),
+    /** Titipan tugas oleh guru pengampu (jadwalnya sendiri). */
+    createTask: (body: { schedule_id: string; date: string; task_content: string; notes?: string | null; leave_type?: string | null }) =>
+      request<TeacherTask>('/teacher-tasks', { method: 'POST', body }),
+    updateTask: (id: string, body: { schedule_id: string; date: string; task_content: string; notes?: string | null; leave_type?: string | null }) =>
+      request<TeacherTask>(`/teacher-tasks/${id}`, { method: 'PUT', body }),
+    deleteTask: (id: string) => request<{ message: string }>(`/teacher-tasks/${id}`, { method: 'DELETE' }),
   },
 
   announcements: {

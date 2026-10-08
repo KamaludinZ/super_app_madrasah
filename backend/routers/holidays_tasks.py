@@ -14,6 +14,7 @@ from core import (
     require_role,
     serialize_doc,
 )
+from core import punya_peran_guru
 from journal_core import current_day_id, day_started_at_filter, now_wib
 from notify import notify_roles, notify_users, spawn
 from models import (
@@ -145,7 +146,8 @@ async def list_teacher_tasks(date: Optional[str] = None,
 
     is_piket = 'guru_piket' in user.get('roles', [])
     is_admin = 'admin' in user.get('roles', [])
-    is_teacher = bool(set(user.get('roles', [])) & {'guru', 'wali_kelas'})
+    # Semua guru mapel (termasuk guru IPA/IPS/agama/…) hanya melihat titipannya sendiri.
+    is_teacher = punya_peran_guru(user) or 'wali_kelas' in user.get('roles', [])
     if not (is_admin or is_piket) and is_teacher:
         q['teacher_id'] = user['id']
     items = await db.teacher_tasks.find(q, {'_id': 0}).sort('date', -1).to_list(500)
@@ -227,6 +229,7 @@ async def create_teacher_task(payload: Dict, request: Request, user: Dict = Depe
         date=payload['date'],
         task_content=payload['task_content'],
         notes=payload.get('notes'),
+        leave_type=payload.get('leave_type') or None,  # dulu tidak tersimpan saat membuat titipan
     )
     doc = task.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -247,8 +250,18 @@ async def update_teacher_task(tid: str, payload: Dict, request: Request, user: D
         raise HTTPException(403, "Hanya guru pengampu/admin yang bisa edit")
     if existing.get('status') == 'completed':
         raise HTTPException(400, "Tugas yang sudah selesai tidak bisa diubah")
-    payload.pop('id', None); payload.pop('_id', None); payload.pop('status', None)
-    await db.teacher_tasks.update_one({'id': tid}, {'$set': payload})
+    # Hanya isian titipan yang boleh diubah (dulu payload apa pun disimpan, termasuk pemilik & status).
+    data = {k: payload[k] for k in ('schedule_id', 'date', 'task_content', 'notes', 'leave_type') if k in payload}
+    if data.get('schedule_id') and data['schedule_id'] != existing.get('schedule_id'):
+        sch = await db.schedules.find_one({'id': data['schedule_id']}, {'_id': 0, 'teacher_id': 1})
+        if not sch:
+            raise HTTPException(404, "Jadwal tidak ditemukan")
+        if not is_admin and sch.get('teacher_id') != user['id']:
+            raise HTTPException(403, "Hanya bisa menitipkan jadwal Anda sendiri")
+        data['teacher_id'] = sch.get('teacher_id')
+    if not data:
+        raise HTTPException(400, "Tidak ada perubahan")
+    await db.teacher_tasks.update_one({'id': tid}, {'$set': data})
     doc = await db.teacher_tasks.find_one({'id': tid}, {'_id': 0})
     return serialize_doc(doc)
 
