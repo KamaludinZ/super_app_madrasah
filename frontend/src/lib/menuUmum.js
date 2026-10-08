@@ -1,4 +1,4 @@
-import { KeyRound, MapPinned, LockKeyhole } from 'lucide-react';
+import { KeyRound, MapPinned, LockKeyhole, BellRing } from 'lucide-react';
 
 // Menu lintas peran yang ditambahkan ke navForRole (AppShell): Simpan Akun (GTK), Masterplan (semua
 // peran; admin mengelola, lainnya melihat), dan Reset PIN Simpan Akun (admin).
@@ -18,6 +18,9 @@ export function menuUmum(role) {
   items.push({ to: '/masterplan', label: 'Masterplan Sekolah', icon: MapPinned, testid: `nav-${role}-masterplan` });
   if (bolehResetPinSimpanAkun(role)) {
     items.push({ to: '/admin/reset-pin-simpan-akun', label: 'Reset PIN Simpan Akun', icon: LockKeyhole, testid: 'nav-admin-reset-pin-simpan-akun' });
+  }
+  if (role === 'admin') {
+    items.push({ to: '/admin/uji-notifikasi', label: 'Uji Notifikasi', icon: BellRing, testid: 'nav-admin-uji-notifikasi' });
   }
   return items;
 }

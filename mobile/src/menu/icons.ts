@@ -7,6 +7,7 @@ const MAP: Record<string, IconName> = {
   ArrowRightLeft: 'swap-horizontal-outline',
   Award: 'ribbon-outline',
   BarChart3: 'stats-chart-outline',
+  BellRing: 'notifications-outline',
   BookMarked: 'bookmarks-outline',
   BookOpen: 'book-outline',
   BookOpenCheck: 'reader-outline',

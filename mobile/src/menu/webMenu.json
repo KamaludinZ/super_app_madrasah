@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T06:36:13.265Z",
+  "generated_at": "2026-10-08T07:42:23.888Z",
   "source": "frontend/src/components/layout/AppShell.js#navForRole",
   "labels": {
     "admin": "Administrator",
@@ -585,6 +585,11 @@
             "to": "/admin/reset-pin-simpan-akun",
             "label": "Reset PIN Simpan Akun",
             "icon": "LockKeyhole"
+          },
+          {
+            "to": "/admin/uji-notifikasi",
+            "label": "Uji Notifikasi",
+            "icon": "BellRing"
           }
         ]
       }

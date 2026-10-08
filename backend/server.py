@@ -63,6 +63,7 @@ from routers import (
     tatib_poin,
     simpan_akun,
     masterplan,
+    uji_notifikasi,
     uks,
     users,
     verval,
@@ -121,6 +122,7 @@ api_router.include_router(tatib.router)
 api_router.include_router(tatib_poin.router)
 api_router.include_router(simpan_akun.router)
 api_router.include_router(masterplan.router)
+api_router.include_router(uji_notifikasi.router)
 api_router.include_router(events.router)
 api_router.include_router(rkam.router)
 api_router.include_router(school_apps.router)
