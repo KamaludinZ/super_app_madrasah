@@ -26,7 +26,7 @@ fitur tetap bisa dipakai selama pengerjaan bertahap.
 | 1 ✅ selesai | **Siswa** (harian, ringan) | Jadwal, Tugas (lihat & kumpulkan), Materi, Kehadiran, Rapor, Prestasi, Ekstrakurikuler, CLKB, PCL, Profil, Ajuan Verval |
 | 2 ✅ selesai | **Guru & Tendik harian** | Agenda Saya, Titipkan Tugas, Tugas & Materi kelas (buat, lihat pengumpulan, nilai), Input Nilai, Kebersihan Kelas, Laporan, Absensi Saya, Jadwal Piket, Profil |
 | 3 ✅ selesai | **Kepegawaian & akademik lanjutan** | E-Kinerja (RHK, SKP, LCKB, jurnal harian), Profesionalitas GTK, Input Indikator & Materi, Atur Jadwal Saya |
-| 4 ✅ selesai (Tata Tertib menyusul) | **Kepala Madrasah** (pemantauan) | Data Jurnal, Kehadiran Siswa, Data Siswa & GTK (cari + detail), Agenda Guru/Tendik, Laporan Absensi GTK, Kegiatan, Kebersihan, DANA RKAM, Tata Tertib, BK, UKS, Perpus, Sarpras, Alumni |
+| 4 ✅ selesai | **Kepala Madrasah** (pemantauan) | Data Jurnal, Kehadiran Siswa, Data Siswa & GTK (cari + detail), Agenda Guru/Tendik, Laporan Absensi GTK, Kegiatan, Kebersihan, DANA RKAM, Tata Tertib, BK, UKS, Perpus, Sarpras, Alumni |
 | 5 ✅ selesai | **Dashboard native per peran** | Ringkasan & grafik per peran menggantikan Dashboard web |
 
 Perkiraan: fase 1–2 adalah prioritas pemakaian harian; fase 4 berisi banyak halaman laporan bertipe
@@ -66,25 +66,25 @@ Perkiraan: fase 1–2 adalah prioritas pemakaian harian; fase 4 berisi banyak ha
 | ✅ sudah (rekap penyusun via web) | E-Kinerja (`/admin/gtk/e-kinerja`) | Guru, Tendik, Kepala | 1525 baris | `DELETE /ekinerja/jurnal-harian/link/{id}`<br>`DELETE /ekinerja/jurnal-harian/{id}`<br>`DELETE /ekinerja/pengumpulan/confirm`<br>`DELETE /ekinerja/rhk/{id}`<br>+25 lagi |
 | ✅ sudah (ringkasan) | Laporan Perpus (`/admin/perpus/laporan`) | Kepala | 115 baris | `GET /perpus/laporan/summary` |
 | ✅ sudah (ringkasan) | Laporan BK (`/admin/bk/laporan`) | Kepala | 120 baris | `GET /bk/laporan/summary` |
-| web (rincian) | Data Kunjungan Perpus (`/admin/perpus/kunjungan`) | Kepala | 223 baris | `DELETE /perpus/kunjungan/{id}`<br>`GET /perpus/kunjungan`<br>`GET /perpus/warga-madrasah`<br>`POST /perpus/kunjungan` |
-| web (rincian) | Data Peminjaman Perpus (`/admin/perpus/peminjaman`) | Kepala | 288 baris | `DELETE /perpus/peminjaman/{id}`<br>`GET /perpus/koleksi`<br>`GET /perpus/peminjaman`<br>`GET /perpus/warga-madrasah`<br>+2 lagi |
+| ✅ sudah (lihat) | Data Kunjungan Perpus (`/admin/perpus/kunjungan`) | Kepala | 223 baris | `DELETE /perpus/kunjungan/{id}`<br>`GET /perpus/kunjungan`<br>`GET /perpus/warga-madrasah`<br>`POST /perpus/kunjungan` |
+| ✅ sudah (lihat) | Data Peminjaman Perpus (`/admin/perpus/peminjaman`) | Kepala | 288 baris | `DELETE /perpus/peminjaman/{id}`<br>`GET /perpus/koleksi`<br>`GET /perpus/peminjaman`<br>`GET /perpus/warga-madrasah`<br>+2 lagi |
 | ✅ sudah | Rekapitulasi Kebersihan (`/admin/kebersihan`) | Kepala | 300 baris | `GET /classes`<br>`GET /cleanliness/admin/recap` |
 | ✅ sudah | Laporan Absensi GTK (`/admin/gtk/laporan-absensi`) | Kepala | 311 baris | `GET /gtk/absensi/rekap`<br>`GET /gtk/izin` |
 | ✅ sudah (lihat) | Laporan Kerusakan & Perbaikan (`/admin/sarpras/kerusakan`) | Kepala | 319 baris | `DELETE /sarpras/kerusakan/{id}`<br>`GET /rooms`<br>`GET /sarpras/aset-lancar`<br>`GET /sarpras/aset-tetap`<br>+5 lagi |
 | ✅ sudah (ringkasan) | Laporan UKS (`/admin/uks/laporan`) | Kepala | 325 baris | `GET /semesters`<br>`GET /uks/laporan/rekap-kunjungan`<br>`GET /uks/laporan/rekap-kunjungan/export-{id}`<br>`GET /uks/laporan/summary` |
-| web (rincian; ringkasan di Laporan BK) | Kunjungan Konseling (`/admin/bk/kunjungan`) | Kepala | 348 baris | `DELETE /bk/kunjungan/{id}`<br>`GET /bk/kunjungan`<br>`GET /classes`<br>`GET /students`<br>+2 lagi |
+| ✅ sudah (lihat) | Kunjungan Konseling (`/admin/bk/kunjungan`) | Kepala | 348 baris | `DELETE /bk/kunjungan/{id}`<br>`GET /bk/kunjungan`<br>`GET /classes`<br>`GET /students`<br>+2 lagi |
 | ✅ sudah | Data Alumni (`/admin/alumni`) | Kepala | 421 baris | `GET /academic-years`<br>`GET /alumni`<br>`GET /alumni/stats`<br>`GET /alumni/{id}`<br>+1 lagi |
-| web | Data Sekolah Lanjutan (`/admin/bk/sekolah-lanjutan`) | Kepala | 462 baris | `DELETE /bk/sekolah-lanjutan/{id}`<br>`DELETE /bk/sekolah-tujuan/{id}`<br>`GET /academic-years`<br>`GET /bk/sekolah-lanjutan`<br>+6 lagi |
-| menyusul (modul poin sedang dikembangkan) | Data Tata Tertib (`/admin/tatib/data`) | Kepala | 505 baris | `GET /semesters`<br>`GET /students`<br>`GET /tahun-takwim`<br>`GET /tatib/aturan`<br>+2 lagi |
+| ✅ sudah (lihat) | Data Sekolah Lanjutan (`/admin/bk/sekolah-lanjutan`) | Kepala | 462 baris | `DELETE /bk/sekolah-lanjutan/{id}`<br>`DELETE /bk/sekolah-tujuan/{id}`<br>`GET /academic-years`<br>`GET /bk/sekolah-lanjutan`<br>+6 lagi |
+| ✅ sudah (rekap & catatan poin; pencatatan via web) | Data Tata Tertib (`/admin/tatib/data`) | Kepala | 505 baris | `GET /semesters`<br>`GET /students`<br>`GET /tahun-takwim`<br>`GET /tatib/aturan`<br>+2 lagi |
 | ✅ sudah (lihat) | Agenda Guru (`/admin/gtk/agenda-guru`) | Kepala | 553 baris | `DELETE /staff-events/{id}`<br>`GET /jabatan`<br>`GET /staff-events`<br>`GET /tahun-takwim`<br>+3 lagi |
 | ✅ sudah (lihat) | Kegiatan Madrasah (`/admin/kegiatan-madrasah`) | Kepala | 553 baris | `DELETE /madrasah-events/{id}`<br>`GET /madrasah-events`<br>`GET /madrasah-events/stats/duration`<br>`GET /tahun-takwim`<br>+2 lagi |
 | ✅ sudah (lihat) | Agenda Tendik (`/admin/gtk/agenda-tendik`) | Kepala | 593 baris | `DELETE /staff-events/{id}`<br>`GET /jabatan`<br>`GET /staff-events`<br>`GET /tahun-takwim`<br>+3 lagi |
-| web (rincian; ringkasan di Laporan UKS) | Laporan UKS Baru (`/admin/uks/laporan-baru`) | Kepala | 700 baris | `GET /uks/laporan-baru/diagnosa`<br>`GET /uks/laporan-baru/opname`<br>`GET /uks/laporan-baru/{id}/export-{id}` |
+| ✅ sudah (diagnosa & opname; ekspor via web) | Laporan UKS Baru (`/admin/uks/laporan-baru`) | Kepala | 700 baris | `GET /uks/laporan-baru/diagnosa`<br>`GET /uks/laporan-baru/opname`<br>`GET /uks/laporan-baru/{id}/export-{id}` |
 | ✅ sudah | Kehadiran Siswa (`/admin/kehadiran`) | Kepala | 748 baris | `GET /admin/attendance/by-class`<br>`GET /admin/attendance/by-grade`<br>`GET /admin/attendance/overall`<br>`GET /classes` |
 | ✅ sudah | Data Jurnal (`/admin/jurnal`) | Kepala | 1045 baris | `GET /admin/jurnal`<br>`GET /admin/jurnal/stats-by-teacher`<br>`GET /classes`<br>`GET /journals/{id}/attendance`<br>+5 lagi |
 | ✅ sudah (lihat) | DANA RKAM (`/admin/dana-rkam`) | Kepala | 1132 baris | `DELETE /rkam/budget-items/{id}`<br>`DELETE /rkam/documents/{id}`<br>`GET /rkam/budget-items`<br>`GET /rkam/budget-items/export`<br>+6 lagi |
 | ✅ sudah (lihat) | Data GTK (`/admin/gtk`) | Kepala | 1665 baris | `DELETE /users/{id}`<br>`GET /admin/audit-logs`<br>`GET /gtk/export-excel`<br>`GET /gtk/export-excel/ringkasan`<br>+5 lagi |
-| web (rincian) | Data Kunjungan UKS (`/admin/uks/kunjungan`) | Kepala | 1858 baris | `DELETE /uks/kunjungan/{id}`<br>`GET /classes`<br>`GET /students`<br>`GET /uks/bmhp`<br>+16 lagi |
+| ✅ sudah (lihat) | Data Kunjungan UKS (`/admin/uks/kunjungan`) | Kepala | 1858 baris | `DELETE /uks/kunjungan/{id}`<br>`GET /classes`<br>`GET /students`<br>`GET /uks/bmhp`<br>+16 lagi |
 | ✅ sudah (lihat) | Data Siswa (`/admin/siswa`) | Kepala | 2772 baris | `DELETE /users/{id}`<br>`GET /academic-years/active`<br>`GET /achievements`<br>`GET /admin/audit-logs`<br>+12 lagi |
 | ✅ sudah (ringkasan per peran di Beranda) | Dashboard (`/dashboard`) | Guru, Tendik, Siswa, Piket, Kepala | 3116 baris | `GET /academic-holidays`<br>`GET /achievements`<br>`GET /admin/jurnal/stats-by-teacher`<br>`GET /admin/stats`<br>+21 lagi |
 

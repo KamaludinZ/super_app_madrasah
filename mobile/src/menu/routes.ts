@@ -68,6 +68,12 @@ export function nativeRoute(path: string, role?: string | null): string | null {
       '/admin/sarpras/kerusakan': '/pantau/layanan?unit=sarpras',
       '/admin/alumni': '/pantau/alumni',
       '/admin/dana-rkam': '/pantau/rkam',
+      '/admin/bk/kunjungan': '/pantau/rincian?jenis=konseling',
+      '/admin/bk/sekolah-lanjutan': '/pantau/rincian?jenis=sekolah-lanjutan',
+      '/admin/perpus/kunjungan': '/pantau/rincian?jenis=perpus-kunjungan',
+      '/admin/perpus/peminjaman': '/pantau/rincian?jenis=perpus-peminjaman',
+      '/admin/uks/kunjungan': '/pantau/rincian?jenis=uks-kunjungan',
+      '/admin/uks/laporan-baru': '/pantau/uks-laporan',
     };
     if (pantau[p]) return pantau[p];
   }
