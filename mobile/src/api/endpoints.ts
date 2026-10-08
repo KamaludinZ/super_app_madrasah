@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, IndikatorFull, LckbRow, MateriFull, PengumpulanStatus, SemesterItem, RhkItem, SertifikasiRecord, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GtkKelengkapan, JurnalHarian, JurnalLink, IndikatorFull, LckbRow, MateriFull, TeachingSlot, PengumpulanStatus, SemesterItem, RhkItem, SertifikasiRecord, GradeEntry, GuruKonten, GuruKontenInput, SubjectItem, TugasSubmissionItem, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -32,6 +32,10 @@ export const api = {
     myToday: () => request<ScheduleItem[]>('/schedules/my-today', { query: { include_substitute: true } }),
     list: (q: { teacher_id?: string; class_id?: string; day?: string }) => request<ScheduleItem[]>('/schedules', { query: q }),
     grouped: (q: { teacher_id?: string; class_id?: string }) => request<ScheduleItem[]>('/schedules/grouped', { query: q }),
+    teachingSlots: () => request<{ teaching_slots?: TeachingSlot[] | Record<string, TeachingSlot[]> }>('/settings', { token: null }),
+    save: (id: string | null, body: Record<string, unknown>) => request<ScheduleItem>(id ? `/schedules/${id}` : '/schedules', { method: id ? 'PUT' : 'POST', body }),
+    remove: (id: string) => request<unknown>(`/schedules/${id}`, { method: 'DELETE' }),
+    submit: (id: string) => request<unknown>(`/schedules/${id}/submit`, { method: 'PUT' }),
     mySubstitute: (from: string, to: string) => request<ScheduleItem[]>('/guru-pengganti/my-schedule', { query: { from, to } }),
   },
 

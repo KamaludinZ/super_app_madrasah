@@ -24,6 +24,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/verval/ajuan-saya') return '/verval';
   // Jadwal: siswa (kelasnya), wali kelas (kelas wali), guru & lainnya (jadwal mengajarnya)
   if (p === '/jadwal') return '/jadwal';
+  if (p === '/jadwal/atur') return '/atur-jadwal';
   if (p === '/gtk/absensi-saya') return '/absensi-saya';
   if (p === '/my-agenda') return '/agenda';
   // Penyusun E-Kinerja (admin, kepala, KTU) mengelola RHK/rekap di web; GTK mengisi jurnal & LCKB di aplikasi.

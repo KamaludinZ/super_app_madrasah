@@ -57,6 +57,8 @@ export type ScheduleItem = {
   teacher_id?: string;
   teacher_name?: string | null;
   slot_indexes?: number[];
+  /** Alur jadwal: draft → submitted → approved → locked. */
+  status?: string;
   jam_ke?: string;
   journal_filled?: boolean;
   journal_id?: string | null;
@@ -506,3 +508,6 @@ export type SertifikasiRecord = { id: string; year: number; period: string; nama
 export type SemesterItem = { id: string; name?: string | null; code?: string | null; is_active?: boolean; academic_year_name?: string | null };
 export type IndikatorFull = Indikator & { tingkat_kelas?: string | null; created_at?: string };
 export type MateriFull = MateriPokok & { mapel_id?: string; semester_id?: string; tingkat_kelas?: string | null; created_at?: string };
+
+/** Jam pelajaran dari pengaturan (/settings.teaching_slots): global (array) atau per hari. */
+export type TeachingSlot = { name?: string; start_time: string; end_time: string; is_break?: boolean };

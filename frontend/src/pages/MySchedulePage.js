@@ -198,7 +198,7 @@ export default function MySchedulePage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...EMPTY, academic_year_id: activeAY?.id, semester: activeAY?.active_semester || 'ganjil', teacher_id: user?.id });
+    setForm({ ...EMPTY, academic_year_id: activeAY?.id, semester: activeAY?.active_semester || (new Date().getMonth() >= 6 ? 'ganjil' : 'genap'), teacher_id: user?.id });
     setSelectedSlots([]); // v1.1.1: Reset multi-slot selection
     setOpen(true);
   };
@@ -623,7 +623,7 @@ export default function MySchedulePage() {
                                           end_time: slot.end_time,
                                           class_id: selectedClassId,
                                           academic_year_id: activeAY?.id,
-                                          semester: activeAY?.active_semester || 'ganjil',
+                                          semester: activeAY?.active_semester || (new Date().getMonth() >= 6 ? 'ganjil' : 'genap'),
                                           teacher_id: user?.id
                                         });
                                         setOpen(true);

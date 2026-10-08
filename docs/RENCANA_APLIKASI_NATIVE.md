@@ -25,7 +25,7 @@ fitur tetap bisa dipakai selama pengerjaan bertahap.
 |---|---|---|
 | 1 ✅ selesai | **Siswa** (harian, ringan) | Jadwal, Tugas (lihat & kumpulkan), Materi, Kehadiran, Rapor, Prestasi, Ekstrakurikuler, CLKB, PCL, Profil, Ajuan Verval |
 | 2 ✅ selesai | **Guru & Tendik harian** | Agenda Saya, Titipkan Tugas, Tugas & Materi kelas (buat, lihat pengumpulan, nilai), Input Nilai, Kebersihan Kelas, Laporan, Absensi Saya, Jadwal Piket, Profil |
-| 3 | **Kepegawaian & akademik lanjutan** | E-Kinerja (RHK, SKP, LCKB, jurnal harian), Profesionalitas GTK, Input Indikator & Materi, Atur Jadwal Saya |
+| 3 ✅ selesai | **Kepegawaian & akademik lanjutan** | E-Kinerja (RHK, SKP, LCKB, jurnal harian), Profesionalitas GTK, Input Indikator & Materi, Atur Jadwal Saya |
 | 4 | **Kepala Madrasah** (pemantauan) | Data Jurnal, Kehadiran Siswa, Data Siswa & GTK (cari + detail), Agenda Guru/Tendik, Laporan Absensi GTK, Kegiatan, Kebersihan, DANA RKAM, Tata Tertib, BK, UKS, Perpus, Sarpras, Alumni |
 | 5 | **Dashboard native per peran** | Ringkasan & grafik per peran menggantikan Dashboard web |
 
@@ -60,10 +60,10 @@ Perkiraan: fase 1–2 adalah prioritas pemakaian harian; fase 4 berisi banyak ha
 | ✅ sudah | Titipkan Tugas (`/piket/tugas`) | Guru, Piket | 727 baris | `DELETE /teacher-tasks/{id}`<br>`GET /piket/schedules/today`<br>`GET /schedules`<br>`GET /students`<br>+5 lagi |
 | ✅ sudah | Materi Mapel (`/guru/materi`) | Guru | 883 baris | `DELETE /kelas/materi/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/materi`<br>+3 lagi |
 | ✅ sudah | Tugas (`/guru/tugas`) | Guru | 1013 baris | `DELETE /kelas/tugas/{id}`<br>`GET /classes`<br>`GET /classes/{id}/students`<br>`GET /kelas/tugas`<br>+4 lagi |
-| 3 | Profesionalitas GTK (`/admin/gtk/profesionalitas`) | Guru, Tendik, Kepala | 343 baris | `DELETE /ekinerja/sertifikasi/{id}`<br>`GET /ekinerja/pengumpulan/meta`<br>`GET /ekinerja/sertifikasi`<br>`GET /ekinerja/sertifikasi/my`<br>+3 lagi |
-| 3 | Input Indikator & Materi (`/guru/indikator-materi`) | Guru | 874 baris | `DELETE /indikator/{id}`<br>`DELETE /materi/{id}`<br>`GET /indikator`<br>`GET /materi`<br>+9 lagi |
-| 3 | Atur Jadwal Saya (`/jadwal/atur`) | Guru | 916 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /rooms`<br>+7 lagi |
-| 3 | E-Kinerja (`/admin/gtk/e-kinerja`) | Guru, Tendik, Kepala | 1525 baris | `DELETE /ekinerja/jurnal-harian/link/{id}`<br>`DELETE /ekinerja/jurnal-harian/{id}`<br>`DELETE /ekinerja/pengumpulan/confirm`<br>`DELETE /ekinerja/rhk/{id}`<br>+25 lagi |
+| ✅ sudah (rekap penyusun via web) | Profesionalitas GTK (`/admin/gtk/profesionalitas`) | Guru, Tendik, Kepala | 343 baris | `DELETE /ekinerja/sertifikasi/{id}`<br>`GET /ekinerja/pengumpulan/meta`<br>`GET /ekinerja/sertifikasi`<br>`GET /ekinerja/sertifikasi/my`<br>+3 lagi |
+| ✅ sudah | Input Indikator & Materi (`/guru/indikator-materi`) | Guru | 874 baris | `DELETE /indikator/{id}`<br>`DELETE /materi/{id}`<br>`GET /indikator`<br>`GET /materi`<br>+9 lagi |
+| ✅ sudah | Atur Jadwal Saya (`/jadwal/atur`) | Guru | 916 baris | `DELETE /schedules/{id}`<br>`GET /academic-years/active`<br>`GET /classes`<br>`GET /rooms`<br>+7 lagi |
+| ✅ sudah (rekap penyusun via web) | E-Kinerja (`/admin/gtk/e-kinerja`) | Guru, Tendik, Kepala | 1525 baris | `DELETE /ekinerja/jurnal-harian/link/{id}`<br>`DELETE /ekinerja/jurnal-harian/{id}`<br>`DELETE /ekinerja/pengumpulan/confirm`<br>`DELETE /ekinerja/rhk/{id}`<br>+25 lagi |
 | 4 | Laporan Perpus (`/admin/perpus/laporan`) | Kepala | 115 baris | `GET /perpus/laporan/summary` |
 | 4 | Laporan BK (`/admin/bk/laporan`) | Kepala | 120 baris | `GET /bk/laporan/summary` |
 | 4 | Data Kunjungan Perpus (`/admin/perpus/kunjungan`) | Kepala | 223 baris | `DELETE /perpus/kunjungan/{id}`<br>`GET /perpus/kunjungan`<br>`GET /perpus/warga-madrasah`<br>`POST /perpus/kunjungan` |
