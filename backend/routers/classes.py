@@ -393,8 +393,11 @@ async def remove_student_from_class(
 
 
 @router.get("/students/{student_id}/class-history")
-async def get_student_class_history(student_id: str, user: Dict = Depends(require_role('admin', 'wali_kelas'))):
-    """Get class history for a specific student."""
+async def get_student_class_history(student_id: str, user: Dict = Depends(get_current_user)):
+    """Get class history for a specific student (admin, wali kelas, atau siswa itu sendiri — Profil Saya)."""
+    roles = user.get('roles', [])
+    if not ('admin' in roles or 'wali_kelas' in roles or user.get('id') == student_id):
+        raise HTTPException(403, "Tidak diizinkan")
     student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0})
     if not student:
         raise HTTPException(404, "Siswa tidak ditemukan")

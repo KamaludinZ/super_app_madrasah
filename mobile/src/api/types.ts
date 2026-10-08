@@ -424,3 +424,11 @@ export type PCLSubmission = BKResponse & {
   id: string; selected: Record<string, number[]>; masalah_lain?: string | null; masalah_saat_ini?: string | null; tempat_curhat?: string | null;
   scoring?: { by_category: { kode: string; nama: string; total_item: number; jumlah_dipilih: number; persentase: number }[]; total_dipilih: number; persentase_keseluruhan: number };
 };
+
+/** Profil siswa (GET /students/{id}/detail): akun + data EMIS (student_details). */
+export type StudentDetailResponse = { student: Record<string, any>; detail: Record<string, any> | null };
+export type Kelengkapan = {
+  persen: number; terisi: number; total: number;
+  bagian: { key: string; label: string; persen: number; terisi: number; total: number; kurang: string[]; status?: string }[];
+};
+export type ClassHistoryItem = { id?: string; class_id: string; semester?: string | null; reason?: string | null; class_name?: string | null; academic_year_name?: string | null; start_date?: string | null; end_date?: string | null; status?: string | null; notes?: string | null };

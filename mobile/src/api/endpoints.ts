@@ -1,6 +1,6 @@
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, CLKBForm, CLKBSubmission, Extracurricular, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, CLKBForm, CLKBSubmission, Extracurricular, Kelengkapan, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -40,6 +40,9 @@ export const api = {
       request<{ month: number; year: number; records: KehadiranRecord[] }>('/students/my-attendance', { query: { month, year } }),
     myAttendanceStats: (month: number, year: number) =>
       request<KehadiranStats>('/students/my-attendance/stats', { query: { month, year } }),
+    detail: (id: string) => request<StudentDetailResponse>(`/students/${id}/detail`),
+    kelengkapan: (id: string) => request<{ kelengkapan: Kelengkapan }>(`/students/${id}/kelengkapan`),
+    classHistory: (id: string) => request<ClassHistoryItem[]>(`/students/${id}/class-history`),
   },
 
   jurnal: {

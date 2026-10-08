@@ -16,6 +16,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/siswa/materi' && role === 'siswa') return '/siswa/materi';
   if (p === '/siswa/kehadiran' && role === 'siswa') return '/siswa/kehadiran';
   if (p === '/rapor' && role === 'siswa') return '/siswa/rapor';
+  if (p === '/profile/siswa' && role === 'siswa') return '/profil-siswa';
   if (p === '/siswa/clkb' && role === 'siswa') return '/siswa/clkb';
   if (p === '/siswa/pcl' && role === 'siswa') return '/siswa/pcl';
   if (p === '/verval/ajuan-saya') return '/verval';
