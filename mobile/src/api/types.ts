@@ -405,3 +405,7 @@ export type Achievement = {
   _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null;
 };
 export type AcademicYear = { id: string; name: string; is_active?: boolean };
+export type Extracurricular = {
+  id: string; name: string; description?: string | null; coach_id?: string | null; coach_name?: string | null;
+  schedule_day?: string | null; schedule_start?: string | null; schedule_end?: string | null; location?: string | null; member_count?: number;
+};

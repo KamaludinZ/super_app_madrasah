@@ -1,6 +1,6 @@
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, Extracurricular, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -87,6 +87,10 @@ export const api = {
       form.append('file', file as unknown as Blob);
       return request<{ url: string }>(`/achievements/upload/${jenis}`, { method: 'POST', form, timeoutMs: 60_000 });
     },
+  },
+
+  ekskul: {
+    list: () => request<Extracurricular[]>('/extracurriculars'),
   },
 
   academicYears: () => request<AcademicYear[]>('/academic-years'),
