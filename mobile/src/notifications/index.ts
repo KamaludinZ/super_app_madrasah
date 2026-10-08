@@ -239,6 +239,16 @@ export function routeForNotification(data: Record<string, any> | undefined, role
     case 'bk_response':
       if (role === 'siswa' && data.submission_id && (data.route === '/siswa/clkb' || data.route === '/siswa/pcl')) return `${data.route}/${data.submission_id}`;
       return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
+    case 'verval_new':
+      // Wali kelas & Waka Kesiswaan memproses ajuan di layar native Proses Ajuan; admin tetap di web.
+      if (role === 'wali_kelas' || role === 'waka_kesiswaan') {
+        return data.route === '/admin/verval-siswa' && role === 'wali_kelas' ? '/ajuan?jenis=data' : '/ajuan?jenis=prestasi';
+      }
+      return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
+    case 'tatib_record':
+      // Wali kelas → poin siswa yang dicatat; peran lain (guru BK) → rute bawaan (rekap tatib).
+      if (role === 'wali_kelas' && data.siswa_id) return `/tatib/poin?id=${encodeURIComponent(data.siswa_id)}&sumber=wali`;
+      return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
     case 'teaching_reminder':
       return data.schedule_id ? `/jurnal/isi?schedule_id=${data.schedule_id}&mode=slot` : '/(app)/(tabs)';
     default:

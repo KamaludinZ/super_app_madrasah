@@ -58,6 +58,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
       '/wali-kelas/kehadiran': '/wali/kehadiran',
       '/wali-kelas/kebersihan': '/wali/kebersihan',
       '/wali-kelas/laporan': '/laporan',
+      '/admin/verval-siswa': '/ajuan?jenis=data',
     };
     if (wali[p]) return wali[p];
   }

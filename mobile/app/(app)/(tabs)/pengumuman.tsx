@@ -16,6 +16,7 @@ import { useNetwork } from '@/store/network';
 import { WEB_URL } from '@/config';
 import { useAuth } from '@/store/auth';
 import { routeForPath } from '@/menu/routes';
+import { routeForNotification } from '@/notifications';
 import { formatRelative } from '@/utils/time';
 import { radius, spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
@@ -61,7 +62,8 @@ export default function NotifikasiScreen() {
   const open = (n: NotificationItem) => {
     if (n.source === 'user') {
       if (!n.is_read) api.notifications.markRead('user', n.source_id).then(refreshBadges).catch(() => {});
-      router.push(routeForPath(n.link || '/dashboard', activeRole, n.title) as any);
+      // Sama dengan ketukan push: jenis ber-layar native (detail tugas, tanggapan BK, verval, tatib…) dibuka langsung.
+      router.push((routeForNotification({ ...(n.data ?? {}), type: n.type, route: n.link || '/dashboard' }, activeRole) ?? routeForPath(n.link || '/dashboard', activeRole, n.title)) as any);
       return;
     }
     if (n.source === 'announcement') {

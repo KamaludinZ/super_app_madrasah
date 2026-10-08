@@ -533,8 +533,9 @@ async def _notify_tatib(doc: Dict, siswa: Dict, poin):
     body = f"{doc.get('tatib_nama') or '-'} ({poin or 0} poin) · dicatat {doc.get('petugas_nama') or '-'}"
     kelas = f" · {doc['siswa_kelas']}" if doc.get('siswa_kelas') else ''
     title = f"{jenis} tata tertib: {doc.get('siswa_nama') or 'siswa'}{kelas}"
-    await notify_users([wali], title, body, type='tatib_record', route='/wali-kelas/siswa',
-                       data={'penanganan_id': doc['id']}, exclude=[doc.get('petugas_id')])
+    # Ke Pantauan Walikelas (poin), bukan Data Siswa; siswa_id agar aplikasi membuka poin siswa itu.
+    await notify_users([wali], title, body, type='tatib_record', route='/wali-kelas/poin-tatib',
+                       data={'penanganan_id': doc['id'], 'siswa_id': doc.get('siswa_id')}, exclude=[doc.get('petugas_id')])
     if not is_prestasi:
         await notify_roles(['guru_bk'], title, body, type='tatib_record', route='/admin/tatib/data',
                            data={'penanganan_id': doc['id']}, exclude=[doc.get('petugas_id'), wali])
