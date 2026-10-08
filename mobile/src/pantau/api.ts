@@ -46,6 +46,38 @@ export type AgendaItem = {
   created_by_name?: string | null; is_active?: boolean; category?: string | null; status?: string; participants_count?: number;
 };
 
+export type Hitungan = Record<string, number>;
+/** GET /bk/laporan/summary */
+export type BkRingkasan = {
+  total_kunjungan: number; kunjungan_by_jenis: Hitungan; total_clkb: number; clkb_belum_ditanggapi: number;
+  total_pcl: number; pcl_belum_ditanggapi: number; total_home_visit: number;
+};
+/** GET /uks/laporan/summary */
+export type UksRingkasan = {
+  total_kunjungan: number; kunjungan_by_jenis_penanganan: Hitungan; kunjungan_by_kondisi_pulang: Hitungan;
+  total_obat_keluar_transaksi: number; most_used_obat: { nama_obat: string; jumlah: number }[]; total_jenis_obat: number;
+  obat_stok_menipis: { id: string; nama_obat: string; satuan?: string | null; stok_tersisa?: number; stok_minimum?: number }[];
+};
+/** GET /perpus/laporan/summary */
+export type PerpusRingkasan = {
+  total_judul_koleksi: number; total_eksemplar: number; total_eksemplar_tersedia: number; koleksi_by_jenis: Hitungan;
+  total_peminjaman: number; peminjaman_aktif: number; peminjaman_terlambat: number; most_borrowed: { judul: string; jumlah: number }[];
+  total_kunjungan: number; kunjungan_by_tujuan: Hitungan;
+};
+/** GET /sarpras/kerusakan */
+export type Kerusakan = {
+  id: string; aset_tipe: string; aset_nama?: string | null; tanggal_lapor: string; deskripsi_kerusakan: string; tingkat_kerusakan?: string | null;
+  status?: string | null; tanggal_perbaikan?: string | null; biaya_perbaikan?: number | null; hasil_perbaikan?: string | null;
+};
+/** GET /alumni/stats */
+export type AlumniStat = { academic_year_id?: string | null; academic_year_name?: string | null; class_id?: string | null; class_name?: string | null; grade?: string | number | null; count: number };
+export type Alumni = { id: string; full_name: string; nisn?: string | null; nis?: string | null; graduation_date?: string | null; graduation_class_name?: string | null; gender?: string | null };
+/** GET /rkam/budget-items */
+export type RkamItem = {
+  id: string; code?: string | null; name: string; category?: string | null; bidang?: string | null; description?: string | null;
+  allocated_bos?: number; allocated_komite?: number; realized_bos?: number; realized_komite?: number; fiscal_year: string; quarter?: string | null;
+};
+
 export const pantau = {
   kehadiranOverall: (month: number, year: number) => request<KehadiranOverall>('/admin/attendance/overall', { query: { month, year } }),
   kehadiranKelas: (class_id: string, month: number, year: number) =>
@@ -57,5 +89,12 @@ export const pantau = {
   kebersihanRekap: () => request<KebersihanRekap[]>('/cleanliness/admin/recap'),
   staffEvents: (year: number, month: number) => request<AgendaItem[]>('/staff-events', { query: { year, month } }),
   madrasahEvents: (year: number, month: number) => request<AgendaItem[]>('/madrasah-events', { query: { year, month } }),
+  bk: (start_date: string, end_date: string) => request<BkRingkasan>('/bk/laporan/summary', { query: { start_date, end_date } }),
+  uks: (start_date: string, end_date: string) => request<UksRingkasan>('/uks/laporan/summary', { query: { start_date, end_date } }),
+  perpus: (start_date: string, end_date: string) => request<PerpusRingkasan>('/perpus/laporan/summary', { query: { start_date, end_date } }),
+  kerusakan: () => request<Kerusakan[]>('/sarpras/kerusakan'),
+  alumniStats: () => request<AlumniStat[]>('/alumni/stats'),
+  alumni: (search?: string) => request<Alumni[]>('/alumni', { query: { search: search || undefined } }),
+  rkam: (fiscal_year: string) => request<RkamItem[]>('/rkam/budget-items', { query: { fiscal_year } }),
   users: (role: string) => request<User[]>('/users', { query: { role, is_active: true } }),
 };

@@ -74,6 +74,30 @@ export function PctRow({ title, subtitle, pct, ada = true, right }: { title: str
   );
 }
 
+/** Rincian hitungan per kategori sebagai bilah mendatar, urut terbanyak. */
+export function Bars({ data, max = 8, label }: { data: Record<string, number> | { label: string; value: number }[]; max?: number; label?: (k: string) => string }) {
+  const { colors } = useTheme();
+  const rows = (Array.isArray(data) ? data : Object.entries(data).map(([k, v]) => ({ label: label ? label(k) : k, value: v })))
+    .filter((r) => r.value > 0).sort((a, b) => b.value - a.value).slice(0, max);
+  if (!rows.length) return <T variant="caption" tone="muted">Belum ada data.</T>;
+  const top = rows[0].value || 1;
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {rows.map((r) => (
+        <View key={r.label} style={{ gap: 4 }}>
+          <View style={styles.row}>
+            <T variant="caption" style={{ flex: 1 }} numberOfLines={1}>{r.label}</T>
+            <T variant="caption" weight="semibold">{r.value}</T>
+          </View>
+          <View style={[styles.track, { backgroundColor: colors.surfaceSecondary }]}>
+            <View style={[styles.fill, { width: `${(r.value / top) * 100}%`, backgroundColor: colors.brandPrimary }]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function SearchBox({ value, onChange, placeholder = 'Cari nama…' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const { colors } = useTheme();
   return (

@@ -55,6 +55,12 @@ export function nativeRoute(path: string, role?: string | null): string | null {
       '/admin/kegiatan-madrasah': '/pantau/agenda?jenis=madrasah',
       '/admin/siswa': '/pantau/siswa',
       '/admin/gtk': '/pantau/gtk',
+      '/admin/bk/laporan': '/pantau/layanan?unit=bk',
+      '/admin/uks/laporan': '/pantau/layanan?unit=uks',
+      '/admin/perpus/laporan': '/pantau/layanan?unit=perpus',
+      '/admin/sarpras/kerusakan': '/pantau/layanan?unit=sarpras',
+      '/admin/alumni': '/pantau/alumni',
+      '/admin/dana-rkam': '/pantau/rkam',
     };
     if (pantau[p]) return pantau[p];
   }
