@@ -12,6 +12,7 @@ import { AlertOctagon, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucid
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const TINGKAT_LIST = ['Ringan', 'Sedang', 'Berat'];
 const STATUS_LIST = ['Dilaporkan', 'Diperbaiki', 'Selesai', 'Tidak Dapat Diperbaiki'];
@@ -29,7 +30,7 @@ const STATUS_BADGE = {
 };
 
 const emptyForm = {
-  aset_tipe: 'tetap', aset_id: '', tanggal_lapor: new Date().toISOString().split('T')[0], pelapor_id: '',
+  aset_tipe: 'tetap', aset_id: '', tanggal_lapor: hariIniWIB(), pelapor_id: '',
   deskripsi_kerusakan: '', tingkat_kerusakan: 'Ringan', status: 'Dilaporkan',
   tanggal_perbaikan: '', biaya_perbaikan: '', hasil_perbaikan: '',
 };

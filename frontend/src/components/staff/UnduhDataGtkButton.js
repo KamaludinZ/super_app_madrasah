@@ -8,6 +8,7 @@ import { Download, Loader2, UserX, CheckCircle2 } from 'lucide-react';
 import { barisDataGtk, jenisGtk } from '@/lib/dataGtkKolom';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { hariIniWIB } from '@/lib/tanggal';
 
 export const saveBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob);
@@ -29,7 +30,7 @@ export const OPSI_JENIS_GTK = [
 ];
 
 /** Nama berkas unduhan Data GTK, mis. Data_GTK_Guru_2026-10-05.xlsx */
-export const namaBerkasDataGtk = (jenis, tanggal = new Date().toISOString().slice(0, 10)) =>
+export const namaBerkasDataGtk = (jenis, tanggal = hariIniWIB()) =>
   `Data_GTK_${LABEL_JENIS_GTK[jenis] || 'Semua'}_${tanggal}.xlsx`;
 
 /**

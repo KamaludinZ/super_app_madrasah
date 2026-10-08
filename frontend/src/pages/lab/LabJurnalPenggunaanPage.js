@@ -14,8 +14,9 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { LAB_META } from './LabMeta';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 const emptyForm = (userName) => ({
-  tanggal: new Date().toISOString().split('T')[0], jam_mulai: '', jam_selesai: '', jp_mulai: '', jp_selesai: '',
+  tanggal: hariIniWIB(), jam_mulai: '', jam_selesai: '', jp_mulai: '', jp_selesai: '',
   pengguna_nama_display: userName || '', judul_percobaan: '', alat_bahan_digunakan: '', keterangan: '',
 });
 

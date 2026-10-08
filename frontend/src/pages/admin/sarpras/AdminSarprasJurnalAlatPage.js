@@ -12,8 +12,9 @@ import { Wrench, Plus, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
-const emptyForm = { aset_id: '', tanggal: new Date().toISOString().split('T')[0], pengguna_id: '', kegiatan: '', kondisi_setelah: '', keterangan: '' };
+const emptyForm = { aset_id: '', tanggal: hariIniWIB(), pengguna_id: '', kegiatan: '', kondisi_setelah: '', keterangan: '' };
 
 export default function AdminSarprasJurnalAlatPage() {
   const [list, setList] = useState([]);

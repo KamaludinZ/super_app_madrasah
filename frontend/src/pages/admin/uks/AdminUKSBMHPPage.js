@@ -13,6 +13,7 @@ import { Package, Plus, Pencil, Trash2, Loader2, Save, Search, AlertTriangle, XC
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { api } from '@/lib/api';
+import { hariIniWIB } from '@/lib/tanggal';
 
 
 
@@ -68,7 +69,7 @@ const getStokStatus = (item) => {
 // Sisa hari menuju tanggal kadaluarsa terdekat; null jika tidak ada tanggal.
 const daysToExpiry = (item) => {
   if (!item.tanggal_kadaluarsa_terdekat) return null;
-  const today = new Date(new Date().toISOString().split('T')[0]);
+  const today = new Date(hariIniWIB());
   const exp = new Date(item.tanggal_kadaluarsa_terdekat);
   return Math.round((exp - today) / 86400000);
 };

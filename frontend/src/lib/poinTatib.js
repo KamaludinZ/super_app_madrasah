@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { hariIniWIB } from '@/lib/tanggal';
 
 // Poin Tata Tertib: helper nilai + pemanggil API (backend/routers/tatib.py & tatib_poin.py).
 // Poin kebaikan selalu PLUS, pelanggaran selalu MINUS; nilai dihitung dari aturan + kondisi.
@@ -89,6 +90,6 @@ export async function ambilRekap(filter) {
 export async function unduhRekap(filter) {
   const res = await api.get('/tatib/rekap/export', { params: tanpaKosong(filter), responseType: 'blob' });
   const cd = res.headers?.['content-disposition'] || '';
-  const nama = /filename="?([^";]+)"?/i.exec(cd)?.[1] || `rekap_poin_tatib_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const nama = /filename="?([^";]+)"?/i.exec(cd)?.[1] || `rekap_poin_tatib_${hariIniWIB()}.xlsx`;
   return { blob: res.data, nama };
 }

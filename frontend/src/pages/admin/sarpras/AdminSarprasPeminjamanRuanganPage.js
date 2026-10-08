@@ -12,6 +12,7 @@ import { CalendarClock, Plus, Pencil, Trash2, Loader2, Save, Search } from 'luci
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const STATUS_LIST = ['Dipesan', 'Berlangsung', 'Selesai', 'Dibatalkan'];
 const STATUS_BADGE = {
@@ -22,7 +23,7 @@ const STATUS_BADGE = {
 };
 
 const emptyForm = {
-  room_id: '', peminjam_id: '', tanggal: new Date().toISOString().split('T')[0],
+  room_id: '', peminjam_id: '', tanggal: hariIniWIB(),
   jam_mulai: '', jam_selesai: '', keperluan: '', status: 'Dipesan', catatan: '',
 };
 

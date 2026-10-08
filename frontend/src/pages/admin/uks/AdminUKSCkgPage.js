@@ -17,9 +17,8 @@ import { useAuth } from '@/lib/AuthContext';
 import TemplateCkgDialog from './TemplateCkgDialog';
 import ImportCkgDialog from './ImportCkgDialog';
 import { FILTER_GTK, FILTER_SEMUA, KOLOM_CKG, cocokCariCkg, cocokFilterCkg, nilaiCkg, opsiKelasCkg } from '@/lib/ckgKolom';
+import { hariIniWIB } from '@/lib/tanggal';
 
-// Tanggal hari ini menurut WIB (toISOString memakai UTC → sebelum pukul 07.00 tercatat kemarin).
-const hariIniWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
 const emptyPatientPicker = {
   jenis_pasien: 'siswa', // 'siswa' or 'gtk'

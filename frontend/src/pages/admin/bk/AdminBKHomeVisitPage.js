@@ -12,10 +12,11 @@ import { Home, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react'
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const emptyForm = {
   siswa_id: '',
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   tujuan: '',
   hasil_kunjungan: '',
   pihak_ditemui: '',

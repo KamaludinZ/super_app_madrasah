@@ -4,6 +4,7 @@
  */
 import { kolomTemplateCkg } from '@/lib/ckgKolom';
 import { cekHeader, validasiBerkas } from '@/lib/imporDataMaster';
+import { hariIniWIB } from '@/lib/tanggal';
 
 export { validasiBerkas };
 
@@ -94,7 +95,7 @@ export function validasiBarisCkg(data) {
   if (data.nik && !/^\d{16}$/.test(data.nik.replace(/\D/g, '')) ) salah.push({ kolom: 'NIK', pesan: 'NIK harus 16 digit angka' });
   if (!data.tanggal) salah.push({ kolom: 'Tanggal Periksa', pesan: 'Tanggal pemeriksaan wajib diisi' });
   else if (!tanggalValid(data.tanggal)) salah.push({ kolom: 'Tanggal Periksa', pesan: 'Format tanggal harus TAHUN-BULAN-TANGGAL (mis. 2026-09-01)' });
-  else if (data.tanggal > new Date().toISOString().slice(0, 10)) salah.push({ kolom: 'Tanggal Periksa', pesan: 'Tanggal pemeriksaan tidak boleh di masa depan' });
+  else if (data.tanggal > hariIniWIB()) salah.push({ kolom: 'Tanggal Periksa', pesan: 'Tanggal pemeriksaan tidak boleh di masa depan' });
   Object.entries(BATAS_ANGKA_CKG).forEach(([key, [label, min, max]]) => {
     const v = data[key];
     if (v === '' || v == null) return;

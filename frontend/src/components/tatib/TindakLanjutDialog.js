@@ -10,8 +10,9 @@ import { formatPoin, nilaiPoin } from '@/components/tatib/RingkasanPoin';
 import { formatTanggalPoin } from '@/components/tatib/RiwayatPoin';
 import { tambahTindakLanjut } from '@/lib/poinTatib';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
+import { hariIniWIB } from '@/lib/tanggal';
 
-const hariIni = () => new Date().toISOString().split('T')[0];
+const hariIni = () => hariIniWIB();
 
 // Tindak lanjut penanganan satu pelanggaran: linimasa yang sudah dicatat + formulir tambah.
 // Disimpan lewat POST /tatib/penanganan/{id}/tindak-lanjut (hanya peran input).

@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const EMPTY_FORM = {
   student_id: '',
@@ -67,7 +68,7 @@ export default function AdminPIPProposalPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, tanggal_pengajuan: new Date().toISOString().split('T')[0] });
+    setForm({ ...EMPTY_FORM, tanggal_pengajuan: hariIniWIB() });
     setOpen(true);
   };
 

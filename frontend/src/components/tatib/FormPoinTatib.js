@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { formatPoin, rangkumPoin } from '@/components/tatib/RingkasanPoin';
 import { ambilAturanPoin, catatPoin, hitungNilaiPoin, sarankanKondisi } from '@/lib/poinTatib';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const TEMA = {
   kebaikan: {
@@ -38,7 +39,7 @@ const TEMA = {
   },
 };
 
-const hariIni = () => new Date().toISOString().split('T')[0];
+const hariIni = () => hariIniWIB();
 const formKosong = () => ({ siswa_id: '', kategori: '', aturan_id: '', kondisi_id: '', tanggal: hariIni(), catatan: '' });
 
 // Formulir pencatatan poin per jalur: 'kebaikan' (PLUS) atau 'pelanggaran' (MINUS).

@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import FilledByCell, { filledByText } from '@/components/guru-pengganti/FilledByCell';
 import { groupSideBySideJournals } from '@/lib/guruPengganti';
+import { hariIniWIB } from '@/lib/tanggal';
 
 // Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
 // "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
@@ -247,7 +248,7 @@ export default function JurnalHistoryPage() {
       ];
 
       // Generate filename with timestamp
-      const timestamp = new Date().toISOString().slice(0, 10);
+      const timestamp = hariIniWIB();
       const filename = `Riwayat_Jurnal_${timestamp}.xlsx`;
 
       // Download file

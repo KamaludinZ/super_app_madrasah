@@ -11,12 +11,13 @@ import { Users, Plus, Trash2, Loader2, Save, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const TUJUAN_LIST = ['Membaca', 'Meminjam Buku', 'Mengembalikan Buku', 'Mengerjakan Tugas', 'Lainnya'];
 
 const emptyForm = {
   pengunjung_id: '',
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   waktu: '',
   tujuan: '',
   keterangan: '',

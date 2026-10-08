@@ -12,12 +12,13 @@ import { HeartHandshake, Plus, Pencil, Trash2, Loader2, Save, Search } from 'luc
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const JENIS_LAYANAN = ['Konseling Individu', 'Konseling Kelompok', 'Konsultasi', 'Bimbingan Klasikal', 'Mediasi'];
 
 const emptyForm = {
   siswa_id: '',
-  tanggal: new Date().toISOString().split('T')[0],
+  tanggal: hariIniWIB(),
   jenis_layanan: '',
   masalah: '',
   penanganan: '',

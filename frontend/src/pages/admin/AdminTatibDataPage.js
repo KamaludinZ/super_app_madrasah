@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Download, TrendingDown, TrendingUp, Award, AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const AdminTatibDataPage = () => {
   const [penangananList, setPenangananList] = useState([]);
@@ -183,7 +184,7 @@ const AdminTatibDataPage = () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `rekapitulasi_tatib_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `rekapitulasi_tatib_${hariIniWIB()}.csv`;
     link.click();
     toast.success('Data berhasil diekspor');
   };

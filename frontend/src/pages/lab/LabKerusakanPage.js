@@ -16,13 +16,14 @@ import LabPeminjamPicker from './LabPeminjamPicker';
 import LabKPI from './LabKPI';
 import { LAB_META } from './LabMeta';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 const STATUS_BADGE = {
   Diajukan: 'bg-blue-100 text-blue-700 border-blue-200',
   'Proses Ganti': 'bg-amber-100 text-amber-700 border-amber-200',
   'Selesai Diganti': 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 const emptyForm = {
-  aset_tipe: 'room', aset_id: '', tanggal_lapor: new Date().toISOString().split('T')[0], pelapor_id: '',
+  aset_tipe: 'room', aset_id: '', tanggal_lapor: hariIniWIB(), pelapor_id: '',
   jumlah_rusak: 1, deskripsi_kerusakan: '', status: 'Diajukan',
   tanggal_perbaikan: '', biaya_perbaikan: '', hasil_perbaikan: '',
 };

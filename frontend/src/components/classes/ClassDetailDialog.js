@@ -10,6 +10,7 @@ import { Users, UserPlus, UserMinus, Search, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 export default function ClassDetailDialog({ classData, open, onOpenChange, onRefresh }) {
   const [students, setStudents] = useState([]);
@@ -19,7 +20,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
   const [searchQuery, setSearchQuery] = useState('');
   const [addForm, setAddForm] = useState({
     reason: 'pembagian_kelas',
-    start_date: new Date().toISOString().split('T')[0],
+    start_date: hariIniWIB(),
     notes: ''
   });
 
@@ -63,7 +64,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
       setSearchQuery('');
       setAddForm({
         reason: 'pembagian_kelas',
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: hariIniWIB(),
         notes: ''
       });
       if (onRefresh) onRefresh();
@@ -76,7 +77,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
     if (!(await confirmDialog(`Hapus ${studentName} dari kelas ${classData.name}?`))) return;
     try {
       await api.delete(`/classes/${classData.id}/students/${studentId}`, {
-        data: { end_date: new Date().toISOString().split('T')[0] }
+        data: { end_date: hariIniWIB() }
       });
       toast.success('Siswa berhasil dihapus dari kelas');
       loadStudents();

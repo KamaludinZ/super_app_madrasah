@@ -12,9 +12,10 @@ import { ClipboardList, Plus, Trash2, Loader2, Save, Search } from 'lucide-react
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const emptyForm = {
-  aset_tipe: 'tetap', aset_id: '', tanggal: new Date().toISOString().split('T')[0],
+  aset_tipe: 'tetap', aset_id: '', tanggal: hariIniWIB(),
   jenis_perawatan: '', petugas_pelaksana: '', biaya: '', hasil: '', keterangan: '',
 };
 

@@ -12,6 +12,7 @@ import axios from 'axios';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
 import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 import { NoDataEmptyState } from '@/components/ui/EmptyState';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const REFRESH_INTERVAL = 30000; // 30s
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -41,7 +42,7 @@ export default function PublicAgenda() {
   const [currentPage, setCurrentPage] = useState(1);
 
   // State for staff events
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(hariIniWIB());
   const [staffPage, setStaffPage] = useState(1);
   const staffPerPage = 10;
 
@@ -319,7 +320,7 @@ export default function PublicAgenda() {
                 {dateButtons.map(d => {
                   const date = new Date(d + 'T00:00:00');
                   const isSelected = d === selectedDate;
-                  const isToday = d === new Date().toISOString().split('T')[0];
+                  const isToday = d === hariIniWIB();
 
                   return (
                     <button

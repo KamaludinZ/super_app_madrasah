@@ -12,6 +12,7 @@ import { BookOpen, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-re
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang'];
 
@@ -25,7 +26,7 @@ const STATUS_BADGE = {
 const emptyForm = {
   koleksi_id: '',
   peminjam_id: '',
-  tanggal_pinjam: new Date().toISOString().split('T')[0],
+  tanggal_pinjam: hariIniWIB(),
   tanggal_kembali_rencana: '',
   tanggal_kembali_aktual: '',
   status: 'Dipinjam',

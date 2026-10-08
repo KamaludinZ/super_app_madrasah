@@ -16,6 +16,7 @@ import LabPeminjamPicker from './LabPeminjamPicker';
 import LabKPI from './LabKPI';
 import { LAB_META } from './LabMeta';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang/Rusak'];
 const STATUS_BADGE = {
   Dipinjam: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -23,7 +24,7 @@ const STATUS_BADGE = {
   Terlambat: 'bg-amber-100 text-amber-700 border-amber-200',
   'Hilang/Rusak': 'bg-rose-100 text-rose-700 border-rose-200',
 };
-const emptyForm = { aset_tipe: 'tetap', aset_id: '', peminjam_id: '', tanggal_pinjam: new Date().toISOString().split('T')[0], tanggal_kembali_rencana: '', tanggal_kembali_aktual: '', jumlah: 1, status: 'Dipinjam', keperluan: '', catatan: '' };
+const emptyForm = { aset_tipe: 'tetap', aset_id: '', peminjam_id: '', tanggal_pinjam: hariIniWIB(), tanggal_kembali_rencana: '', tanggal_kembali_aktual: '', jumlah: 1, status: 'Dipinjam', keperluan: '', catatan: '' };
 
 export default function LabPeminjamanAlatPage() {
   const { labKey } = useParams();

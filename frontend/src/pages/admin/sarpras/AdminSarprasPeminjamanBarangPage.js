@@ -12,6 +12,7 @@ import { Handshake, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-r
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const STATUS_LIST = ['Dipinjam', 'Dikembalikan', 'Terlambat', 'Hilang/Rusak'];
 const STATUS_BADGE = {
@@ -22,7 +23,7 @@ const STATUS_BADGE = {
 };
 
 const emptyForm = {
-  aset_tipe: 'tetap', aset_id: '', peminjam_id: '', tanggal_pinjam: new Date().toISOString().split('T')[0],
+  aset_tipe: 'tetap', aset_id: '', peminjam_id: '', tanggal_pinjam: hariIniWIB(),
   tanggal_kembali_rencana: '', tanggal_kembali_aktual: '', jumlah: 1, status: 'Dipinjam', keperluan: '', catatan: '',
 };
 

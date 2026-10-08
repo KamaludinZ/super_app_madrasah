@@ -18,9 +18,8 @@ import { confirmDialog } from '@/components/ui/confirm-dialog';
 import SuratKeteranganUKS, { JUDUL_SURAT } from './SuratKeteranganUKS';
 import { saveBlob } from './laporanExport';
 import RiwayatKunjunganPanel, { filterRiwayatSetahun } from './RiwayatKunjunganPanel';
+import { hariIniWIB } from '@/lib/tanggal';
 
-// Tanggal hari ini menurut WIB (toISOString memakai UTC → sebelum pukul 07.00 tercatat kemarin).
-const hariIniWIB = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
 const KONDISI_PULANG_LIST = ['Membaik', 'Dirujuk', 'Dijemput Orang Tua', 'Istirahat di UKS', 'Istirahat di Mahad'];
 

@@ -18,6 +18,7 @@ import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const ATTENDANCE_STATUSES = [
@@ -453,7 +454,7 @@ function MembersTab({ extra, canManage }) {
 }
 
 function AttendanceTab({ extra, canManage }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(hariIniWIB());
   const [history, setHistory] = useState([]);
   const [members, setMembers] = useState([]);
   const [records, setRecords] = useState({});

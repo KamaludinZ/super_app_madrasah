@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { barisDataSiswa, KOLOM_DATA_SISWA } from '@/lib/dataSiswaKolom';
 import PratinjauKolom from './PratinjauKolom';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const saveBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob);
@@ -24,7 +25,7 @@ const saveBlob = (blob, filename) => {
 export const TINGKAT_DEFAULT = ['7', '8', '9'];
 
 /** Nama berkas unduhan Data Siswa, mis. Data_Siswa_Kelas_7_2026-10-05.xlsx */
-export const namaBerkasDataSiswa = (tingkat, tanggal = new Date().toISOString().slice(0, 10)) =>
+export const namaBerkasDataSiswa = (tingkat, tanggal = hariIniWIB()) =>
   `Data_Siswa_${tingkat && tingkat !== 'all' ? `Kelas_${tingkat}` : 'Semua'}_${tanggal}.xlsx`;
 
 /**

@@ -13,9 +13,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return hariIniWIB();
 }
 function firstOfMonthISO() {
   const d = new Date();

@@ -20,6 +20,7 @@ import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FormPoinTatib from '@/components/tatib/FormPoinTatib';
 import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, bolehHapusTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { hariIniWIB } from '@/lib/tanggal';
 
 // Dua jalur pencatatan poin yang dipisah tegas: kebaikan (PLUS) dan pelanggaran (MINUS).
 // Poin kebaikan tidak terhubung ke data prestasi siswa.
@@ -43,7 +44,7 @@ const JALUR = {
 // Catatan lama (sebelum migrasi) belum punya jenis_poin — turunkan dari nilainya.
 const jenisCatatan = (p) => p.jenis_poin || (nilaiPoin(p) < 0 ? 'pelanggaran' : 'kebaikan');
 
-const hariIni = () => new Date().toISOString().split('T')[0];
+const hariIni = () => hariIniWIB();
 const formKosong = () => ({ siswa_id: '', tatib_id: '', tanggal: hariIni(), catatan: '' });
 
 const AdminTatibPenangananPage = () => {

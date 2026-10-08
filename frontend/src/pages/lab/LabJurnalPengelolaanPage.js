@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { LAB_META } from './LabMeta';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 function defaultTahunAjaran() {
   const now = new Date();
@@ -21,7 +22,7 @@ function defaultTahunAjaran() {
   return now.getMonth() >= 6 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
 }
 
-const emptyForm = { aset_tipe: 'room', aset_id: '', tahun_ajaran: defaultTahunAjaran(), tanggal: new Date().toISOString().split('T')[0], jenis_perawatan: '', petugas_pelaksana: '', biaya: '', hasil: '', keterangan: '' };
+const emptyForm = { aset_tipe: 'room', aset_id: '', tahun_ajaran: defaultTahunAjaran(), tanggal: hariIniWIB(), jenis_perawatan: '', petugas_pelaksana: '', biaya: '', hasil: '', keterangan: '' };
 
 export default function LabJurnalPengelolaanPage() {
   const { labKey } = useParams();
