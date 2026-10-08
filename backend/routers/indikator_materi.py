@@ -1,6 +1,7 @@
 """API endpoints for KD/Indikator and Materi/Pokok Bahasan."""
 from typing import Dict, Optional
 from datetime import datetime
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import uuid
@@ -68,7 +69,7 @@ async def list_indikator(
     if guru_id:
         query['created_by'] = guru_id
     # If user is guru (not admin), only show their own data
-    elif 'guru' in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    elif punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         query['created_by'] = user['id']
 
     if semester_id:
@@ -93,7 +94,7 @@ async def get_indikator(indikator_id: str, user: Dict = Depends(get_current_user
 async def create_indikator(req: IndikatorCreateRequest, user: Dict = Depends(get_current_user)):
     """Create a new KD/Indikator."""
     # Check if user is guru or admin
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(403, "Hanya guru atau admin yang dapat membuat indikator")
 
     doc = {
@@ -166,7 +167,7 @@ async def list_materi(
     if guru_id:
         query['created_by'] = guru_id
     # If user is guru (not admin), only show their own data
-    elif 'guru' in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    elif punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         query['created_by'] = user['id']
 
     if semester_id:
@@ -191,7 +192,7 @@ async def get_materi(materi_id: str, user: Dict = Depends(get_current_user)):
 async def create_materi(req: MateriCreateRequest, user: Dict = Depends(get_current_user)):
     """Create a new Materi/Pokok Bahasan."""
     # Check if user is guru or admin
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(403, "Hanya guru atau admin yang dapat membuat materi")
 
     doc = {
@@ -261,7 +262,7 @@ async def import_indikator(
     Expected columns: kode, nama, mapel_id, tingkat_kelas, semester_id
     """
     # Check if user is guru or admin
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(403, "Hanya guru atau admin yang dapat mengimpor indikator")
 
     if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
@@ -353,7 +354,7 @@ async def import_indikator_materi(
     Expected columns: kode, indikator_nama, mapel_id, tingkat_kelas, semester_id,
     materi_nama (optional), materi_deskripsi (optional)
     """
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(403, "Hanya guru atau admin yang dapat mengimpor data")
 
     if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
@@ -466,7 +467,7 @@ async def import_materi(
     Expected columns: nama, deskripsi, mapel_id, tingkat_kelas, semester_id, indikator_id (optional)
     """
     # Check if user is guru or admin
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(403, "Hanya guru atau admin yang dapat mengimpor materi")
 
     if not file.filename.endswith(('.xlsx', '.xls', '.csv')):

@@ -242,6 +242,15 @@ ACADEMIC_MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'waka_kurikulum')
 GURU_PENGGANTI_ROLES = ('admin', 'waka_kurikulum', 'guru_piket')
 
 
+# Guru pengajar mapel: peran 'guru' dan semua peran guru per bidang. Dipakai agar guru IPA/IPS/agama/bahasa/
+# seni/TIK diperlakukan sama dengan 'guru' (dulu banyak endpoint hanya mengenali 'guru').
+GURU_MAPEL_ROLES = ('guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik')
+
+
+def punya_peran_guru(user: Dict[str, Any]) -> bool:
+    return any(r in GURU_MAPEL_ROLES for r in (user.get('roles') or []))
+
+
 def require_role(*allowed_roles: str):
     async def checker(user: Dict[str, Any] = Depends(get_current_user)):
         active = user.get('active_role')

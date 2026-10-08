@@ -16,6 +16,7 @@ from core import (
     require_role,
     serialize_doc,
 )
+from core import GURU_MAPEL_ROLES
 from routers.auth import _resolve_view_context
 from excel_io import class_template, parse_class_rows
 from models import ClassModel, ClassHistoryModel
@@ -235,7 +236,7 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
 # ==================== Class Student Management ====================
 
 @router.get("/classes/{cid}/students")  # Allow admin, wali_kelas, and guru
-async def get_class_students(cid: str, user: Dict = Depends(require_role('admin', 'wali_kelas', 'guru'))):
+async def get_class_students(cid: str, user: Dict = Depends(require_role('admin', 'wali_kelas', *GURU_MAPEL_ROLES))):
     """Get list of students in a specific class."""
     cls = await db.classes.find_one({'id': cid}, {'_id': 0})
     if not cls:

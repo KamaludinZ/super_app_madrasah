@@ -1,6 +1,7 @@
 """
 Kelas Digital Router - Authentication, Materi Mapel, dan Tugas untuk Role Kelas, Siswa, Guru, dan Admin.
 """
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 import hmac
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -306,7 +307,7 @@ async def create_materi(
     """Create materi mapel (guru only)."""
 
     # Only guru can create
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(status_code=403, detail="Hanya guru yang dapat membuat materi")
 
     # Get active semester
@@ -414,7 +415,7 @@ async def get_materi_list(
 
         return serialized_list
 
-    elif active_role == 'guru':
+    elif active_role in GURU_MAPEL_ROLES:
         # Role guru: show materi yang dibuat oleh guru ini
         # If class_id provided, filter by class
         filter_query['teacher_id'] = user['id']
@@ -552,7 +553,7 @@ async def create_tugas(
 ):
     """Create tugas (guru only)."""
 
-    if 'guru' not in user.get('roles', []) and 'admin' not in user.get('roles', []):
+    if not punya_peran_guru(user) and 'admin' not in user.get('roles', []):
         raise HTTPException(status_code=403, detail="Hanya guru yang dapat membuat tugas")
 
     semester = await db.semesters.find_one({'is_active': True})
@@ -665,7 +666,7 @@ async def get_tugas_list(
 
         return serialized_list
 
-    elif active_role == 'guru':
+    elif active_role in GURU_MAPEL_ROLES:
         filter_query['teacher_id'] = user['id']
         if class_id:
             filter_query['target_kelas_ids'] = class_id

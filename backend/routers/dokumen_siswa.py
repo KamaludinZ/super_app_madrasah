@@ -2,6 +2,7 @@
 Router untuk upload dan management dokumen siswa (EMIS).
 Dokumen: Pas Foto, Akte, Ijazah SD/MI, KK, KIP, PKH, KKS, Ijazah MTs
 """
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 import os
 import uuid
 from datetime import datetime
@@ -129,7 +130,7 @@ async def get_dokumen_file(
 
     # Cek akses: admin, guru, atau siswa yang bersangkutan
     if 'admin' not in user.get('roles', []) and \
-       'guru' not in user.get('roles', []) and \
+       not punya_peran_guru(user) and \
        'wali_kelas' not in user.get('roles', []) and \
        user['id'] != student_id:
         raise HTTPException(403, "Tidak diizinkan melihat dokumen siswa lain")
@@ -204,7 +205,7 @@ async def get_all_dokumen(
     """Get list semua dokumen siswa."""
     # Cek akses
     if 'admin' not in user.get('roles', []) and \
-       'guru' not in user.get('roles', []) and \
+       not punya_peran_guru(user) and \
        'wali_kelas' not in user.get('roles', []) and \
        user['id'] != student_id:
         raise HTTPException(403, "Tidak diizinkan melihat dokumen siswa lain")

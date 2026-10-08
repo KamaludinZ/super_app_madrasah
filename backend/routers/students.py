@@ -1,4 +1,5 @@
 """Students: list, attendance, cleanliness, today, detail, Excel import."""
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 import io
 import uuid
 from datetime import datetime
@@ -218,11 +219,8 @@ async def get_cleanliness_recap(user: Dict = Depends(require_role('admin', 'guru
     return result
 
 
-# Guru mapel (semua peran guru_* pengajar) — dulu hanya peran aktif 'guru' sehingga guru IPA/IPS/agama/
-# bahasa/seni/TIK ditolak walau menu Kebersihan Kelas tampil untuk mereka.
-GURU_MAPEL_ROLES = ('guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik')
-
-
+# Guru mapel (GURU_MAPEL_ROLES, core): dulu hanya peran aktif 'guru' sehingga guru IPA/IPS/agama/bahasa/
+# seni/TIK ditolak walau menu Kebersihan Kelas tampil untuk mereka.
 @router.get("/cleanliness/guru/classes/all")
 async def get_guru_all_classes(user: Dict = Depends(require_role(*GURU_MAPEL_ROLES))):
     """Guru: get all classes they teach (from their schedules), filtered by user's view context (semester)."""
@@ -937,7 +935,7 @@ async def get_rekam_didik(
     """
     # Cek akses
     if 'admin' not in user.get('roles', []) and \
-       'guru' not in user.get('roles', []) and \
+       not punya_peran_guru(user) and \
        'wali_kelas' not in user.get('roles', []) and \
        user['id'] != student_id:
         raise HTTPException(403, "Tidak diizinkan melihat rekam didik siswa lain")

@@ -55,7 +55,7 @@ export function CommandPalette() {
       },
     ];
 
-    if (activeRole === 'guru') {
+    if (['guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik'].includes(activeRole)) {
       baseItems.push({
         group: 'Jurnal & Mengajar',
         items: [

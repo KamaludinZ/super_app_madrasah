@@ -1,6 +1,7 @@
 """Shared helpers used across multiple routers (e.g. RBAC class check)."""
 from typing import Any, Dict, List, Optional, Tuple
 
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 from core import db, require_role
 
 # Satu kebijakan akses untuk seluruh fitur kelengkapan data master (unduh data, template,
@@ -265,7 +266,7 @@ async def user_can_view_class(user: Dict, class_id: str) -> bool:
     if overlap:
         return True
     # Allow subject teachers who teach this class to view its students
-    if 'guru' in user.get('roles', []) or 'wali_kelas' in user.get('roles', []):
+    if punya_peran_guru(user) or 'wali_kelas' in user.get('roles', []):
         sched = await db.schedules.find_one({'class_id': class_id, 'teacher_id': user['id']})
         if sched:
             return True

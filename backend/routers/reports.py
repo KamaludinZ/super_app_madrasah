@@ -1,4 +1,5 @@
 """Reports: sarana prasarana, siswa bermasalah, catatan umum."""
+from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
@@ -23,7 +24,7 @@ router = APIRouter()
 # ============================================================
 @router.post("/reports")
 async def submit_report(req: ReportSubmit, request: Request,
-                        user: Dict = Depends(require_role('guru', 'wali_kelas'))):
+                        user: Dict = Depends(require_role(*GURU_MAPEL_ROLES, 'wali_kelas'))):
     """Submit a new report (sarana_prasarana, siswa, catatan)."""
     doc = req.model_dump()
     doc['id'] = str(uuid.uuid4())
@@ -56,7 +57,7 @@ async def get_reports(
     """
     is_admin = 'admin' in user.get('roles', [])
     is_wali_kelas = 'wali_kelas' in user.get('roles', [])
-    is_guru = 'guru' in user.get('roles', [])
+    is_guru = punya_peran_guru(user)
 
     # Get user's view context for semester filtering
     ctx = await get_active_context(user)
