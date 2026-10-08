@@ -11,6 +11,8 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit
 router = APIRouter()
 
 PERPUS_ROLES = ('admin', 'perpustakaan')
+# Daftar peminjaman & kunjungan (nama warga) hanya petugas perpustakaan, admin & kepala madrasah;
+# dulu cukup login. Katalog koleksi tetap terbuka untuk semua pengguna.
 
 
 # ============================================================
@@ -186,7 +188,7 @@ async def list_peminjaman(
     koleksi_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(require_role(*PERPUS_ROLES, 'kepala_sekolah'))
 ):
     query = {}
     if status:
@@ -289,7 +291,7 @@ async def list_kunjungan(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     pengunjung_id: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(require_role(*PERPUS_ROLES, 'kepala_sekolah'))
 ):
     query = {}
     if pengunjung_id:

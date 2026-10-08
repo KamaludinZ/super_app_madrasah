@@ -17,6 +17,10 @@ from routers._shared import sembunyikan_siswa_nonaktif
 router = APIRouter()
 
 BK_ROLES = ('admin', 'guru_bk')
+# Boleh MELIHAT data konseling (kunjungan) & sekolah lanjutan — sama dengan menu web Kunjungan Konseling /
+# Data Sekolah Lanjutan. Dulu endpoint daftar/detail hanya mewajibkan login sehingga siswa pun bisa membaca
+# catatan masalah konseling siswa lain.
+BK_VIEW_ROLES = (*BK_ROLES, 'kepala_sekolah', 'waka_kesiswaan')
 
 
 def _now_wib_naive_iso() -> str:
@@ -137,7 +141,7 @@ async def list_kunjungan(
     end_date: Optional[str] = None,
     tahun_pelajaran_id: Optional[str] = None,
     semester: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(require_role(*BK_VIEW_ROLES))
 ):
     """List counseling visits, optionally filtered."""
     query = {}
@@ -163,7 +167,7 @@ async def list_kunjungan(
 
 
 @router.get("/bk/kunjungan/{kunjungan_id}")
-async def get_kunjungan(kunjungan_id: str, user: Dict = Depends(get_current_user)):
+async def get_kunjungan(kunjungan_id: str, user: Dict = Depends(require_role(*BK_VIEW_ROLES))):
     doc = await db.bk_kunjungan.find_one({'id': kunjungan_id}, {'_id': 0})
     if not doc:
         raise HTTPException(404, "Data kunjungan tidak ditemukan")
@@ -729,7 +733,7 @@ async def list_home_visit(
     end_date: Optional[str] = None,
     tahun_pelajaran_id: Optional[str] = None,
     semester: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(require_role(*BK_ROLES))
 ):
     query = {}
     if siswa_id:
@@ -851,7 +855,7 @@ async def list_sekolah_lanjutan(
     siswa_id: Optional[str] = None,
     status: Optional[str] = None,
     jenjang_tujuan: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(require_role(*BK_VIEW_ROLES))
 ):
     query = {}
     if siswa_id:
