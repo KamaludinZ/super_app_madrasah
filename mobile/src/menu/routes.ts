@@ -6,6 +6,8 @@
 /** Rute native untuk path web tertentu (bergantung peran), atau null. */
 export function nativeRoute(path: string, role?: string | null): string | null {
   const p = path.split('?')[0];
+  // Dashboard web = Beranda aplikasi (ringkasan per peran, jadwal hari ini, pintasan, pengumuman).
+  if (p === '/dashboard') return '/(app)/(tabs)';
   if (p === '/jurnal/scan') return '/scan';
   if (p === '/jurnal/riwayat') return '/(app)/(tabs)/jurnal';
   if (p === '/guru-pengganti') return '/(app)/(tabs)/pengganti';
@@ -50,6 +52,7 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   // Wali kelas — layar kelas walinya.
   if (role === 'wali_kelas') {
     const wali: Record<string, string> = {
+      '/wali-kelas': '/wali/dashboard',
       '/wali-kelas/siswa': '/pantau/siswa?kelas=wali',
       '/wali-kelas/jurnal-kelas': '/(app)/(tabs)/jurnal',
       '/wali-kelas/kehadiran': '/wali/kehadiran',

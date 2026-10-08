@@ -13,7 +13,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import current_day_id, now_wib
+from journal_core import current_day_id, day_started_at_filter, now_wib
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,8 @@ async def wali_kelas_dashboard(user: Dict = Depends(get_current_user)):
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1})
         teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
         room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
-        journal = await db.journals.find_one({'schedule_id': s['id']}, {'_id': 0, 'id': 1, 'materi': 1})
+        # Jurnal HARI INI (WIB); dulu tanpa tanggal sehingga jadwal yang pernah dijurnal selalu 'terisi'.
+        journal = await db.journals.find_one({'schedule_id': s['id'], **day_started_at_filter()}, {'_id': 0, 'id': 1, 'materi': 1})
         s['subject_name'] = sub.get('name') if sub else None
         s['teacher_name'] = teacher.get('full_name') if teacher else None
         s['room_name'] = room.get('name') if room else None
@@ -78,7 +79,7 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
 
     # 1. ATTENDANCE STATISTICS
     # Get attendance records for the current month
-    today = datetime.now()
+    today = now_wib()
     month_pattern = today.strftime('%Y-%m')  # e.g., "2026-09"
 
     logger.info(f"[DASHBOARD-STATS] Class: {class_id}, Month pattern: {month_pattern}")
@@ -141,25 +142,15 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
     total_achievements = sum(achievement_by_level.values())
 
     # 4. DISCIPLINE (TATA TERTIB) STATISTICS
-    # Get discipline records
-    discipline_records = await db.tatib_data.find({
-        'student_id': {'$in': student_ids}
-    }, {'_id': 0}).to_list(1000)
-
-    total_violation_points = 0
-    total_achievement_points = 0
-
-    for record in discipline_records:
-        kategori = await db.tatib_kategori.find_one(
-            {'id': record.get('kategori_id')},
-            {'_id': 0, 'jenis': 1, 'poin': 1}
-        )
-        if kategori:
-            poin = kategori.get('poin', 0)
-            if kategori.get('jenis') == 'pelanggaran':
-                total_violation_points += poin
-            elif kategori.get('jenis') == 'prestasi':
-                total_achievement_points += poin
+    # Catatan poin ada di koleksi tatib_penanganan (field siswa_id) dengan poin bertanda (kebaikan +,
+    # pelanggaran −). Dulu membaca koleksi tatib_data/student_id sehingga selalu 0.
+    from tatib_poin import KOLEKSI_POIN, rangkum_poin
+    discipline_records = await db[KOLEKSI_POIN].find(
+        {'siswa_id': {'$in': student_ids}}, {'_id': 0, 'poin': 1, 'tatib_poin': 1}
+    ).to_list(5000)
+    ringkas = rangkum_poin(discipline_records)
+    total_violation_points = abs(ringkas['total_minus'])
+    total_achievement_points = ringkas['total_plus']
 
     return {
         'attendance': {
