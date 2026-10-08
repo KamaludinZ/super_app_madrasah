@@ -60,21 +60,21 @@ export default function PantauRkam() {
         ) : (
           <>
             <Card style={{ gap: spacing.md }}>
-              <PctRow title={`Total ${rp(tot.ab + tot.ak)}`} subtitle={`Realisasi ${rp(tot.rb + tot.rk)}`} pct={pct(tot.rb + tot.rk, tot.ab + tot.ak)} ada={tot.ab + tot.ak > 0} />
-              <PctRow title={`BOS ${rp(tot.ab)}`} subtitle={`Realisasi ${rp(tot.rb)} · sisa ${rp(tot.ab - tot.rb)}`} pct={pct(tot.rb, tot.ab)} ada={tot.ab > 0} />
-              <PctRow title={`Komite ${rp(tot.ak)}`} subtitle={`Realisasi ${rp(tot.rk)} · sisa ${rp(tot.ak - tot.rk)}`} pct={pct(tot.rk, tot.ak)} ada={tot.ak > 0} />
+              <PctRow netral title={`Total ${rp(tot.ab + tot.ak)}`} subtitle={`Realisasi ${rp(tot.rb + tot.rk)}`} pct={pct(tot.rb + tot.rk, tot.ab + tot.ak)} ada={tot.ab + tot.ak > 0} />
+              <PctRow netral title={`BOS ${rp(tot.ab)}`} subtitle={`Realisasi ${rp(tot.rb)} · sisa ${rp(tot.ab - tot.rb)}`} pct={pct(tot.rb, tot.ab)} ada={tot.ab > 0} />
+              <PctRow netral title={`Komite ${rp(tot.ak)}`} subtitle={`Realisasi ${rp(tot.rk)} · sisa ${rp(tot.ak - tot.rk)}`} pct={pct(tot.rk, tot.ak)} ada={tot.ak > 0} />
             </Card>
             <Card style={{ gap: spacing.md }}>
               <T weight="semibold">Serapan per bidang</T>
               {perBidang.map(([b, v]) => (
-                <PctRow key={b} title={BIDANG[b] ?? (b === 'lainnya' ? 'Lainnya' : b)} subtitle={`${rp(v.r)} dari ${rp(v.a)}`} pct={pct(v.r, v.a)} ada={v.a > 0} />
+                <PctRow netral key={b} title={BIDANG[b] ?? (b === 'lainnya' ? 'Lainnya' : b)} subtitle={`${rp(v.r)} dari ${rp(v.a)}`} pct={pct(v.r, v.a)} ada={v.a > 0} />
               ))}
             </Card>
             <SearchBox value={q} onChange={setQ} placeholder="Cari mata anggaran…" />
             <Card style={{ gap: spacing.md }}>
               {rows.length === 0 ? <T variant="caption" tone="muted">Tidak ditemukan.</T> : rows.map((i, n) => (
                 <View key={i.id} style={n > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider, paddingTop: spacing.md } : undefined}>
-                  <PctRow title={`${i.code ? `${i.code} ` : ''}${i.name}`} pct={pct(real(i), pagu(i))} ada={pagu(i) > 0}
+                  <PctRow netral title={`${i.code ? `${i.code} ` : ''}${i.name}`} pct={pct(real(i), pagu(i))} ada={pagu(i) > 0}
                     subtitle={`${rp(real(i))} dari ${rp(pagu(i))}${i.bidang ? ` · ${BIDANG[i.bidang] ?? i.bidang}` : ''}`} />
                 </View>
               ))}

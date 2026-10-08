@@ -53,9 +53,11 @@ export function Counts({ items }: { items: Hitung[] }) {
 }
 
 /** Baris nama + persentase + bilah; dipakai untuk rekap kelas, guru, GTK. */
-export function PctRow({ title, subtitle, pct, ada = true, right }: { title: string; subtitle?: string | null; pct: number | null | undefined; ada?: boolean; right?: React.ReactNode }) {
+/** `netral`: warna merek tetap (mis. serapan anggaran, bukan ukuran baik/buruk seperti kehadiran). */
+export function PctRow({ title, subtitle, pct, ada = true, right, netral }: { title: string; subtitle?: string | null; pct: number | null | undefined; ada?: boolean; right?: React.ReactNode; netral?: boolean }) {
   const { colors } = useTheme();
-  const warna = usePctColor()(pct, ada);
+  const skala = usePctColor()(pct, ada);
+  const warna = netral && ada && pct != null ? colors.brandPrimary : skala;
   const lebar = ada && pct != null ? Math.max(0, Math.min(100, pct)) : 0;
   return (
     <View style={{ gap: 6 }}>

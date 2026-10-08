@@ -39,10 +39,10 @@ function Bk({ dari, sampai }: { dari: string; sampai: string }) {
     <Muat res={res}>
       {d ? (
         <>
-          <Counts items={[
+          <Card><Counts items={[
             { label: 'Konseling', value: d.total_kunjungan, color: colors.brandPrimary }, { label: 'Home visit', value: d.total_home_visit },
             { label: 'CLKB', value: d.total_clkb }, { label: 'PCL', value: d.total_pcl },
-          ]} />
+          ]} /></Card>
           {d.clkb_belum_ditanggapi || d.pcl_belum_ditanggapi ? (
             <Card tone="warning"><T variant="caption">Belum ditanggapi Guru BK: CLKB {d.clkb_belum_ditanggapi} · PCL {d.pcl_belum_ditanggapi}</T></Card>
           ) : null}
@@ -61,10 +61,10 @@ function Uks({ dari, sampai }: { dari: string; sampai: string }) {
     <Muat res={res}>
       {d ? (
         <>
-          <Counts items={[
+          <Card><Counts items={[
             { label: 'Kunjungan', value: d.total_kunjungan, color: colors.brandPrimary }, { label: 'Obat keluar', value: d.total_obat_keluar_transaksi },
             { label: 'Jenis obat', value: d.total_jenis_obat }, { label: 'Stok menipis', value: d.obat_stok_menipis.length, color: d.obat_stok_menipis.length ? colors.error : undefined },
-          ]} />
+          ]} /></Card>
           <Bagian title="Penanganan"><Bars data={d.kunjungan_by_jenis_penanganan} /></Bagian>
           <Bagian title="Kondisi pulang"><Bars data={d.kunjungan_by_kondisi_pulang} /></Bagian>
           <Bagian title="Obat paling banyak dipakai"><Bars data={d.most_used_obat.map((o) => ({ label: o.nama_obat, value: o.jumlah }))} /></Bagian>
@@ -92,10 +92,10 @@ function Perpus({ dari, sampai }: { dari: string; sampai: string }) {
     <Muat res={res}>
       {d ? (
         <>
-          <Counts items={[
+          <Card><Counts items={[
             { label: 'Kunjungan', value: d.total_kunjungan, color: colors.brandPrimary }, { label: 'Peminjaman', value: d.total_peminjaman },
             { label: 'Dipinjam', value: d.peminjaman_aktif }, { label: 'Terlambat', value: d.peminjaman_terlambat, color: d.peminjaman_terlambat ? colors.error : undefined },
-          ]} />
+          ]} /></Card>
           <Card><T variant="caption" tone="secondary">Koleksi: {d.total_judul_koleksi} judul · {d.total_eksemplar} eksemplar ({d.total_eksemplar_tersedia} tersedia)</T></Card>
           <Bagian title="Kunjungan per tujuan"><Bars data={d.kunjungan_by_tujuan} /></Bagian>
           <Bagian title="Paling banyak dipinjam"><Bars data={d.most_borrowed.map((b) => ({ label: b.judul, value: b.jumlah }))} /></Bagian>
@@ -118,10 +118,10 @@ function Sarpras() {
   const n = (s: string) => all.filter((k) => k.status === s).length;
   return (
     <Muat res={res}>
-      <Counts items={[
+      <Card><Counts items={[
         { label: 'Dilaporkan', value: n('Dilaporkan'), color: colors.warning }, { label: 'Diperbaiki', value: n('Diperbaiki'), color: colors.brandPrimary },
         { label: 'Selesai', value: n('Selesai'), color: colors.success }, { label: 'Tak bisa', value: n('Tidak Dapat Diperbaiki'), color: colors.error },
-      ]} />
+      ]} /></Card>
       <SegmentedControl small segments={[{ value: 'aktif', label: 'Belum selesai' }, { value: 'Selesai', label: 'Selesai' }, { value: 'semua', label: 'Semua' }]} value={status} onChange={setStatus} />
       <SearchBox value={q} onChange={setQ} placeholder="Cari aset atau kerusakan…" />
       {rows.length === 0 ? <Card><EmptyState icon="construct-outline" title="Tidak ada laporan" compact /></Card> : rows.map((k) => (

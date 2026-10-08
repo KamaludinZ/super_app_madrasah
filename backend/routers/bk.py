@@ -949,8 +949,13 @@ async def get_laporan_summary(
     kunjungan = await db.bk_kunjungan.find(with_date(base_query), {'_id': 0}).to_list(10000)
     home_visit = await db.bk_home_visit.find(with_date(base_query), {'_id': 0}).to_list(10000)
 
-    clkb_date_query = {'submitted_at': date_query} if date_query else {}
-    pcl_date_query = {'submitted_at': date_query} if date_query else {}
+    # submitted_at berisi tanggal+jam: batas akhir harus mencakup seluruh hari end_date
+    # (dulu '$lte': '2026-10-08' membuang kiriman pada tanggal akhir itu sendiri).
+    submit_q = dict(date_query)
+    if end_date:
+        submit_q['$lte'] = end_date + 'T23:59:59.999999'
+    clkb_date_query = {'submitted_at': submit_q} if submit_q else {}
+    pcl_date_query = {'submitted_at': submit_q} if submit_q else {}
     clkb = await db.bk_clkb_submissions.find(clkb_date_query, {'_id': 0}).to_list(10000)
     pcl = await db.bk_pcl_submissions.find(pcl_date_query, {'_id': 0}).to_list(10000)
 
