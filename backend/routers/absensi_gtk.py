@@ -108,6 +108,31 @@ async def _build_izin_checker(gtk_id: str, date_from: date_cls, date_to: date_cl
     return get_izin
 
 
+def _tanggal_wib(started: str) -> str:
+    """Tanggal WIB dari started_at jurnal: format campuran — scan QR/token kelas menyimpan UTC tanpa zona,
+    jurnal piket/pengganti menyimpan WIB '+07:00' (lihat journal_core.day_started_at_filter)."""
+    if started.endswith('+07:00'):
+        return started[:10]
+    try:
+        dt = datetime.fromisoformat(started.replace('Z', '').split('+')[0])
+    except ValueError:
+        return started[:10]
+    return (dt + timedelta(hours=7)).date().isoformat()
+
+
+def _status_tanpa_bukti(d: date_cls, izin: Optional[Dict]) -> Optional[Dict]:
+    """Tanpa jurnal: izin bila ada; hari ini 'belum' (jam mengajar/kerja belum tentu lewat, tidak dihitung);
+    hari berikutnya dilewati; selain itu alpha."""
+    if izin:
+        return {'date': d.isoformat(), 'status': izin['jenis'], 'izin_id': izin['id']}
+    today = now_wib().date()
+    if d > today:
+        return None
+    if d == today:
+        return {'date': d.isoformat(), 'status': 'belum'}
+    return {'date': d.isoformat(), 'status': 'alpha'}
+
+
 async def _compute_guru_attendance(gtk_id: str, semester_id: Optional[str], date_from: date_cls, date_to: date_cls):
     """Kehadiran guru: dari jadwal mengajar (schedules) x jurnal (journals.schedule_id)."""
     schedule_query = {'teacher_id': gtk_id}
@@ -122,7 +147,8 @@ async def _compute_guru_attendance(gtk_id: str, semester_id: Optional[str], date
     journal_query = {
         'teacher_id': gtk_id,
         'started_at': {
-            '$gte': date_from.isoformat(),
+            # mulai sehari sebelumnya: jurnal UTC tanpa zona sebelum 07.00 WIB tercatat tanggal kemarin
+            '$gte': (date_from - timedelta(days=1)).isoformat(),
             '$lt': (date_to + timedelta(days=1)).isoformat(),
         },
     }
@@ -133,7 +159,7 @@ async def _compute_guru_attendance(gtk_id: str, semester_id: Optional[str], date
         if not started:
             continue
         try:
-            d_str = started[:10]
+            d_str = _tanggal_wib(started)
         except (TypeError, IndexError):
             continue
         filled_schedule_ids_by_date.setdefault(d_str, set()).add(j.get('schedule_id'))
@@ -157,11 +183,9 @@ async def _compute_guru_attendance(gtk_id: str, semester_id: Optional[str], date
             days.append({'date': d.isoformat(), 'status': 'hadir'})
             continue
 
-        izin = get_izin(d)
-        if izin:
-            days.append({'date': d.isoformat(), 'status': izin['jenis'], 'izin_id': izin['id']})
-        else:
-            days.append({'date': d.isoformat(), 'status': 'alpha'})
+        row = _status_tanpa_bukti(d, get_izin(d))
+        if row:
+            days.append(row)
 
     return days
 
@@ -193,11 +217,9 @@ async def _compute_tendik_attendance(gtk_id: str, date_from: date_cls, date_to: 
             days.append({'date': d.isoformat(), 'status': 'hadir'})
             continue
 
-        izin = get_izin(d)
-        if izin:
-            days.append({'date': d.isoformat(), 'status': izin['jenis'], 'izin_id': izin['id']})
-        else:
-            days.append({'date': d.isoformat(), 'status': 'alpha'})
+        row = _status_tanpa_bukti(d, get_izin(d))
+        if row:
+            days.append(row)
 
     return days
 

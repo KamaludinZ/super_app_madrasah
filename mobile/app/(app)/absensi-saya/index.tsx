@@ -29,6 +29,7 @@ import { toast } from '@/components/ui/Toast';
 export const IZIN_LABELS: Record<string, string> = { sakit: 'Sakit', cuti: 'Cuti', dinas_luar: 'Dinas Luar', lainnya: 'Lainnya' };
 const STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   hadir: { label: 'Hadir', tone: 'success' }, alpha: { label: 'Alpha', tone: 'error' }, libur: { label: 'Libur', tone: 'neutral' },
+  belum: { label: 'Hari ini · belum ada jurnal', tone: 'neutral' },
   sakit: { label: 'Sakit', tone: 'warning' }, cuti: { label: 'Cuti', tone: 'brand' }, dinas_luar: { label: 'Dinas Luar', tone: 'brand' }, lainnya: { label: 'Lainnya', tone: 'neutral' },
 };
 type Tab = 'rekap' | 'izin';

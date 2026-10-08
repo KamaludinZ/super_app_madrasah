@@ -77,6 +77,7 @@ function MyRekapTab() {
     if (status === 'hadir') return <Badge className="bg-emerald-100 text-emerald-700">Hadir</Badge>;
     if (status === 'alpha') return <Badge className="bg-rose-100 text-rose-700">Alpha</Badge>;
     if (status === 'libur') return <Badge variant="outline" className="text-slate-500">Libur</Badge>;
+    if (status === 'belum') return <Badge variant="outline" className="text-slate-500">Hari ini · belum ada jurnal</Badge>;
     return <Badge className={IZIN_COLORS[status] || 'bg-slate-100 text-slate-700'}>{IZIN_LABELS[status] || status}</Badge>;
   };
 
