@@ -24,6 +24,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/jadwal') return '/jadwal';
   if (p === '/gtk/absensi-saya') return '/absensi-saya';
   if (p === '/my-agenda') return '/agenda';
+  // Admin mengelola jadwal piket di modul web; peran lain melihat saja.
+  if (p === '/admin/jadwal-piket' && role !== 'admin') return '/jadwal-piket';
   // Admin, Waka Kesiswaan & wali kelas memproses/memverifikasi prestasi siswa → modul web (Fase 2).
   // Pembina & admin mengelola anggota/absensi/nilai ekskul → tetap di modul web (Fase 2).
   if (p === '/ekstrakurikuler' && role !== 'admin' && role !== 'guru_ekstrakurikuler') return '/ekskul';
