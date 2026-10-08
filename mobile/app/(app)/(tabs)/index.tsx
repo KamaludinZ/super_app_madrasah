@@ -6,6 +6,7 @@
  *      slot sendiri digantikan → Isi jurnal saya tanpa QR (mode original)
  *      slot guru pengganti    → Isi jurnal pengganti (mode substitute)
  *  - Guru piket / admin: kartu Tugas Piket (slot hari ini tanpa jurnal & titipan menunggu) → /piket.
+ *  - Ringkasan per peran (src/home/RingkasanPeran): siswa, kepala madrasah, GTK.
  *  - Semua peran: pintasan menu peran (sama dengan menu web) & pengumuman terbaru.
  */
 import React, { useCallback, useMemo, useState } from 'react';
@@ -18,6 +19,7 @@ import { useCached } from '@/hooks/useCached';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { listQueue } from '@/offline/queue';
+import { RingkasanPeran } from '@/home/RingkasanPeran';
 import { radius, spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
@@ -139,6 +141,8 @@ export default function HomeScreen() {
         </Card>
       ) : null}
 
+      <View style={styles.ringkasan}><RingkasanPeran role={activeRole} /></View>
+
       {showSchedule ? (
         <>
           <View style={styles.stats}>
@@ -237,6 +241,7 @@ const firstName = (n?: string | null) => (n || '').replace(/^(drs?\.?|h\.|hj\.)\
 const stripMd = (s: string) => (s || '').replace(/[#*_`>\[\]]/g, '').replace(/\s+/g, ' ').trim();
 
 const styles = StyleSheet.create({
+  ringkasan: { marginBottom: spacing.md },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md },
   quick: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
   quickIcon: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
