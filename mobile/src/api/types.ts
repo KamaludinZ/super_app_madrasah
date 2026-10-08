@@ -460,3 +460,10 @@ export type CleanlinessRecord = {
   id?: string; class_id: string; class_name?: string | null; date: string; rating?: number; condition?: string;
   notes?: string | null; piket_students?: string[]; recorded_by?: string; recorded_at?: string;
 };
+
+/** Laporan guru (/reports): sarana prasarana, siswa bermasalah, catatan umum. */
+export type GuruReport = {
+  id: string; type: string; title: string; description: string; class_id?: string | null; class_name?: string | null;
+  student_id?: string | null; student_name?: string | null; location?: string | null; priority?: string; status?: string;
+  response?: string | null; reported_at?: string; reporter_name?: string | null; updated_at?: string | null;
+};

@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -129,6 +129,13 @@ export const api = {
     classHistory: (classId: string) => request<CleanlinessRecord[]>(`/cleanliness/class/${classId}`),
     submit: (body: Omit<CleanlinessRecord, 'id' | 'class_name' | 'recorded_by' | 'recorded_at'>) =>
       request<CleanlinessRecord>('/cleanliness/class', { method: 'POST', body }),
+  },
+
+  laporan: {
+    list: () => request<GuruReport[]>('/reports'),
+    create: (body: Pick<GuruReport, 'type' | 'title' | 'description' | 'class_id' | 'student_id' | 'location' | 'priority'>) =>
+      request<GuruReport>('/reports', { method: 'POST', body }),
+    remove: (id: string) => request<{ message: string }>(`/reports/${id}`, { method: 'DELETE' }),
   },
 
   agenda: {
