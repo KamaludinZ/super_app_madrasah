@@ -16,7 +16,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from core import GURU_MAPEL_ROLES
+from core import DETAIL_SISWA_VIEWER_ROLES, GURU_MAPEL_ROLES
 from routers.auth import _resolve_view_context
 from excel_io import class_template, parse_class_rows
 from models import ClassModel, ClassHistoryModel
@@ -397,7 +397,7 @@ async def remove_student_from_class(
 async def get_student_class_history(student_id: str, user: Dict = Depends(get_current_user)):
     """Get class history for a specific student (admin, wali kelas, atau siswa itu sendiri — Profil Saya)."""
     roles = user.get('roles', [])
-    if not ('admin' in roles or 'wali_kelas' in roles or user.get('id') == student_id):
+    if not ('admin' in roles or 'wali_kelas' in roles or user.get('id') == student_id or set(roles) & set(DETAIL_SISWA_VIEWER_ROLES)):
         raise HTTPException(403, "Tidak diizinkan")
     student = await db.users.find_one({'id': student_id, 'roles': 'siswa'}, {'_id': 0})
     if not student:

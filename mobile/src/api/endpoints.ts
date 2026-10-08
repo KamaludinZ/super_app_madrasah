@@ -124,6 +124,7 @@ export const api = {
     absensiMy: (date_from: string, date_to: string) => request<GTKAbsensiMy>('/gtk/absensi/my', { query: { date_from, date_to } }),
     izinMy: () => request<GTKIzin[]>('/gtk/izin/my'),
     profil: () => request<Record<string, any>>('/users/me/profile'),
+    user: (id: string) => request<Record<string, any>>(`/users/${id}`),
     kelengkapan: (id: string) => request<GtkKelengkapan>(`/gtk/${id}/kelengkapan`),
     izinCreate: (body: Omit<GTKIzin, 'id'>) => request<GTKIzin>('/gtk/izin', { method: 'POST', body }),
     izinUpdate: (id: string, body: Omit<GTKIzin, 'id'>) => request<GTKIzin>(`/gtk/izin/${id}`, { method: 'PUT', body }),

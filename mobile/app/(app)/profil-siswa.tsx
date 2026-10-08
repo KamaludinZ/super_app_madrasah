@@ -4,10 +4,11 @@
  * dibuka-tutup (GET /students/{id}/detail): data siswa, orang tua/wali, alamat, keahlian, tahfidz, beasiswa,
  * pendidikan lain, kebutuhan khusus, berkas (dibuka dengan sesi aplikasi) & riwayat kelas.
  * NIK/No. KK disamarkan sampai diketuk "Tampilkan". Perubahan data diajukan lewat formulir verval (web).
+ * Dengan parameter `id` (dari Data Siswa) menampilkan siswa lain dalam mode lihat untuk Kepala Madrasah & peran pemantau.
  */
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
 import { errorMessage } from '@/api/client';
 import type { ClassHistoryItem, Kelengkapan, StudentDetailResponse } from '@/api/types';
@@ -60,10 +61,14 @@ export default function ProfilSiswa() {
   const { colors } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const sid = user?.id ?? '';
-  const res = useCached<StudentDetailResponse>('siswa.profil', () => api.students.detail(sid), { enabled: !!sid });
-  const kel = useCached<{ kelengkapan: Kelengkapan }>('siswa.profil.kelengkapan', () => api.students.kelengkapan(sid), { enabled: !!sid });
-  const hist = useCached<ClassHistoryItem[]>('siswa.profil.riwayat', () => api.students.classHistory(sid), { enabled: !!sid });
+  const p = useLocalSearchParams<{ id?: string }>();
+  const lain = !!p.id && p.id !== user?.id;
+  const sid = (lain ? p.id : user?.id) ?? '';
+  const ck = lain ? `pantau.siswa.${sid}` : 'siswa.profil';
+  const judul = lain ? 'Data Siswa' : 'Profil Saya';
+  const res = useCached<StudentDetailResponse>(ck, () => api.students.detail(sid), { enabled: !!sid });
+  const kel = useCached<{ kelengkapan: Kelengkapan }>(`${ck}.kelengkapan`, () => api.students.kelengkapan(sid), { enabled: !!sid });
+  const hist = useCached<ClassHistoryItem[]>(`${ck}.riwayat`, () => api.students.classHistory(sid), { enabled: !!sid });
   const [open, setOpen] = useState<string | null>('siswa');
   const [reveal, setReveal] = useState(false);
 
@@ -94,14 +99,14 @@ export default function ProfilSiswa() {
 
   if (!res.data) {
     return (
-      <Screen title="Profil Saya" back refreshing={res.refreshing} onRefresh={refresh}>
+      <Screen title={judul} back refreshing={res.refreshing} onRefresh={refresh}>
         {res.loading ? <CardSkeleton lines={6} /> : <ErrorState message={errorMessage(res.error, 'Profil belum bisa dimuat.')} onRetry={res.refresh} />}
       </Screen>
     );
   }
 
   return (
-    <Screen title="Profil Saya" subtitle="Data diri siswa (EMIS)" back refreshing={res.refreshing || kel.refreshing} onRefresh={refresh}
+    <Screen title={judul} subtitle={lain ? 'Data EMIS siswa · hanya lihat' : 'Data diri siswa (EMIS)'} back refreshing={res.refreshing || kel.refreshing} onRefresh={refresh}
       offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}>
       <View style={{ gap: spacing.md }}>
         <Card style={styles.idCard}>
@@ -134,8 +139,10 @@ export default function ProfilSiswa() {
                 {b.kurang?.length ? <T variant="small" tone="muted" style={{ marginLeft: 24 }} numberOfLines={3}>Belum: {b.kurang.join(', ')}</T> : null}
               </View>
             ))}
-            <Button title={k.persen < 100 ? 'Lengkapi data / ajukan perubahan' : 'Ajukan perubahan data'} icon="create-outline" variant="outline" size="sm"
-              onPress={() => router.push({ pathname: '/web', params: { path: '/profile/siswa', title: 'Ubah Data Diri' } })} />
+            {lain ? null : (
+              <Button title={k.persen < 100 ? 'Lengkapi data / ajukan perubahan' : 'Ajukan perubahan data'} icon="create-outline" variant="outline" size="sm"
+                onPress={() => router.push({ pathname: '/web', params: { path: '/profile/siswa', title: 'Ubah Data Diri' } })} />
+            )}
           </Card>
         ) : null}
 
@@ -231,7 +238,7 @@ export default function ProfilSiswa() {
           )) : <T variant="caption" tone="muted">{hist.error ? 'Riwayat kelas belum bisa dimuat.' : 'Belum ada riwayat kelas.'}</T>}
         </Section>
 
-        <Button title="Lihat prestasi saya" icon="trophy-outline" variant="outline" onPress={() => router.push('/prestasi')} />
+        {lain ? null : <Button title="Lihat prestasi saya" icon="trophy-outline" variant="outline" onPress={() => router.push('/prestasi')} />}
       </View>
     </Screen>
   );

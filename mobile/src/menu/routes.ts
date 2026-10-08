@@ -43,6 +43,21 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   // Pembina & admin mengelola anggota/absensi/nilai ekskul → tetap di modul web (Fase 2).
   if (p === '/ekstrakurikuler' && role !== 'admin' && role !== 'guru_ekstrakurikuler') return '/ekskul';
   if (p === '/prestasi' && !['admin', 'wali_kelas', 'waka_kesiswaan'].includes(role ?? '')) return '/prestasi';
+  // Fase 4 — pemantauan Kepala Madrasah (hanya lihat; admin tetap mengelola di modul web).
+  if (role === 'kepala_sekolah') {
+    const pantau: Record<string, string> = {
+      '/admin/kehadiran': '/pantau/kehadiran',
+      '/admin/jurnal': '/pantau/jurnal',
+      '/admin/gtk/laporan-absensi': '/pantau/absensi-gtk',
+      '/admin/kebersihan': '/pantau/kebersihan',
+      '/admin/gtk/agenda-guru': '/pantau/agenda?jenis=guru',
+      '/admin/gtk/agenda-tendik': '/pantau/agenda?jenis=tendik',
+      '/admin/kegiatan-madrasah': '/pantau/agenda?jenis=madrasah',
+      '/admin/siswa': '/pantau/siswa',
+      '/admin/gtk': '/pantau/gtk',
+    };
+    if (pantau[p]) return pantau[p];
+  }
   return null;
 }
 

@@ -521,8 +521,10 @@ async def list_teachers(user: Dict = Depends(get_current_user)):
 
 # GET /users/{uid} harus SETELAH rute statis /users/teachers, jika tidak
 # "teachers" akan tertangkap sebagai {uid}.
+# Kepala madrasah & kepala TU (FULL_IDENTITY_ROLES, hanya lihat) membuka detail GTK dari Data GTK; dulu 403
+# padahal /users sudah memberi mereka data yang sama.
 @router.get("/users/{uid}")
-async def get_user(uid: str, user: Dict = Depends(require_role('admin'))):
+async def get_user(uid: str, user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'kepala_tata_usaha'))):
     doc = await db.users.find_one({'id': uid}, {'_id': 0, 'password_hash': 0})
     if not doc:
         raise HTTPException(404, "User tidak ditemukan")

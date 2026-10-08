@@ -237,6 +237,9 @@ async def bump_token_version(user_id: str):
 # Helper constants for common role groups
 MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas')
 ACADEMIC_MANAGEMENT_ROLES = ('admin', 'kepala_sekolah', 'waka_kurikulum')
+# Peran yang boleh MELIHAT (bukan mengubah) data EMIS lengkap siswa mana pun; sama dengan VIEW_ONLY_BROAD_ROLES
+# di halaman Data Siswa web.
+DETAIL_SISWA_VIEWER_ROLES = ('kepala_sekolah', 'waka_kesiswaan', 'guru_bk', 'guru_tata_tertib', 'unit_pelayanan', 'penjamin_mutu')
 # Peran yang boleh membuka menu Guru Pengganti & menugaskan guru pengganti.
 # Guru mata pelajaran hanya melaksanakan penugasan (tanpa menu).
 GURU_PENGGANTI_ROLES = ('admin', 'waka_kurikulum', 'guru_piket')

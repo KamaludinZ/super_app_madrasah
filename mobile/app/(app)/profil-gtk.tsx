@@ -4,10 +4,11 @@
  * kepegawaian, kontak & administrasi, tempat tinggal, perkawinan, riwayat pendidikan/diklat/penghargaan,
  * data anak, riwayat pesantren, dan arsip berkas (dibuka dengan sesi aplikasi). NIK/KK/rekening disamarkan.
  * Perubahan data diajukan lewat formulir verval (web).
+ * Dengan parameter `id` (dari Data GTK) menampilkan GTK lain dalam mode lihat (GET /users/{id}) untuk Kepala Madrasah.
  */
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
 import { errorMessage } from '@/api/client';
 import type { GtkKelengkapan } from '@/api/types';
@@ -59,8 +60,12 @@ export default function ProfilGtk() {
   const { colors } = useTheme();
   const router = useRouter();
   const { user, activeRole } = useAuth();
-  const res = useCached<Obj>('gtk.profil', api.gtk.profil);
-  const kel = useCached<GtkKelengkapan>('gtk.kelengkapan', () => api.gtk.kelengkapan(user!.id), { enabled: !!user?.id });
+  const p = useLocalSearchParams<{ id?: string }>();
+  const lain = !!p.id && p.id !== user?.id;
+  const gid = (lain ? p.id : user?.id) ?? '';
+  const judul = lain ? 'Data GTK' : 'Profil Saya';
+  const res = useCached<Obj>(lain ? `pantau.gtk.${gid}` : 'gtk.profil', lain ? () => api.gtk.user(gid) : api.gtk.profil);
+  const kel = useCached<GtkKelengkapan>(lain ? `pantau.gtk.${gid}.kelengkapan` : 'gtk.kelengkapan', () => api.gtk.kelengkapan(gid), { enabled: !!gid });
   const [open, setOpen] = useState<string | null>('diri');
   const [reveal, setReveal] = useState(false);
   const d = res.data ?? {};
@@ -84,14 +89,14 @@ export default function ProfilGtk() {
 
   if (!res.data) {
     return (
-      <Screen title="Profil Saya" back refreshing={res.refreshing} onRefresh={res.refresh}>
+      <Screen title={judul} back refreshing={res.refreshing} onRefresh={res.refresh}>
         {res.loading ? <CardSkeleton lines={6} /> : <ErrorState message={errorMessage(res.error, 'Profil belum bisa dimuat.')} onRetry={res.refresh} />}
       </Screen>
     );
   }
 
   return (
-    <Screen title="Profil Saya" subtitle="Data GTK (EMIS)" back refreshing={res.refreshing || kel.refreshing} onRefresh={() => { void res.refresh(); void kel.refresh(); }}
+    <Screen title={judul} subtitle={lain ? 'Data GTK (EMIS) · hanya lihat' : 'Data GTK (EMIS)'} back refreshing={res.refreshing || kel.refreshing} onRefresh={() => { void res.refresh(); void kel.refresh(); }}
       offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}>
       <View style={{ gap: spacing.md }}>
         <Card style={styles.idCard}>
@@ -121,8 +126,10 @@ export default function ProfilGtk() {
                 {b.kurang?.length ? <T variant="small" tone="muted" style={{ marginLeft: 24 }} numberOfLines={3}>Belum: {b.kurang.join(', ')}</T> : null}
               </View>
             ))}
-            <Button title={k.persen < 100 ? 'Lengkapi data / ajukan perubahan' : 'Ajukan perubahan data'} icon="create-outline" variant="outline" size="sm"
-              onPress={() => router.push({ pathname: '/web', params: { path: activeRole === 'tenaga_kependidikan' ? '/profile/tendik' : '/profile/guru', title: 'Ubah Data Diri' } })} />
+            {lain ? null : (
+              <Button title={k.persen < 100 ? 'Lengkapi data / ajukan perubahan' : 'Ajukan perubahan data'} icon="create-outline" variant="outline" size="sm"
+                onPress={() => router.push({ pathname: '/web', params: { path: activeRole === 'tenaga_kependidikan' ? '/profile/tendik' : '/profile/guru', title: 'Ubah Data Diri' } })} />
+            )}
           </Card>
         ) : null}
 

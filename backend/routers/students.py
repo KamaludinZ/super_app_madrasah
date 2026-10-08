@@ -1,5 +1,5 @@
 """Students: list, attendance, cleanliness, today, detail, Excel import."""
-from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
+from core import DETAIL_SISWA_VIEWER_ROLES, GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
 import io
 import uuid
 from datetime import datetime
@@ -417,7 +417,9 @@ async def get_student_detail(sid: str, user: Dict = Depends(get_current_user)):
     is_wk = False
     if 'wali_kelas' in user.get('roles', []):
         is_wk = await user_can_view_class(user, student.get('student_class_id'))
-    if not (is_admin or is_self or is_wk):
+    # Peran pemantau (hanya lihat) yang diberi tombol Detail di Data Siswa web — dulu ditolak 403.
+    is_pemantau = bool(set(user.get('roles', [])) & set(DETAIL_SISWA_VIEWER_ROLES))
+    if not (is_admin or is_self or is_wk or is_pemantau):
         raise HTTPException(403, "Tidak diizinkan")
     detail = await db.student_details.find_one({'student_id': sid}, {'_id': 0})
     return {
