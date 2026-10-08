@@ -402,7 +402,7 @@ export type Achievement = {
   jenis_lomba?: string | null; jenis_penyelenggara?: string | null; mode_pelaksanaan?: string | null; tempat_pelaksanaan?: string | null;
   cara_mengikuti?: string | null; jenis_hadiah?: string[] | null; nama_pembina?: string | null; description?: string | null;
   certificate_url?: string | null; photo_url?: string | null; is_verified?: boolean; verifier_name?: string | null;
-  _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null _vervalOwner?: string;
+  _vervalRequestId?: string; _vervalStatus?: string; _adminNotes?: string | null; _vervalOwner?: string;
 };
 export type AcademicYear = { id: string; name: string; is_active?: boolean };
 export type Extracurricular = {
@@ -432,3 +432,11 @@ export type Kelengkapan = {
   bagian: { key: string; label: string; persen: number; terisi: number; total: number; kurang: string[]; status?: string }[];
 };
 export type ClassHistoryItem = { id?: string; class_id: string; semester?: string | null; reason?: string | null; class_name?: string | null; academic_year_name?: string | null; start_date?: string | null; end_date?: string | null; status?: string | null; notes?: string | null };
+
+/** Absensi GTK (dari keterisian jurnal) & perizinan diri sendiri. */
+export type GTKAbsensiDay = { date: string; status: 'hadir' | 'alpha' | 'libur' | 'sakit' | 'cuti' | 'dinas_luar' | 'lainnya' | string };
+export type GTKAbsensiMy = {
+  days: GTKAbsensiDay[];
+  summary: { hadir: number; sakit: number; cuti: number; dinas_luar: number; lainnya: number; alpha: number; persentase_hadir?: number | null };
+};
+export type GTKIzin = { id: string; jenis: string; tanggal_mulai: string; tanggal_selesai: string; keterangan?: string | null; dokumen_url?: string | null };
