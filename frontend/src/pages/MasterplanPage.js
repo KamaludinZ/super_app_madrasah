@@ -39,6 +39,7 @@ export default function MasterplanPage() {
   const [daftarRuang, setDaftarRuang] = useState([]);
   const [draf, setDraf] = useState(null); // {posisi_x, posisi_y} penanda baru yang belum disimpan
   const kotakDenah = useRef(null);
+  const panelRuang = useRef(null);
   const geser = useRef(null); // {id, awal: {x, y}, bergerak}
 
   const gantiPenanda = useCallback((id, ubah) => {
@@ -167,6 +168,13 @@ export default function MasterplanPage() {
       if (objek) URL.revokeObjectURL(objek);
     };
   }, [urlDenah, versiGambar]);
+
+  // Layar sempit (HP): panel ruang berada di bawah denah, jadi gulir ke panel saat penanda dipilih.
+  const idDipilih = dipilih?.id;
+  useEffect(() => {
+    if (!idDipilih || window.innerWidth >= 1024 || !panelRuang.current) return;
+    panelRuang.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [idDipilih]);
 
   const muatUlangGambar = () => {
     setGagalGambar(false);
@@ -321,6 +329,7 @@ export default function MasterplanPage() {
           setDipilih(m);
         }}
       />
+      <div ref={panelRuang} className="scroll-mt-4">
       {modeAtur && dipilih ? (
         <PanelAturPenanda
           marker={dipilih}
@@ -336,6 +345,7 @@ export default function MasterplanPage() {
       ) : (
         <PanelDetailRuang marker={dipilih} onTutup={() => setDipilih(null)} />
       )}
+      </div>
         </div>
       )}
     </div>

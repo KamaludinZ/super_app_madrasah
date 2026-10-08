@@ -4,7 +4,27 @@
 
 const HIJAU = '#006837';
 
-const unduhBlob = (blob, nama) => {
+// Sisi terpanjang gambar unduhan dibatasi agar canvas tidak kehabisan memori di HP.
+const MAKS_SISI = 4096;
+
+const iOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Unduh berkas. Di aplikasi Android (WebView), klik tautan blob dicegat jembatan aplikasi lalu
+// disimpan/dibagikan. Di iPhone/iPad (Safari/PWA) dipakai lembar Bagikan bila tersedia
+// (Simpan Gambar / ke Berkas); selain itu tautan unduhan biasa.
+const unduhBlob = async (blob, nama) => {
+  if (!window.__MATSA_EMBED__ && iOS() && navigator.canShare && typeof File === 'function') {
+    try {
+      const berkas = new File([blob], nama, { type: blob.type });
+      if (navigator.canShare({ files: [berkas] })) {
+        await navigator.share({ files: [berkas], title: nama });
+        return;
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError') return; // pengguna menutup lembar Bagikan
+    }
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -28,7 +48,7 @@ export function urutkanPenanda(markers = []) {
 
 export async function unduhDenahKosong(gambarUrl) {
   const blob = await (await fetch(gambarUrl)).blob();
-  unduhBlob(blob, `denah-sekolah-kosong_${tanggalBerkas()}.${EKSTENSI[blob.type] || 'png'}`);
+  await unduhBlob(blob, `denah-sekolah-kosong_${tanggalBerkas()}.${EKSTENSI[blob.type] || 'png'}`);
 }
 
 const muatGambar = (src) => new Promise((resolve, reject) => {
@@ -58,8 +78,9 @@ function potong(ctx, teks, maks) {
 // Susun denah + penanda (label kode) + keterangan di tepi kanan -> Blob PNG.
 export async function susunDenahBerpenanda(gambarUrl, markers, { judul = 'Masterplan Sekolah' } = {}) {
   const img = await muatGambar(gambarUrl);
-  const W = img.naturalWidth;
-  const H = img.naturalHeight;
+  const skala = Math.min(1, MAKS_SISI / Math.max(img.naturalWidth, img.naturalHeight));
+  const W = Math.round(img.naturalWidth * skala);
+  const H = Math.round(img.naturalHeight * skala);
   const huruf = Math.max(14, Math.round(Math.max(W, H) / 70));
   const pad = Math.round(huruf * 1.2);
   const barisH = Math.round(huruf * 1.9);
@@ -158,5 +179,5 @@ export async function susunDenahBerpenanda(gambarUrl, markers, { judul = 'Master
 
 export async function unduhDenahBerpenanda(gambarUrl, markers, opsi) {
   const blob = await susunDenahBerpenanda(gambarUrl, markers, opsi);
-  unduhBlob(blob, `denah-sekolah-berpenanda_${tanggalBerkas()}.png`);
+  await unduhBlob(blob, `denah-sekolah-berpenanda_${tanggalBerkas()}.png`);
 }

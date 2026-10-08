@@ -8,13 +8,35 @@ import { ambilDetailAkun, hapusAkun } from '@/lib/simpanAkun';
 import { domainDari } from '@/components/simpan-akun/KartuAkun';
 import NilaiRahasia, { TombolMata, useTampilRahasia } from '@/components/simpan-akun/NilaiRahasia';
 
+// Salin ke papan klip; WebView aplikasi Android/HTTP sering menolak navigator.clipboard,
+// jadi ada cadangan lewat textarea tersembunyi + execCommand('copy').
+function salinCadangan(teks) {
+  const el = document.createElement('textarea');
+  el.value = teks;
+  el.setAttribute('readonly', '');
+  el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(el);
+  el.select();
+  el.setSelectionRange(0, teks.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  el.remove();
+  return ok;
+}
+
 async function salin(teks, label) {
+  let ok = false;
   try {
-    await navigator.clipboard.writeText(teks || '');
-    toast.success(`${label} disalin`);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(teks || '');
+      ok = true;
+    }
   } catch {
-    toast.error(`Gagal menyalin ${label.toLowerCase()}`);
+    ok = false;
   }
+  if (!ok) ok = salinCadangan(teks || '');
+  if (ok) toast.success(`${label} disalin`);
+  else toast.error(`Gagal menyalin ${label.toLowerCase()}`);
 }
 
 function Baris({ label, children, aksi }) {

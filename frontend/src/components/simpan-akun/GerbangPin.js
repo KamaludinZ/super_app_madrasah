@@ -13,7 +13,7 @@ function SlotPin({ index, lihat }) {
   const { slots } = useContext(OTPInputContext);
   const { char, isActive } = slots[index];
   return (
-    <div className={`flex h-12 w-11 items-center justify-center rounded-lg border text-2xl transition-all ${isActive ? 'border-[#006837] ring-2 ring-[#006837]/30' : 'border-slate-300'}`}>
+    <div className={`flex h-11 w-9 items-center justify-center rounded-lg border text-2xl transition-all sm:h-12 sm:w-11 ${isActive ? 'border-[#006837] ring-2 ring-[#006837]/30' : 'border-slate-300'}`}>
       {char ? (lihat ? char : '•') : ''}
     </div>
   );
@@ -34,7 +34,7 @@ function IsianPin({ value, onChange, onSelesai, disabled, autoFocus, label, test
       autoFocus={autoFocus}
       aria-label={label}
       data-testid={testid}
-      containerClassName="flex justify-center gap-2"
+      containerClassName="flex justify-center gap-1.5 sm:gap-2"
     >
       {[0, 1, 2, 3, 4, 5].map((i) => <SlotPin key={i} index={i} lihat={lihat} />)}
     </OTPInput>
@@ -172,7 +172,7 @@ export default function GerbangPin({ onTerbuka }) {
 
   return (
     <Card className="mx-auto max-w-md" data-testid={buat ? 'simpan-akun-buat-pin' : 'simpan-akun-verifikasi-pin'}>
-      <CardContent className="space-y-5 p-6 text-center">
+      <CardContent className="space-y-5 p-4 text-center sm:p-6">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#006837]/10 text-[#006837]">
           {buat ? <ShieldCheck className="h-7 w-7" /> : <LockKeyhole className="h-7 w-7" />}
         </span>
