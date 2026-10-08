@@ -48,6 +48,8 @@ export default function SiswaCLKB() {
   const [kebiasaan, setKebiasaan] = useState(['', '', '']);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Pesan galat validasi: di bawah form + toast agar langsung terlihat walau form panjang. */
+  const fail = (msg: string) => { setError(msg); toast.error(msg); };
   const f = form.data;
   const history = hist.data ?? [];
   const open = !!f?.is_open;
@@ -56,8 +58,8 @@ export default function SiswaCLKB() {
   const time = (v: string) => v.replace(/[^\d:.]/g, '').replace('.', ':').slice(0, 5);
 
   const submit = async () => {
-    if (!selected.size) return setError('Pilih minimal satu pernyataan yang sesuai dengan dirimu.');
-    for (const t of [dari, sampai]) if (t && !/^\d{1,2}:\d{2}$/.test(t)) return setError('Jam ditulis JJ:MM, mis. 19:00.');
+    if (!selected.size) return fail('Pilih minimal satu pernyataan yang sesuai dengan dirimu.');
+    for (const t of [dari, sampai]) if (t && !/^\d{1,2}:\d{2}$/.test(t)) return fail('Jam ditulis JJ:MM, mis. 19:00.');
     setError(null);
     setBusy(true);
     try {

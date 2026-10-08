@@ -50,6 +50,8 @@ export default function TambahPrestasi() {
   const [uploading, setUploading] = useState<Jenis | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Pesan galat validasi: di bawah form + toast agar langsung terlihat walau form panjang. */
+  const fail = (msg: string) => { setError(msg); toast.error(msg); };
   const set = (k: keyof typeof f) => (v: string | null) => setF((p) => ({ ...p, [k]: v ?? '' }));
 
   useEffect(() => {
@@ -86,12 +88,12 @@ export default function TambahPrestasi() {
   };
 
   const submit = async () => {
-    if (!f.name.trim()) return setError('Nama lomba wajib diisi.');
-    if (f.date && !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return setError('Tanggal lomba ditulis TTTT-BB-HH, mis. 2026-08-17.');
+    if (!f.name.trim()) return fail('Nama lomba wajib diisi.');
+    if (f.date && !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return fail('Tanggal lomba ditulis TTTT-BB-HH, mis. 2026-08-17.');
     const year = parseInt(f.year || f.date.slice(0, 4), 10);
-    if (!year || year < 2000 || year > 2099) return setError('Tahun wajib diisi (2000–2099).');
-    if (!hadiah.length) return setError('Pilih minimal satu penerimaan hadiah.');
-    if (!f.photo_url) return setError('Foto memegang sertifikat/piala wajib diunggah.');
+    if (!year || year < 2000 || year > 2099) return fail('Tahun wajib diisi (2000–2099).');
+    if (!hadiah.length) return fail('Pilih minimal satu penerimaan hadiah.');
+    if (!f.photo_url) return fail('Foto memegang sertifikat/piala wajib diunggah.');
     if (!user || !access.canAdd) return;
     setError(null);
     setBusy(true);

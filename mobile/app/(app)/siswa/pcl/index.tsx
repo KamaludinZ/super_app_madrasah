@@ -41,6 +41,8 @@ export default function SiswaPCL() {
   const [essay, setEssay] = useState<Record<Essay, string>>({ masalah_lain: '', masalah_saat_ini: '', tempat_curhat: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Pesan galat validasi: di bawah form + toast agar langsung terlihat walau form panjang. */
+  const fail = (msg: string) => { setError(msg); toast.error(msg); };
   const f = form.data;
   const history = hist.data ?? [];
   const total = Object.values(selected).reduce((n, l) => n + l.length, 0);
@@ -51,7 +53,7 @@ export default function SiswaPCL() {
   });
 
   const submit = async () => {
-    if (!total) return setError('Pilih minimal satu masalah yang pernah/sedang kamu alami.');
+    if (!total) return fail('Pilih minimal satu masalah yang pernah/sedang kamu alami.');
     setError(null);
     setBusy(true);
     try {
