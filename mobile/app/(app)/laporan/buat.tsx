@@ -58,7 +58,7 @@ export default function BuatLaporan() {
         location: jenis === 'sarana_prasarana' ? lokasi.trim() || null : null,
       });
       toast.success('Laporan terkirim', 'Admin/Guru BK akan menindaklanjuti.');
-      await qc.invalidateQueries({ queryKey: ['laporan.list'] });
+      await qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('laporan.list') });
       router.back();
     } catch (e) {
       fail(errorMessage(e, 'Gagal mengirim laporan.'));

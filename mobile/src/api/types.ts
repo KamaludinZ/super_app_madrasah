@@ -467,7 +467,7 @@ export type CleanlinessRecord = {
 export type GuruReport = {
   id: string; type: string; title: string; description: string; class_id?: string | null; class_name?: string | null;
   student_id?: string | null; student_name?: string | null; location?: string | null; priority?: string; status?: string;
-  response?: string | null; reported_at?: string; reporter_name?: string | null; updated_at?: string | null;
+  response?: string | null; reported_at?: string; reported_by?: string; reporter_name?: string | null; updated_at?: string | null;
 };
 
 /** Nilai E-Rapor per siswa/mapel/semester (/grades). */

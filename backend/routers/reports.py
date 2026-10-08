@@ -56,7 +56,9 @@ async def get_reports(
     - Guru: sees their own reports for current semester
     """
     is_admin = 'admin' in user.get('roles', [])
-    is_wali_kelas = 'wali_kelas' in user.get('roles', [])
+    # Menurut peran AKTIF: dulu cukup punya peran wali_kelas sehingga guru mapel yang juga wali kelas
+    # tidak pernah melihat laporan yang ia kirim sendiri (selalu laporan kelas walinya).
+    is_wali_kelas = user.get('active_role') == 'wali_kelas'
     is_guru = punya_peran_guru(user)
 
     # Get user's view context for semester filtering

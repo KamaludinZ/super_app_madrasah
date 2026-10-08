@@ -47,6 +47,17 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   // Pencatatan poin (admin, guru tata tertib, waka kesiswaan) tetap di modul web.
   if (p === '/siswa/poin' && role === 'siswa') return '/tatib/poin';
   if (p === '/wali-kelas/poin-tatib' && role === 'wali_kelas') return '/tatib/walikelas';
+  // Wali kelas — layar kelas walinya.
+  if (role === 'wali_kelas') {
+    const wali: Record<string, string> = {
+      '/wali-kelas/siswa': '/pantau/siswa?kelas=wali',
+      '/wali-kelas/jurnal-kelas': '/(app)/(tabs)/jurnal',
+      '/wali-kelas/kehadiran': '/wali/kehadiran',
+      '/wali-kelas/kebersihan': '/wali/kebersihan',
+      '/wali-kelas/laporan': '/laporan',
+    };
+    if (wali[p]) return wali[p];
+  }
   if (p === '/tatib/rekap' && role !== 'admin') return '/tatib/rekap';
   if ((p === '/admin/tatib/data' || p === '/admin/tatib/penanganan')
     && ['guru_bk', 'kepala_sekolah', 'penjamin_mutu', 'kepala_tata_usaha', 'waka_kurikulum'].includes(role ?? '')) return '/tatib/rekap';

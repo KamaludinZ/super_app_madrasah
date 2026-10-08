@@ -1,16 +1,18 @@
 /**
  * Data Siswa (Kepala Madrasah & peran pemantau) — native, pengganti /admin/siswa (hanya lihat).
  * Siswa aktif (GET /students, saring kelas) dengan pencarian nama/NISN, jumlah L/P dan kelengkapan data;
- * ketuk siswa untuk data EMIS lengkapnya (profil-siswa?id).
+ * ketuk siswa untuk data EMIS lengkapnya (profil-siswa?id). Parameter `kelas` (wali kelas, /wali-kelas/siswa)
+ * mengunci daftar ke kelas itu tanpa pemilih kelas.
  */
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
 import { request } from '@/api/client';
 import type { ClassItem } from '@/api/types';
 import { cocok, SearchBox } from '@/pantau/ui';
 import { useCached } from '@/hooks/useCached';
+import { useAuth } from '@/store/auth';
 import { spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
@@ -25,12 +27,17 @@ type SiswaRow = { id: string; full_name: string; nisn?: string | null; nism?: st
 export default function PantauSiswa() {
   const { colors } = useTheme();
   const router = useRouter();
-  const [kelas, setKelas] = useState<string | null>(null);
+  const param = useLocalSearchParams<{ kelas?: string }>();
+  const { user } = useAuth();
+  // kelas=wali → kelas wali pengguna (menu /wali-kelas/siswa tidak tahu id kelasnya).
+  const kunci = param.kelas === 'wali' ? user?.homeroom_class_id ?? null : param.kelas ?? null;
+  const terkunci = !!param.kelas;
+  const [kelas, setKelas] = useState<string | null>(kunci);
   const [q, setQ] = useState('');
   const kelasRes = useCached<ClassItem[]>('kebersihan.classes.all', async () => {
     const ay = await api.kebersihan.activeYear().catch(() => null);
     return api.kebersihan.classes(ay?.id);
-  }, { staleTime: 30 * 60_000 });
+  }, { staleTime: 30 * 60_000, enabled: !terkunci });
   const res = useCached<SiswaRow[]>(`pantau.siswa.${kelas ?? 'semua'}`, () => request<SiswaRow[]>('/students', { query: { class_id: kelas ?? undefined } }), { staleTime: 30 * 60_000 });
 
   const rows = useMemo(() => (res.data ?? []).filter((s) => cocok(`${s.full_name} ${s.nisn ?? ''} ${s.nism ?? ''}`, q)), [res.data, q]);
@@ -39,16 +46,16 @@ export default function PantauSiswa() {
 
   const header = (
     <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
-      <SelectField label="Kelas" value={kelas} placeholder="Semua kelas" noneLabel="Semua kelas" icon="school-outline"
+      {terkunci ? null : <SelectField label="Kelas" value={kelas} placeholder="Semua kelas" noneLabel="Semua kelas" icon="school-outline"
         options={[...(kelasRes.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'id', { numeric: true })).map((c) => ({ value: c.id, label: c.name }))}
-        onChange={setKelas} />
+        onChange={setKelas} />}
       <SearchBox value={q} onChange={setQ} placeholder="Cari nama atau NISN…" />
       {res.data ? <T variant="caption" tone="muted">{rows.length} siswa · L {l} · P {p}</T> : null}
     </View>
   );
 
   return (
-    <Screen title="Data Siswa" subtitle="Siswa aktif · hanya lihat" back scroll={false} offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}>
+    <Screen title="Data Siswa" subtitle={terkunci ? `Kelas wali${res.data?.[0]?.class_name ? ` ${res.data[0].class_name}` : ''} · hanya lihat` : 'Siswa aktif · hanya lihat'} back scroll={false} offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}>
       {res.loading ? <>{header}<CardSkeleton lines={6} /></> : res.error && !res.data ? (
         <>{header}<ErrorState message="Data siswa belum tersimpan di perangkat." onRetry={res.refresh} compact /></>
       ) : (

@@ -1,13 +1,15 @@
 /**
  * Laporan Saya (guru & wali kelas) — native, pengganti /guru/laporan. Daftar laporan yang saya kirim
  * (GET /reports): jenis, prioritas, status penanganan, kelas/siswa/lokasi, dan tanggapan Admin/Guru BK;
- * hapus selama status masih "Baru". Buat laporan lewat form.
+ * hapus selama status masih "Baru" (hanya laporan sendiri). Buat laporan lewat form.
+ * Peran aktif wali kelas: laporan tentang kelas walinya (pengganti /wali-kelas/laporan).
  */
 import React, { useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/endpoints';
+import { useAuth } from '@/store/auth';
 import { errorMessage } from '@/api/client';
 import type { GuruReport } from '@/api/types';
 import { useCached } from '@/hooks/useCached';
@@ -33,7 +35,9 @@ export default function LaporanSaya() {
   const router = useRouter();
   const qc = useQueryClient();
   const { online } = useNetwork();
-  const res = useCached<GuruReport[]>('laporan.list', api.laporan.list);
+  const { user, activeRole } = useAuth();
+  const walas = activeRole === 'wali_kelas';
+  const res = useCached<GuruReport[]>(`laporan.list.${activeRole ?? ''}`, api.laporan.list);
   const [filter, setFilter] = useState<Filter>('aktif');
   const [open, setOpen] = useState<string | null>(null);
 
@@ -49,14 +53,14 @@ export default function LaporanSaya() {
         try {
           await api.laporan.remove(r.id);
           toast.success('Laporan dihapus');
-          await qc.invalidateQueries({ queryKey: ['laporan.list'] });
+          await qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('laporan.list') });
         } catch (e) { toast.error(errorMessage(e, 'Gagal menghapus laporan.')); }
       },
     },
   ]);
 
   return (
-    <Screen title="Laporan Saya" subtitle={`${res.data?.length ?? 0} laporan`} back scroll={false}
+    <Screen title={walas ? 'Laporan Kelas' : 'Laporan Saya'} subtitle={`${res.data?.length ?? 0} laporan`} back scroll={false}
       offline={{ fromCache: res.fromCache, updatedAt: res.updatedAt }}
       footer={<Button title="Buat laporan" icon="create-outline" size="lg" fullWidth disabled={!online} onPress={() => router.push('/laporan/buat')} />}>
       <FlatList
@@ -72,7 +76,7 @@ export default function LaporanSaya() {
               <View style={styles.row}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <T weight="semibold" numberOfLines={isOpen ? undefined : 2}>{r.title}</T>
-                  <T variant="caption" tone="muted">{formatDateTime(r.reported_at ?? '')}</T>
+                  <T variant="caption" tone="muted">{formatDateTime(r.reported_at ?? '')}{walas && r.reporter_name ? ` · ${r.reporter_name}` : ''}</T>
                 </View>
                 <Badge label={st.label} tone={st.tone} small />
               </View>
@@ -92,7 +96,7 @@ export default function LaporanSaya() {
                       <T selectable>{r.response}</T>
                     </View>
                   ) : <T variant="caption" tone="muted">Belum ada tanggapan.</T>}
-                  {r.status === 'baru' ? <Button title="Hapus laporan" icon="trash-outline" variant="ghost" size="sm" disabled={!online} onPress={() => remove(r)} /> : null}
+                  {r.status === 'baru' && r.reported_by === user?.id ? <Button title="Hapus laporan" icon="trash-outline" variant="ghost" size="sm" disabled={!online} onPress={() => remove(r)} /> : null}
                 </>
               ) : r.response ? (
                 <View style={styles.row}><Icon name="chatbubble-ellipses-outline" size={14} color={colors.success} /><T variant="caption" color={colors.success}>Ada tanggapan</T></View>
