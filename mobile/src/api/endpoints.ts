@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, ClassItem, CleanlinessRecord, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GradeEntry, GradeInput, GuruReport, IbadahSchedule, PiketGuru, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -129,6 +129,12 @@ export const api = {
     classHistory: (classId: string) => request<CleanlinessRecord[]>(`/cleanliness/class/${classId}`),
     submit: (body: Omit<CleanlinessRecord, 'id' | 'class_name' | 'recorded_by' | 'recorded_at'>) =>
       request<CleanlinessRecord>('/cleanliness/class', { method: 'POST', body }),
+  },
+
+  nilai: {
+    list: (q: { class_id: string; subject_id: string; semester: string }) => request<GradeEntry[]>('/grades', { query: q }),
+    saveBulk: (body: { class_id: string; subject_id: string; semester: string; entries: GradeInput[] }) =>
+      request<{ success: number }>('/grades/bulk', { method: 'POST', body }),
   },
 
   laporan: {

@@ -41,7 +41,8 @@ export default function GradesInputPage() {
       try {
         const ay = await api.get('/academic-years/active');
         setActiveAY(ay.data);
-        setSemester(ay.data?.active_semester || 'ganjil');
+        // active_semester tidak dikirim server: bawaan menurut bulan (Juli–Desember ganjil, Januari–Juni genap).
+        setSemester(ay.data?.active_semester || (new Date().getMonth() >= 6 ? 'ganjil' : 'genap'));
         const [cls, sub, sch] = await Promise.all([
           // Load classes for active academic year
           ay.data ? api.get('/classes', { params: { academic_year_id: ay.data.id } }) : api.get('/classes'),

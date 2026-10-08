@@ -467,3 +467,10 @@ export type GuruReport = {
   student_id?: string | null; student_name?: string | null; location?: string | null; priority?: string; status?: string;
   response?: string | null; reported_at?: string; reporter_name?: string | null; updated_at?: string | null;
 };
+
+/** Nilai E-Rapor per siswa/mapel/semester (/grades). */
+export type GradeEntry = {
+  id?: string; student_id: string; class_id: string; subject_id: string; semester: string;
+  nilai_pengetahuan?: number | null; nilai_keterampilan?: number | null; nilai_akhir?: number | null; predicate?: string | null; description?: string | null;
+};
+export type GradeInput = { student_id: string; nilai_pengetahuan: number | null; nilai_keterampilan: number | null; description: string };

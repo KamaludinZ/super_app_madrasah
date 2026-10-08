@@ -26,6 +26,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (p === '/my-agenda') return '/agenda';
   if (p === '/guru/kebersihan') return '/kebersihan';
   if (p === '/guru/laporan') return '/laporan';
+  // Admin menginput nilai semua kelas di web; guru mengampu kelasnya di aplikasi.
+  if (p === '/nilai/input' && role !== 'admin') return '/nilai';
   // Admin mengelola jadwal piket di modul web; peran lain melihat saja.
   if (p === '/admin/jadwal-piket' && role !== 'admin') return '/jadwal-piket';
   // Admin, Waka Kesiswaan & wali kelas memproses/memverifikasi prestasi siswa → modul web (Fase 2).

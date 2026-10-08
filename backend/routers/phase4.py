@@ -492,6 +492,21 @@ async def submit_grades_bulk(payload: Dict, request: Request, user: Dict = Depen
         if not sched:
             raise HTTPException(403, "Anda bukan pengampu mapel ini di kelas tersebut")
 
+    # Nilai harus angka 0–100 (dulu salah ketik seperti 850 tersimpan dan merusak rata-rata rapor).
+    for e in entries:
+        for k in ('nilai_pengetahuan', 'nilai_keterampilan'):
+            v = e.get(k)
+            if v is None or v == '':
+                e[k] = None
+                continue
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"Nilai tidak valid: {v}")
+            if not 0 <= f <= 100:
+                raise HTTPException(400, f"Nilai harus 0–100 (ditemukan {v})")
+            e[k] = f
+
     inserted = 0
     for e in entries:
         nilai_p = e.get('nilai_pengetahuan')
