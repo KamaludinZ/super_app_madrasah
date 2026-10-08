@@ -127,6 +127,16 @@ async def _tatib_aturan_kondisi(db):
     return await migrate(db)
 
 
+async def _simpan_akun(db):
+    from migrations.migrate_simpan_akun import migrate
+    return await migrate(db)
+
+
+async def _masterplan(db):
+    from migrations.migrate_masterplan import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -136,6 +146,8 @@ MIGRASI = [
     ('2026-10-07_journal_pengisi', _journal_pengisi),
     ('2026-10-08_tatib_poin', _tatib_poin),
     ('2026-10-08_tatib_aturan_kondisi', _tatib_aturan_kondisi),
+    ('2026-10-08_simpan_akun', _simpan_akun),
+    ('2026-10-08_masterplan', _masterplan),
 ]
 
 

@@ -70,6 +70,9 @@ import AdminGTKPage from '@/pages/admin/AdminGTKPage';
 import AdminGTKDetailPage from '@/pages/admin/AdminGTKDetailPage';
 import AdminLaporanAbsensiPage from '@/pages/admin/AdminLaporanAbsensiPage';
 import GTKAbsensiSayaPage from '@/pages/GTKAbsensiSayaPage';
+import SimpanAkunPage from '@/pages/SimpanAkunPage';
+import MasterplanPage from '@/pages/MasterplanPage';
+import AdminResetPinSimpanAkunPage from '@/pages/admin/AdminResetPinSimpanAkunPage';
 import AdminAgendaGuruPage from '@/pages/admin/AdminAgendaGuruPage';
 import AdminAgendaTendikPage from '@/pages/admin/AdminAgendaTendikPage';
 import AdminMadrasahEventsPage from '@/pages/admin/AdminMadrasahEventsPage';
@@ -319,6 +322,9 @@ function App() {
             <Route path="/admin/gtk/:id" element={<AdminGTKDetailPage />} />
             <Route path="/admin/gtk/laporan-absensi" element={<AdminLaporanAbsensiPage />} />
             <Route path="/gtk/absensi-saya" element={<GTKAbsensiSayaPage />} />
+            <Route path="/gtk/simpan-akun" element={<SimpanAkunPage />} />
+            <Route path="/masterplan" element={<MasterplanPage />} />
+            <Route path="/admin/reset-pin-simpan-akun" element={<AdminResetPinSimpanAkunPage />} />
             <Route path="/admin/gtk/agenda-guru" element={<AdminAgendaGuruPage />} />
             <Route path="/admin/gtk/agenda-tendik" element={<AdminAgendaTendikPage />} />
             <Route path="/admin/kegiatan-madrasah" element={<AdminMadrasahEventsPage />} />

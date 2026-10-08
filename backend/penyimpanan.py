@@ -21,7 +21,7 @@ UPLOAD_ROOT = os.path.abspath(os.environ.get('UPLOAD_ROOT') or os.path.join(_BAC
 LOKASI_LAMA = os.path.abspath(os.path.join(_BACKEND_DIR, '..', 'uploads'))
 
 # Subfolder per jenis unggahan
-SUBFOLDER = ('achievements', 'dokumen_siswa', 'student_detail', 'gtk_berkas')
+SUBFOLDER = ('achievements', 'dokumen_siswa', 'student_detail', 'gtk_berkas', 'masterplan')
 
 
 def folder_unggahan(nama: str) -> str:

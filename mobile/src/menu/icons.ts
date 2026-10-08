@@ -35,6 +35,8 @@ const MAP: Record<string, IconName> = {
   Home: 'home-outline',
   Info: 'information-circle-outline',
   LayoutDashboard: 'grid-outline',
+  KeyRound: 'key-outline',
+  LockKeyhole: 'lock-closed-outline',
   ListChecks: 'checkbox-outline',
   MapPin: 'location-outline',
   MapPinned: 'map-outline',

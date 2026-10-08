@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { menuTatib } from '@/lib/aksesTatib';
+import { tambahMenuUmum } from '@/lib/menuUmum';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -77,7 +78,7 @@ function withoutGuruPengganti(entries) {
     .map((e) => (e.items ? { ...e, items: e.items.filter((i) => i.to !== GURU_PENGGANTI_PATH) } : e));
 }
 
-function navForRole(role, userRoles = []) {
+function navForRoleDasar(role, userRoles = []) {
   const isSubjectTeacher = SUBJECT_TEACHER_ROLES.includes(role);
   const items = isSubjectTeacher
     ? [{ to: '/jurnal/scan', label: 'Jurnal Presisi', icon: ScanLine, testid: 'nav-scan', highlight: true }]
@@ -741,6 +742,12 @@ function navForRole(role, userRoles = []) {
       },
     ];
   }
+  return items;
+}
+
+// Menu per peran + menu lintas peran (Simpan Akun, Masterplan, Reset PIN) dari lib/menuUmum.js.
+function navForRole(role, userRoles = []) {
+  const items = tambahMenuUmum(navForRoleDasar(role, userRoles), role);
   return items;
 }
 

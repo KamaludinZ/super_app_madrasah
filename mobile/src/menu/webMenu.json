@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-08T05:02:53.807Z",
+  "generated_at": "2026-10-08T06:36:13.265Z",
   "source": "frontend/src/components/layout/AppShell.js#navForRole",
   "labels": {
     "admin": "Administrator",
@@ -567,6 +567,26 @@
             "icon": "Settings"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          },
+          {
+            "to": "/admin/reset-pin-simpan-akun",
+            "label": "Reset PIN Simpan Akun",
+            "icon": "LockKeyhole"
+          }
+        ]
       }
     ],
     "siswa": [
@@ -637,6 +657,11 @@
             "to": "/siswa/pcl",
             "label": "PCL",
             "icon": "AlertTriangle"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -760,6 +785,21 @@
             "to": "/verval/ajuan-saya",
             "label": "Ajuan Verval Saya",
             "icon": "CheckCircle2"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -910,6 +950,21 @@
             "icon": "AlertOctagon"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "guru_ips": [
@@ -1056,6 +1111,21 @@
             "to": "/lab/ips/kerusakan",
             "label": "Laporan Kerusakan",
             "icon": "AlertOctagon"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -1206,6 +1276,21 @@
             "icon": "AlertOctagon"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "guru_seni": [
@@ -1352,6 +1437,21 @@
             "to": "/lab/seni/kerusakan",
             "label": "Laporan Kerusakan",
             "icon": "AlertOctagon"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -1502,6 +1602,21 @@
             "icon": "AlertOctagon"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "guru_tik": [
@@ -1650,6 +1765,21 @@
             "icon": "AlertOctagon"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "tenaga_kependidikan": [
@@ -1707,6 +1837,21 @@
             "icon": "Trophy"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "guru_ekstrakurikuler": [
@@ -1727,6 +1872,16 @@
             "to": "/prestasi",
             "label": "Data Prestasi",
             "icon": "Trophy"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -1765,6 +1920,16 @@
             "to": "/guru/kebersihan",
             "label": "Kebersihan Kelas",
             "icon": "Sparkles"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -1874,6 +2039,21 @@
             "icon": "FileBarChart"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "wali_kelas": [
@@ -1956,6 +2136,21 @@
             "icon": "Trophy"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "guru_tata_tertib": [
@@ -2018,6 +2213,21 @@
             "icon": "BarChart3"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "alumni": [
@@ -2028,6 +2238,11 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2222,6 +2437,21 @@
             "icon": "AlertOctagon"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "kepala_tata_usaha": [
@@ -2307,6 +2537,21 @@
             "to": "/tatib/rekap",
             "label": "Rekap Pengawas",
             "icon": "BarChart3"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2424,6 +2669,21 @@
             "to": "/admin/bk/sekolah-lanjutan",
             "label": "Data Sekolah Lanjutan",
             "icon": "School"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2578,6 +2838,21 @@
             "icon": "BarChart3"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "waka_sarpras": [
@@ -2675,6 +2950,21 @@
             "icon": "Trophy"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "waka_humas": [
@@ -2705,6 +2995,16 @@
             "to": "/admin/aplikasi-madrasah",
             "label": "Aplikasi Madrasah",
             "icon": "Globe"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2732,6 +3032,16 @@
             "to": "/admin/pip/ajuan",
             "label": "Daftar Ajuan PIP",
             "icon": "FileText"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2744,6 +3054,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2756,6 +3076,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2798,6 +3128,16 @@
             "to": "/prestasi",
             "label": "Data Prestasi",
             "icon": "Trophy"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -2865,6 +3205,21 @@
             "to": "/admin/uks/laporan-baru",
             "label": "Laporan UKS Baru",
             "icon": "FileBarChart"
+          }
+        ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3074,6 +3429,21 @@
             "icon": "School"
           }
         ]
+      },
+      {
+        "title": "Layanan Umum",
+        "items": [
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
       }
     ],
     "unit_pengaduan": [
@@ -3084,6 +3454,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3096,6 +3476,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3108,6 +3498,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3120,6 +3520,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3132,6 +3542,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3144,6 +3564,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3156,6 +3586,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3168,6 +3608,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3180,6 +3630,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3192,6 +3652,16 @@
             "to": "/dashboard",
             "label": "Dashboard",
             "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/gtk/simpan-akun",
+            "label": "Simpan Akun",
+            "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3234,6 +3704,11 @@
             "to": "/kelas/kehadiran",
             "label": "Kehadiran Siswa",
             "icon": "UserCheck"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
@@ -3251,6 +3726,11 @@
             "to": "/dashboard",
             "label": "Anak Saya",
             "icon": "Users"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
           }
         ]
       }
