@@ -409,3 +409,18 @@ export type Extracurricular = {
   id: string; name: string; description?: string | null; coach_id?: string | null; coach_name?: string | null;
   schedule_day?: string | null; schedule_start?: string | null; schedule_end?: string | null; location?: string | null; member_count?: number;
 };
+
+/** BK: Cek List Kebiasaan Belajar (CLKB) & Problem Cek List (PCL) — formulir & riwayat siswa. */
+type BKWindow = { petunjuk: string[]; total_items: number; is_open: boolean; info?: string | null; open_start?: string | null; open_end?: string | null };
+export type CLKBForm = BKWindow & { items: { no: number; pernyataan: string; kunci?: string }[] };
+export type PCLForm = BKWindow & { categories: { kode: string; nama: string; items: string[] }[]; essay_questions: { kode: string; pertanyaan: string }[] };
+type BKResponse = { tanggapan_bk?: string | null; rekomendasi_bk?: string | null; ditanggapi_oleh?: string | null; ditanggapi_pada?: string | null; submitted_at: string };
+export type CLKBSubmission = BKResponse & {
+  id: string; selected: number[]; waktu_belajar_jam?: string | null; waktu_belajar_dari?: string | null; waktu_belajar_sampai?: string | null;
+  perlu_info_cara_belajar?: boolean | null; topik_diminati?: string[]; topik_lainnya?: string | null; kebiasaan_diperbaiki?: string[];
+  scoring?: { plus_count: number; minus_count: number; total_selected: number; completion_percentage: number };
+};
+export type PCLSubmission = BKResponse & {
+  id: string; selected: Record<string, number[]>; masalah_lain?: string | null; masalah_saat_ini?: string | null; tempat_curhat?: string | null;
+  scoring?: { by_category: { kode: string; nama: string; total_item: number; jumlah_dipilih: number; persentase: number }[]; total_dipilih: number; persentase_keseluruhan: number };
+};

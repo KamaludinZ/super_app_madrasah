@@ -1,6 +1,6 @@
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, Extracurricular, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, CLKBForm, CLKBSubmission, Extracurricular, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -91,6 +91,16 @@ export const api = {
 
   ekskul: {
     list: () => request<Extracurricular[]>('/extracurriculars'),
+  },
+
+  bk: {
+    clkbForm: () => request<CLKBForm>('/bk/clkb/form'),
+    clkbHistory: () => request<CLKBSubmission[]>('/bk/clkb/my-history'),
+    clkbSubmit: (body: Omit<CLKBSubmission, 'id' | 'submitted_at' | 'scoring'>) => request<CLKBSubmission>('/bk/clkb/submit', { method: 'POST', body }),
+    pclForm: () => request<PCLForm>('/bk/pcl/form'),
+    pclHistory: () => request<PCLSubmission[]>('/bk/pcl/my-history'),
+    pclSubmit: (body: Pick<PCLSubmission, 'selected' | 'masalah_lain' | 'masalah_saat_ini' | 'tempat_curhat'>) =>
+      request<PCLSubmission>('/bk/pcl/submit', { method: 'POST', body }),
   },
 
   academicYears: () => request<AcademicYear[]>('/academic-years'),

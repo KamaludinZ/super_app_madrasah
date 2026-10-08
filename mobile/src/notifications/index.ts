@@ -236,6 +236,9 @@ export function routeForNotification(data: Record<string, any> | undefined, role
     case 'class_task_new':
       if (role === 'siswa' && data.tugas_id) return `/siswa/tugas/${data.tugas_id}`;
       return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
+    case 'bk_response':
+      if (role === 'siswa' && data.submission_id && (data.route === '/siswa/clkb' || data.route === '/siswa/pcl')) return `${data.route}/${data.submission_id}`;
+      return typeof data.route === 'string' ? routeForPath(data.route, role) : '/(app)/(tabs)';
     case 'teaching_reminder':
       return data.schedule_id ? `/jurnal/isi?schedule_id=${data.schedule_id}&mode=slot` : '/(app)/(tabs)';
     default:
