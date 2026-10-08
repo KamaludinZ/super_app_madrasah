@@ -35,7 +35,7 @@ export default function WaliKelasDashboard() {
   const levelLabels = {
     sekolah: { label: 'Sekolah', icon: School, color: 'text-slate-600' },
     kecamatan: { label: 'Kecamatan', icon: Map, color: 'text-blue-600' },
-    kabupaten: { label: 'Kabupaten', icon: MapPin, color: 'text-green-600' },
+    kabupaten: { label: 'Kab/Kota', icon: MapPin, color: 'text-green-600' },
     provinsi: { label: 'Provinsi', icon: Flag, color: 'text-amber-600' },
     nasional: { label: 'Nasional', icon: Globe, color: 'text-rose-600' },
     internasional: { label: 'Internasional', icon: Award, color: 'text-purple-600' },

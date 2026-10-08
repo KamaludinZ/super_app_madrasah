@@ -131,7 +131,10 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
     }
 
     for ach in achievements:
-        level = ach.get('level', '').lower()
+        level = (ach.get('level') or '').lower()
+        # Data prestasi menyimpan tingkat Kab/Kota sebagai 'kab_kota' (data lama: 'kota'/'kabupaten').
+        if level in ('kab_kota', 'kota'):
+            level = 'kabupaten'
         if level in achievement_by_level:
             achievement_by_level[level] += 1
 
