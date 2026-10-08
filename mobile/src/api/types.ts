@@ -440,3 +440,12 @@ export type GTKAbsensiMy = {
   summary: { hadir: number; sakit: number; cuti: number; dinas_luar: number; lainnya: number; alpha: number; persentase_hadir?: number | null };
 };
 export type GTKIzin = { id: string; jenis: string; tanggal_mulai: string; tanggal_selesai: string; keterangan?: string | null; dokumen_url?: string | null };
+
+/** Agenda kegiatan pegawai (guru/tendik) — /staff-events. */
+export type StaffEvent = {
+  id: string; event_name: string; description?: string | null; date: string; end_date?: string | null;
+  start_time: string; end_time: string; location?: string | null; category?: string | null; priority?: string | null;
+  status?: string; is_public?: boolean;
+};
+export type StaffEventInput = Omit<StaffEvent, 'id'>;
+export type StaffEventStats = { total_events: number; avg_duration_days: number; avg_duration_hours: number; multi_day_count: number; single_day_count: number };

@@ -1,7 +1,7 @@
 import { File as FsFile } from 'expo-file-system';
 import { request } from './client';
 import type {
-  AcademicYear, Achievement, Announcement, ClassHistoryItem, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GTKIzin, Kelengkapan, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
+  AcademicYear, Achievement, Announcement, ClassHistoryItem, CLKBForm, CLKBSubmission, Extracurricular, GTKAbsensiMy, GTKIzin, Kelengkapan, StaffEvent, StaffEventInput, StaffEventStats, StudentDetailResponse, PCLForm, PCLSubmission, Captcha, GPAssignment, GPAssignResult, GPCandidate, GPConfig, GPPeriod, GPSideBySide, GPSlot,
   GPSlotDates, GPTeacher, Indikator, Journal, KehadiranRecord, KehadiranStats, KelasMateri, KelasTugas, LoginResponse, NotificationItem, OfflinePermitsResponse, PiketSchedule,
   MateriPokok, PublicSettings, QRValidation, Rapor, RaporEkskul, ScheduleItem, VervalRequest, Student, TeacherTask, User,
 } from './types';
@@ -114,6 +114,14 @@ export const api = {
     izinCreate: (body: Omit<GTKIzin, 'id'>) => request<GTKIzin>('/gtk/izin', { method: 'POST', body }),
     izinUpdate: (id: string, body: Omit<GTKIzin, 'id'>) => request<GTKIzin>(`/gtk/izin/${id}`, { method: 'PUT', body }),
     izinDelete: (id: string) => request<{ message: string }>(`/gtk/izin/${id}`, { method: 'DELETE' }),
+  },
+
+  agenda: {
+    list: () => request<StaffEvent[]>('/staff-events'),
+    stats: () => request<StaffEventStats>('/staff-events/stats/duration'),
+    create: (body: StaffEventInput) => request<StaffEvent>('/staff-events', { method: 'POST', body }),
+    update: (id: string, body: StaffEventInput) => request<StaffEvent>(`/staff-events/${id}`, { method: 'PUT', body }),
+    remove: (id: string) => request<{ message: string }>(`/staff-events/${id}`, { method: 'DELETE' }),
   },
 
   academicYears: () => request<AcademicYear[]>('/academic-years'),

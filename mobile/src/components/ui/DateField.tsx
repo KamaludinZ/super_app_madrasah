@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { Keyboard, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addMonths, formatDateLong, monthOf, todayISO } from '@/utils/time';
+import { addMonths, formatDateLong, formatDayShort, monthOf, todayISO } from '@/utils/time';
 import { radius, spacing, useTheme } from '@/theme';
 import { MonthCalendar } from '../MonthCalendar';
 import { Button } from './Button';
@@ -36,7 +36,7 @@ export function DateField({ label, value, onChange, min, max, placeholder = 'Pil
       <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value ? formatDateLong(value) : placeholder}`} onPress={show}
         style={({ pressed }) => [styles.field, { borderColor: colors.borderStrong, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 }]}>
         <Icon name="calendar-outline" size={18} color={colors.muted} />
-        <T numberOfLines={1} style={{ flex: 1 }} tone={value ? 'default' : 'muted'}>{value ? formatDateLong(value) : placeholder}</T>
+        <T numberOfLines={1} style={{ flex: 1 }} tone={value ? 'default' : 'muted'}>{value ? `${formatDayShort(value)} ${value.slice(0, 4)}` : placeholder}</T>
       </Pressable>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
