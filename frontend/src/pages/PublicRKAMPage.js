@@ -181,7 +181,7 @@ export default function PublicRKAMPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--cream)]">
+    <div className="relative isolate min-h-screen bg-[var(--cream)]">
       <IslamicBackground pattern="tile" opacity={0.02} />
       <div className="absolute inset-x-0 top-0 h-64 bg-hero-wash pointer-events-none" />
 

@@ -89,7 +89,7 @@ export default function GuruDashboard() {
   }));
 
   return (
-    <div className="section-spacing">
+    <div className="relative isolate section-spacing">
       <IslamicBackground pattern="star" opacity={0.02} />
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>

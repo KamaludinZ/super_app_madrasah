@@ -126,7 +126,7 @@ export default function SiswaDashboard() {
   const days = getDaysInMonth(currentMonth);
 
   return (
-    <div className="section-spacing">
+    <div className="relative isolate section-spacing">
       <IslamicBackground pattern="star" opacity={0.02} />
       <div>
         <KemenagBadge variant="default" className="mb-2" />

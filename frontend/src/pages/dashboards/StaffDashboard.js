@@ -11,7 +11,7 @@ export default function StaffDashboard() {
   const { user, activeRole } = useAuth();
 
   return (
-    <div className="section-spacing">
+    <div className="relative isolate section-spacing">
       <IslamicBackground pattern="tile" opacity={0.02} />
       <div>
         <KemenagBadge variant="default" className="mb-2" />

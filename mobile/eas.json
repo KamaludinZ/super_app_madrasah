@@ -33,6 +33,12 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.super.mtsn2kotamalang.sch.id/api"
       }
+    },
+    "production-aab": {
+      "extends": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   }
 }

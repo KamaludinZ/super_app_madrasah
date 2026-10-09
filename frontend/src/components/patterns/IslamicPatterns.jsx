@@ -265,7 +265,7 @@ export function IslamicBackground({ pattern = 'star', className = '', opacity = 
   };
 
   return (
-    <div className={`absolute inset-0 pointer-events-none ${className}`}>
+    <div aria-hidden="true" className={`absolute inset-0 -z-10 overflow-hidden pointer-events-none ${className}`}>
       {patterns[pattern]}
     </div>
   );
