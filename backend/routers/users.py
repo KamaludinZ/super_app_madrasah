@@ -938,6 +938,15 @@ async def process_mutation_masuk(req: MutationMasukSubmit, request: Request,
         result_user = new_user.model_dump()
         del result_user['password_hash']
 
+    if is_siswa and req.class_id:
+        # Riwayat keaktifan: siswa mutasi masuk tercatat masuk ke rombel tujuan.
+        from rombel import hari_ini, pindahkan_siswa
+        cls = await db.classes.find_one({'id': req.class_id}, {'_id': 0})
+        if cls:
+            sebelum = {'id': result_user['id'], 'student_class_id': (existing or {}).get('student_class_id')}
+            await pindahkan_siswa(sebelum, cls, 'mutasi_masuk', req.mutation_date or hari_ini(), user,
+                                  notes=req.mutation_note or 'Mutasi masuk')
+
     return serialize_doc(result_user)
 
 
@@ -978,6 +987,11 @@ async def process_mutation_keluar(req: MutationKeluarSubmit, request: Request,
         update_data['mutation_destination'] = req.mutation_destination or None
 
     await db.users.update_one({'id': req.user_id}, {'$set': update_data})
+    if is_siswa:
+        # Riwayat keaktifan: tutup masa rombel dan catat mutasi keluar dari rombel terakhir.
+        from rombel import catat_keluar, hari_ini
+        await catat_keluar(target_user, 'mutasi_keluar', req.mutation_date or hari_ini(), user,
+                           notes=req.mutation_note or 'Mutasi keluar')
 
     # Log audit with detailed information
     role_label = 'Siswa' if is_siswa else 'GTK/Staff'

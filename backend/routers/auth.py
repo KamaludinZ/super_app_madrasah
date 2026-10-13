@@ -326,6 +326,12 @@ async def switch_role(req: RoleSwitchRequest, request: Request, user: Dict = Dep
 async def me(user: Dict = Depends(get_current_user)):
     user.pop('password_hash', None)
     user['password_status'] = _password_change_status(user)
+    # Rombel perwalian mengikuti semester yang sedang dilihat (rombel dibuat baru tiap semester).
+    if 'wali_kelas' in (user.get('roles') or []):
+        from rombel import kelas_perwalian
+        cls = await kelas_perwalian(user, projection={'_id': 0, 'id': 1})
+        if cls:
+            user['homeroom_class_id'] = cls['id']
     return user
 
 

@@ -11,15 +11,17 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { hariIniWIB } from '@/lib/tanggal';
+import { formatWIB } from '@/lib/datetime';
 
 export default function ClassDetailDialog({ classData, open, onOpenChange, onRefresh }) {
   const [students, setStudents] = useState([]);
+  const [lampau, setLampau] = useState(false);
   const [availableStudents, setAvailableStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [addForm, setAddForm] = useState({
-    reason: 'pembagian_kelas',
+    reason: 'otomatis',
     start_date: hariIniWIB(),
     notes: ''
   });
@@ -37,6 +39,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
     try {
       const { data } = await api.get(`/classes/${classData.id}/students`);
       setStudents(data.students || []);
+      setLampau(!!data.is_rombel_lampau);
     } catch (e) {
       toast.error('Gagal memuat data siswa');
     } finally {
@@ -56,14 +59,14 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
 
   const handleAddStudent = async (studentId) => {
     try {
-      await api.post(`/classes/${classData.id}/students/${studentId}`, addForm);
+      await api.post(`/classes/${classData.id}/students/${studentId}`, { ...addForm, reason: addForm.reason === 'otomatis' ? undefined : addForm.reason });
       toast.success('Siswa berhasil ditambahkan ke kelas');
       loadStudents();
       loadAvailableStudents();
       setShowAddStudent(false);
       setSearchQuery('');
       setAddForm({
-        reason: 'pembagian_kelas',
+        reason: 'otomatis',
         start_date: hariIniWIB(),
         notes: ''
       });
@@ -100,12 +103,16 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
   const isFull = currentCount >= capacity;
 
   const reasonLabels = {
+    otomatis: 'Otomatis (sesuai rombel sebelumnya)',
     pembagian_kelas: 'Pembagian Kelas',
-    pindah_kelas: 'Pindah Kelas',
     naik_kelas: 'Naik Kelas',
+    lanjut_semester: 'Lanjut Semester',
+    pindah_kelas: 'Pindah Rombel',
+    tinggal_kelas: 'Tinggal Kelas',
+    pindah_semester: 'Pindah Semester (Percepatan)',
     mutasi_masuk: 'Mutasi Masuk',
-    mutasi_keluar: 'Mutasi Keluar'
   };
+  const tgl = (v) => (v ? formatWIB(v, 'Date', { day: 'numeric', month: 'short', year: 'numeric' }) : '…');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,8 +164,8 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
           {/* Current Students */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-lg">Siswa di Kelas ({currentCount})</h3>
-              <Button
+              <h3 className="font-semibold text-lg">{lampau ? 'Siswa yang pernah di rombel ini' : 'Siswa di Kelas'} ({currentCount})</h3>
+              {!lampau && <Button
                 onClick={() => setShowAddStudent(!showAddStudent)}
                 size="sm"
                 disabled={isFull}
@@ -166,10 +173,17 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
               >
                 <UserPlus className="h-4 w-4" />
                 Tambah Siswa
-              </Button>
+              </Button>}
             </div>
 
-            {isFull && (
+            {lampau && (
+              <div className="bg-sky-50 border border-sky-200 text-sky-900 p-3 rounded-lg mb-3 flex items-start gap-2 text-sm" data-testid="rombel-lampau-info">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                Rombel semester lampau: daftar diambil dari riwayat rombel siswa, termasuk yang sudah naik, pindah, atau lulus.
+              </div>
+            )}
+
+            {!lampau && isFull && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg mb-3 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span className="text-sm">
@@ -192,7 +206,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
                       <TableHead>NIS</TableHead>
                       <TableHead>Nama Lengkap</TableHead>
                       <TableHead>Jenis Kelamin</TableHead>
-                      <TableHead className="text-right">Aksi</TableHead>
+                      {lampau ? <><TableHead>Periode</TableHead><TableHead>Selanjutnya</TableHead></> : <TableHead className="text-right">Aksi</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -205,17 +219,24 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
                         <TableCell>
                           {s.gender === 'L' ? 'Laki-laki' : s.gender === 'P' ? 'Perempuan' : '-'}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleRemoveStudent(s.id, s.full_name)}
-                            className="text-rose-600"
-                            title="Hapus dari kelas"
-                          >
-                            <UserMinus className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+                        {lampau ? (
+                          <>
+                            <TableCell className="text-xs whitespace-nowrap">{tgl(s.periode_mulai)} – {s.periode_selesai ? tgl(s.periode_selesai) : 'sekarang'}</TableCell>
+                            <TableCell className="text-xs">{s.keterangan_lanjut || '-'}</TableCell>
+                          </>
+                        ) : (
+                          <TableCell className="text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleRemoveStudent(s.id, s.full_name)}
+                              className="text-rose-600"
+                              title="Hapus dari kelas"
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -225,7 +246,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
           </div>
 
           {/* Add Student Section */}
-          {showAddStudent && (
+          {showAddStudent && !lampau && (
             <div className="border-t pt-4">
               <h3 className="font-semibold text-lg mb-3">Tambah Siswa ke Kelas</h3>
 
@@ -277,7 +298,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
               <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
                 {filteredAvailable.length === 0 ? (
                   <p className="text-center py-8 text-slate-400">
-                    {searchQuery ? 'Tidak ada siswa yang sesuai pencarian' : 'Semua siswa sudah memiliki kelas'}
+                    {searchQuery ? 'Tidak ada siswa yang sesuai pencarian' : 'Semua siswa sudah memiliki rombel di semester ini'}
                   </p>
                 ) : (
                   <Table>
@@ -286,7 +307,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
                         <TableHead>NISN</TableHead>
                         <TableHead>NIS</TableHead>
                         <TableHead>Nama Lengkap</TableHead>
-                        <TableHead>Jenis Kelamin</TableHead>
+                        <TableHead>Rombel Sekarang</TableHead>
                         <TableHead className="text-right">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -296,9 +317,7 @@ export default function ClassDetailDialog({ classData, open, onOpenChange, onRef
                           <TableCell className="font-mono text-xs">{s.nisn || '-'}</TableCell>
                           <TableCell className="font-mono text-xs">{s.nis || '-'}</TableCell>
                           <TableCell className="font-semibold">{s.full_name}</TableCell>
-                          <TableCell>
-                            {s.gender === 'L' ? 'Laki-laki' : s.gender === 'P' ? 'Perempuan' : '-'}
-                          </TableCell>
+                          <TableCell className="text-xs">{s.kelas_sebelumnya || <span className="text-slate-400">Belum ada</span>}</TableCell>
                           <TableCell className="text-right">
                             <Button
                               size="sm"

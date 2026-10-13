@@ -1,6 +1,7 @@
 """Classes CRUD + Excel import + Token generation."""
 import io
 import random
+import re
 import string
 from datetime import datetime
 from journal_core import now_wib
@@ -8,6 +9,7 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from core import (
     db,
@@ -20,7 +22,9 @@ from core import (
 from core import DETAIL_SISWA_VIEWER_ROLES, GURU_MAPEL_ROLES
 from routers.auth import _resolve_view_context
 from excel_io import class_template, parse_class_rows
-from models import ClassModel, ClassHistoryModel
+from models import ClassModel
+from rombel import ALASAN_LABEL, alasan_otomatis, anggota_rombel_ids, pindahkan_siswa, semester_aktif_id, tutup_riwayat_aktif
+from routers._shared import FILTER_SISWA_AKTIF
 
 router = APIRouter()
 
@@ -62,11 +66,13 @@ async def _ensure_unique_token(token: str) -> str:
 
 
 @router.get("/classes")
-async def list_classes(user: Dict = Depends(get_current_user)):
-    """List classes filtered by user's view context (semester)."""
-    # Get user's effective view context
-    ctx = await _resolve_view_context(user)
-    semester_id = ctx.get('semester_id')
+async def list_classes(semester_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    """List classes filtered by user's view context (semester), atau semester_id tertentu
+    (dipakai halaman Proses Rombel untuk memilih rombel semester asal/tujuan)."""
+    if not semester_id:
+        ctx = await _resolve_view_context(user)
+        semester_id = ctx.get('semester_id')
+    aktif_id = await semester_aktif_id()
 
     # Filter by semester_id from view context
     q = {}
@@ -76,9 +82,9 @@ async def list_classes(user: Dict = Depends(get_current_user)):
     items = await db.classes.find(q, {'_id': 0}).sort('name', 1).to_list(500)
     enriched = []
     for c in items:
-        c['student_count'] = await db.users.count_documents({
-            'roles': 'siswa', 'student_class_id': c['id'], 'is_active': True
-        })
+        # Rombel semester lampau: jumlah siswa yang pernah tercatat di rombel itu (riwayat).
+        c['student_count'] = len(await anggota_rombel_ids(c, aktif_id))
+        c['is_rombel_lampau'] = bool(c.get('semester_id') and aktif_id and c['semester_id'] != aktif_id)
         c.setdefault('capacity', 40)
         if c.get('homeroom_teacher_id'):
             t = await db.users.find_one({'id': c['homeroom_teacher_id']}, {'_id': 0, 'full_name': 1})
@@ -128,6 +134,72 @@ async def create_class(payload: Dict, request: Request, user: Dict = Depends(req
     await db.classes.insert_one(doc)
     await log_audit(user, 'create', 'class', cls.id, details={'name': cls.name, 'token': cls.token}, request=request)
     return serialize_doc(doc)
+
+
+class SalinStrukturRequest(BaseModel):
+    from_semester_id: str
+    to_semester_id: str
+    naik_tingkat: bool = False  # Genap -> Ganjil TP baru: 7A -> 8A (tingkat akhir tidak disalin)
+    salin_wali: bool = True
+    tingkat_akhir: int = 9
+
+
+_ROMAWI = {1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X', 11: 'XI', 12: 'XII'}
+
+
+def _nama_rombel_naik(nama: str, grade: int, parallel: str) -> str:
+    """'7A' -> '8A', '7 A' -> '8 A', 'VII-A' -> 'VIII-A'; bila pola tidak dikenali: '<grade+1><paralel>'."""
+    m = re.match(r'^(\D*?)(\d+)(.*)$', nama or '')
+    if m and int(m.group(2)) == grade:
+        return f"{m.group(1)}{grade + 1}{m.group(3)}"
+    r = _ROMAWI.get(grade)
+    if r and re.match(rf'^{r}(?![IVX])', nama or ''):
+        return _ROMAWI.get(grade + 1, str(grade + 1)) + nama[len(r):]
+    return f"{grade + 1}{parallel or ''}"
+
+
+@router.post("/classes/salin-struktur")
+async def salin_struktur_rombel(req: SalinStrukturRequest, request: Request, user: Dict = Depends(require_role('admin', 'waka_kurikulum'))):
+    """Buat rombel semester tujuan dari struktur rombel semester asal (nama, paralel, wali kelas,
+    ruang, kapasitas, percepatan). Rombel yang namanya sudah ada di semester tujuan dilewati.
+    Siswa TIDAK ikut dipindah — proses siswa lewat menu Naik Kelas / Proses Rombel."""
+    if req.from_semester_id == req.to_semester_id:
+        raise HTTPException(400, "Semester asal dan tujuan harus berbeda")
+    tujuan = await db.semesters.find_one({'id': req.to_semester_id}, {'_id': 0})
+    if not tujuan or not await db.semesters.find_one({'id': req.from_semester_id}, {'_id': 1}):
+        raise HTTPException(404, "Semester tidak ditemukan")
+    ay = await db.academic_years.find_one({'id': tujuan.get('academic_year_id')}, {'_id': 0, 'name': 1})
+    sudah = {c['name'] for c in await db.classes.find({'semester_id': req.to_semester_id}, {'_id': 0, 'name': 1}).to_list(1000)}
+    dibuat, dilewati = [], []
+    for c in await db.classes.find({'semester_id': req.from_semester_id}, {'_id': 0}).sort('name', 1).to_list(1000):
+        grade = int(c.get('grade') or 0)
+        if req.naik_tingkat:
+            if grade >= req.tingkat_akhir:
+                dilewati.append(f"{c['name']} (tingkat akhir)")
+                continue
+            nama, grade_baru = _nama_rombel_naik(c['name'], grade, c.get('parallel')), grade + 1
+        else:
+            nama, grade_baru = c['name'], grade
+        if nama in sudah:
+            dilewati.append(f"{nama} (sudah ada)")
+            continue
+        baru = ClassModel(
+            name=nama, grade=grade_baru, parallel=c.get('parallel') or '', academic_year_id=tujuan.get('academic_year_id'),
+            semester_id=req.to_semester_id, homeroom_teacher_id=c.get('homeroom_teacher_id') if req.salin_wali else None,
+            room_id=c.get('room_id'), capacity=c.get('capacity') or 40, is_accelerated=bool(c.get('is_accelerated')),
+            curriculum_id=tujuan.get('curriculum_id') or c.get('curriculum_id'),
+        )
+        baru.token = await _ensure_unique_token(_generate_class_token(nama, ay.get('name') if ay else None))
+        doc = baru.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        doc['disalin_dari_class_id'] = c['id']
+        await db.classes.insert_one(doc)
+        sudah.add(nama)
+        dibuat.append(nama)
+    await log_audit(user, 'salin_struktur_rombel', 'class', req.to_semester_id,
+                    details={'dari': req.from_semester_id, 'dibuat': len(dibuat), 'dilewati': len(dilewati)}, request=request)
+    return {'message': f"{len(dibuat)} rombel dibuat" + (f", {len(dilewati)} dilewati" if dilewati else ''),
+            'dibuat': dibuat, 'dilewati': dilewati}
 
 
 @router.put("/classes/{cid}")
@@ -243,16 +315,29 @@ async def get_class_students(cid: str, user: Dict = Depends(require_role('admin'
     if not cls:
         raise HTTPException(404, "Kelas tidak ditemukan")
 
-    students = await db.users.find({
-        'roles': 'siswa',
-        'student_class_id': cid,
-        'is_active': True
-    }, {'_id': 0}).sort('full_name', 1).to_list(500)
+    aktif_id = await semester_aktif_id()
+    ids = await anggota_rombel_ids(cls, aktif_id)
+    students = await db.users.find({'id': {'$in': ids}, 'roles': 'siswa'}, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(500)
+    lampau = bool(cls.get('semester_id') and aktif_id and cls['semester_id'] != aktif_id)
+    if not lampau:
+        students = [st for st in students if st.get('is_active', True) is not False]
+    else:
+        # Masa siswa di rombel lampau ini + rombel sesudahnya
+        for st in students:
+            h = await db.class_history.find_one({'student_id': st['id'], 'class_id': cid}, {'_id': 0}, sort=[('start_date', -1)])
+            st['periode_mulai'] = (h or {}).get('start_date')
+            st['periode_selesai'] = (h or {}).get('end_date')
+            berikut = await db.class_history.find_one({'student_id': st['id'], 'from_class_id': cid}, {'_id': 0, 'reason': 1, 'class_name': 1})
+            keluar = await db.class_history.find_one({'student_id': st['id'], 'class_id': cid, 'reason': {'$in': ['lulus', 'mutasi_keluar']}}, {'_id': 0, 'reason': 1})
+            st['keterangan_lanjut'] = (
+                f"{ALASAN_LABEL.get(berikut['reason'], berikut['reason'])} ke {berikut.get('class_name') or '-'}" if berikut
+                else (ALASAN_LABEL.get(keluar['reason']) if keluar else None))
 
     return {
         'class': serialize_doc(cls),
         'students': [serialize_doc(s) for s in students],
-        'count': len(students)
+        'count': len(students),
+        'is_rombel_lampau': lampau,
     }
 
 
@@ -264,16 +349,21 @@ async def get_available_students(cid: str, user: Dict = Depends(require_role('ad
     if not cls:
         raise HTTPException(404, "Kelas tidak ditemukan")
 
-    # Get students who don't have a class assigned and are active
+    # Siswa aktif yang belum punya rombel, atau rombelnya masih di semester lain (mis. semester lalu
+    # yang belum diproses) — sehingga rombel semester baru bisa diisi langsung dari sini.
+    kelas_semester_ini = [c['id'] for c in await db.classes.find({'semester_id': cls.get('semester_id')}, {'_id': 0, 'id': 1}).to_list(1000)] if cls.get('semester_id') else [cid]
     students = await db.users.find({
-        'roles': 'siswa',
+        'roles': 'siswa', **FILTER_SISWA_AKTIF, 'graduation_status': {'$ne': 'lulus'},
         '$or': [
             {'student_class_id': None},
-            {'student_class_id': {'$exists': False}}
+            {'student_class_id': {'$exists': False}},
+            {'student_class_id': {'$nin': kelas_semester_ini}},
         ],
-        'is_active': True
-    }, {'_id': 0}).sort('full_name', 1).to_list(500)
-
+    }, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
+    nama_kelas = {c['id']: c.get('name') for c in await db.classes.find(
+        {'id': {'$in': list({s.get('student_class_id') for s in students if s.get('student_class_id')})}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(1000)}
+    for st in students:
+        st['kelas_sebelumnya'] = nama_kelas.get(st.get('student_class_id'))
     return [serialize_doc(s) for s in students]
 
 
@@ -294,57 +384,29 @@ async def add_student_to_class(
     if not student:
         raise HTTPException(404, "Siswa tidak ditemukan")
 
-    # Check if student already has a class
-    if student.get('student_class_id'):
-        raise HTTPException(400, "Siswa sudah memiliki kelas. Hapus dari kelas lama terlebih dahulu.")
+    kelas_lama = await db.classes.find_one({'id': student.get('student_class_id')}, {'_id': 0}) if student.get('student_class_id') else None
+    if kelas_lama and kelas_lama['id'] == cid:
+        raise HTTPException(400, "Siswa sudah berada di kelas ini")
+    if kelas_lama and kelas_lama.get('semester_id') == cls.get('semester_id'):
+        raise HTTPException(400, f"Siswa masih di rombel {kelas_lama.get('name')} pada semester yang sama. Pindahkan lewat menu Naik Kelas / Proses Rombel atau hapus dari rombel lama dulu.")
 
     # Check class capacity
-    current_count = await db.users.count_documents({
-        'roles': 'siswa',
-        'student_class_id': cid,
-        'is_active': True
-    })
+    current_count = await db.users.count_documents({'roles': 'siswa', 'student_class_id': cid, **FILTER_SISWA_AKTIF})
     capacity = cls.get('capacity', 40)
     if current_count >= capacity:
         raise HTTPException(400, f"Kelas sudah penuh (kapasitas: {capacity})")
-
-    # Get semester info from class to create history record
-    # ClassHistoryModel still uses academic_year_id + semester for backward compatibility
-    semester_id = cls.get('semester_id')
-    if not semester_id:
+    if not cls.get('semester_id'):
         raise HTTPException(400, "Kelas tidak memiliki semester_id")
 
-    semester = await db.semesters.find_one({'id': semester_id}, {'_id': 0})
-    if not semester:
-        raise HTTPException(400, "Semester tidak ditemukan")
-
-    academic_year_id = semester.get('academic_year_id')
-    semester_code = semester.get('code', 'Ganjil')
-
-    # Update student's class
-    await db.users.update_one(
-        {'id': student_id},
-        {'$set': {'student_class_id': cid}}
-    )
-
-    # Create history record (uses old format for backward compatibility)
-    history = ClassHistoryModel(
-        student_id=student_id,
-        class_id=cid,
-        academic_year_id=academic_year_id,
-        semester=semester_code,
-        reason=payload.get('reason', 'pembagian_kelas'),
-        start_date=payload.get('start_date', now_wib().strftime('%Y-%m-%d')),
-        notes=payload.get('notes'),
-        created_by_user_id=user['id']
-    )
-
-    doc = history.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    await db.class_history.insert_one(doc)
+    # Siswa dari rombel semester lain dipindahkan (riwayat rombel lama ditutup otomatis).
+    reason = payload.get('reason') or await alasan_otomatis(kelas_lama, cls)
+    if reason not in ALASAN_LABEL or reason in ('lulus', 'mutasi_keluar'):
+        raise HTTPException(400, "Alasan tidak valid")
+    doc = await pindahkan_siswa(student, cls, reason, payload.get('start_date') or now_wib().strftime('%Y-%m-%d'), user,
+                                semester_belajar=payload.get('semester_belajar'), notes=payload.get('notes'))
 
     await log_audit(user, 'add_student_to_class', 'class', cid,
-                    details={'student_id': student_id, 'student_name': student.get('full_name'), 'reason': history.reason},
+                    details={'student_id': student_id, 'student_name': student.get('full_name'), 'reason': reason},
                     request=request)
 
     return {'message': 'Siswa berhasil ditambahkan ke kelas', 'history': serialize_doc(doc)}
@@ -370,22 +432,9 @@ async def remove_student_from_class(
     if student.get('student_class_id') != cid:
         raise HTTPException(400, "Siswa tidak terdaftar di kelas ini")
 
-    # Update student's class to None
-    await db.users.update_one(
-        {'id': student_id},
-        {'$set': {'student_class_id': None}}
-    )
-
-    # Update the most recent active history record for this student in this class
-    end_date = payload.get('end_date', now_wib().strftime('%Y-%m-%d'))
-    await db.class_history.update_one(
-        {
-            'student_id': student_id,
-            'class_id': cid,
-            'end_date': None  # Find active record
-        },
-        {'$set': {'end_date': end_date}}
-    )
+    end_date = payload.get('end_date') or now_wib().strftime('%Y-%m-%d')
+    await tutup_riwayat_aktif(student, end_date, user)
+    await db.users.update_one({'id': student_id}, {'$set': {'student_class_id': None}})
 
     await log_audit(user, 'remove_student_from_class', 'class', cid,
                     details={'student_id': student_id, 'student_name': student.get('full_name')},
@@ -407,15 +456,22 @@ async def get_student_class_history(student_id: str, user: Dict = Depends(get_cu
     history = await db.class_history.find(
         {'student_id': student_id},
         {'_id': 0}
-    ).sort('start_date', -1).to_list(500)
+    ).sort([('start_date', -1), ('created_at', -1)]).to_list(500)
 
-    # Enrich with class name, academic year name
+    # Lengkapi nama rombel, TP, semester, rombel asal, dan label alasan (riwayat keaktifan siswa)
     enriched = []
     for h in history:
-        cls = await db.classes.find_one({'id': h.get('class_id')}, {'_id': 0, 'name': 1})
-        ay = await db.academic_years.find_one({'id': h.get('academic_year_id')}, {'_id': 0, 'name': 1})
-        h['class_name'] = cls.get('name') if cls else None
+        cls = await db.classes.find_one({'id': h.get('class_id')}, {'_id': 0, 'name': 1, 'semester_id': 1, 'is_accelerated': 1})
+        sem_id = h.get('semester_id') or (cls or {}).get('semester_id')
+        sem = await db.semesters.find_one({'id': sem_id}, {'_id': 0, 'name': 1, 'academic_year_id': 1}) if sem_id else None
+        ay = await db.academic_years.find_one({'id': h.get('academic_year_id') or (sem or {}).get('academic_year_id')}, {'_id': 0, 'name': 1})
+        asal = await db.classes.find_one({'id': h['from_class_id']}, {'_id': 0, 'name': 1}) if h.get('from_class_id') else None
+        h['class_name'] = (cls or {}).get('name') or h.get('class_name')
         h['academic_year_name'] = ay.get('name') if ay else None
+        h['semester_name'] = (sem or {}).get('name') or h.get('semester')
+        h['from_class_name'] = asal.get('name') if asal else None
+        h['reason_label'] = ALASAN_LABEL.get(h.get('reason'), h.get('reason'))
+        h['is_accelerated'] = bool((cls or {}).get('is_accelerated'))
         enriched.append(serialize_doc(h))
 
     return enriched

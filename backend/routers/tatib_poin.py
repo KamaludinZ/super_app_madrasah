@@ -71,6 +71,10 @@ async def ubah_ambang(req: AmbangRequest, user: Dict = Depends(wajib_akses('inpu
 
 async def kelas_diampu(user: Dict) -> Optional[Dict]:
     """Kelas yang diampu wali kelas login; utamakan kelas tahun pelajaran aktif."""
+    from rombel import kelas_perwalian
+    cls = await kelas_perwalian(user)
+    if cls:
+        return cls
     daftar = await db.classes.find({'homeroom_teacher_id': user['id']}, {'_id': 0}).to_list(20)
     if not daftar:
         return None

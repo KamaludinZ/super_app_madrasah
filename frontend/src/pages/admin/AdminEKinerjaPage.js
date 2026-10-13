@@ -637,7 +637,7 @@ export default function AdminEKinerjaPage() {
           {isEkinerjaAuthorJurnal ? (
             <Card>
               <CardContent className="p-4">
-                <JurnalHarianAdminView />
+                <JurnalHarianAdminView year={activeYear} />
               </CardContent>
             </Card>
           ) : (
@@ -656,7 +656,7 @@ export default function AdminEKinerjaPage() {
               <TabsContent value="isi" className="mt-4">
                 <Card>
                   <CardContent className="p-4">
-                    <JurnalHarianForm />
+                    <JurnalHarianForm year={activeYear} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1335,7 +1335,7 @@ function JurnalLinkManager() {
   );
 }
 
-function JurnalHarianForm() {
+function JurnalHarianForm({ year }) {
   const [links, setLinks] = useState([]);
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1349,7 +1349,8 @@ function JurnalHarianForm() {
     try {
       const [{ data: linkData }, { data: entryData }] = await Promise.all([
         api.get('/ekinerja/jurnal-harian/link'),
-        api.get('/ekinerja/jurnal-harian/my'),
+        // Hanya jurnal pada tahun yang sedang dilihat (Mode Lihat / tahun aktif).
+        api.get('/ekinerja/jurnal-harian/my', { params: year ? { date_from: `${year}-01-01`, date_to: `${year}-12-31` } : {} }),
       ]);
       setLinks(linkData || []);
       setEntries(entryData || []);
@@ -1360,7 +1361,7 @@ function JurnalHarianForm() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => { setEditing(null); setForm(JURNAL_ENTRY_EMPTY_FORM); setOpen(true); };
   const openEdit = (e) => { setEditing(e); setForm({ uraian_kegiatan: e.uraian_kegiatan, volume: e.volume || '', satuan_hasil: e.satuan_hasil || '', link_id: e.link_id || '' }); setOpen(true); };
@@ -1424,7 +1425,7 @@ function JurnalHarianForm() {
             {loading ? (
               <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
             ) : entries.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada jurnal harian. Klik "Tambah Jurnal" untuk mengisi hari ini.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-slate-500">Belum ada jurnal harian di tahun {year}. Klik "Tambah Jurnal" untuk mengisi hari ini.</TableCell></TableRow>
             ) : (
               entries.map((e) => (
                 <TableRow key={e.id}>
@@ -1496,7 +1497,7 @@ function JurnalHarianForm() {
   );
 }
 
-function JurnalHarianAdminView() {
+function JurnalHarianAdminView({ year }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -1504,7 +1505,7 @@ function JurnalHarianAdminView() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/ekinerja/jurnal-harian');
+      const { data } = await api.get('/ekinerja/jurnal-harian', { params: year ? { date_from: `${year}-01-01`, date_to: `${year}-12-31` } : {} });
       setEntries(data || []);
     } catch (e) {
       toast.error('Gagal memuat jurnal harian semua GTK');
@@ -1513,7 +1514,7 @@ function JurnalHarianAdminView() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = entries.filter((e) => {
     if (!search) return true;

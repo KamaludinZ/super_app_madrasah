@@ -1,331 +1,217 @@
-"""Promotions - Naik kelas, pindah semester, dan kelulusan siswa."""
-from datetime import datetime
-from journal_core import now_wib
-from typing import Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Request
+"""Promotions - Naik kelas, pindah semester, dan kelulusan siswa.
 
-from core import db, get_current_user, require_role, serialize_doc, log_audit
-from models import PromotionRequest, ClassHistoryModel
+Semua perpindahan lewat rombel.py agar users.student_class_id dan class_history (riwayat keaktifan
+siswa per rombel & semester) selalu konsisten. Endpoint utama: POST /promotions/proses — satu
+permintaan berisi aksi per siswa (naik kelas, lanjut semester, pindah rombel, tinggal kelas, pindah
+semester kelas percepatan, lulus). Endpoint lama (naik-kelas, pindah-semester, lulus) tetap ada dan
+memakai proses yang sama.
+"""
+from typing import Dict, List, Literal, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+
+from core import db, require_role, serialize_doc, log_audit
+from models import PromotionRequest
+from rombel import AKSI_PINDAH, ALASAN_LABEL, anggota_rombel_ids, catat_keluar, hari_ini, pindahkan_siswa
+from routers._shared import FILTER_SISWA_AKTIF
 
 router = APIRouter()
 
+PROMOSI_ROLES = ('admin', 'waka_kurikulum')
+
+AKSI_LABEL = {**{k: ALASAN_LABEL[k] for k in AKSI_PINDAH}, 'lulus': 'Lulus'}
+
+
+class ProsesItem(BaseModel):
+    student_id: str
+    aksi: Literal['naik_kelas', 'lanjut_semester', 'pindah_kelas', 'tinggal_kelas', 'pindah_semester', 'lulus']
+    to_class_id: Optional[str] = None
+    semester_belajar: Optional[str] = None  # kelas percepatan: semester belajar tujuan, mis. "2"
+    notes: Optional[str] = None
+
+
+class ProsesRombelRequest(BaseModel):
+    tanggal: Optional[str] = None  # tanggal efektif (YYYY-MM-DD), bawaan hari ini (WIB)
+    items: List[ProsesItem]
+    certificate_number_prefix: Optional[str] = None
+    notes: Optional[str] = None
+
+
+async def _proses(items: List[ProsesItem], tanggal: str, user: Dict, notes: Optional[str] = None,
+                  cert_prefix: Optional[str] = None) -> Dict:
+    """Proses aksi per siswa. Satu siswa gagal tidak membatalkan siswa lain."""
+    berhasil: Dict[str, int] = {}
+    errors: List[str] = []
+    kelas_cache: Dict[str, Optional[Dict]] = {}
+    isi_rombel: Dict[str, int] = {}
+    nomor_ijazah = 1
+
+    async def kelas(cid: str) -> Optional[Dict]:
+        if cid not in kelas_cache:
+            kelas_cache[cid] = await db.classes.find_one({'id': cid}, {'_id': 0})
+        return kelas_cache[cid]
+
+    for it in items:
+        student = await db.users.find_one({'id': it.student_id, 'roles': 'siswa', 'graduation_status': {'$ne': 'lulus'}, **FILTER_SISWA_AKTIF},
+                                          {'_id': 0, 'password_hash': 0})
+        if not student:
+            errors.append(f"{it.student_id}: siswa aktif tidak ditemukan")
+            continue
+        nama = student.get('full_name') or it.student_id
+        catatan = it.notes or notes
+
+        if it.aksi == 'lulus':
+            kini = await kelas(student['student_class_id']) if student.get('student_class_id') else None
+            if not kini:
+                errors.append(f"{nama}: belum berada di rombel mana pun")
+                continue
+            no = None
+            if cert_prefix:
+                no = f"{cert_prefix}/{nomor_ijazah:04d}"
+                nomor_ijazah += 1
+            await catat_keluar(student, 'lulus', tanggal, user, notes=catatan or 'Lulus')
+            await db.users.update_one({'id': student['id']}, {'$set': {
+                'graduation_status': 'lulus',
+                'graduation_date': tanggal,
+                'graduation_ay_id': kini.get('academic_year_id'),
+                'graduation_class_id': kini['id'],
+                'graduation_certificate_number': no,
+                'student_class_id': None,
+                'is_active': True,  # akun tetap aktif untuk akses alumni
+            }})
+            berhasil['lulus'] = berhasil.get('lulus', 0) + 1
+            continue
+
+        if not it.to_class_id:
+            errors.append(f"{nama}: rombel tujuan belum dipilih")
+            continue
+        tujuan = await kelas(it.to_class_id)
+        if not tujuan:
+            errors.append(f"{nama}: rombel tujuan tidak ditemukan")
+            continue
+        sama = student.get('student_class_id') == tujuan['id']
+        if sama and it.aksi != 'pindah_semester':
+            errors.append(f"{nama}: sudah berada di rombel {tujuan.get('name')}")
+            continue
+        if sama and not it.semester_belajar:
+            errors.append(f"{nama}: isi semester belajar tujuan untuk pindah semester di rombel yang sama")
+            continue
+        if not sama:
+            if tujuan['id'] not in isi_rombel:
+                isi_rombel[tujuan['id']] = await db.users.count_documents({'roles': 'siswa', 'student_class_id': tujuan['id'], **FILTER_SISWA_AKTIF})
+            if isi_rombel[tujuan['id']] >= (tujuan.get('capacity') or 40):
+                errors.append(f"{nama}: rombel {tujuan.get('name')} sudah penuh (kapasitas {tujuan.get('capacity') or 40})")
+                continue
+            isi_rombel[tujuan['id']] += 1
+        await pindahkan_siswa(student, tujuan, it.aksi, tanggal, user, semester_belajar=it.semester_belajar, notes=catatan)
+        berhasil[it.aksi] = berhasil.get(it.aksi, 0) + 1
+
+    total = sum(berhasil.values())
+    rincian = ', '.join(f"{AKSI_LABEL[k]} {v}" for k, v in berhasil.items())
+    return {
+        'message': f"Berhasil memproses {total} siswa" + (f" ({rincian})" if rincian else ''),
+        'success_count': total,
+        'rincian': berhasil,
+        'failed_count': len(errors),
+        'errors': errors,
+    }
+
+
+@router.post("/promotions/proses")
+async def proses_rombel(payload: ProsesRombelRequest, request: Request, user: Dict = Depends(require_role(*PROMOSI_ROLES))):
+    """Proses semester baru / kenaikan / kelulusan / pindah semester percepatan, aksi per siswa."""
+    if not payload.items:
+        raise HTTPException(400, "Pilih minimal satu siswa")
+    tanggal = payload.tanggal or hari_ini()
+    hasil = await _proses(payload.items, tanggal, user, payload.notes, payload.certificate_number_prefix)
+    await log_audit(user, 'proses_rombel', 'promotion', None,
+                    details={'tanggal': tanggal, **hasil['rincian'], 'gagal': hasil['failed_count']}, request=request)
+    return hasil
+
 
 @router.post("/promotions/naik-kelas")
-async def promote_class(
-    payload: PromotionRequest,
-    request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
-):
-    """
-    Naik kelas: pindahkan siswa ke kelas berikutnya di TP baru.
-    - Copy siswa dengan ID tetap
-    - Update student_class_id ke kelas baru
-    - Catat riwayat di class_history
-    - Tutup riwayat kelas lama dengan end_date
-    """
+async def promote_class(payload: PromotionRequest, request: Request, user: Dict = Depends(require_role(*PROMOSI_ROLES))):
+    """Naik kelas ke rombel tujuan (kompatibilitas; gunakan /promotions/proses)."""
     if payload.type != 'naik_kelas':
         raise HTTPException(400, "Type harus 'naik_kelas'")
-
-    if not payload.to_class_id or not payload.to_academic_year_id:
-        raise HTTPException(400, "to_class_id dan to_academic_year_id wajib diisi")
-
-    # Validate target class exists
-    target_class = await db.classes.find_one({'id': payload.to_class_id})
-    if not target_class:
-        raise HTTPException(404, "Kelas tujuan tidak ditemukan")
-
-    target_ay = await db.academic_years.find_one({'id': payload.to_academic_year_id})
-    if not target_ay:
-        raise HTTPException(404, "Tahun pelajaran tujuan tidak ditemukan")
-
-    success_count = 0
-    errors = []
-    today = now_wib().strftime('%Y-%m-%d')
-
-    for student_id in payload.student_ids:
-        try:
-            student = await db.users.find_one({'id': student_id, 'siswa': {'$in': ['roles']}})
-            if not student:
-                errors.append(f"Siswa {student_id}: tidak ditemukan")
-                continue
-
-            old_class_id = student.get('student_class_id')
-
-            # Close old class history (set end_date)
-            if old_class_id:
-                await db.class_history.update_many(
-                    {'student_id': student_id, 'class_id': old_class_id, 'end_date': None},
-                    {'$set': {'end_date': today}}
-                )
-
-            # Update student to new class
-            await db.users.update_one(
-                {'id': student_id},
-                {'$set': {
-                    'student_class_id': payload.to_class_id,
-                    'graduation_status': 'aktif'
-                }}
-            )
-
-            # Create new class history record
-            history = ClassHistoryModel(
-                student_id=student_id,
-                class_id=payload.to_class_id,
-                academic_year_id=payload.to_academic_year_id,
-                semester=payload.to_semester or 'Ganjil',
-                reason='naik_kelas',
-                start_date=today,
-                notes=payload.notes,
-                created_by_user_id=user['id']
-            )
-            doc = history.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            await db.class_history.insert_one(doc)
-
-            success_count += 1
-
-        except Exception as e:
-            errors.append(f"Siswa {student_id}: {str(e)}")
-
-    await log_audit(
-        user, 'naik_kelas', 'promotion',
-        payload.to_class_id,
-        details={'success': success_count, 'failed': len(errors), 'to_class': target_class.get('name')},
-        request=request
-    )
-
-    return {
-        'message': f'Berhasil menaikkan {success_count} siswa',
-        'success_count': success_count,
-        'failed_count': len(errors),
-        'errors': errors
-    }
+    if not payload.to_class_id:
+        raise HTTPException(400, "to_class_id wajib diisi")
+    items = [ProsesItem(student_id=s, aksi='naik_kelas', to_class_id=payload.to_class_id) for s in payload.student_ids]
+    hasil = await _proses(items, hari_ini(), user, payload.notes)
+    await log_audit(user, 'naik_kelas', 'promotion', payload.to_class_id, details=hasil['rincian'], request=request)
+    return hasil
 
 
 @router.post("/promotions/pindah-semester")
-async def move_semester(
-    payload: PromotionRequest,
-    request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
-):
-    """
-    Pindah semester: untuk kelas accelerated yang pindah semester dalam 1 TP.
-    Mirip naik kelas tapi masih di TP yang sama, hanya ganti semester.
-    """
+async def move_semester(payload: PromotionRequest, request: Request, user: Dict = Depends(require_role(*PROMOSI_ROLES))):
+    """Pindah semester (kelas percepatan), dengan atau tanpa pindah rombel (kompatibilitas)."""
     if payload.type != 'pindah_semester':
         raise HTTPException(400, "Type harus 'pindah_semester'")
-
     if not payload.to_semester:
         raise HTTPException(400, "to_semester wajib diisi")
-
-    # Get current active AY
-    active_ay = await db.academic_years.find_one({'is_active': True})
-    if not active_ay:
-        raise HTTPException(404, "Tidak ada tahun pelajaran aktif")
-
-    to_ay_id = payload.to_academic_year_id or active_ay['id']
-
-    success_count = 0
-    errors = []
-    today = now_wib().strftime('%Y-%m-%d')
-
-    for student_id in payload.student_ids:
-        try:
-            student = await db.users.find_one({'id': student_id, 'siswa': {'$in': ['roles']}})
-            if not student:
-                errors.append(f"Siswa {student_id}: tidak ditemukan")
-                continue
-
-            # Close current semester history
-            current_class_id = student.get('student_class_id')
-            if current_class_id:
-                await db.class_history.update_many(
-                    {'student_id': student_id, 'class_id': current_class_id, 'end_date': None},
-                    {'$set': {'end_date': today}}
-                )
-
-            # If changing class too
-            if payload.to_class_id and payload.to_class_id != current_class_id:
-                await db.users.update_one(
-                    {'id': student_id},
-                    {'$set': {'student_class_id': payload.to_class_id}}
-                )
-                current_class_id = payload.to_class_id
-
-            # Create new semester history
-            history = ClassHistoryModel(
-                student_id=student_id,
-                class_id=current_class_id,
-                academic_year_id=to_ay_id,
-                semester=payload.to_semester,
-                reason='pindah_semester',
-                start_date=today,
-                notes=payload.notes,
-                created_by_user_id=user['id']
-            )
-            doc = history.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            await db.class_history.insert_one(doc)
-
-            success_count += 1
-
-        except Exception as e:
-            errors.append(f"Siswa {student_id}: {str(e)}")
-
-    await log_audit(
-        user, 'pindah_semester', 'promotion',
-        to_ay_id,
-        details={'success': success_count, 'failed': len(errors), 'to_semester': payload.to_semester},
-        request=request
-    )
-
-    return {
-        'message': f'Berhasil memindahkan {success_count} siswa ke semester {payload.to_semester}',
-        'success_count': success_count,
-        'failed_count': len(errors),
-        'errors': errors
-    }
+    items = []
+    for sid in payload.student_ids:
+        s = await db.users.find_one({'id': sid}, {'_id': 0, 'student_class_id': 1}) or {}
+        items.append(ProsesItem(student_id=sid, aksi='pindah_semester', to_class_id=payload.to_class_id or s.get('student_class_id'),
+                                semester_belajar=payload.to_semester))
+    hasil = await _proses(items, hari_ini(), user, payload.notes)
+    await log_audit(user, 'pindah_semester', 'promotion', None, details=hasil['rincian'], request=request)
+    return hasil
 
 
 @router.post("/promotions/lulus")
-async def graduate_students(
-    payload: PromotionRequest,
-    request: Request,
-    user: Dict = Depends(require_role('admin', 'waka_kurikulum'))
-):
-    """
-    Kelulusan: tandai siswa sebagai lulus.
-    - Set graduation_status = 'lulus'
-    - Set graduation_date, graduation_ay_id, graduation_class_id
-    - Generate certificate number if prefix provided
-    - Close class history with reason='lulus'
-    - Student masih tersimpan di database sebagai alumni
-    """
+async def graduate_students(payload: PromotionRequest, request: Request, user: Dict = Depends(require_role(*PROMOSI_ROLES))):
+    """Kelulusan (kompatibilitas). Siswa tetap tersimpan sebagai alumni."""
     if payload.type != 'lulus':
         raise HTTPException(400, "Type harus 'lulus'")
-
     if not payload.graduation_date:
         raise HTTPException(400, "graduation_date wajib diisi")
-
-    # Get current active AY
-    active_ay = await db.academic_years.find_one({'is_active': True})
-    if not active_ay:
-        raise HTTPException(404, "Tidak ada tahun pelajaran aktif")
-
-    success_count = 0
-    errors = []
-    today = now_wib().strftime('%Y-%m-%d')
-
-    # For certificate numbering
-    cert_counter = 1
-
-    for student_id in payload.student_ids:
-        try:
-            student = await db.users.find_one({'id': student_id, 'siswa': {'$in': ['roles']}})
-            if not student:
-                errors.append(f"Siswa {student_id}: tidak ditemukan")
-                continue
-
-            current_class_id = student.get('student_class_id')
-            if not current_class_id:
-                errors.append(f"Siswa {student_id}: tidak memiliki kelas aktif")
-                continue
-
-            # Generate certificate number if prefix provided
-            cert_number = None
-            if payload.certificate_number_prefix:
-                cert_number = f"{payload.certificate_number_prefix}/{cert_counter:04d}"
-                cert_counter += 1
-
-            # Close current class history with reason=lulus
-            await db.class_history.update_many(
-                {'student_id': student_id, 'end_date': None},
-                {'$set': {'end_date': payload.graduation_date}}
-            )
-
-            # Create final graduation history record
-            history = ClassHistoryModel(
-                student_id=student_id,
-                class_id=current_class_id,
-                academic_year_id=active_ay['id'],
-                semester=active_ay.get('active_semester', 'Genap'),
-                reason='lulus',
-                start_date=payload.graduation_date,
-                end_date=payload.graduation_date,
-                notes=payload.notes or 'Lulus',
-                created_by_user_id=user['id']
-            )
-            doc = history.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            await db.class_history.insert_one(doc)
-
-            # Update student to graduated status
-            await db.users.update_one(
-                {'id': student_id},
-                {'$set': {
-                    'graduation_status': 'lulus',
-                    'graduation_date': payload.graduation_date,
-                    'graduation_ay_id': active_ay['id'],
-                    'graduation_class_id': current_class_id,
-                    'graduation_certificate_number': cert_number,
-                    'student_class_id': None,  # Remove from active class
-                    'is_active': True  # Keep account active for alumni access
-                }}
-            )
-
-            success_count += 1
-
-        except Exception as e:
-            errors.append(f"Siswa {student_id}: {str(e)}")
-
-    await log_audit(
-        user, 'lulus', 'promotion',
-        active_ay['id'],
-        details={'success': success_count, 'failed': len(errors), 'graduation_date': payload.graduation_date},
-        request=request
-    )
-
-    return {
-        'message': f'Berhasil meluluskan {success_count} siswa',
-        'success_count': success_count,
-        'failed_count': len(errors),
-        'errors': errors
-    }
+    items = [ProsesItem(student_id=s, aksi='lulus') for s in payload.student_ids]
+    hasil = await _proses(items, payload.graduation_date, user, payload.notes, payload.certificate_number_prefix)
+    await log_audit(user, 'lulus', 'promotion', None, details=hasil['rincian'], request=request)
+    return hasil
 
 
 @router.get("/promotions/preview")
 async def preview_promotion(
     from_class_id: str,
     type: str,
-    user: Dict = Depends(require_role('admin', 'waka_kurikulum', 'penjamin_mutu'))
+    user: Dict = Depends(require_role(*PROMOSI_ROLES, 'penjamin_mutu'))
 ):
     """
     Preview siswa yang akan diproses untuk naik kelas/semester/lulus.
     Returns list of students in the source class.
     """
-    if type not in ['naik_kelas', 'pindah_semester', 'lulus']:
+    if type not in ['naik_kelas', 'pindah_semester', 'lulus', 'proses']:
         raise HTTPException(400, "Type tidak valid")
 
-    # Get students in the class
+    # Siswa yang SAAT INI berada di rombel asal (yang sudah diproses tidak muncul lagi)
     students = await db.users.find(
-        {'student_class_id': from_class_id, 'roles': 'siswa', 'is_active': True},
+        {'student_class_id': from_class_id, 'roles': 'siswa', **FILTER_SISWA_AKTIF},
         {'_id': 0, 'password_hash': 0}
-    ).to_list(500)
+    ).sort('full_name', 1).to_list(500)
 
-    # Get class info
     cls = await db.classes.find_one({'id': from_class_id}, {'_id': 0})
+    # Semester belajar terakhir tiap siswa (kelas percepatan)
+    for st in students:
+        h = await db.class_history.find_one({'student_id': st['id'], 'end_date': None}, {'_id': 0, 'semester_belajar': 1})
+        st['semester_belajar'] = (h or {}).get('semester_belajar')
+    sudah_diproses = 0
+    if cls:
+        sudah_diproses = max(0, len(await anggota_rombel_ids(cls, riwayat=True)) - len(students))
 
     return {
         'class': serialize_doc(cls) if cls else None,
         'student_count': len(students),
-        'students': [serialize_doc(s) for s in students]
+        'students': [serialize_doc(s) for s in students],
+        'sudah_diproses': sudah_diproses,
     }
 
 
 @router.get("/promotions/history")
 async def promotion_history(
     student_id: str = None,
-    user: Dict = Depends(require_role('admin'))
+    user: Dict = Depends(require_role(*PROMOSI_ROLES))
 ):
     """Get promotion history for a student or all students."""
     query = {}

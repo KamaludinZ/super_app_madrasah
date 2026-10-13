@@ -23,6 +23,7 @@ import ExportTemplateButton from '@/components/students/ExportTemplateButton';
 import { KOLOM_DATA_SISWA } from '@/lib/dataSiswaKolom';
 import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
 import { formatWIB } from '@/lib/datetime';
+import { VIEW_CONTEXT_CHANGED } from '@/lib/useViewYear';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
@@ -45,6 +46,13 @@ export default function DataSiswaPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [genderFilter, setGenderFilter] = useState('all');
+  // Muat ulang saat pengguna mengganti semester di Mode Lihat (data siswa & rombel per semester).
+  const [muatUlang, setMuatUlang] = useState(0);
+  useEffect(() => {
+    const h = () => { setSelectedClass('all'); setMuatUlang((n) => n + 1); };
+    window.addEventListener(VIEW_CONTEXT_CHANGED, h);
+    return () => window.removeEventListener(VIEW_CONTEXT_CHANGED, h);
+  }, []);
 
   const [detailStudent, setDetailStudent] = useState(null);
   const [accountStudent, setAccountStudent] = useState(null);
@@ -63,15 +71,15 @@ export default function DataSiswaPage() {
           });
           setClasses(c.data || []);
           await loadStudents('all');
-        } else if (isWaliKelas && homeroomClassId) {
-          // For wali kelas, auto-load only their homeroom class students
-          setSelectedClass(homeroomClassId);
-          await loadStudents(homeroomClassId);
+        } else if (isWaliKelas) {
+          // Wali kelas: server memilih rombel perwalian pada semester yang sedang dilihat.
+          if (homeroomClassId) setSelectedClass(homeroomClassId);
+          await loadStudents('all');
         }
       } finally { setLoading(false); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAdminView, isWaliKelas, homeroomClassId]);
+  }, [hasAdminView, isWaliKelas, homeroomClassId, muatUlang]);
 
   const loadStudents = async (classId) => {
     setLoading(true);
@@ -333,7 +341,12 @@ export default function DataSiswaPage() {
                           testid={`btn-kelengkapan-siswa-${s.id}`}
                         />
                       </TableCell>
-                      <TableCell>{s.class_name || '-'}</TableCell>
+                      <TableCell>
+                        {s.class_name || '-'}
+                        {s.rombel_semester_ini === false && (
+                          <div className="text-[11px] text-amber-700" title="Proses lewat menu Naik Kelas / Proses Rombel">Belum masuk rombel semester ini</div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {s.santri_mahad ? (
                           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Santri</Badge>

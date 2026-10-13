@@ -1107,8 +1107,10 @@ class ClassHistoryModel(BaseModel):
     semester: str  # 'Ganjil' | 'Genap' | '1' | '2' | '3' | '4' | '5' | '6'
     reason: Literal[
         'pembagian_kelas',  # Pembagian kelas awal TP
-        'pindah_kelas',  # Pindah kelas dalam satu TP/semester
+        'pindah_kelas',  # Pindah rombel (dalam semester berjalan atau saat ganti semester)
         'naik_kelas',  # Naik kelas ke TP berikutnya
+        'lanjut_semester',  # Ganjil -> Genap ke rombel semester baru (tingkat sama)
+        'tinggal_kelas',  # Tidak naik kelas: rombel tingkat sama di TP berikutnya
         'pindah_semester',  # Pindah semester (khusus kelas accelerated)
         'mutasi_masuk',  # Siswa mutasi masuk dari sekolah lain
         'mutasi_keluar',  # Siswa mutasi keluar ke sekolah lain
@@ -1117,6 +1119,9 @@ class ClassHistoryModel(BaseModel):
     start_date: str  # YYYY-MM-DD - tanggal mulai di kelas ini
     end_date: Optional[str] = None  # YYYY-MM-DD - tanggal keluar dari kelas (None jika masih aktif)
     notes: Optional[str] = None  # Catatan tambahan
+    semester_id: Optional[str] = None  # Semester (kalender) rombel ini
+    semester_belajar: Optional[str] = None  # Kelas percepatan: semester belajar, mis. "2"
+    from_class_id: Optional[str] = None  # Rombel sebelumnya
     created_by_user_id: str  # User yang membuat record ini
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

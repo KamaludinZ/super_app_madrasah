@@ -35,6 +35,7 @@ from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, 
 from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
 from models import ClassAttendanceSubmit, ClassCleanlinessSubmit, UserModel
+from rombel import anggota_rombel_ids, kelas_perwalian, rombel_siswa_di_semester, semester_aktif_id
 from routers._shared import ADMIN_DATA_MASTER, FILTER_SISWA_AKTIF, compute_completeness, compute_completeness_siswa, user_can_view_class
 
 router = APIRouter()
@@ -60,20 +61,40 @@ async def list_students(
     BROAD_VISIBILITY_ROLES = {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan', 'unit_kesehatan', 'unit_pelayanan', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'}
     has_broad_visibility = 'admin' in user.get('roles', []) or bool(set(user.get('roles', [])) & BROAD_VISIBILITY_ROLES)
 
-    q = {'roles': 'siswa'}
+    # Semester yang sedang dilihat (Mode Lihat per pengguna). Semester lampau = tampilan riwayat:
+    # siswa beserta rombelnya PADA semester itu, termasuk yang kini sudah naik/lulus/pindah.
+    ctx = await get_active_context(user)
+    sem_id = ctx.get('semester_id')
+    aktif_id = await semester_aktif_id()
+    lampau = bool(sem_id and aktif_id and sem_id != aktif_id)
+
+    q: Dict[str, Any] = {'roles': 'siswa'}
+    if not class_id and not has_broad_visibility:
+        cls = await kelas_perwalian(user, sem_id, {'_id': 0, 'id': 1})
+        if not cls:
+            return []
+        class_id = cls['id']
     if class_id:
         if not await user_can_view_class(user, class_id):
             raise HTTPException(403, "Tidak diizinkan melihat siswa kelas ini")
-        q['student_class_id'] = class_id
-    elif not has_broad_visibility:
-        cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
-        if cls:
-            q['student_class_id'] = cls['id']
-        else:
-            return []
-    if not include_inactive:
+        cls_doc = await db.classes.find_one({'id': class_id}, {'_id': 0})
+        q['id'] = {'$in': await anggota_rombel_ids(cls_doc, aktif_id)} if cls_doc else {'$in': []}
+    elif lampau:
+        kelas_ids = [c['id'] for c in await db.classes.find({'semester_id': sem_id}, {'_id': 0, 'id': 1}).to_list(1000)]
+        ids = set(await db.class_history.distinct('student_id', {'class_id': {'$in': kelas_ids}, 'reason': {'$nin': ['lulus', 'mutasi_keluar']}}))
+        ids |= {u['id'] async for u in db.users.find({'roles': 'siswa', 'student_class_id': {'$in': kelas_ids}}, {'_id': 0, 'id': 1})}
+        q['id'] = {'$in': list(ids)}
+    if not include_inactive and not lampau:
         q.update(FILTER_SISWA_AKTIF)
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('full_name', 1).to_list(2000)
+    rombel_konteks = await rombel_siswa_di_semester([s['id'] for s in items], sem_id) if sem_id else {}
+    for s in items:
+        r = rombel_konteks.get(s['id'])
+        s['rombel_semester_ini'] = bool(r)
+        if lampau:
+            # Tampilkan rombel siswa pada semester yang dilihat; rombel saat ini tetap tersedia.
+            s['student_class_id_saat_ini'] = s.get('student_class_id')
+            s['student_class_id'] = r['id'] if r else None
     student_ids = [s['id'] for s in items if s.get('id')]
     details = await db.student_details.find({'student_id': {'$in': student_ids}}, {'_id': 0}).to_list(2000)
     detail_map = {d['student_id']: d for d in details}

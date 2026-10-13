@@ -27,7 +27,9 @@ def _reviewer_role(user: Dict) -> Optional[str]:
 
 
 async def _wali_kelas_student_ids(user: Dict) -> List[str]:
-    cls_id = user.get('homeroom_class_id')
+    from rombel import kelas_perwalian
+    cls = await kelas_perwalian(user, projection={'_id': 0, 'id': 1})
+    cls_id = cls['id'] if cls else user.get('homeroom_class_id')
     if not cls_id:
         return []
     students = await db.users.find(
