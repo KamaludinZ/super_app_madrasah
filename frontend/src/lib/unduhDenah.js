@@ -1,3 +1,4 @@
+import { hariIniWIB } from '@/lib/tanggal';
 // Unduh denah sekolah (semua peran): denah kosong (berkas asli) atau denah dengan penanda.
 // Versi berpenanda disusun di browser (canvas): titik penanda hanya berlabel KODE ruang, dan
 // keterangan "kode — nama ruang" ditempatkan di tepi kanan denah.
@@ -35,7 +36,7 @@ const unduhBlob = async (blob, nama) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-const tanggalBerkas = () => new Date().toISOString().slice(0, 10);
+const tanggalBerkas = () => hariIniWIB();
 const EKSTENSI = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 
 // Urutkan penanda menurut kode ruang (alami: R-2 sebelum R-10); penanda tanpa kode di akhir.

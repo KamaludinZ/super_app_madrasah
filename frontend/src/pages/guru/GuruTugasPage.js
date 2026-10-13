@@ -29,12 +29,12 @@ import {
 } from '@/components/ui/select';
 import { Loader2, ClipboardList, Calendar, Plus, Edit, Trash2, ChevronDown, ChevronRight, Eye, Download, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Editor } from '@tinymce/tinymce-react';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIBPanjang, parseServerDate } from '@/lib/datetime';
 
 const GuruTugasPage = () => {
   const [loading, setLoading] = useState(true);
@@ -159,7 +159,7 @@ const GuruTugasPage = () => {
       let deadlineFormatted = '';
       if (tugas.deadline) {
         try {
-          const date = new Date(tugas.deadline);
+          const date = parseServerDate(tugas.deadline);
           deadlineFormatted = format(date, "yyyy-MM-dd'T'HH:mm");
         } catch (e) {
           console.error('Error formatting deadline:', e);
@@ -308,7 +308,7 @@ const GuruTugasPage = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: id });
+      return formatWIBPanjang(dateString);
     } catch {
       return dateString;
     }
@@ -485,9 +485,7 @@ const GuruTugasPage = () => {
                   <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {format(new Date(tugas.created_at), 'dd MMMM yyyy, HH:mm', {
-                        locale: id,
-                      })}
+                      {formatWIBPanjang(tugas.created_at)}
                     </div>
                     {tugas.subject_name && (
                       <span className="text-blue-600 font-medium">

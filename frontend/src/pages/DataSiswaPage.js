@@ -22,6 +22,7 @@ import KelengkapanPopover from '@/components/students/KelengkapanPopover';
 import ExportTemplateButton from '@/components/students/ExportTemplateButton';
 import { KOLOM_DATA_SISWA } from '@/lib/dataSiswaKolom';
 import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
+import { formatWIB } from '@/lib/datetime';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
@@ -316,7 +317,7 @@ export default function DataSiswaPage() {
                       </TableCell>
                       <TableCell className="text-sm">{s.birth_place || '-'}</TableCell>
                       <TableCell className="text-sm">
-                        {s.birth_date ? new Date(s.birth_date).toLocaleDateString('id-ID', {
+                        {s.birth_date ? formatWIB(s.birth_date, 'Date', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric'

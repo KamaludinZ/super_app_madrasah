@@ -8,6 +8,7 @@ Mendukung dua format:
 import io
 import re
 from datetime import date, datetime
+from journal_core import now_wib
 from typing import Any, Dict, List, Optional
 
 from openpyxl import load_workbook
@@ -133,7 +134,7 @@ _POLA_TD = re.compile(r'^\d{2,3}\s*/\s*\d{2,3}$')
 def validasi_baris_ckg(data: Dict[str, str], hari_ini: Optional[str] = None) -> List[Dict[str, str]]:
     """Daftar kesalahan [{kolom, pesan}] satu baris impor CKG; kosong = valid.
     Aturan & pesan identik dengan frontend (lib/ckgImpor.js) agar pratinjau = hasil server."""
-    hari_ini = hari_ini or datetime.utcnow().date().isoformat()
+    hari_ini = hari_ini or now_wib().date().isoformat()
     salah: List[Dict[str, str]] = []
     nik = data.get('nik') or ''
     if not data.get('pasien_id') and not nik:

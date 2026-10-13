@@ -39,13 +39,12 @@ import {
   Eye,
   Download
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Editor } from '@tinymce/tinymce-react';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIBPanjang } from '@/lib/datetime';
 
 const GuruMateriPage = () => {
   const [loading, setLoading] = useState(true);
@@ -278,7 +277,7 @@ const GuruMateriPage = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: id });
+      return formatWIBPanjang(dateString);
     } catch {
       return dateString;
     }
@@ -455,9 +454,7 @@ const GuruMateriPage = () => {
                   <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {format(new Date(materi.created_at), 'dd MMMM yyyy, HH:mm', {
-                        locale: id,
-                      })}
+                      {formatWIBPanjang(materi.created_at)}
                     </div>
                     {materi.subject_name && (
                       <span className="text-green-600 font-medium">

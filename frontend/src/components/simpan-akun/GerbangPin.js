@@ -7,6 +7,7 @@ import { Loader2, LockKeyhole, ShieldCheck, ShieldAlert, Clock, RotateCcw } from
 import { toast } from 'sonner';
 import { statusPin, buatPin, verifikasiPin, pinValid, alasanPinLemah, BATAS_PERCOBAAN_PIN } from '@/lib/simpanAkun';
 import LupaPinDialog from '@/components/simpan-akun/LupaPinDialog';
+import { formatWIB } from '@/lib/datetime';
 
 // Slot PIN: tersamar (titik) kecuali pengguna memilih menampilkan angka.
 function SlotPin({ index, lihat }) {
@@ -132,7 +133,7 @@ export default function GerbangPin({ onTerbuka }) {
   const infoReset = resetDiminta ? (
     <p className="flex items-center justify-center gap-1.5 text-xs text-amber-700" data-testid="pin-reset-diminta">
       <Clock className="h-3.5 w-3.5" />
-      Permintaan reset dikirim {new Date(resetDiminta).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} — menunggu admin.
+      Permintaan reset dikirim {formatWIB(resetDiminta, 'Date', { day: 'numeric', month: 'long', year: 'numeric' })} — menunggu admin.
     </p>
   ) : (
     <Button variant="link" size="sm" className="text-slate-600" onClick={() => setDialogLupa(true)} data-testid="pin-lupa">
@@ -183,7 +184,7 @@ export default function GerbangPin({ onTerbuka }) {
         {buat && status.direset_pada && (
           <p className="flex items-start gap-2 rounded-md bg-sky-50 px-3 py-2 text-left text-xs text-sky-800" data-testid="pin-sudah-direset">
             <RotateCcw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            PIN Anda telah direset admin pada {new Date(status.direset_pada).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}.
+            PIN Anda telah direset admin pada {formatWIB(status.direset_pada, 'Date', { day: 'numeric', month: 'long', year: 'numeric' })}.
             Buat PIN baru — akun yang tersimpan tetap utuh.
           </p>
         )}

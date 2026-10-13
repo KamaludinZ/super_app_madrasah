@@ -1,5 +1,6 @@
 import io
 from datetime import datetime
+from journal_core import now_wib
 from typing import Any, Dict, List
 
 from reportlab.lib import colors
@@ -27,7 +28,7 @@ def _kop_surat(story, styles, settings: Dict[str, Any], title: str):
 
 
 def _signature_block(story, city_label: str, kepala_madrasah: Dict[str, str], penyusun_label: str, penyusun: Dict[str, str]):
-    today_str = datetime.now().strftime("%d %B %Y")
+    today_str = now_wib().strftime("%d %B %Y")
     sign_data = [
         ["Mengetahui,", f"{city_label}, {today_str}"],
         ["Kepala Madrasah", penyusun_label],

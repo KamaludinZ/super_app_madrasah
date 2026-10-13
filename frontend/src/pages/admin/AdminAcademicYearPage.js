@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 export default function AdminAcademicYearPage() {
   const [items, setItems] = useState([]);
@@ -122,7 +123,7 @@ export default function AdminAcademicYearPage() {
               </TableCell>
               <TableCell className="text-xs text-slate-600">
                 {ay.start_date && ay.end_date ? (
-                  <>{new Date(ay.start_date).toLocaleDateString('id-ID')} - {new Date(ay.end_date).toLocaleDateString('id-ID')}</>
+                  <>{formatWIB(ay.start_date, 'Date')} - {formatWIB(ay.end_date, 'Date')}</>
                 ) : '-'}
               </TableCell>
               <TableCell>{ay.is_active ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge> : <Badge variant="outline">Arsip</Badge>}</TableCell>

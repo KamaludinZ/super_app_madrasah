@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { AlertTriangle, Clock, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { formatWIB } from '@/lib/datetime';
 
 export function DeadlineWarningDialog({ open, onOpenChange, deadlineInfo, onConfirm, onCancel }) {
   if (!deadlineInfo) return null;
@@ -47,19 +48,19 @@ export function DeadlineWarningDialog({ open, onOpenChange, deadlineInfo, onConf
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-600">Jam Pelajaran Berakhir:</span>
                   <Badge variant="outline" className="text-xs">
-                    {scheduleEnd ? new Date(scheduleEnd).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    {formatWIB(scheduleEnd, 'Time', { hour: '2-digit', minute: '2-digit' })}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-600">Deadline Pengisian:</span>
                   <Badge variant="outline" className="text-xs">
-                    {deadline ? new Date(deadline).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    {deadline ? formatWIB(deadline, 'Time', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-600">Grace Period Hingga:</span>
                   <Badge variant="outline" className="text-xs">
-                    {graceDeadline ? new Date(graceDeadline).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    {graceDeadline ? formatWIB(graceDeadline, 'Time', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </Badge>
                 </div>
               </div>

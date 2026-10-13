@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import StudentDetailDialog from '@/components/students/StudentDetailDialog';
 import StudentAccountInfoDialog from '@/components/students/StudentAccountInfoDialog';
+import { formatWIB } from '@/lib/datetime';
 
 export default function WakaKurSiswaPage() {
   const { activeRole, user } = useAuth();
@@ -179,7 +180,7 @@ export default function WakaKurSiswaPage() {
                       </TableCell>
                       <TableCell className="text-sm">{s.birth_place || '-'}</TableCell>
                       <TableCell className="text-sm">
-                        {s.birth_date ? new Date(s.birth_date).toLocaleDateString('id-ID', {
+                        {s.birth_date ? formatWIB(s.birth_date, 'Date', {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric'

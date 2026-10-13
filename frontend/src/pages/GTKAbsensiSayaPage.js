@@ -19,8 +19,8 @@ function todayISO() {
   return hariIniWIB();
 }
 function firstOfMonthISO() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  // Tanggal 1 bulan ini menurut WIB (toISOString() menggeser tengah malam WIB ke tanggal kemarin)
+  return `${hariIniWIB().slice(0, 8)}01`;
 }
 
 const IZIN_LABELS = { sakit: 'Sakit', cuti: 'Cuti', dinas_luar: 'Dinas Luar', lainnya: 'Lainnya' };

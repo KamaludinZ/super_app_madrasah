@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
 import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
+import { formatWIB } from '@/lib/datetime';
 
 export default function WaliKelasJurnalKelasPage() {
   const { user } = useAuth();
@@ -125,7 +126,7 @@ export default function WaliKelasJurnalKelasPage() {
     if (!data.items.length) return;
 
     const excelData = data.items.map((j) => ({
-      'Tanggal': new Date(j.started_at).toLocaleString('id-ID'),
+      'Tanggal': formatWIB(j.started_at, ''),
       'JTM': j.jtm_count || 1,
       'Mapel': j.subject_name || '-',
       'Guru': j.teacher_name || '-',
@@ -171,7 +172,7 @@ export default function WaliKelasJurnalKelasPage() {
     if (!data.items.length) return;
     const headers = ['Tanggal', 'JTM', 'Mapel', 'Guru', 'Ruang', 'KD/Indikator', 'Materi/Pokok Bahasan (Terdaftar)', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Detail Kehadiran Siswa'];
     const rows = data.items.map((j) => [
-      new Date(j.started_at).toLocaleString('id-ID'), j.jtm_count || 1, j.subject_name, j.teacher_name, j.room_name,
+      formatWIB(j.started_at, ''), j.jtm_count || 1, j.subject_name, j.teacher_name, j.room_name,
       JSON.stringify(j.kd_indikator || ''), JSON.stringify(j.materi_nama || ''), JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
       JSON.stringify(formatAttendanceDetail(j)),
     ]);
@@ -299,7 +300,7 @@ export default function WaliKelasJurnalKelasPage() {
                     ) : (
                       data.items.map((j) => (
                         <TableRow key={j.id}>
-                          <TableCell className="text-xs">{new Date(j.started_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
+                          <TableCell className="text-xs">{formatWIB(j.started_at, '', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
                           <TableCell className="text-center">{j.jtm_count || 1}</TableCell>
                           <TableCell className="text-sm">{j.subject_name}</TableCell>
                           <TableCell className="text-sm">{j.teacher_name}</TableCell>
@@ -384,7 +385,7 @@ export default function WaliKelasJurnalKelasPage() {
           {detailDialog.journal && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div><Label className="text-xs text-slate-500">Tanggal & Waktu</Label><div className="font-medium">{new Date(detailDialog.journal.started_at).toLocaleString('id-ID')}</div></div>
+                <div><Label className="text-xs text-slate-500">Tanggal & Waktu</Label><div className="font-medium">{formatWIB(detailDialog.journal.started_at, '')}</div></div>
                 <div><Label className="text-xs text-slate-500">JTM</Label><div className="font-medium">{detailDialog.journal.jtm_count || 1}</div></div>
                 <div><Label className="text-xs text-slate-500">Kelas</Label><div className="font-medium">{detailDialog.journal.class_name}</div></div>
                 <div><Label className="text-xs text-slate-500">Mapel</Label><div className="font-medium">{detailDialog.journal.subject_name}</div></div>

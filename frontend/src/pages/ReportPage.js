@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 const TYPE_OPTIONS = [
   { value: 'sarana_prasarana', label: 'Sarana & Prasarana', color: 'bg-orange-100 text-orange-700 border-orange-300' },
@@ -203,7 +204,7 @@ export default function ReportPage() {
                     <h3 className="font-semibold text-slate-900 mb-1">{r.title}</h3>
                     <p className="text-sm text-slate-600 line-clamp-2">{r.description}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
-                      <span>{new Date(r.reported_at).toLocaleString('id-ID')}</span>
+                      <span>{formatWIB(r.reported_at, '')}</span>
                       {r.class_name && <span>• Kelas: {r.class_name}</span>}
                       {r.student_name && <span>• Siswa: {r.student_name}</span>}
                       {r.location && <span>• Lokasi: {r.location}</span>}
@@ -397,7 +398,7 @@ export default function ReportPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Tanggal Laporan</Label>
-                  <p className="text-sm">{new Date(selectedReport.reported_at).toLocaleString('id-ID')}</p>
+                  <p className="text-sm">{formatWIB(selectedReport.reported_at, '')}</p>
                 </div>
               </div>
 
@@ -434,7 +435,7 @@ export default function ReportPage() {
                   {selectedReport.reviewer_name && (
                     <p className="text-xs text-slate-500 mt-2">
                       Ditanggapi oleh: {selectedReport.reviewer_name}
-                      {selectedReport.reviewed_at && ` pada ${new Date(selectedReport.reviewed_at).toLocaleString('id-ID')}`}
+                      {selectedReport.reviewed_at && ` pada ${formatWIB(selectedReport.reviewed_at, '')}`}
                     </p>
                   )}
                 </div>

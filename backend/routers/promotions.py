@@ -1,5 +1,6 @@
 """Promotions - Naik kelas, pindah semester, dan kelulusan siswa."""
 from datetime import datetime
+from journal_core import now_wib
 from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -39,7 +40,7 @@ async def promote_class(
 
     success_count = 0
     errors = []
-    today = datetime.utcnow().strftime('%Y-%m-%d')
+    today = now_wib().strftime('%Y-%m-%d')
 
     for student_id in payload.student_ids:
         try:
@@ -126,7 +127,7 @@ async def move_semester(
 
     success_count = 0
     errors = []
-    today = datetime.utcnow().strftime('%Y-%m-%d')
+    today = now_wib().strftime('%Y-%m-%d')
 
     for student_id in payload.student_ids:
         try:
@@ -213,7 +214,7 @@ async def graduate_students(
 
     success_count = 0
     errors = []
-    today = datetime.utcnow().strftime('%Y-%m-%d')
+    today = now_wib().strftime('%Y-%m-%d')
 
     # For certificate numbering
     cert_counter = 1

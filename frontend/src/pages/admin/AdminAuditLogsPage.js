@@ -6,6 +6,7 @@ import { ShieldCheck, Activity, Lock, AlertTriangle, Search } from 'lucide-react
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
+import { formatWIB } from '@/lib/datetime';
 
 export default function AdminAuditLogsPage() {
   const [audit, setAudit] = useState([]);
@@ -95,7 +96,7 @@ export default function AdminAuditLogsPage() {
                 {filteredErrors.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">{searchErrors ? 'Tidak ada hasil pencarian' : 'Belum ada error tercatat'}</TableCell></TableRow> :
                   filteredErrors.map((l) => (
                     <TableRow key={l.id} className="bg-rose-50/50">
-                      <TableCell className="font-mono text-xs whitespace-nowrap">{new Date(l.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{formatWIB(l.timestamp, '', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
                       <TableCell><Badge className="bg-rose-100 text-rose-700 border-rose-300 font-mono text-xs">{l.details?.error_type || 'Unknown'}</Badge></TableCell>
                       <TableCell className="text-sm max-w-xs truncate" title={l.details?.message}>{l.details?.message || '-'}</TableCell>
                       <TableCell className="text-xs font-mono">{l.details?.path || '-'}</TableCell>
@@ -133,7 +134,7 @@ export default function AdminAuditLogsPage() {
                 {filteredAudit.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">{searchAudit ? 'Tidak ada hasil pencarian' : 'Belum ada log'}</TableCell></TableRow> :
                   filteredAudit.map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell className="font-mono text-xs whitespace-nowrap">{new Date(l.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{formatWIB(l.timestamp, '', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
                       <TableCell className="text-sm">{l.username || '-'}</TableCell>
                       <TableCell><Badge variant="outline" className="capitalize">{l.action}</Badge></TableCell>
                       <TableCell className="text-sm">{l.entity}</TableCell>
@@ -168,7 +169,7 @@ export default function AdminAuditLogsPage() {
                     const isWarn = ['login_failed', 'locked', 'locked_attempt', 'captcha_failed', 'journal_blocked'].includes(l.event_type);
                     return (
                       <TableRow key={l.id}>
-                        <TableCell className="font-mono text-xs whitespace-nowrap">{new Date(l.timestamp).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
+                        <TableCell className="font-mono text-xs whitespace-nowrap">{formatWIB(l.timestamp, '', { dateStyle: 'short', timeStyle: 'medium' })}</TableCell>
                         <TableCell><Badge className={isWarn ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}>{l.event_type}</Badge></TableCell>
                         <TableCell className="text-sm">{l.username || '-'}</TableCell>
                         <TableCell className="text-xs font-mono max-w-xs truncate">{JSON.stringify(l.details || {})}</TableCell>

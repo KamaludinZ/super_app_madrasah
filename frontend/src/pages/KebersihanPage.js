@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { formatWIB } from '@/lib/datetime';
 
 const CONDITION_OPTIONS = [
   { value: 'bersih', label: 'Bersih', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
@@ -472,7 +473,7 @@ export default function KebersihanPage() {
                           </TableCell>
                           <TableCell className="text-center text-xs">{h.piket_students?.length || 0}</TableCell>
                           <TableCell className="text-xs text-slate-500">
-                            {h.recorded_at ? new Date(h.recorded_at).toLocaleString('id-ID', {
+                            {h.recorded_at ? formatWIB(h.recorded_at, '', {
                               day: '2-digit',
                               month: 'short',
                               hour: '2-digit',
@@ -539,7 +540,7 @@ export default function KebersihanPage() {
               <div>
                 <Label className="text-xs text-slate-500">Waktu Input</Label>
                 <p className="text-sm">
-                  {detailDialog.data.recorded_at ? new Date(detailDialog.data.recorded_at).toLocaleString('id-ID', {
+                  {detailDialog.data.recorded_at ? formatWIB(detailDialog.data.recorded_at, '', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',

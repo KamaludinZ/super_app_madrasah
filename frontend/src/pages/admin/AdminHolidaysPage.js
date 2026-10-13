@@ -17,6 +17,7 @@ import {
 import { api, DAY_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { hariIniWIB } from '@/lib/tanggal';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
 const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -379,8 +380,7 @@ function MonthCalendar({ year, month, holidaysByDate, onAddDate }) {
   const lastDay = new Date(year, month + 1, 0);
   const startOffset = firstDay.getDay(); // 0=Sun
   const daysInMonth = lastDay.getDate();
-  const today = new Date();
-  const todayKey = today.toISOString().slice(0, 10);
+  const todayKey = hariIniWIB();
 
   const cells = [];
   for (let i = 0; i < startOffset; i++) cells.push(null);

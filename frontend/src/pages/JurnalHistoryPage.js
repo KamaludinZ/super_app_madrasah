@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 import FilledByCell, { filledByText } from '@/components/guru-pengganti/FilledByCell';
 import { groupSideBySideJournals } from '@/lib/guruPengganti';
 import { hariIniWIB } from '@/lib/tanggal';
+import { formatWIB, wibDateKey } from '@/lib/datetime';
 
 // Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
 // "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
@@ -139,13 +140,12 @@ export default function JurnalHistoryPage() {
     let filtered = [...items];
 
     // Filter by date range
+    // Bandingkan tanggal kalender WIB (YYYY-MM-DD), bukan instan UTC
     if (filterDateStart) {
-      filtered = filtered.filter(j => new Date(j.started_at) >= new Date(filterDateStart));
+      filtered = filtered.filter(j => wibDateKey(j.started_at) >= filterDateStart);
     }
     if (filterDateEnd) {
-      const endDate = new Date(filterDateEnd);
-      endDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(j => new Date(j.started_at) <= endDate);
+      filtered = filtered.filter(j => wibDateKey(j.started_at) <= filterDateEnd);
     }
 
     // Filter by class
@@ -183,7 +183,7 @@ export default function JurnalHistoryPage() {
       const exportData = filteredItems.map((j, index) => {
         const base = {
           'No': index + 1,
-          'Tanggal': new Date(j.started_at).toLocaleString('id-ID', {
+          'Tanggal': formatWIB(j.started_at, '', {
             dateStyle: 'medium',
             timeStyle: 'short'
           }),
@@ -513,7 +513,7 @@ export default function JurnalHistoryPage() {
                       <TableCell>
                         <div className="text-sm">
                           <div className="font-medium text-slate-900">
-                            {new Date(j.started_at).toLocaleDateString('id-ID', {
+                            {formatWIB(j.started_at, 'Date', {
                               day: 'numeric',
                               month: 'short',
                               year: 'numeric'
@@ -521,7 +521,7 @@ export default function JurnalHistoryPage() {
                           </div>
                           <div className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
                             <Clock className="h-3 w-3" />
-                            {new Date(j.started_at).toLocaleTimeString('id-ID', {
+                            {formatWIB(j.started_at, 'Time', {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
@@ -653,14 +653,14 @@ export default function JurnalHistoryPage() {
                     <div className="col-span-2">
                       <div className="text-xs text-slate-500 mb-1">Tanggal & Waktu</div>
                       <div className="font-medium">
-                        {new Date(selectedJournal.started_at).toLocaleDateString('id-ID', {
+                        {formatWIB(selectedJournal.started_at, 'Date', {
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric'
                         })}
                         {' '}
                         <span className="text-slate-600">
-                          {new Date(selectedJournal.started_at).toLocaleTimeString('id-ID', {
+                          {formatWIB(selectedJournal.started_at, 'Time', {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
@@ -893,7 +893,7 @@ export default function JurnalHistoryPage() {
                 <div>
                   <div className="text-xs text-slate-500">Tanggal & Waktu</div>
                   <div className="font-semibold text-sm">
-                    {new Date(editJournal.started_at).toLocaleString('id-ID', {
+                    {formatWIB(editJournal.started_at, '', {
                       dateStyle: 'long',
                       timeStyle: 'short'
                     })}

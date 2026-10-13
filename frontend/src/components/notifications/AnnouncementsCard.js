@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { formatWIB } from '@/lib/datetime';
 
 const SEVERITY_STYLES = {
   info: 'bg-sky-50 border-sky-200 text-sky-900',
@@ -17,7 +18,7 @@ const SEVERITY_STYLES = {
 function relativeDate(iso) {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    return formatWIB(iso, 'Date', { day: '2-digit', month: 'long', year: 'numeric' }, iso);
   } catch { return iso; }
 }
 
