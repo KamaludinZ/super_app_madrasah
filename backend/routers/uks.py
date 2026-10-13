@@ -24,6 +24,7 @@ from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
 from ckg_kolom import KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, kolom_template_ckg, lengkapi_identitas_ckg, pemeriksaan_lain
 from core import db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
+from journal_core import now_wib
 from routers._shared import sembunyikan_siswa_nonaktif
 
 router = APIRouter()
@@ -275,6 +276,20 @@ async def ensure_uks_bmhp_indexes(database) -> List[str]:
     ])
 
 
+async def ensure_uks_obat_indexes(database) -> List[str]:
+    """Index katalog obat (idempotent). nama_key unik mencegah nama obat ganda; index
+    parsial agar dokumen lama yang belum punya nama_key (diisi migrasi otomatis) tidak
+    bentrok. Bila data lama masih ganda, index unik gagal dibuat (dicatat di log) dan
+    berhasil pada start berikutnya setelah data digabung lewat menu Obat."""
+    return await _create_indexes_safely(database, [
+        ('uks_obat', 'id', {'unique': True}),
+        ('uks_obat', 'nama_key', {'unique': True, 'name': 'nama_key_unik',
+                                  'partialFilterExpression': {'nama_key': {'$type': 'string'}}}),
+        ('uks_obat_masuk', [('obat_id', 1), ('tanggal_kadaluarsa', 1)], {}),
+        ('uks_obat_keluar', 'kunjungan_id', {}),
+    ])
+
+
 async def ensure_uks_diagnosa_indexes(database) -> List[str]:
     """Index master diagnosa, riwayat kunjungan/CKG, dan filter periode laporan
     (idempotent). Setiap index dibuat terpisah agar satu kegagalan (mis. nama diagnosa
@@ -389,32 +404,142 @@ async def _get_obat_or_404(obat_id: str):
     return doc
 
 
-async def _get_obat_stock_summary(obat_id: str) -> Dict:
-    """Aggregate remaining stock and nearest expiry across all Obat Masuk
-    batches for one medicine. Stock and expiry are derived here, never stored
-    on the uks_obat catalog record."""
-    batches = await db.uks_obat_masuk.find(
-        {'obat_id': obat_id, 'stok_sisa': {'$gt': 0}}, {'_id': 0}
-    ).sort('tanggal_kadaluarsa', 1).to_list(1000)
+# ------------------------------------------------------------
+# STOK PER BATCH: FEFO lalu FIFO, batch kadaluarsa dikunci
+# ------------------------------------------------------------
+# Tiap Obat/BMHP Masuk adalah satu batch dengan stok_sisa sendiri. Saat dipakai,
+# stok dipotong dari batch yang kadaluarsanya paling dekat (FEFO); bila tanggal
+# kadaluarsanya sama, batch yang masuk lebih dulu dipakai dulu (FIFO). Batch tanpa
+# tanggal kadaluarsa dipakai paling akhir. Batch yang SUDAH kadaluarsa tidak pernah
+# dipotong: stoknya tetap tercatat sebagai stok_kadaluarsa, bukan stok layak pakai.
 
-    stok_tersisa = sum(b.get('stok_sisa', 0) for b in batches)
-    stok_masuk_total = await db.uks_obat_masuk.aggregate([
-        {'$match': {'obat_id': obat_id}},
+SEGERA_KADALUARSA_HARI = 30
+
+
+def _hari_ini_wib() -> str:
+    return now_wib().strftime('%Y-%m-%d')
+
+
+def _batch_kadaluarsa(batch: Dict, hari_ini: str) -> bool:
+    """Kadaluarsa bila tanggal kadaluarsanya sebelum hari ini (hari-H masih boleh dipakai)."""
+    ed = (batch.get('tanggal_kadaluarsa') or '')[:10]
+    return bool(ed) and ed < hari_ini
+
+
+def _urut_fefo(batches: List[Dict]) -> List[Dict]:
+    return sorted(batches, key=lambda b: (
+        not b.get('tanggal_kadaluarsa'),
+        b.get('tanggal_kadaluarsa') or '',
+        b.get('tanggal') or '',
+        b.get('created_at') or '',
+    ))
+
+
+async def _batch_berstok(masuk_coll, id_field: str, item_id: str) -> List[Dict]:
+    return _urut_fefo(await masuk_coll.find({id_field: item_id, 'stok_sisa': {'$gt': 0}}, {'_id': 0}).to_list(1000))
+
+
+async def _ringkasan_stok(masuk_coll, id_field: str, item_id: str) -> Dict:
+    """Ringkasan stok satu Obat/BMHP dari batch-batchnya (tidak disimpan di katalog).
+    stok_tersisa = stok LAYAK PAKAI (tanpa batch kadaluarsa)."""
+    hari_ini = _hari_ini_wib()
+    batas_segera = (now_wib() + timedelta(days=SEGERA_KADALUARSA_HARI)).strftime('%Y-%m-%d')
+    batches = await _batch_berstok(masuk_coll, id_field, item_id)
+    layak = [b for b in batches if not _batch_kadaluarsa(b, hari_ini)]
+    basi = [b for b in batches if _batch_kadaluarsa(b, hari_ini)]
+
+    stok_tersisa = sum(b.get('stok_sisa', 0) for b in layak)
+    stok_kadaluarsa = sum(b.get('stok_sisa', 0) for b in basi)
+    total = await masuk_coll.aggregate([
+        {'$match': {id_field: item_id}},
         {'$group': {'_id': None, 'total': {'$sum': '$jumlah'}}},
     ]).to_list(1)
-    stok_masuk = stok_masuk_total[0]['total'] if stok_masuk_total else 0
-    stok_terpakai = stok_masuk - stok_tersisa
-
-    with_expiry = [b for b in batches if b.get('tanggal_kadaluarsa')]
-    tanggal_kadaluarsa_terdekat = with_expiry[0]['tanggal_kadaluarsa'] if with_expiry else None
+    stok_masuk = total[0]['total'] if total else 0
+    ed_terdekat = next((b['tanggal_kadaluarsa'] for b in layak if b.get('tanggal_kadaluarsa')), None)
 
     return {
         'stok_masuk': stok_masuk,
-        'stok_terpakai': stok_terpakai,
+        'stok_terpakai': stok_masuk - stok_tersisa - stok_kadaluarsa,
         'stok_tersisa': stok_tersisa,
-        'tanggal_kadaluarsa_terdekat': tanggal_kadaluarsa_terdekat,
-        'jumlah_batch_aktif': len(batches),
+        'stok_kadaluarsa': stok_kadaluarsa,
+        'jumlah_batch_kadaluarsa': len(basi),
+        'tanggal_kadaluarsa_terdekat': ed_terdekat,
+        'segera_kadaluarsa': bool(ed_terdekat and ed_terdekat[:10] <= batas_segera),
+        'jumlah_batch_aktif': len(layak),
+        # Urutan batch yang akan dipotong (FEFO lalu FIFO) — untuk petunjuk di form.
+        'batch_layak': [
+            {'id': b['id'], 'tanggal': b.get('tanggal'), 'tanggal_kadaluarsa': b.get('tanggal_kadaluarsa'),
+             'stok_sisa': b.get('stok_sisa', 0)}
+            for b in layak
+        ],
     }
+
+
+async def _potong_stok_fefo(masuk_coll, id_field: str, item_id: str, jumlah: int, nama: str) -> List[Dict]:
+    """Potong stok dari batch layak pakai (FEFO lalu FIFO) -> batch_alokasi [{masuk_id, jumlah}].
+    Tiap potongan bersyarat (stok_sisa >= potongan) sehingga dua petugas yang menyimpan
+    bersamaan tidak membuat stok minus; bila stok tidak cukup, potongan yang sudah
+    terjadi dikembalikan dan permintaan ditolak."""
+    hari_ini = _hari_ini_wib()
+    alokasi: Dict[str, int] = {}
+    sisa = jumlah
+    for _ in range(5):
+        batches = [b for b in await _batch_berstok(masuk_coll, id_field, item_id) if not _batch_kadaluarsa(b, hari_ini)]
+        if sum(b.get('stok_sisa', 0) for b in batches) < sisa:
+            break
+        for b in batches:
+            if sisa <= 0:
+                break
+            ambil = min(b.get('stok_sisa', 0), sisa)
+            if ambil <= 0:
+                continue
+            r = await masuk_coll.update_one({'id': b['id'], 'stok_sisa': {'$gte': ambil}}, {'$inc': {'stok_sisa': -ambil}})
+            if r.modified_count:
+                alokasi[b['id']] = alokasi.get(b['id'], 0) + ambil
+                sisa -= ambil
+        if sisa <= 0:
+            return [{'masuk_id': k, 'jumlah': v} for k, v in alokasi.items()]
+
+    for masuk_id, n in alokasi.items():
+        await masuk_coll.update_one({'id': masuk_id}, {'$inc': {'stok_sisa': n}})
+    tersedia = (await _ringkasan_stok(masuk_coll, id_field, item_id))['stok_tersisa']
+    raise HTTPException(400, f"Stok '{nama}' tidak mencukupi (stok layak pakai: {tersedia})")
+
+
+async def _kembalikan_ke_batch(masuk_coll, id_field: str, item_id: str, jumlah: int) -> None:
+    """Catatan lama tanpa batch_alokasi: kembalikan ke batch layak pakai terdekat yang
+    masih punya ruang, lalu batch mana pun yang punya ruang, lalu batch terakhir."""
+    batches = _urut_fefo(await masuk_coll.find({id_field: item_id}, {'_id': 0}).to_list(1000))
+    if not batches:
+        return
+    hari_ini = _hari_ini_wib()
+    ada_ruang = [b for b in batches if b.get('stok_sisa', 0) < b.get('jumlah', 0)]
+    target = next((b for b in ada_ruang if not _batch_kadaluarsa(b, hari_ini)), None) or (ada_ruang[0] if ada_ruang else batches[-1])
+    await masuk_coll.update_one({'id': target['id']}, {'$inc': {'stok_sisa': jumlah}})
+
+
+async def _stok_kembali_layak(keluar_coll, masuk_coll, id_field: str, kunjungan_id: str) -> Dict[str, int]:
+    """Jumlah per item yang akan kembali sebagai stok LAYAK PAKAI bila pemakaian lama
+    kunjungan ini dibatalkan (simpan ulang penanganan). Potongan dari batch yang kini
+    sudah kadaluarsa tidak dihitung."""
+    hari_ini = _hari_ini_wib()
+    entries = await keluar_coll.find({'kunjungan_id': kunjungan_id}, {'_id': 0}).to_list(500)
+    ids = list({a['masuk_id'] for e in entries for a in (e.get('batch_alokasi') or [])})
+    batch_map = {b['id']: b for b in await masuk_coll.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'tanggal_kadaluarsa': 1}).to_list(len(ids) + 1)}
+    hasil: Dict[str, int] = {}
+    for e in entries:
+        alokasi = e.get('batch_alokasi') or []
+        if alokasi:
+            n = sum(a['jumlah'] for a in alokasi
+                    if a['masuk_id'] in batch_map and not _batch_kadaluarsa(batch_map[a['masuk_id']], hari_ini))
+        else:
+            n = e.get('jumlah', 0)
+        hasil[e[id_field]] = hasil.get(e[id_field], 0) + n
+    return hasil
+
+
+async def _get_obat_stock_summary(obat_id: str) -> Dict:
+    return await _ringkasan_stok(db.uks_obat_masuk, 'obat_id', obat_id)
 
 
 async def _get_bmhp_or_404(bmhp_id: str):
@@ -425,27 +550,7 @@ async def _get_bmhp_or_404(bmhp_id: str):
 
 
 async def _get_bmhp_stock_summary(bmhp_id: str) -> Dict:
-    """Aggregate remaining stock and nearest expiry across all BMHP Masuk
-    batches for one BMHP — same derivation as _get_obat_stock_summary."""
-    batches = await db.uks_bmhp_masuk.find(
-        {'bmhp_id': bmhp_id, 'stok_sisa': {'$gt': 0}}, {'_id': 0}
-    ).sort('tanggal_kadaluarsa', 1).to_list(1000)
-
-    stok_tersisa = sum(b.get('stok_sisa', 0) for b in batches)
-    stok_masuk_total = await db.uks_bmhp_masuk.aggregate([
-        {'$match': {'bmhp_id': bmhp_id}},
-        {'$group': {'_id': None, 'total': {'$sum': '$jumlah'}}},
-    ]).to_list(1)
-    stok_masuk = stok_masuk_total[0]['total'] if stok_masuk_total else 0
-
-    with_expiry = [b for b in batches if b.get('tanggal_kadaluarsa')]
-    return {
-        'stok_masuk': stok_masuk,
-        'stok_terpakai': stok_masuk - stok_tersisa,
-        'stok_tersisa': stok_tersisa,
-        'tanggal_kadaluarsa_terdekat': with_expiry[0]['tanggal_kadaluarsa'] if with_expiry else None,
-        'jumlah_batch_aktif': len(batches),
-    }
+    return await _ringkasan_stok(db.uks_bmhp_masuk, 'bmhp_id', bmhp_id)
 
 
 def _clean_bmhp_request(req: BMHPRequest) -> Dict:
@@ -480,24 +585,10 @@ def _merge_bmhp_items(items) -> Dict[str, int]:
 
 
 async def _use_bmhp(bmhp: Dict, jumlah: int, kunjungan: Dict, pasien: Optional[Dict], user: Dict) -> Dict:
-    """Potong stok BMHP secara FEFO dari batch BMHP Masuk dan catat otomatis
+    """Potong stok BMHP (FEFO lalu FIFO, batch kadaluarsa dilewati) dari batch BMHP Masuk dan catat otomatis
     di uks_bmhp_keluar. Batch yang dipotong disimpan di batch_alokasi agar stok
     bisa dikembalikan tepat ke batch asal bila penanganan diubah/dihapus."""
-    batches = await db.uks_bmhp_masuk.find(
-        {'bmhp_id': bmhp['id'], 'stok_sisa': {'$gt': 0}}, {'_id': 0}
-    ).sort('tanggal_kadaluarsa', 1).to_list(1000)
-    # Batch tanpa tanggal kadaluarsa dipakai paling akhir.
-    batches.sort(key=lambda b: (b.get('tanggal_kadaluarsa') is None, b.get('tanggal_kadaluarsa') or ''))
-
-    remaining = jumlah
-    alokasi = []
-    for batch in batches:
-        if remaining <= 0:
-            break
-        take = min(batch['stok_sisa'], remaining)
-        await db.uks_bmhp_masuk.update_one({'id': batch['id']}, {'$inc': {'stok_sisa': -take}})
-        alokasi.append({'masuk_id': batch['id'], 'jumlah': take})
-        remaining -= take
+    alokasi = await _potong_stok_fefo(db.uks_bmhp_masuk, 'bmhp_id', bmhp['id'], jumlah, bmhp.get('nama_bmhp'))
 
     doc = {
         'id': str(uuid.uuid4()),
@@ -530,41 +621,21 @@ async def _revert_bmhp_keluar_for_kunjungan(kunjungan_id: str) -> None:
             for a in alokasi:
                 await db.uks_bmhp_masuk.update_one({'id': a['masuk_id']}, {'$inc': {'stok_sisa': a['jumlah']}})
         else:
-            # Catatan lama tanpa alokasi: kembalikan ke batch terdekat yang masih punya ruang.
-            batches = await db.uks_bmhp_masuk.find({'bmhp_id': entry['bmhp_id']}, {'_id': 0}).sort('tanggal_kadaluarsa', 1).to_list(1000)
-            if batches:
-                target = next((b for b in batches if b.get('stok_sisa', 0) < b.get('jumlah', 0)), batches[-1])
-                await db.uks_bmhp_masuk.update_one({'id': target['id']}, {'$inc': {'stok_sisa': entry.get('jumlah', 0)}})
+            await _kembalikan_ke_batch(db.uks_bmhp_masuk, 'bmhp_id', entry['bmhp_id'], entry.get('jumlah', 0))
     await db.uks_bmhp_keluar.delete_many({'kunjungan_id': kunjungan_id})
 
 
 async def _dispense_obat(obat_id: str, jumlah: int, tanggal: str, user: Dict,
                           kunjungan_id: Optional[str] = None, penerima: Optional[Dict] = None,
                           keterangan: Optional[str] = None) -> Dict:
-    """Record an obat-keluar entry and deduct stock FEFO (earliest expiry
-    batch first) across Obat Masuk batches. Shared by the manual Obat Keluar
+    """Record an obat-keluar entry and deduct stock FEFO then FIFO across Obat
+    Masuk batches (expired batches are never used). Shared by the manual Obat Keluar
     form and the Penanganan Kunjungan flow."""
     obat = await _get_obat_or_404(obat_id)
     if jumlah <= 0:
         raise HTTPException(400, "Jumlah harus lebih dari 0")
 
-    summary = await _get_obat_stock_summary(obat_id)
-    if summary['stok_tersisa'] < jumlah:
-        raise HTTPException(400, f"Stok '{obat.get('nama_obat')}' tidak mencukupi (tersedia: {summary['stok_tersisa']})")
-
-    batches = await db.uks_obat_masuk.find(
-        {'obat_id': obat_id, 'stok_sisa': {'$gt': 0}}, {'_id': 0}
-    ).sort('tanggal_kadaluarsa', 1).to_list(1000)
-
-    remaining = jumlah
-    alokasi = []
-    for batch in batches:
-        if remaining <= 0:
-            break
-        take = min(batch['stok_sisa'], remaining)
-        await db.uks_obat_masuk.update_one({'id': batch['id']}, {'$inc': {'stok_sisa': -take}})
-        alokasi.append({'masuk_id': batch['id'], 'jumlah': take})
-        remaining -= take
+    alokasi = await _potong_stok_fefo(db.uks_obat_masuk, 'obat_id', obat_id, jumlah, obat.get('nama_obat'))
 
     doc = {
         'id': str(uuid.uuid4()),
@@ -594,7 +665,7 @@ async def _restore_obat_keluar(entry: Dict):
         for a in alokasi:
             await db.uks_obat_masuk.update_one({'id': a['masuk_id']}, {'$inc': {'stok_sisa': a['jumlah']}})
     else:
-        await _restore_obat_stock(entry['obat_id'], entry.get('jumlah', 0))
+        await _kembalikan_ke_batch(db.uks_obat_masuk, 'obat_id', entry['obat_id'], entry.get('jumlah', 0))
 
 
 async def _revert_obat_keluar_for_kunjungan(kunjungan_id: str) -> None:
@@ -604,17 +675,6 @@ async def _revert_obat_keluar_for_kunjungan(kunjungan_id: str) -> None:
     for entry in entries:
         await _restore_obat_keluar(entry)
     await db.uks_obat_keluar.delete_many({'kunjungan_id': kunjungan_id})
-
-
-async def _restore_obat_stock(obat_id: str, jumlah: int):
-    """Reverse a dispense (e.g. when an obat-keluar entry is deleted) by
-    returning quantity to the batch with the nearest expiry that still has
-    room, or the most recent batch if all are exhausted."""
-    batches = await db.uks_obat_masuk.find({'obat_id': obat_id}, {'_id': 0}).sort('tanggal_kadaluarsa', 1).to_list(1000)
-    if not batches:
-        return
-    target = next((b for b in batches if b.get('stok_sisa', 0) < b.get('jumlah', 0)), batches[-1])
-    await db.uks_obat_masuk.update_one({'id': target['id']}, {'$inc': {'stok_sisa': jumlah}})
 
 
 # ============================================================
@@ -794,17 +854,43 @@ async def list_obat(search: Optional[str] = None, user: Dict = Depends(get_curre
     return enriched
 
 
+def _clean_obat_request(req: ObatRequest) -> Dict:
+    data = req.model_dump()
+    data['nama_obat'] = ' '.join((data.get('nama_obat') or '').split())
+    if not data['nama_obat']:
+        raise HTTPException(400, "Nama obat wajib diisi")
+    data['satuan'] = (data.get('satuan') or '').strip() or 'pcs'
+    if (data.get('stok_minimum') or 0) < 0:
+        raise HTTPException(400, "Stok minimum tidak boleh negatif")
+    data['stok_minimum'] = data.get('stok_minimum') or 0
+    data['nama_key'] = bmhp_nama_key(data['nama_obat'])
+    return data
+
+
+async def _ensure_obat_name_free(nama_key: str, exclude_id: Optional[str] = None):
+    """Tolak nama obat yang sudah terdaftar (beda huruf besar/kecil atau spasi dianggap sama).
+    Dokumen lama yang belum punya nama_key ikut dicek lewat nama_obat."""
+    pola = r'^\s*' + r'\s+'.join(re.escape(w) for w in nama_key.split()) + r'\s*$'
+    query: Dict[str, Any] = {'$or': [{'nama_key': nama_key}, {'nama_obat': {'$regex': pola, '$options': 'i'}}]}
+    if exclude_id:
+        query['id'] = {'$ne': exclude_id}
+    if await db.uks_obat.find_one(query, {'_id': 1}):
+        raise HTTPException(400, "Nama obat sudah terdaftar. Gunakan obat yang sudah ada, lalu catat stoknya lewat Obat Masuk.")
+
+
 @router.post("/uks/obat")
 async def create_obat(req: ObatRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
+    data = _clean_obat_request(req)
+    await _ensure_obat_name_free(data['nama_key'])
     doc = {
         'id': str(uuid.uuid4()),
-        **req.model_dump(),
+        **data,
         'created_by': user['id'],
         'created_at': datetime.utcnow().isoformat(),
         'updated_at': datetime.utcnow().isoformat(),
     }
     await db.uks_obat.insert_one(doc)
-    await log_audit(user, 'uks_obat_create', f"Created obat: {req.nama_obat}")
+    await log_audit(user, 'uks_obat_create', f"Created obat: {data['nama_obat']}")
     return serialize_doc(doc)
 
 
@@ -812,7 +898,8 @@ async def create_obat(req: ObatRequest, user: Dict = Depends(require_role(*UKS_R
 async def update_obat(obat_id: str, req: ObatRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
     await _get_obat_or_404(obat_id)
 
-    update_data = req.model_dump()
+    update_data = _clean_obat_request(req)
+    await _ensure_obat_name_free(update_data['nama_key'], exclude_id=obat_id)
     update_data['updated_at'] = datetime.utcnow().isoformat()
     await db.uks_obat.update_one({'id': obat_id}, {'$set': update_data})
     await log_audit(user, 'uks_obat_update', f"Updated obat: {obat_id}")
@@ -832,6 +919,67 @@ async def delete_obat(obat_id: str, user: Dict = Depends(require_role(*UKS_ROLES
     await db.uks_obat.delete_one({'id': obat_id})
     await log_audit(user, 'uks_obat_delete', f"Deleted obat: {obat_id}")
     return {'message': 'Data obat berhasil dihapus'}
+
+
+class GabungObatRequest(BaseModel):
+    sumber_ids: List[str]
+
+
+@router.get("/uks/obat-ganda")
+async def list_obat_ganda(user: Dict = Depends(require_role(*UKS_ROLES))):
+    """Kelompok obat yang namanya sama (beda huruf besar/kecil atau spasi saja)."""
+    items = await db.uks_obat.find({}, {'_id': 0, 'id': 1, 'nama_obat': 1, 'satuan': 1, 'created_at': 1}).to_list(5000)
+    groups: Dict[str, List[Dict]] = {}
+    for it in items:
+        groups.setdefault(bmhp_nama_key(it.get('nama_obat')), []).append(it)
+    hasil = []
+    for key, anggota in groups.items():
+        if len(anggota) < 2:
+            continue
+        rinci = []
+        for it in anggota:
+            ringkas = await _get_obat_stock_summary(it['id'])
+            rinci.append({**it, 'stok_tersisa': ringkas['stok_tersisa'], 'stok_kadaluarsa': ringkas['stok_kadaluarsa'],
+                          'jumlah_batch': await db.uks_obat_masuk.count_documents({'obat_id': it['id']})})
+        # Usulan tujuan gabung: yang paling banyak batch-nya, lalu yang paling lama dibuat.
+        rinci.sort(key=lambda x: (-x['jumlah_batch'], x.get('created_at') or ''))
+        hasil.append({'nama_key': key, 'items': [serialize_doc(r) for r in rinci]})
+    return sorted(hasil, key=lambda g: g['nama_key'])
+
+
+@router.post("/uks/obat/{obat_id}/gabung")
+async def gabung_obat(obat_id: str, req: GabungObatRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
+    """Gabungkan obat ganda ke obat ini: seluruh batch Obat Masuk, catatan Obat Keluar,
+    dan rujukan di penanganan kunjungan dipindahkan, lalu data obat sumber dihapus.
+    Stok tidak berubah — hanya dipindah ke satu nama."""
+    target = await _get_obat_or_404(obat_id)
+    sumber_ids = [i for i in dict.fromkeys(req.sumber_ids) if i and i != obat_id]
+    if not sumber_ids:
+        raise HTTPException(400, "Pilih minimal satu obat lain untuk digabungkan")
+    sumber = await db.uks_obat.find({'id': {'$in': sumber_ids}}, {'_id': 0}).to_list(len(sumber_ids))
+    if len(sumber) != len(sumber_ids):
+        raise HTTPException(404, "Sebagian data obat sumber tidak ditemukan")
+
+    nama = target.get('nama_obat')
+    pindah = {'batch_masuk': 0, 'obat_keluar': 0, 'kunjungan': 0}
+    for s_doc in sumber:
+        sid = s_doc['id']
+        r = await db.uks_obat_masuk.update_many({'obat_id': sid}, {'$set': {'obat_id': obat_id, 'obat_nama': nama}})
+        pindah['batch_masuk'] += r.modified_count
+        r = await db.uks_obat_keluar.update_many({'obat_id': sid}, {'$set': {'obat_id': obat_id, 'obat_nama': nama}})
+        pindah['obat_keluar'] += r.modified_count
+        async for k in db.uks_kunjungan.find({'obat_dipakai.obat_id': sid}, {'_id': 0, 'id': 1, 'obat_dipakai': 1}):
+            baru = [{**o, 'obat_id': obat_id, 'obat_nama': nama} if o.get('obat_id') == sid else o for o in k.get('obat_dipakai') or []]
+            await db.uks_kunjungan.update_one({'id': k['id']}, {'$set': {'obat_dipakai': baru}})
+            pindah['kunjungan'] += 1
+        await db.uks_obat.delete_one({'id': sid})
+
+    if not target.get('nama_key'):
+        await db.uks_obat.update_one({'id': obat_id}, {'$set': {'nama_key': bmhp_nama_key(nama)}})
+    await log_audit(user, 'uks_obat_gabung',
+                    f"Gabung obat {', '.join(x.get('nama_obat') or x['id'] for x in sumber)} -> {nama} ({obat_id})")
+    return {'message': f"{len(sumber)} data obat digabung ke '{nama}'", 'dipindah': pindah,
+            'stok': await _get_obat_stock_summary(obat_id)}
 
 
 # ============================================================
@@ -863,14 +1011,19 @@ async def list_obat_masuk(
 @router.post("/uks/obat-masuk")
 async def create_obat_masuk(req: ObatMasukRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
     """Record a new stock batch. stok_sisa starts equal to jumlah and is
-    depleted FEFO as the medicine is dispensed via Obat Keluar / Penanganan."""
+    depleted FEFO then FIFO as the medicine is dispensed via Obat Keluar / Penanganan."""
     obat = await _get_obat_or_404(req.obat_id)
     if req.jumlah <= 0:
         raise HTTPException(400, "Jumlah harus lebih dari 0")
+    if req.tanggal > _hari_ini_wib():
+        raise HTTPException(400, "Tanggal masuk tidak boleh melebihi hari ini")
+    if req.tanggal_kadaluarsa and req.tanggal_kadaluarsa <= req.tanggal:
+        raise HTTPException(400, "Tanggal kadaluarsa harus setelah tanggal masuk")
 
     doc = {
         'id': str(uuid.uuid4()),
         **req.model_dump(),
+        'tanggal_kadaluarsa': req.tanggal_kadaluarsa or None,
         'stok_sisa': req.jumlah,
         'obat_nama': obat.get('nama_obat'),
         'petugas_id': user['id'],
@@ -1216,8 +1369,7 @@ async def create_bmhp_masuk(req: BMHPMasukRequest, user: Dict = Depends(require_
     bmhp = await _get_bmhp_or_404(req.bmhp_id)
     if req.jumlah <= 0:
         raise HTTPException(400, "Jumlah harus lebih dari 0")
-    today_wib = (datetime.utcnow() + timedelta(hours=7)).strftime('%Y-%m-%d')
-    if req.tanggal > today_wib:
+    if req.tanggal > _hari_ini_wib():
         raise HTTPException(400, "Tanggal masuk tidak boleh melebihi hari ini")
     if req.tanggal_kadaluarsa and req.tanggal_kadaluarsa <= req.tanggal:
         raise HTTPException(400, "Tanggal kadaluarsa harus setelah tanggal masuk")
@@ -1829,16 +1981,21 @@ async def _rekap_opname(item_coll, masuk_coll, keluar_coll, id_field: str, nama_
     """Rekap opname persediaan untuk rentang [start, end] (dipakai obat & BMHP):
     stok_awal = masuk - keluar sebelum start; masuk/keluar = mutasi dalam periode;
     stok_akhir = stok_awal + masuk - keluar. Disertakan pula stok sistem saat ini
-    (jumlah stok_sisa batch) dan kadaluarsa terdekat batch yang masih ada stoknya."""
+    (jumlah stok_sisa batch, termasuk stok_kadaluarsa = bagian dari batch yang sudah
+    kadaluarsa) dan kadaluarsa terdekat batch yang masih ada stoknya."""
     items = await item_coll.find({}, {'_id': 0, 'id': 1, nama_field: 1, 'satuan': 1, 'stok_minimum': 1, 'jenis': 1}).sort(nama_field, 1).to_list(5000)
     masuk = await _sum_mutasi_per_item(masuk_coll, id_field, start, end)
     keluar = await _sum_mutasi_per_item(keluar_coll, id_field, start, end)
 
+    hari_ini = _hari_ini_wib()
+    ed = {'$ifNull': ['$tanggal_kadaluarsa', '']}
     stok_now = {r['_id']: r for r in await masuk_coll.aggregate([
         {'$match': {'stok_sisa': {'$gt': 0}}},
         {'$group': {
             '_id': f'${id_field}',
             'stok': {'$sum': '$stok_sisa'},
+            # Bagian stok fisik dari batch yang sudah kadaluarsa (tidak boleh dipakai).
+            'stok_kadaluarsa': {'$sum': {'$cond': [{'$and': [{'$gt': [ed, '']}, {'$lt': [ed, hari_ini]}]}, '$stok_sisa', 0]}},
             'kadaluarsa': {'$min': {'$cond': [{'$gt': [{'$ifNull': ['$tanggal_kadaluarsa', '']}, '']}, '$tanggal_kadaluarsa', None]}},
         }},
     ]).to_list(5000)}
@@ -1864,6 +2021,7 @@ async def _rekap_opname(item_coll, masuk_coll, keluar_coll, id_field: str, nama_
             'stok_akhir': akhir,
             'status': status,
             'stok_saat_ini': now.get('stok', 0),
+            'stok_kadaluarsa': now.get('stok_kadaluarsa', 0),
             'tanggal_kadaluarsa_terdekat': now.get('kadaluarsa'),
         })
 
@@ -2193,9 +2351,7 @@ async def submit_penanganan(kunjungan_id: str, req: PenangananKunjunganRequest, 
     # so a mid-list failure never leaves a partially-applied treatment. Obat yang
     # sudah tercatat untuk kunjungan ini akan dikembalikan dulu (simpan ulang
     # mengganti, bukan menambah), jadi jumlah lamanya ikut dihitung tersedia.
-    previous_obat: Dict[str, int] = {}
-    for prev in await db.uks_obat_keluar.find({'kunjungan_id': kunjungan_id}, {'_id': 0, 'obat_id': 1, 'jumlah': 1}).to_list(500):
-        previous_obat[prev['obat_id']] = previous_obat.get(prev['obat_id'], 0) + prev.get('jumlah', 0)
+    previous_obat = await _stok_kembali_layak(db.uks_obat_keluar, db.uks_obat_masuk, 'obat_id', kunjungan_id)
     requested_obat: Dict[str, int] = {}
     for item in req.obat_list:
         if item.jumlah <= 0:
@@ -2205,21 +2361,19 @@ async def submit_penanganan(kunjungan_id: str, req: PenangananKunjunganRequest, 
         obat = await _get_obat_or_404(obat_id)
         available = (await _get_obat_stock_summary(obat_id))['stok_tersisa'] + previous_obat.get(obat_id, 0)
         if available < jumlah:
-            raise HTTPException(400, f"Stok '{obat.get('nama_obat')}' tidak mencukupi (tersedia: {available})")
+            raise HTTPException(400, f"Stok '{obat.get('nama_obat')}' tidak mencukupi (stok layak pakai: {available})")
 
     # Validasi stok BMHP. BMHP yang sudah tercatat untuk kunjungan ini akan
     # dikembalikan dulu, jadi jumlah lama ikut dihitung sebagai stok tersedia.
     bmhp_request = _merge_bmhp_items(req.bmhp_list)
-    previous_bmhp: Dict[str, int] = {}
-    for prev in await db.uks_bmhp_keluar.find({'kunjungan_id': kunjungan_id}, {'_id': 0, 'bmhp_id': 1, 'jumlah': 1}).to_list(500):
-        previous_bmhp[prev['bmhp_id']] = previous_bmhp.get(prev['bmhp_id'], 0) + prev.get('jumlah', 0)
+    previous_bmhp = await _stok_kembali_layak(db.uks_bmhp_keluar, db.uks_bmhp_masuk, 'bmhp_id', kunjungan_id)
     bmhp_docs = {}
     for bmhp_id, jumlah in bmhp_request.items():
         bmhp = await _get_bmhp_or_404(bmhp_id)
         bmhp_docs[bmhp_id] = bmhp
         available = (await _get_bmhp_stock_summary(bmhp_id))['stok_tersisa'] + previous_bmhp.get(bmhp_id, 0)
         if available < jumlah:
-            raise HTTPException(400, f"Stok BMHP '{bmhp.get('nama_bmhp')}' tidak mencukupi (tersedia: {available})")
+            raise HTTPException(400, f"Stok BMHP '{bmhp.get('nama_bmhp')}' tidak mencukupi (stok layak pakai: {available})")
 
     pasien = await db.users.find_one({'id': existing['pasien_id']}, {'_id': 0, 'password_hash': 0})
 

@@ -9,11 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pill, ArrowDownCircle, ArrowUpCircle, Plus, Pencil, Trash2, Loader2, Save, Search } from 'lucide-react';
+import { Pill, ArrowDownCircle, ArrowUpCircle, Plus, Pencil, Trash2, Loader2, Save, Search, Merge, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { hariIniWIB } from '@/lib/tanggal';
+import { BatchStatusBadge, KadaluarsaCell, RencanaPotongHint, formatED, labelPilihanStok } from './uksStok';
 
 
 const emptyObatForm = { nama_obat: '', jenis: '', satuan: 'pcs', untuk_penanganan: '', dosis: '', stok_minimum: 0, keterangan: '' };
@@ -39,6 +40,10 @@ export default function AdminUKSObatPage() {
   const [showKeluarModal, setShowKeluarModal] = useState(false);
   const [keluarForm, setKeluarForm] = useState(emptyKeluarForm);
 
+  // Obat ganda (nama sama, beda huruf besar/kecil/spasi) yang perlu digabung.
+  const [gandaList, setGandaList] = useState([]);
+  const [gabung, setGabung] = useState(null); // { items: [...], target_id }
+
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
@@ -52,6 +57,7 @@ export default function AdminUKSObatPage() {
       setObatList(obatRes.data || []);
       setMasukList(masukRes.data || []);
       setKeluarList(keluarRes.data || []);
+      api.get('/uks/obat-ganda').then((r) => setGandaList(r.data || [])).catch(() => setGandaList([]));
     } catch (e) {
       toast.error('Gagal memuat data obat');
     } finally {
@@ -165,6 +171,27 @@ export default function AdminUKSObatPage() {
     }
   };
 
+  const openGabung = (items) => setGabung({ items, target_id: items[0]?.id });
+
+  const handleGabung = async () => {
+    if (!gabung?.target_id) return;
+    const sumber = gabung.items.filter((i) => i.id !== gabung.target_id);
+    const target = gabung.items.find((i) => i.id === gabung.target_id);
+    if (!(await confirmDialog(`Gabungkan ${sumber.map((i) => `"${i.nama_obat}"`).join(', ')} ke "${target?.nama_obat}"? Semua batch, obat keluar, dan riwayat penanganan dipindahkan; stok tidak berubah.`))) return;
+    setSaving(true);
+    try {
+      const { data } = await api.post(`/uks/obat/${gabung.target_id}/gabung`, { sumber_ids: sumber.map((i) => i.id) });
+      toast.success(data?.message || 'Data obat digabung');
+      setGabung(null);
+      loadData();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal menggabungkan data');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const keluarObat = obatList.find((o) => o.id === keluarForm.obat_id);
   const filteredObat = obatList.filter((o) => !search || (o.nama_obat || '').toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -185,6 +212,23 @@ export default function AdminUKSObatPage() {
         </TabsList>
 
         <TabsContent value="daftar" className="mt-4 space-y-4">
+          {gandaList.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2" data-testid="obat-ganda-banner">
+              <div className="flex items-start gap-2 text-amber-900">
+                <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold">Ada {gandaList.length} nama obat yang terdaftar ganda</div>
+                  <p className="text-sm">Gabungkan agar obat tampil satu kali saat dipilih dan stok batch-nya menyatu.</p>
+                </div>
+              </div>
+              {gandaList.map((g) => (
+                <div key={g.nama_key} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/70 px-3 py-2 text-sm">
+                  <span>{g.items.map((i) => `${i.nama_obat} (stok ${i.stok_tersisa})`).join(' · ')}</span>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openGabung(g.items)}><Merge className="h-4 w-4" /> Gabungkan</Button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row gap-3 justify-between">
             <div className="relative max-w-sm flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -207,7 +251,7 @@ export default function AdminUKSObatPage() {
                         <TableHead>Jenis</TableHead>
                         <TableHead>Untuk Penanganan</TableHead>
                         <TableHead>Dosis</TableHead>
-                        <TableHead className="text-center">Stok Tersisa</TableHead>
+                        <TableHead className="text-center">Stok Layak Pakai</TableHead>
                         <TableHead className="text-center">Stok Terpakai</TableHead>
                         <TableHead className="text-center">Stok Min</TableHead>
                         <TableHead>Kadaluarsa Terdekat</TableHead>
@@ -234,7 +278,7 @@ export default function AdminUKSObatPage() {
                             </TableCell>
                             <TableCell className="text-center font-mono">{item.stok_terpakai ?? 0}</TableCell>
                             <TableCell className="text-center font-mono">{item.stok_minimum}</TableCell>
-                            <TableCell className="font-mono">{item.tanggal_kadaluarsa_terdekat || '-'}</TableCell>
+                            <TableCell><KadaluarsaCell item={item} /></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
                                 <Button size="icon" variant="ghost" onClick={() => openObatModal(item)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></Button>
@@ -267,6 +311,7 @@ export default function AdminUKSObatPage() {
                       <TableHead className="text-center">Jumlah</TableHead>
                       <TableHead className="text-center">Sisa Batch</TableHead>
                       <TableHead>Kadaluarsa</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Sumber</TableHead>
                       <TableHead>Petugas</TableHead>
                       <TableHead className="text-right">Aksi</TableHead>
@@ -274,7 +319,7 @@ export default function AdminUKSObatPage() {
                   </TableHeader>
                   <TableBody>
                     {masukList.length === 0 ? (
-                      <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">Belum ada data obat masuk</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-12 text-slate-500">Belum ada data obat masuk</TableCell></TableRow>
                     ) : (
                       masukList.map((item) => (
                         <TableRow key={item.id}>
@@ -282,7 +327,8 @@ export default function AdminUKSObatPage() {
                           <TableCell className="font-semibold">{item.obat_nama}</TableCell>
                           <TableCell className="text-center"><Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">+{item.jumlah}</Badge></TableCell>
                           <TableCell className="text-center font-mono">{item.stok_sisa}</TableCell>
-                          <TableCell className="font-mono">{item.tanggal_kadaluarsa || '-'}</TableCell>
+                          <TableCell className="font-mono">{formatED(item.tanggal_kadaluarsa)}</TableCell>
+                          <TableCell><BatchStatusBadge batch={item} /></TableCell>
                           <TableCell>{item.sumber || '-'}</TableCell>
                           <TableCell>{item.petugas_nama || '-'}</TableCell>
                           <TableCell className="text-right">
@@ -398,9 +444,10 @@ export default function AdminUKSObatPage() {
                 <SelectTrigger><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Pilih Obat</SelectItem>
-                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok_tersisa ?? 0})</SelectItem>)}
+                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{labelPilihanStok(o.nama_obat, o)}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-slate-500">Obat yang sama cukup dipilih di sini — tiap pencatatan menjadi batch baru dengan tanggal kadaluarsanya sendiri.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -445,7 +492,9 @@ export default function AdminUKSObatPage() {
                 <SelectTrigger><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Pilih Obat</SelectItem>
-                  {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok_tersisa ?? 0})</SelectItem>)}
+                  {obatList.map((o) => (
+                    <SelectItem key={o.id} value={o.id} disabled={!(o.stok_tersisa > 0)}>{labelPilihanStok(o.nama_obat, o)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -456,9 +505,10 @@ export default function AdminUKSObatPage() {
               </div>
               <div className="space-y-2">
                 <Label>Jumlah <span className="text-rose-500">*</span></Label>
-                <Input type="number" min="1" value={keluarForm.jumlah} onChange={(e) => setKeluarForm({ ...keluarForm, jumlah: e.target.value })} />
+                <Input type="number" min="1" max={keluarObat?.stok_tersisa || undefined} value={keluarForm.jumlah} onChange={(e) => setKeluarForm({ ...keluarForm, jumlah: e.target.value })} />
               </div>
             </div>
+            {keluarObat && <RencanaPotongHint item={keluarObat} jumlah={keluarForm.jumlah} />}
             <div className="space-y-2">
               <Label>Keterangan</Label>
               <Textarea rows={2} value={keluarForm.keterangan} onChange={(e) => setKeluarForm({ ...keluarForm, keterangan: e.target.value })} />
@@ -468,6 +518,31 @@ export default function AdminUKSObatPage() {
             <Button variant="outline" onClick={() => setShowKeluarModal(false)} disabled={saving}>Batal</Button>
             <Button onClick={handleSaveKeluar} disabled={saving} className="gap-2 bg-[#006837] hover:bg-[#005830]">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gabung Obat Ganda */}
+      <Dialog open={!!gabung} onOpenChange={(o) => !o && setGabung(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Gabungkan Obat Ganda</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-slate-600">Pilih nama yang dipertahankan. Data lain dipindahkan ke nama ini lalu dihapus.</p>
+            {(gabung?.items || []).map((i) => (
+              <label key={i.id} className={`flex items-center justify-between gap-3 rounded-md border p-3 cursor-pointer ${gabung.target_id === i.id ? 'border-[#006837] bg-[#006837]/5' : 'border-slate-200'}`}>
+                <span className="flex items-center gap-2">
+                  <input type="radio" name="gabung-target" checked={gabung.target_id === i.id} onChange={() => setGabung({ ...gabung, target_id: i.id })} />
+                  <span className="font-semibold">{i.nama_obat}</span>
+                </span>
+                <span className="text-xs text-slate-500">{i.jumlah_batch} batch · stok {i.stok_tersisa}{i.stok_kadaluarsa ? ` · ${i.stok_kadaluarsa} kadaluarsa` : ''}</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGabung(null)} disabled={saving}>Batal</Button>
+            <Button onClick={handleGabung} disabled={saving} className="gap-2 bg-[#006837] hover:bg-[#005830]">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Merge className="h-4 w-4" />} Gabungkan
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Stethoscope, History, Plus, Trash2, Loader2, Save, Search, Eye, ClipboardPlus, X, Pencil, Printer, Download } from 'lucide-react';
 import { api } from '@/lib/api';
+import { RencanaPotongHint, labelPilihanStok } from './uksStok';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
@@ -493,6 +494,12 @@ export default function AdminUKSKunjunganPage() {
     return (bmhp?.stok_tersisa ?? 0) + already;
   };
 
+  const obatAvailable = (obatId) => {
+    const obat = obatList.find((o) => o.id === obatId);
+    const already = (penangananTarget?.obat_dipakai || []).filter((o) => o.obat_id === obatId).reduce((n, o) => n + (o.jumlah || 0), 0);
+    return (obat?.stok_tersisa ?? 0) + already;
+  };
+
   const handleSavePenanganan = async () => {
     if (!penangananForm.diagnosa_utama_id) {
       setDiagnosaError('Diagnosa utama wajib dipilih');
@@ -511,6 +518,17 @@ export default function AdminUKSKunjunganPage() {
     const invalidBmhp = penangananForm.bmhp_list.some((b) => !b.bmhp_id || !b.jumlah || Number(b.jumlah) < 1);
     if (invalidBmhp) {
       toast.error('Lengkapi BMHP dan jumlahnya, atau hapus baris BMHP yang kosong');
+      return;
+    }
+    const obatIds = penangananForm.obat_list.map((o) => o.obat_id);
+    if (new Set(obatIds).size !== obatIds.length) {
+      toast.error('Obat yang sama dipilih lebih dari sekali; gabungkan jumlahnya dalam satu baris');
+      return;
+    }
+    const overObat = penangananForm.obat_list.find((o) => Number(o.jumlah) > obatAvailable(o.obat_id));
+    if (overObat) {
+      const nama = obatList.find((o) => o.id === overObat.obat_id)?.nama_obat || 'Obat';
+      toast.error(`Jumlah ${nama} melebihi stok layak pakai (${obatAvailable(overObat.obat_id)})`);
       return;
     }
     const bmhpIds = penangananForm.bmhp_list.map((b) => b.bmhp_id);
@@ -1079,23 +1097,34 @@ export default function AdminUKSKunjunganPage() {
                 <div className="space-y-2">
                   {penangananForm.obat_list.map((row, idx) => {
                     const selectedObat = obatList.find((o) => o.id === row.obat_id);
+                    const available = row.obat_id ? obatAvailable(row.obat_id) : undefined;
+                    const over = row.obat_id && Number(row.jumlah) > available;
+                    const dipilihDiBarisLain = new Set(penangananForm.obat_list.filter((_, i) => i !== idx).map((o) => o.obat_id));
                     return (
-                      <div key={idx} className="flex items-center gap-2">
-                        <Select value={row.obat_id || 'none'} onValueChange={(v) => updateObatRow(idx, 'obat_id', v === 'none' ? '' : v)}>
-                          <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Pilih Obat</SelectItem>
-                            {obatList.map((o) => <SelectItem key={o.id} value={o.id}>{o.nama_obat} (Stok: {o.stok_tersisa ?? 0})</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number" min="1" max={selectedObat?.stok_tersisa || undefined}
-                          value={row.jumlah} onChange={(e) => updateObatRow(idx, 'jumlah', e.target.value)}
-                          className="w-24" placeholder="Jml"
-                        />
-                        <Button size="icon" variant="ghost" onClick={() => removeObatRow(idx)} className="text-rose-600 hover:text-rose-700 shrink-0">
-                          <X className="h-4 w-4" />
-                        </Button>
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Select value={row.obat_id || 'none'} onValueChange={(v) => updateObatRow(idx, 'obat_id', v === 'none' ? '' : v)}>
+                            <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih Obat" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Pilih Obat</SelectItem>
+                              {obatList.map((o) => (
+                                <SelectItem key={o.id} value={o.id} disabled={obatAvailable(o.id) <= 0 || dipilihDiBarisLain.has(o.id)}>
+                                  {labelPilihanStok(o.nama_obat, o)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number" min="1" max={available || undefined}
+                            value={row.jumlah} onChange={(e) => updateObatRow(idx, 'jumlah', e.target.value)}
+                            className="w-24" placeholder="Jml" aria-invalid={!!over}
+                          />
+                          <Button size="icon" variant="ghost" onClick={() => removeObatRow(idx)} className="text-rose-600 hover:text-rose-700 shrink-0">
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {over && <p className="text-xs text-rose-600">Melebihi stok layak pakai ({available} {selectedObat?.satuan})</p>}
+                        {selectedObat && !over && <RencanaPotongHint item={selectedObat} jumlah={row.jumlah} tambahan={available - (selectedObat.stok_tersisa ?? 0)} />}
                       </div>
                     );
                   })}
@@ -1118,6 +1147,7 @@ export default function AdminUKSKunjunganPage() {
                     const selected = bmhpList.find((b) => b.id === row.bmhp_id);
                     const available = row.bmhp_id ? bmhpAvailable(row.bmhp_id) : undefined;
                     const over = row.bmhp_id && Number(row.jumlah) > available;
+                    const bmhpDiBarisLain = new Set(penangananForm.bmhp_list.filter((_, i) => i !== idx).map((b) => b.bmhp_id));
                     return (
                       <div key={idx} className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -1126,8 +1156,8 @@ export default function AdminUKSKunjunganPage() {
                             <SelectContent>
                               <SelectItem value="none">Pilih BMHP</SelectItem>
                               {bmhpList.map((b) => (
-                                <SelectItem key={b.id} value={b.id} disabled={bmhpAvailable(b.id) <= 0}>
-                                  {b.nama_bmhp} (Stok: {b.stok_tersisa ?? 0} {b.satuan})
+                                <SelectItem key={b.id} value={b.id} disabled={bmhpAvailable(b.id) <= 0 || bmhpDiBarisLain.has(b.id)}>
+                                  {labelPilihanStok(b.nama_bmhp, b)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1141,7 +1171,8 @@ export default function AdminUKSKunjunganPage() {
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
-                        {over && <p className="text-xs text-rose-600">Melebihi stok tersedia ({available} {selected?.satuan})</p>}
+                        {over && <p className="text-xs text-rose-600">Melebihi stok layak pakai ({available} {selected?.satuan})</p>}
+                        {selected && !over && <RencanaPotongHint item={selected} jumlah={row.jumlah} tambahan={available - (selected.stok_tersisa ?? 0)} />}
                       </div>
                     );
                   })}

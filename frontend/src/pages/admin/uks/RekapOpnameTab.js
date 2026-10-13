@@ -13,7 +13,8 @@ import { labelPeriode, paramsPeriode } from './uksPeriode';
 export const fromServerOpname = (rows, namaKey) => (rows || []).map((r) => ({
   id: r.id, [namaKey]: r.nama, satuan: r.satuan, stok_minimum: r.stok_minimum,
   awal: r.stok_awal, masuk: r.masuk, keluar: r.keluar, akhir: r.stok_akhir,
-  status: r.status, stok_saat_ini: r.stok_saat_ini, tanggal_kadaluarsa_terdekat: r.tanggal_kadaluarsa_terdekat,
+  status: r.status, stok_saat_ini: r.stok_saat_ini, stok_kadaluarsa: r.stok_kadaluarsa ?? 0,
+  tanggal_kadaluarsa_terdekat: r.tanggal_kadaluarsa_terdekat,
 }));
 
 const STATUS_CLS = {
@@ -51,13 +52,14 @@ function OpnameTable({ rows, namaKey, jenisLabel }) {
                   <TableHead className="text-center">Stok Akhir</TableHead>
                   <TableHead className="text-center">Stok Min</TableHead>
                   <TableHead className="text-center" title="Stok tersisa di sistem saat ini (dari batch masuk)">Stok Sistem</TableHead>
+                  <TableHead className="text-center" title="Bagian stok sistem dari batch yang sudah kadaluarsa — dikunci, tidak bisa dipakai">Stok Kadaluarsa</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead>Kadaluarsa Terdekat</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-slate-500">Tidak ada {jenisLabel} yang cocok.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={12} className="text-center py-8 text-slate-500">Tidak ada {jenisLabel} yang cocok.</TableCell></TableRow>
                 ) : filtered.map((r, i) => (
                   <TableRow key={r.id} data-testid="opname-row">
                     <TableCell className="text-center font-mono text-slate-500">{i + 1}</TableCell>
@@ -69,6 +71,7 @@ function OpnameTable({ rows, namaKey, jenisLabel }) {
                     <TableCell className="text-center font-mono font-semibold">{r.akhir}</TableCell>
                     <TableCell className="text-center font-mono">{r.stok_minimum ?? 0}</TableCell>
                     <TableCell className="text-center font-mono text-slate-500">{r.stok_saat_ini ?? '-'}</TableCell>
+                    <TableCell className={`text-center font-mono ${r.stok_kadaluarsa ? 'text-rose-700 font-semibold' : 'text-slate-400'}`}>{r.stok_kadaluarsa || 0}</TableCell>
                     <TableCell className="text-center"><Badge className={STATUS_CLS[r.status]}>{r.status}</Badge></TableCell>
                     <TableCell className="font-mono">{r.tanggal_kadaluarsa_terdekat || '-'}</TableCell>
                   </TableRow>
@@ -80,7 +83,7 @@ function OpnameTable({ rows, namaKey, jenisLabel }) {
                     <TableCell className="text-center font-mono text-emerald-700">+{sum('masuk')}</TableCell>
                     <TableCell className="text-center font-mono text-rose-700">-{sum('keluar')}</TableCell>
                     <TableCell className="text-center font-mono">{sum('akhir')}</TableCell>
-                    <TableCell colSpan={4} className="text-xs font-normal text-slate-500">Total lintas satuan hanya sebagai gambaran umum.</TableCell>
+                    <TableCell colSpan={5} className="text-xs font-normal text-slate-500">Total lintas satuan hanya sebagai gambaran umum.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -105,7 +108,8 @@ export default function RekapOpnameTab({ periode, onExportData }) {
     const cols = (nama) => [
       { key: 'no', label: 'No' }, { key: nama, label: 'Nama' }, { key: 'satuan', label: 'Satuan' },
       { key: 'awal', label: 'Stok Awal' }, { key: 'masuk', label: 'Masuk' }, { key: 'keluar', label: 'Keluar' },
-      { key: 'akhir', label: 'Stok Akhir' }, { key: 'stok_minimum', label: 'Stok Min' }, { key: 'stok_saat_ini', label: 'Stok Sistem' }, { key: 'status', label: 'Status' },
+      { key: 'akhir', label: 'Stok Akhir' }, { key: 'stok_minimum', label: 'Stok Min' }, { key: 'stok_saat_ini', label: 'Stok Sistem' },
+      { key: 'stok_kadaluarsa', label: 'Stok Kadaluarsa' }, { key: 'status', label: 'Status' },
       { key: 'tanggal_kadaluarsa_terdekat', label: 'Kadaluarsa Terdekat' },
     ];
     const num = (rows) => rows.map((r, i) => ({ ...r, no: i + 1 }));
