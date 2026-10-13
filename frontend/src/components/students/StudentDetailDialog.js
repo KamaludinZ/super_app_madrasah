@@ -826,13 +826,17 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                       {classHistory.map((h, idx) => {
                         const reasonLabels = {
                           pembagian_kelas: { label: 'Pembagian Kelas', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-                          pindah_kelas: { label: 'Pindah Kelas', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+                          pindah_kelas: { label: 'Pindah Rombel', color: 'bg-amber-100 text-amber-700 border-amber-200' },
                           naik_kelas: { label: 'Naik Kelas', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+                          lanjut_semester: { label: 'Lanjut Semester', color: 'bg-teal-100 text-teal-700 border-teal-200' },
+                          tinggal_kelas: { label: 'Tinggal Kelas', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+                          pindah_semester: { label: 'Pindah Semester (Percepatan)', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
                           mutasi_masuk: { label: 'Mutasi Masuk', color: 'bg-purple-100 text-purple-700 border-purple-200' },
-                          mutasi_keluar: { label: 'Mutasi Keluar', color: 'bg-rose-100 text-rose-700 border-rose-200' }
+                          mutasi_keluar: { label: 'Mutasi Keluar', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+                          lulus: { label: 'Lulus', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
                         };
-                        const reason = reasonLabels[h.reason] || { label: h.reason, color: 'bg-slate-100 text-slate-700' };
-                        const isActive = !h.end_date;
+                        const reason = reasonLabels[h.reason] || { label: h.reason_label || h.reason, color: 'bg-slate-100 text-slate-700' };
+                        const isActive = !h.end_date && !['lulus', 'mutasi_keluar'].includes(h.reason);
 
                         return (
                           <div key={h.id} className={`p-4 rounded-lg border-2 ${isActive ? 'border-[#006837] bg-[#006837]/5' : 'border-slate-200 bg-slate-50'}`}>
@@ -851,7 +855,10 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                                   </div>
                                   <div>
                                     <span className="text-slate-600">Semester:</span>
-                                    <div className="font-semibold text-slate-900 capitalize">{h.semester}</div>
+                                    <div className="font-semibold text-slate-900 capitalize">
+                                      {h.semester_name || h.semester}
+                                      {h.semester_belajar && <span className="ml-1 text-xs font-normal text-indigo-700">(semester belajar {h.semester_belajar})</span>}
+                                    </div>
                                   </div>
                                   <div>
                                     <span className="text-slate-600">Tanggal Mulai:</span>
@@ -859,6 +866,12 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                                       {formatWIB(h.start_date, 'Date', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     </div>
                                   </div>
+                                  {h.from_class_name && (
+                                    <div>
+                                      <span className="text-slate-600">Dari Rombel:</span>
+                                      <div className="font-semibold text-slate-900">{h.from_class_name}</div>
+                                    </div>
+                                  )}
                                   {h.end_date && (
                                     <div>
                                       <span className="text-slate-600">Tanggal Selesai:</span>

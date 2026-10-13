@@ -147,8 +147,8 @@ async def get_report(report_id: str, user: Dict = Depends(get_current_user)):
     is_wali_kelas = False
 
     if 'wali_kelas' in user.get('roles', []) and report.get('class_id'):
-        wk_class = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
-        is_wali_kelas = wk_class and wk_class['id'] == report.get('class_id')
+        wk_class = await db.classes.find_one({'id': report.get('class_id'), 'homeroom_teacher_id': user['id']}, {'_id': 0, 'id': 1})
+        is_wali_kelas = bool(wk_class)
 
     if not (is_admin or is_owner or is_wali_kelas):
         raise HTTPException(403, "Tidak diizinkan")

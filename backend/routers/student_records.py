@@ -107,7 +107,7 @@ async def get_student_record(
     """Get buku induk siswa lengkap untuk 1 siswa."""
     # Get student
     student = await db.users.find_one(
-        {'id': student_id, 'siswa': {'$in': ['roles']}},
+        {'id': student_id, 'roles': 'siswa'},
         {'_id': 0, 'password_hash': 0}
     )
 
@@ -154,7 +154,7 @@ async def create_student_record(
         raise HTTPException(400, "student_id wajib diisi")
 
     # Validate student exists
-    student = await db.users.find_one({'id': student_id, 'siswa': {'$in': ['roles']}})
+    student = await db.users.find_one({'id': student_id, 'roles': 'siswa'})
     if not student:
         raise HTTPException(404, "Siswa tidak ditemukan")
 

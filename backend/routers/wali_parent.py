@@ -14,6 +14,7 @@ from core import (
     serialize_doc,
 )
 from journal_core import current_day_id, day_started_at_filter, now_wib
+from rombel import anggota_rombel_ids, kelas_perwalian
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ router = APIRouter()
 
 @router.get("/wali-kelas/my-class")
 async def wali_kelas_dashboard(user: Dict = Depends(get_current_user)):
-    cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0})
+    cls = await kelas_perwalian(user)
     if not cls:
         return {'class': None, 'today_schedule': [], 'students': []}
     day = current_day_id()
@@ -44,7 +45,7 @@ async def wali_kelas_dashboard(user: Dict = Depends(get_current_user)):
         s['journal_filled'] = bool(journal)
         s['journal_materi'] = journal.get('materi') if journal else None
         enriched.append(serialize_doc(s))
-    students = await db.users.find({'student_class_id': cls['id'], 'roles': 'siswa'},
+    students = await db.users.find({'id': {'$in': await anggota_rombel_ids(cls)}, 'roles': 'siswa'},
                                    {'_id': 0, 'password_hash': 0}).to_list(200)
     return {
         'class': serialize_doc(cls),
@@ -57,7 +58,7 @@ async def wali_kelas_dashboard(user: Dict = Depends(get_current_user)):
 async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
     """Get comprehensive dashboard statistics for wali kelas."""
     # Get the class this user manages
-    cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0})
+    cls = await kelas_perwalian(user)
     if not cls:
         return {
             'attendance': None,
@@ -71,7 +72,7 @@ async def wali_kelas_dashboard_stats(user: Dict = Depends(get_current_user)):
 
     # Get all students in this class
     students = await db.users.find(
-        {'student_class_id': class_id, 'roles': 'siswa'},
+        {'id': {'$in': await anggota_rombel_ids(cls)}, 'roles': 'siswa'},
         {'_id': 0}
     ).to_list(200)
     student_ids = [s['id'] for s in students]
@@ -192,7 +193,7 @@ async def wali_kelas_attendance_report(
 
     # Get all students in this class
     students = await db.users.find(
-        {'student_class_id': class_id, 'roles': 'siswa'},
+        {'id': {'$in': await anggota_rombel_ids(cls)}, 'roles': 'siswa'},
         {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1}
     ).to_list(200)
 
@@ -454,7 +455,7 @@ async def get_class_attendance(
     for the specified month, with per-student breakdowns.
     """
     # Get the class this user manages
-    cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0})
+    cls = await kelas_perwalian(user)
     if not cls:
         return {
             'class': None,
@@ -475,7 +476,7 @@ async def get_class_attendance(
 
     # Get all students in this class
     students = await db.users.find(
-        {'student_class_id': cls['id'], 'roles': 'siswa'},
+        {'id': {'$in': await anggota_rombel_ids(cls)}, 'roles': 'siswa'},
         {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1}
     ).sort('full_name', 1).to_list(200)
 
@@ -572,7 +573,7 @@ async def get_class_attendance_stats(
     - Per-student summary
     """
     # Get the class this user manages
-    cls = await db.classes.find_one({'homeroom_teacher_id': user['id']}, {'_id': 0})
+    cls = await kelas_perwalian(user)
     if not cls:
         return {
             'class': None,
@@ -596,7 +597,7 @@ async def get_class_attendance_stats(
 
     # Get all students in this class
     students = await db.users.find(
-        {'student_class_id': cls['id'], 'roles': 'siswa'},
+        {'id': {'$in': await anggota_rombel_ids(cls)}, 'roles': 'siswa'},
         {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1}
     ).to_list(200)
     student_ids = [s['id'] for s in students]
