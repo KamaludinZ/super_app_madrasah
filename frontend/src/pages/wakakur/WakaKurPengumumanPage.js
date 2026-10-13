@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Megaphone, Pin, Eye, EyeOff } from 'lucide-react';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 const SEVERITIES = [
   { v: 'info', label: 'Info', color: 'bg-sky-100 text-sky-800' },
@@ -101,9 +102,9 @@ export default function WakaKurPengumumanPage() {
                     </div>
                     {(a.starts_at || a.ends_at) && (
                       <div className="text-[10px] text-slate-500 mt-1.5">
-                        {a.starts_at && <span>Mulai: {new Date(a.starts_at).toLocaleString('id-ID')}</span>}
+                        {a.starts_at && <span>Mulai: {formatWIB(a.starts_at, '')}</span>}
                         {a.starts_at && a.ends_at && <span className="mx-1">•</span>}
-                        {a.ends_at && <span>Sampai: {new Date(a.ends_at).toLocaleString('id-ID')}</span>}
+                        {a.ends_at && <span>Sampai: {formatWIB(a.ends_at, '')}</span>}
                       </div>
                     )}
                   </div>

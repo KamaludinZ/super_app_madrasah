@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { hariIniWIB } from '@/lib/tanggal';
+import { formatWIB } from '@/lib/datetime';
 
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
 const ATTENDANCE_STATUSES = [
@@ -398,7 +399,7 @@ function MembersTab({ extra, canManage }) {
                   <TableCell className="font-mono text-xs">{m.student_nisn || '-'}</TableCell>
                   <TableCell>{m.class_name || '-'}</TableCell>
                   <TableCell className="text-xs text-slate-600">
-                    {m.joined_at ? new Date(m.joined_at).toLocaleDateString('id-ID') : '-'}
+                    {m.joined_at ? formatWIB(m.joined_at, 'Date') : '-'}
                   </TableCell>
                   {canManage && (
                     <TableCell className="text-right">
@@ -565,7 +566,7 @@ function AttendanceTab({ extra, canManage }) {
                 return (
                   <div key={h.id} className="p-3 rounded-lg border border-slate-200 flex items-center justify-between flex-wrap gap-2" data-testid={`attendance-history-${h.date}`}>
                     <div>
-                      <div className="font-semibold">{new Date(h.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                      <div className="font-semibold">{formatWIB(h.date, 'Date', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
                       <div className="text-xs text-slate-600">{(h.records || []).length} siswa</div>
                     </div>
                     <div className="flex gap-1.5 flex-wrap">

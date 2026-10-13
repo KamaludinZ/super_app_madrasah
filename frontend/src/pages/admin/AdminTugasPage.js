@@ -30,11 +30,10 @@ import {
   Trash2,
   CheckCircle
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import { toast } from 'sonner';
+import { formatWIBPanjang } from '@/lib/datetime';
 
 const AdminTugasPage = () => {
   const [loading, setLoading] = useState(true);
@@ -148,7 +147,7 @@ const AdminTugasPage = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: id });
+      return formatWIBPanjang(dateString);
     } catch {
       return dateString;
     }

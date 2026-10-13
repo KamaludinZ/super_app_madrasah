@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -277,7 +278,7 @@ export default function AdminBackupPage() {
               {logs.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell className="font-mono text-xs">
-                    {l.created_at ? new Date(l.created_at).toLocaleString('id-ID') : '-'}
+                    {l.created_at ? formatWIB(l.created_at, '') : '-'}
                   </TableCell>
                   <TableCell>
                     {l.type === 'export' ? (

@@ -5,6 +5,7 @@ import { AlertCircle, Send, X, Clock, Edit3, Trash2, XCircle, CheckCircle } from
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 /**
  * Component to show alert for verval request status
@@ -239,7 +240,7 @@ export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, 
               </h3>
               <p className="text-xs text-rose-800 mb-2">
                 Ajuan perubahan data Anda ditolak oleh admin pada{' '}
-                {new Date(rejectedRequest.reviewed_at).toLocaleDateString('id-ID', {
+                {formatWIB(rejectedRequest.reviewed_at, 'Date', {
                   day: '2-digit',
                   month: 'long',
                   year: 'numeric',
@@ -293,7 +294,7 @@ export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, 
               </h3>
               <p className="text-xs text-blue-800 mb-3">
                 Perubahan data Anda sudah diajukan pada{' '}
-                {new Date(pendingRequest.created_at).toLocaleDateString('id-ID', {
+                {formatWIB(pendingRequest.created_at, 'Date', {
                   day: '2-digit',
                   month: 'long',
                   year: 'numeric',
@@ -356,7 +357,7 @@ export function VervalDraftAlert({ userId, userType, onRefresh, onStatusChange, 
               </h3>
               <p className="text-xs text-amber-800 mb-1">
                 Anda memiliki perubahan data yang tersimpan sementara pada{' '}
-                {new Date(draftData.saved_at).toLocaleDateString('id-ID', {
+                {formatWIB(draftData.saved_at, 'Date', {
                   day: '2-digit',
                   month: 'long',
                   year: 'numeric',

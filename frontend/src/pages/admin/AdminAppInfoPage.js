@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 export default function AdminAppInfoPage() {
   const [appInfo, setAppInfo] = useState(null);
@@ -567,7 +568,7 @@ export default function AdminAppInfoPage() {
 
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-500">
-                    Terakhir dicek: {new Date(updateInfo.checked_at).toLocaleString('id-ID')}
+                    Terakhir dicek: {formatWIB(updateInfo.checked_at, '')}
                   </p>
                   {updateInfo.github_configured && (
                     <Badge variant="outline" className="text-xs">

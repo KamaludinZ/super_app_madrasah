@@ -11,9 +11,10 @@ import { ROLE_LABELS } from '@/lib/api';
 import { daftarPermintaanReset, resetPinOlehAdmin } from '@/lib/simpanAkun';
 import { Button } from '@/components/ui/button';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 const formatWaktu = (iso) => (iso
-  ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  ? formatWIB(iso, '', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '-');
 
 // Admin: daftar GTK yang mengajukan reset PIN Simpan Akun. Admin hanya bisa mereset PIN,

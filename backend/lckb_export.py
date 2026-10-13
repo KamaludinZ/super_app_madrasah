@@ -1,5 +1,6 @@
 import io
 from datetime import datetime
+from journal_core import now_wib
 from typing import Any, Dict, List
 
 from reportlab.lib import colors
@@ -100,7 +101,7 @@ def export_lckb_pdf(
     ))
     story.append(Spacer(1, 18))
 
-    today_str = datetime.now().strftime("%d %B %Y")
+    today_str = now_wib().strftime("%d %B %Y")
     sign_data = [
         ["", f"Malang, {today_str}"],
         ["Mengetahui,", ""],

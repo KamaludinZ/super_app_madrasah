@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 export default function StudentAccountInfoDialog({ student, open, onClose, isGTK = false }) {
   const [tab, setTab] = useState('akun');
@@ -158,7 +159,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose, isGTK
                     </div>
                   </div>
                   <div className="text-xs text-slate-500 mt-2">
-                    Login terakhir: {data?.last_login_at ? new Date(data.last_login_at).toLocaleString('id-ID') : <span className="italic">belum pernah login</span>}
+                    Login terakhir: {data?.last_login_at ? formatWIB(data.last_login_at, '') : <span className="italic">belum pernah login</span>}
                   </div>
                 </CardContent>
               </Card>
@@ -264,7 +265,7 @@ export default function StudentAccountInfoDialog({ student, open, onClose, isGTK
                       <TableBody>
                         {logs.map((l) => (
                           <TableRow key={l.id}>
-                            <TableCell className="text-xs font-mono whitespace-nowrap">{new Date(l.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
+                            <TableCell className="text-xs font-mono whitespace-nowrap">{formatWIB(l.created_at, '', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">{l.action}</Badge>
                             </TableCell>

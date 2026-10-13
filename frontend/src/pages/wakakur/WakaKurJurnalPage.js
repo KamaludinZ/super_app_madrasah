@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
 import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
+import { formatWIB } from '@/lib/datetime';
 
 export default function WakaKurJurnalPage() {
   const { activeRole } = useAuth();
@@ -108,7 +109,7 @@ export default function WakaKurJurnalPage() {
     if (!data.items.length) return;
     const headers = ['Tanggal', 'JTM', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'KD/Indikator', 'Materi/Pokok Bahasan (Terdaftar)', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Detail Kehadiran Siswa'];
     const rows = data.items.map((j) => [
-      new Date(j.started_at).toLocaleString('id-ID'), j.jtm_count || 1, j.class_name, j.subject_name, j.teacher_name, j.room_name,
+      formatWIB(j.started_at, ''), j.jtm_count || 1, j.class_name, j.subject_name, j.teacher_name, j.room_name,
       JSON.stringify(j.kd_indikator || ''), JSON.stringify(j.materi_nama || ''), JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
       JSON.stringify(formatAttendanceDetail(j)),
     ]);
@@ -124,7 +125,7 @@ export default function WakaKurJurnalPage() {
 
     // Prepare data for Excel
     const excelData = data.items.map((j) => ({
-      'Tanggal': new Date(j.started_at).toLocaleString('id-ID'),
+      'Tanggal': formatWIB(j.started_at, ''),
       'JTM': j.jtm_count || 1,
       'Kelas': j.class_name || '-',
       'Mapel': j.subject_name || '-',
@@ -256,7 +257,7 @@ export default function WakaKurJurnalPage() {
                 {data.items.length === 0 ? <TableRow><TableCell colSpan={13} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
                   data.items.map((j) => (
                     <TableRow key={j.id}>
-                      <TableCell className="text-xs whitespace-nowrap">{new Date(j.started_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{formatWIB(j.started_at, '', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
                       <TableCell>
                         <div className="text-xs font-medium text-slate-700">
                           {j.jam_ke || '-'}
@@ -359,7 +360,7 @@ export default function WakaKurJurnalPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-slate-500">Tanggal & Waktu</Label>
-                  <div className="font-semibold">{new Date(detailDialog.journal.started_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}</div>
+                  <div className="font-semibold">{formatWIB(detailDialog.journal.started_at, '', { dateStyle: 'long', timeStyle: 'short' })}</div>
                 </div>
                 <div>
                   <Label className="text-xs text-slate-500">Jam Ke</Label>

@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 export default function AdminTahunTakwimPage() {
   const [items, setItems] = useState([]);
@@ -132,7 +133,7 @@ export default function AdminTahunTakwimPage() {
                     <TableCell className="font-mono font-semibold">{item.year}</TableCell>
                     <TableCell>{item.name}</TableCell>
                     <TableCell className="text-xs text-slate-600">
-                      {new Date(item.start_date).toLocaleDateString('id-ID')} - {new Date(item.end_date).toLocaleDateString('id-ID')}
+                      {formatWIB(item.start_date, 'Date')} - {formatWIB(item.end_date, 'Date')}
                     </TableCell>
                     <TableCell>
                       {item.is_active ? (

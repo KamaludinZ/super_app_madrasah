@@ -6,6 +6,7 @@ import { Megaphone, Pin, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
+import { formatWIB } from '@/lib/datetime';
 
 const SEVERITY_STYLES = {
   info: 'bg-sky-50 border-sky-200 text-sky-900',
@@ -71,7 +72,7 @@ export default function AnnouncementsListPage() {
                   <ReactMarkdown>{a.body}</ReactMarkdown>
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                  <span>{new Date(a.created_at).toLocaleString('id-ID')}</span>
+                  <span>{formatWIB(a.created_at, '')}</span>
                   {a.created_by_name && <span>• oleh {a.created_by_name}</span>}
                 </div>
               </CardContent>

@@ -3,6 +3,7 @@ import io
 import random
 import string
 from datetime import datetime
+from journal_core import now_wib
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -38,7 +39,7 @@ def _generate_class_token(class_name: str, ay_name: Optional[str] = None) -> str
         elif len(digits) >= 4:
             year_part = digits[-4:]
     if not year_part:
-        year_part = datetime.utcnow().strftime('%y')
+        year_part = now_wib().strftime('%y')
     # Class part: take alnum from name (e.g. "7A" -> "7A")
     class_part = ''.join(c for c in class_name if c.isalnum()).upper() or 'CLS'
     # Random suffix
@@ -333,7 +334,7 @@ async def add_student_to_class(
         academic_year_id=academic_year_id,
         semester=semester_code,
         reason=payload.get('reason', 'pembagian_kelas'),
-        start_date=payload.get('start_date', datetime.utcnow().strftime('%Y-%m-%d')),
+        start_date=payload.get('start_date', now_wib().strftime('%Y-%m-%d')),
         notes=payload.get('notes'),
         created_by_user_id=user['id']
     )
@@ -376,7 +377,7 @@ async def remove_student_from_class(
     )
 
     # Update the most recent active history record for this student in this class
-    end_date = payload.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))
+    end_date = payload.get('end_date', now_wib().strftime('%Y-%m-%d'))
     await db.class_history.update_one(
         {
             'student_id': student_id,

@@ -1,9 +1,11 @@
 """
 Pydantic models for Super Apps MATSANDATAMA.
 """
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Literal, Union
 import uuid
+
+WIB_TZ = timezone(timedelta(hours=7))
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -524,7 +526,8 @@ class JournalModel(BaseModel):
     siswa_izin: int = 0
     siswa_sakit: int = 0
     attendance_details: List[JournalAttendanceDetail] = Field(default_factory=list)
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    # WIB ber-offset (+07:00), sama dengan jurnal piket/pengganti; dulu utcnow tanpa zona -> jam tampil 7 jam lebih awal
+    started_at: datetime = Field(default_factory=lambda: datetime.now(WIB_TZ))
     scheduled_start: Optional[str] = None
     scheduled_end: Optional[str] = None
     # === v1.1.1: Support for grouped time slots ===

@@ -31,6 +31,27 @@ def now_wib() -> datetime:
     return datetime.now(WIB_TZ)
 
 
+def parse_waktu_wib(nilai) -> Optional[datetime]:
+    """Ubah nilai waktu tersimpan menjadi datetime ber-zona WIB.
+
+    Format di database campuran: ber-zona ('+07:00'/'+00:00'/'Z'), UTC tanpa zona dari
+    datetime.utcnow().isoformat() (selalu memuat detik), atau WIB tanpa zona dari isian
+    <input type="datetime-local"> ('YYYY-MM-DDTHH:MM', tanpa detik).
+    """
+    if isinstance(nilai, datetime):
+        return (nilai if nilai.tzinfo else nilai.replace(tzinfo=timezone.utc)).astimezone(WIB_TZ)
+    if not isinstance(nilai, str) or not nilai:
+        return None
+    try:
+        dt = datetime.fromisoformat(nilai.replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if dt.tzinfo:
+        return dt.astimezone(WIB_TZ)
+    punya_detik = len(nilai) > 16 and nilai[10] == 'T'
+    return (dt.replace(tzinfo=timezone.utc).astimezone(WIB_TZ) if punya_detik else dt.replace(tzinfo=WIB_TZ))
+
+
 def _derive_key(secret: str = MASTER_SECRET) -> bytes:
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),

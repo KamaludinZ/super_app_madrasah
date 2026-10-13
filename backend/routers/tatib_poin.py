@@ -5,6 +5,7 @@ aktif (AKSES_TATIB_PER_PERAN): input = admin/guru tatib/waka kesiswaan, lihat = 
 kelas = wali kelas (hanya kelas yang diampu), pribadi = siswa (hanya miliknya).
 """
 from datetime import datetime
+from journal_core import now_wib
 from typing import Dict, List, Optional
 
 import io
@@ -367,9 +368,9 @@ async def ekspor_rekap_poin(
         bagian.append(f"Semester {sem.get('name')}")
     if start_date or end_date:
         bagian.append(f"Tanggal {start_date or '…'} s.d. {end_date or '…'}")
-    keterangan = 'Filter: ' + ' · '.join(bagian) + f" · diunduh {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    keterangan = 'Filter: ' + ' · '.join(bagian) + f" · diunduh {now_wib().strftime('%Y-%m-%d %H:%M')}"
     nama = '_'.join(filter(None, ['rekap_poin_tatib', f"kelas-{kelas}" if kelas else '', start_date, end_date,
-                                  datetime.now().strftime('%Y%m%d')]))
+                                  now_wib().strftime('%Y%m%d')]))
     return StreamingResponse(
         io.BytesIO(export_rekap_tatib_xlsx(rekap, keterangan)),
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

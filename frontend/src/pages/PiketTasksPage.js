@@ -18,6 +18,7 @@ import { api, DAY_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 const ATTENDANCE_DEFAULT = { siswa_hadir: 0, siswa_tidak_hadir: 0, siswa_izin: 0, siswa_sakit: 0 };
 
@@ -366,7 +367,7 @@ export default function PiketTasksPage() {
                           </TableCell>
                           <TableCell className="text-xs text-slate-600">
                             {t.accepted_at ? (
-                              new Date(t.accepted_at).toLocaleString('id-ID', {
+                              formatWIB(t.accepted_at, '', {
                                 day: '2-digit',
                                 month: 'short',
                                 hour: '2-digit',

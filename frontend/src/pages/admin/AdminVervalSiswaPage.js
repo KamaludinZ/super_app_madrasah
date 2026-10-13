@@ -11,6 +11,7 @@ import { CheckCircle, XCircle, Eye, Clock, AlertCircle, UserCheck, FileText, Tro
 import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
 
 export default function AdminVervalSiswaPage() {
   const [requests, setRequests] = useState([]);
@@ -357,7 +358,7 @@ export default function AdminVervalSiswaPage() {
                 ) : filteredRequests.map(req => (
                   <TableRow key={req.id}>
                     <TableCell className="text-sm">
-                      {new Date(req.created_at).toLocaleDateString('id-ID', {
+                      {formatWIB(req.created_at, 'Date', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
@@ -372,7 +373,7 @@ export default function AdminVervalSiswaPage() {
                       {req.reviewed_by_name || '-'}
                       {req.reviewed_at && (
                         <div className="text-xs text-slate-400 mt-0.5">
-                          {new Date(req.reviewed_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                          {formatWIB(req.reviewed_at, 'Date', { day: '2-digit', month: 'short' })}
                         </div>
                       )}
                     </TableCell>
@@ -411,7 +412,7 @@ export default function AdminVervalSiswaPage() {
                     <div><span className="text-slate-600">Diajukan oleh:</span> <strong>{selectedRequest.submitted_by_name}</strong></div>
                     <div><span className="text-slate-600">Jenis Pengajuan:</span> {requestTypeBadge(selectedRequest.request_type)}</div>
                     <div><span className="text-slate-600">Status:</span> {statusBadge(selectedRequest.status)}</div>
-                    <div><span className="text-slate-600">Tanggal:</span> {new Date(selectedRequest.created_at).toLocaleString('id-ID')}</div>
+                    <div><span className="text-slate-600">Tanggal:</span> {formatWIB(selectedRequest.created_at, '')}</div>
                     {selectedRequest.reviewed_by_name && (
                       <div><span className="text-slate-600">Direview:</span> {selectedRequest.reviewed_by_name}</div>
                     )}

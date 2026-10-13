@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { formatWIB } from '@/lib/datetime';
 
 export default function WaliKelasAttendanceReportPage() {
   const { user } = useAuth();
@@ -360,7 +361,7 @@ export default function WaliKelasAttendanceReportPage() {
                         <Calendar className="h-4 w-4 text-slate-400" />
                         <div>
                           <div className="font-mono text-sm font-semibold">
-                            {new Date(record.date).toLocaleDateString('id-ID', {
+                            {formatWIB(record.date, 'Date', {
                               weekday: 'long',
                               year: 'numeric',
                               month: 'long',

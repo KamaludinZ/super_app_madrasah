@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, Eye, Clock, AlertCircle, FileText, ShieldCheck } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 export default function MyVervalRequestsPage() {
   const [requests, setRequests] = useState([]);
@@ -297,7 +298,7 @@ export default function MyVervalRequestsPage() {
                 ) : requests.map(req => (
                   <TableRow key={req.id}>
                     <TableCell className="text-sm">
-                      {new Date(req.created_at).toLocaleDateString('id-ID', {
+                      {formatWIB(req.created_at, 'Date', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
@@ -310,7 +311,7 @@ export default function MyVervalRequestsPage() {
                       {req.reviewed_by_name || <span className="text-slate-400">Belum direview</span>}
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">
-                      {req.reviewed_at ? new Date(req.reviewed_at).toLocaleDateString('id-ID', {
+                      {req.reviewed_at ? formatWIB(req.reviewed_at, 'Date', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric'
@@ -348,7 +349,7 @@ export default function MyVervalRequestsPage() {
                 <div className="bg-slate-50 border rounded-lg p-3 text-sm">
                   <div className="grid grid-cols-2 gap-2">
                     <div><span className="text-slate-600">Status:</span> {statusBadge(selectedRequest.status)}</div>
-                    <div><span className="text-slate-600">Tanggal Pengajuan:</span> {new Date(selectedRequest.created_at).toLocaleString('id-ID')}</div>
+                    <div><span className="text-slate-600">Tanggal Pengajuan:</span> {formatWIB(selectedRequest.created_at, '')}</div>
                     <div><span className="text-slate-600">Jenis Pengajuan:</span> <strong>{requestTypeLabel(selectedRequest.request_type)}</strong></div>
                     <div><span className="text-slate-600">Target:</span> <span className="font-mono">{selectedRequest.target_collection || '-'}</span></div>
                     {selectedRequest.reviewed_by_role && (
@@ -363,7 +364,7 @@ export default function MyVervalRequestsPage() {
                     {selectedRequest.reviewed_by_name && (
                       <>
                         <div><span className="text-slate-600">Direview oleh:</span> <strong>{selectedRequest.reviewed_by_name}</strong></div>
-                        <div><span className="text-slate-600">Tanggal Review:</span> {new Date(selectedRequest.reviewed_at).toLocaleString('id-ID')}</div>
+                        <div><span className="text-slate-600">Tanggal Review:</span> {formatWIB(selectedRequest.reviewed_at, '')}</div>
                       </>
                     )}
                   </div>

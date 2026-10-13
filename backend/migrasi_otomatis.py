@@ -142,6 +142,16 @@ async def _masterplan_kode(db):
     return await migrate(db)
 
 
+async def _waktu_wib(db):
+    from migrations.migrate_waktu_wib import migrate
+    return await migrate(db)
+
+
+async def _uks_obat_nama_key(db):
+    from migrations.migrate_uks_obat_nama_key import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -154,6 +164,8 @@ MIGRASI = [
     ('2026-10-08_simpan_akun', _simpan_akun),
     ('2026-10-08_masterplan', _masterplan),
     ('2026-10-08_masterplan_kode', _masterplan_kode),
+    ('2026-10-13_waktu_wib', _waktu_wib),
+    ('2026-10-13_uks_obat_nama_key', _uks_obat_nama_key),
 ]
 
 

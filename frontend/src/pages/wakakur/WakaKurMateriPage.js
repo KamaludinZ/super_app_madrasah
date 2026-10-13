@@ -28,11 +28,10 @@ import {
   ChevronRight,
   User,
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { formatWIBPanjang } from '@/lib/datetime';
 
 const WakaKurMateriPage = () => {
   const [loading, setLoading] = useState(true);
@@ -119,7 +118,7 @@ const WakaKurMateriPage = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: id });
+      return formatWIBPanjang(dateString);
     } catch {
       return dateString;
     }

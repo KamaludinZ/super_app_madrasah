@@ -26,6 +26,7 @@ import {
 import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { formatWIB } from '@/lib/datetime';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 function fileUrl(u) {
@@ -855,14 +856,14 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
                                   <div>
                                     <span className="text-slate-600">Tanggal Mulai:</span>
                                     <div className="font-mono text-sm text-slate-900">
-                                      {new Date(h.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                      {formatWIB(h.start_date, 'Date', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     </div>
                                   </div>
                                   {h.end_date && (
                                     <div>
                                       <span className="text-slate-600">Tanggal Selesai:</span>
                                       <div className="font-mono text-sm text-slate-900">
-                                        {new Date(h.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                        {formatWIB(h.end_date, 'Date', { day: 'numeric', month: 'long', year: 'numeric' })}
                                       </div>
                                     </div>
                                   )}

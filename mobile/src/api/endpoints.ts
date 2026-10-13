@@ -160,7 +160,15 @@ export const api = {
   },
 
   ekinerja: {
-    tahunTakwim: () => request<{ year?: number } | null>('/tahun-takwim/active'),
+    /** Tahun Takwim yang dilihat pengguna: ikut "Konteks Lihat" pribadinya (diatur di web), selain itu tahun aktif. */
+    tahunTakwim: async (): Promise<{ year?: number; isOverride?: boolean } | null> => {
+      try {
+        const ctx = await request<{ is_override?: boolean; tahun_takwim_info?: { year?: number }[] }>('/auth/view-context');
+        const year = ctx?.is_override ? ctx.tahun_takwim_info?.[0]?.year : undefined;
+        if (year) return { year: Number(year), isOverride: true };
+      } catch { /* jatuh ke tahun aktif */ }
+      return request<{ year?: number } | null>('/tahun-takwim/active');
+    },
     jurnalMy: () => request<JurnalHarian[]>('/ekinerja/jurnal-harian/my'),
     jurnalCreate: (body: { uraian_kegiatan: string; volume: string | null; satuan_hasil: string | null; link_id: string | null }) =>
       request<JurnalHarian>('/ekinerja/jurnal-harian', { method: 'POST', body }),

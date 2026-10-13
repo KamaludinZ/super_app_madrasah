@@ -24,13 +24,22 @@ export function wibParts(d: Date | number | string = Date.now()) {
   };
 }
 
-/** Parse ISO 8601; string tanpa zona dianggap WIB (sesuai backend yang menyimpan now_wib()). */
+/**
+ * Parse ISO 8601 dari server. Format tersimpan campuran:
+ *  - ber-zona ('+07:00' / '+00:00' / 'Z')            -> apa adanya
+ *  - UTC tanpa zona dari datetime.utcnow().isoformat() (selalu memuat detik, mis. '2026-10-12T00:35:12.3')
+ *  - WIB tanpa zona dari isian jam (tanpa detik, mis. '2026-10-12T07:35')
+ *  - tanggal saja ('2026-10-12')                     -> 00:00 WIB
+ * Dulu semua string tanpa zona dianggap WIB, sehingga jam jurnal Scan QR (UTC) tampil 7 jam lebih awal.
+ */
 export function parseISO(s: string): Date {
   if (!s) return new Date(NaN);
   const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(s);
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
   if (dateOnly) return new Date(`${s}T00:00:00+07:00`);
-  return new Date(hasZone ? s : `${s}+07:00`);
+  if (hasZone) return new Date(s);
+  if (/T\d{2}:\d{2}:\d{2}/.test(s)) return new Date(`${s.replace(/(\.\d{3})\d+$/, '$1')}Z`);
+  return new Date(`${s}+07:00`);
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

@@ -16,6 +16,7 @@ import axios from 'axios';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
 import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 import { NoPrestasiEmptyState } from '@/components/ui/EmptyState';
+import { formatWIB } from '@/lib/datetime';
 
 const REFRESH_INTERVAL = 30000; // 30s
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -623,7 +624,7 @@ function AchievementCard({ achievement }) {
 
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Calendar className="h-3 w-3" />
-          <span>{achievement.date ? new Date(achievement.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : `Tahun ${achievement.year}`}</span>
+          <span>{achievement.date ? formatWIB(achievement.date, 'Date', { day: 'numeric', month: 'long', year: 'numeric' }) : `Tahun ${achievement.year}`}</span>
         </div>
 
         {(achievement.student_name || achievement.teacher_name || achievement.holder_type === 'madrasah' || achievement.holder_type === 'tendik') && (

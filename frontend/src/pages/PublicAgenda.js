@@ -109,10 +109,11 @@ export default function PublicAgenda() {
   // Generate date buttons (7 days before and after today)
   const generateDateButtons = () => {
     const dates = [];
-    const today = new Date();
+    // Hitung dari tanggal WIB hari ini (bukan tanggal UTC) agar tidak bergeser sebelum 07.00 WIB
+    const base = new Date(`${hariIniWIB()}T00:00:00Z`);
     for (let i = -7; i <= 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
+      const d = new Date(base);
+      d.setUTCDate(base.getUTCDate() + i);
       dates.push(d.toISOString().split('T')[0]);
     }
     return dates;

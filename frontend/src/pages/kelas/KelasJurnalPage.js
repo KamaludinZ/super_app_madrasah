@@ -18,6 +18,7 @@ import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
+import { formatWIBPanjang, parseServerDate } from '@/lib/datetime';
 
 const KelasJurnalPage = () => {
   const [loading, setLoading] = useState(true);
@@ -135,7 +136,7 @@ const KelasJurnalPage = () => {
                     try {
                       const dateValue = j.started_at || j.created_at;
                       if (dateValue) {
-                        const dateObj = new Date(dateValue);
+                        const dateObj = parseServerDate(dateValue);
                         if (!isNaN(dateObj.getTime())) {
                           formattedDate = format(dateObj, 'dd MMM yyyy', { locale: id });
                         }
@@ -249,7 +250,7 @@ const KelasJurnalPage = () => {
                   <div>
                     <span className="text-gray-600">Tanggal:</span>
                     <span className="ml-2 font-semibold">
-                      {attendanceDetail.date ? format(new Date(attendanceDetail.date), 'dd MMMM yyyy', { locale: id }) : '-'}
+                      {attendanceDetail.date ? formatWIBPanjang(attendanceDetail.date, false) : '-'}
                     </span>
                   </div>
                   <div>

@@ -14,6 +14,7 @@ import PublicFooter from '@/components/layout/PublicFooter';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
 import { IslamicBackground } from '@/components/patterns/IslamicPatterns';
 import { NoDataEmptyState } from '@/components/ui/EmptyState';
+import { formatWIB } from '@/lib/datetime';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API_BASE = `${BACKEND_URL}/api`;
@@ -122,7 +123,7 @@ export default function PublicRKAMPage() {
   };
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('id-ID', {
+    return formatWIB(dateStr, 'Date', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'

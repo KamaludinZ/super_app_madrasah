@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { formatWIB } from '@/lib/datetime';
 
 export default function WaliKelasCleanlinessReportPage() {
   const { user } = useAuth();
@@ -228,7 +229,7 @@ export default function WaliKelasCleanlinessReportPage() {
                       <TableCell className="font-semibold">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-slate-400" />
-                          {new Date(record.date).toLocaleDateString('id-ID', {
+                          {formatWIB(record.date, 'Date', {
                             weekday: 'long',
                             year: 'numeric',
                             month: 'long',
@@ -303,7 +304,7 @@ export default function WaliKelasCleanlinessReportPage() {
               <div>
                 <div className="text-lg">Detail Penilaian Kebersihan</div>
                 <div className="text-sm font-normal text-slate-600 mt-1">
-                  {selectedDate && new Date(selectedDate.date).toLocaleDateString('id-ID', {
+                  {selectedDate && formatWIB(selectedDate.date, 'Date', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -363,7 +364,7 @@ export default function WaliKelasCleanlinessReportPage() {
                 <div className="text-xs text-blue-700 font-semibold mb-2">Penilai</div>
                 <div className="font-semibold">{dateDetails.assessor_name}</div>
                 <div className="text-xs text-blue-600 mt-1">
-                  Dinilai pada: {new Date(dateDetails.assessed_at).toLocaleString('id-ID')}
+                  Dinilai pada: {formatWIB(dateDetails.assessed_at, '')}
                 </div>
               </div>
 

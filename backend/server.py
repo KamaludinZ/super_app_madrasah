@@ -274,11 +274,12 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Seed error (development mode): {e}")
 
-    # Index koleksi BMHP & diagnosa UKS (idempotent; kegagalan tidak boleh menghentikan server)
+    # Index koleksi obat, BMHP & diagnosa UKS (idempotent; kegagalan tidak boleh menghentikan server)
     try:
-        from routers.uks import ensure_uks_bmhp_indexes, ensure_uks_diagnosa_indexes
+        from routers.uks import ensure_uks_bmhp_indexes, ensure_uks_diagnosa_indexes, ensure_uks_obat_indexes
         await ensure_uks_bmhp_indexes(db)
         await ensure_uks_diagnosa_indexes(db)
+        await ensure_uks_obat_indexes(db)
     except Exception as e:
         logger.error(f"Failed to ensure UKS BMHP/diagnosa indexes: {e}")
 

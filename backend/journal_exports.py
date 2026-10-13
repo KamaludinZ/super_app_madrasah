@@ -1,6 +1,7 @@
 import calendar
 import io
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from journal_core import now_wib
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from openpyxl import Workbook
@@ -38,6 +39,8 @@ DAY_IDX_TO_ID = {
 def _safe_date_label(iso_dt: str) -> Tuple[str, str]:
     try:
         dt = datetime.fromisoformat(iso_dt.replace("Z", "+00:00"))
+        # Tanggal selalu menurut WIB; string tanpa zona = data lama UTC (lihat migrate_waktu_wib)
+        dt = (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).astimezone(timezone(timedelta(hours=7)))
         day_id = DAY_IDX_TO_ID.get(dt.weekday(), "")
         day_label = DAY_ID_TO_LABEL.get(day_id, "")
         date_label = dt.strftime("%d-%m-%Y")
@@ -218,7 +221,7 @@ def export_monthly_teacher_journal_pdf(
     story.append(tbl)
     story.append(Spacer(1, 16))
 
-    today_str = datetime.now().strftime("%d-%m-%Y")
+    today_str = now_wib().strftime("%d-%m-%Y")
     sign_data = [
         ["", f"{city_label.upper()}, {today_str}"],
         ["MENGETAHUI", ""],

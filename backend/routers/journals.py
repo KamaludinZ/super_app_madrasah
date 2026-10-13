@@ -1,5 +1,5 @@
 """Jurnal: validate / create / my / by-class + admin jurnal rekap & stats."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, List, Any, Set
 import logging
 
@@ -588,10 +588,9 @@ async def my_journal_timeliness(user: Dict = Depends(get_current_user)):
             except ValueError:
                 continue
         if started_at.tzinfo is None:
-            # started_at is written via now_wib().isoformat() (already WIB) at
-            # journal-creation time; a small number of legacy rows are naive
-            # with no offset — treat those as already-WIB too, not UTC.
-            started_wib = started_at.replace(tzinfo=WIB_TZ)
+            # Jurnal lama (Scan QR/Token QR) tersimpan UTC tanpa zona (JournalModel dulu memakai
+            # utcnow); lihat migrations/migrate_waktu_wib.py. Anggap UTC, bukan WIB.
+            started_wib = started_at.replace(tzinfo=timezone.utc).astimezone(WIB_TZ)
         else:
             started_wib = started_at.astimezone(WIB_TZ)
         try:

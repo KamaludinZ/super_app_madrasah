@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { api } from '@/lib/api';
 import { hariIniWIB } from '@/lib/tanggal';
+import { BatchStatusBadge, formatED } from './uksStok';
 
 
 
@@ -73,6 +74,9 @@ const daysToExpiry = (item) => {
   const exp = new Date(item.tanggal_kadaluarsa_terdekat);
   return Math.round((exp - today) / 86400000);
 };
+
+// Ada stok kadaluarsa (dikunci, tidak bisa dipakai) atau stok layak pakai segera kadaluarsa.
+const perluPerhatianKadaluarsa = (item) => (item.stok_kadaluarsa ?? 0) > 0 || !!getKadaluarsaInfo(item);
 
 const getKadaluarsaInfo = (item) => {
   const days = daysToExpiry(item);
@@ -279,7 +283,7 @@ export default function AdminUKSBMHPPage() {
 
   const matchesStatus = (b) => {
     if (statusFilter === 'semua') return true;
-    if (statusFilter === 'kadaluarsa') return !!getKadaluarsaInfo(b);
+    if (statusFilter === 'kadaluarsa') return perluPerhatianKadaluarsa(b);
     return getStokStatus(b).key === statusFilter;
   };
 
@@ -290,7 +294,7 @@ export default function AdminUKSBMHPPage() {
     total: bmhpList.length,
     menipis: bmhpList.filter((b) => getStokStatus(b).key === 'menipis').length,
     habis: bmhpList.filter((b) => getStokStatus(b).key === 'habis').length,
-    kadaluarsa: bmhpList.filter((b) => getKadaluarsaInfo(b)).length,
+    kadaluarsa: bmhpList.filter(perluPerhatianKadaluarsa).length,
   };
 
   return (
@@ -316,7 +320,7 @@ export default function AdminUKSBMHPPage() {
         <SummaryCard icon={CheckCircle2} label="Total Jenis BMHP" value={summary.total} tone="bg-emerald-100 text-emerald-700" />
         <SummaryCard icon={AlertTriangle} label="Stok Menipis" value={summary.menipis} tone="bg-rose-100 text-rose-700" />
         <SummaryCard icon={XCircle} label="Stok Habis" value={summary.habis} tone="bg-slate-200 text-slate-700" />
-        <SummaryCard icon={CalendarClock} label={`Kadaluarsa ≤ ${KADALUARSA_WARNING_DAYS} hari`} value={summary.kadaluarsa} tone="bg-amber-100 text-amber-700" />
+        <SummaryCard icon={CalendarClock} label={`Kadaluarsa / ≤ ${KADALUARSA_WARNING_DAYS} hari`} value={summary.kadaluarsa} tone="bg-amber-100 text-amber-700" />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 justify-between">
@@ -345,7 +349,7 @@ export default function AdminUKSBMHPPage() {
                 <TableRow>
                   <TableHead>Nama BMHP</TableHead>
                   <TableHead>Jenis</TableHead>
-                  <TableHead className="text-center">Stok Tersisa</TableHead>
+                  <TableHead className="text-center">Stok Layak Pakai</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Stok Terpakai</TableHead>
                   <TableHead className="text-center">Stok Min</TableHead>
@@ -378,8 +382,11 @@ export default function AdminUKSBMHPPage() {
                       <TableCell className="text-center font-mono">{item.stok_terpakai ?? 0}</TableCell>
                       <TableCell className="text-center font-mono">{item.stok_minimum}</TableCell>
                       <TableCell>
-                        <div className="font-mono">{item.tanggal_kadaluarsa_terdekat || '-'}</div>
+                        <div className="font-mono">{formatED(item.tanggal_kadaluarsa_terdekat)}</div>
                         {kadaluarsa && <div className={`text-xs font-medium ${kadaluarsa.className}`}>{kadaluarsa.label}</div>}
+                        {(item.stok_kadaluarsa ?? 0) > 0 && (
+                          <div className="text-xs font-medium text-rose-700">{item.stok_kadaluarsa} {item.satuan} sudah kadaluarsa ({item.jumlah_batch_kadaluarsa} batch, dikunci)</div>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-xs"><div className="line-clamp-2">{item.keterangan || '-'}</div></TableCell>
                       <TableCell className="text-right">
@@ -413,7 +420,9 @@ export default function AdminUKSBMHPPage() {
                       <TableHead>Tanggal</TableHead>
                       <TableHead>BMHP</TableHead>
                       <TableHead className="text-center">Jumlah</TableHead>
+                      <TableHead className="text-center">Sisa Batch</TableHead>
                       <TableHead>Kadaluarsa</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Sumber</TableHead>
                       <TableHead>Petugas</TableHead>
                       <TableHead>Keterangan</TableHead>
@@ -422,7 +431,7 @@ export default function AdminUKSBMHPPage() {
                   </TableHeader>
                   <TableBody>
                     {sortedMasuk.length === 0 ? (
-                      <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">Belum ada data BMHP masuk</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-500">Belum ada data BMHP masuk</TableCell></TableRow>
                     ) : (
                       sortedMasuk.map((item) => {
                         const bmhp = bmhpById(item.bmhp_id);
@@ -431,7 +440,9 @@ export default function AdminUKSBMHPPage() {
                             <TableCell className="font-mono">{item.tanggal}</TableCell>
                             <TableCell className="font-semibold">{bmhp?.nama_bmhp || item.bmhp_nama || '(BMHP terhapus)'}</TableCell>
                             <TableCell className="text-center"><Badge className="bg-emerald-100 text-emerald-700 border-emerald-200" title={`Sisa batch: ${item.stok_sisa ?? item.jumlah}`}>+{item.jumlah} {bmhp?.satuan || item.satuan || ''}</Badge></TableCell>
-                            <TableCell className="font-mono">{item.tanggal_kadaluarsa || '-'}</TableCell>
+                            <TableCell className="text-center font-mono">{item.stok_sisa ?? item.jumlah}</TableCell>
+                            <TableCell className="font-mono">{formatED(item.tanggal_kadaluarsa)}</TableCell>
+                            <TableCell><BatchStatusBadge batch={{ ...item, stok_sisa: item.stok_sisa ?? item.jumlah }} /></TableCell>
                             <TableCell>{item.sumber || '-'}</TableCell>
                             <TableCell>{item.petugas_nama || '-'}</TableCell>
                             <TableCell className="max-w-xs"><div className="line-clamp-2">{item.keterangan || '-'}</div></TableCell>

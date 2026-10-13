@@ -14,10 +14,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Loader2, BookOpen, User, Calendar, Search, Eye, Send, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
 import { api } from '@/lib/api';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { formatWIBPanjang } from '@/lib/datetime';
 
 const SiswaTugasPage = () => {
   const [loading, setLoading] = useState(true);
@@ -108,7 +107,7 @@ const SiswaTugasPage = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: id });
+      return formatWIBPanjang(dateString);
     } catch {
       return dateString;
     }

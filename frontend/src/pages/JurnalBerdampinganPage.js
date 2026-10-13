@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Clock, Columns2, FileX2, Loader2, User, UserRoundCog } from 'lucide-react';
 import { parseLocalIso } from '@/lib/guruPengganti';
 import { getSideBySideJournals } from '@/lib/guruPenggantiSchedule';
+import { formatWIB } from '@/lib/datetime';
 
 /**
  * Jurnal berdampingan: catatan guru yang digantikan dan guru pengganti untuk slot & tanggal
@@ -112,7 +113,7 @@ function JournalColumn({ tone, title, teacherName, journal, emptyText }) {
           <>
             <div className="flex items-center gap-1 text-xs text-slate-500">
               <Clock className="h-3 w-3" />
-              Diisi {new Date(journal.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              Diisi {formatWIB(journal.started_at, 'Time', { hour: '2-digit', minute: '2-digit' })}
               {journal.filled_by_name && <> oleh <span className="font-medium text-slate-700">{journal.filled_by_name}</span></>}
             </div>
             <Field label="Materi" value={journal.materi} />

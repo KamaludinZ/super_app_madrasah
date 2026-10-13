@@ -6,7 +6,7 @@ to claim. Once claimed, the RHK is attributed to that person; the author roles
 can lock a claimed RHK to prevent it being claimed by anyone else (a claimed
 RHK is otherwise still just informational — locking is an explicit extra step).
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import uuid
 
@@ -521,6 +521,26 @@ async def download_lckb_pdf(
 # itu sendiri.
 # ============================================================
 
+# Peran yang boleh mengubah status "Sudah Upload" milik GTK lain (mis. KTU
+# menandai berkas yang diserahkan langsung/di luar aplikasi).
+PENGUMPULAN_STATUS_MANAGER_ROLES = ('admin', 'kepala_tata_usaha')
+
+# Peran yang ikut direkap sebagai GTK wajib upload. KTU juga tenaga kependidikan,
+# sehingga ikut direkap dan bisa menandai status dirinya sendiri.
+PENGUMPULAN_GTK_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
+                         'guru_ekstrakurikuler', 'guru_ipa', 'guru_ips', 'guru_bahasa',
+                         'guru_seni', 'guru_agama', 'guru_tik', 'tenaga_kependidikan', 'kepala_tata_usaha']
+
+
+def _utc_now_iso() -> str:
+    """Waktu UTC lengkap dengan zona (+00:00) agar browser/aplikasi mengonversi ke WIB dengan benar."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _can_manage_pengumpulan_status(user: Dict) -> bool:
+    return user.get('active_role') in PENGUMPULAN_STATUS_MANAGER_ROLES or 'admin' in user.get('roles', [])
+
+
 PENGUMPULAN_TYPES = ('skp', 'lckb', 'absensi', 'angka_kredit', 'pak', 'profesionalitas_gtk', 'sertifikasi')
 PENGUMPULAN_MONTHLY_TYPES = ('lckb', 'absensi')
 PENGUMPULAN_QUARTERLY_TYPES = ('skp', 'angka_kredit', 'pak', 'profesionalitas_gtk', 'sertifikasi')
@@ -597,9 +617,7 @@ async def get_pengumpulan_status(
         confirmed_by_id = {c['gtk_id']: c for c in confirmations}
 
         gtk_users = await db.users.find(
-            {'roles': {'$in': ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
-                                'guru_ekstrakurikuler', 'guru_ipa', 'guru_ips', 'guru_bahasa',
-                                'guru_seni', 'guru_agama', 'guru_tik', 'tenaga_kependidikan']}},
+            {'roles': {'$in': PENGUMPULAN_GTK_ROLES}, 'is_active': {'$ne': False}},
             {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1},
         ).to_list(2000)
 
@@ -611,12 +629,16 @@ async def get_pengumpulan_status(
                 'gtk_name': g.get('full_name') or g.get('username'),
                 'sudah_upload': g['id'] in confirmed_ids,
                 'confirmed_at': c.get('confirmed_at') if c else None,
+                # Diisi bila status ditandai oleh KTU/admin, bukan oleh GTK sendiri
+                'confirmed_by_name': c.get('confirmed_by_name') if c else None,
             })
         rekap.sort(key=lambda x: (x['sudah_upload'], x['gtk_name']))
+        gtk_ids = {g['id'] for g in gtk_users}
         return {
             'link_url': link_url,
             'total_gtk': len(gtk_users),
-            'total_confirmed': len(confirmed_ids),
+            'total_confirmed': len(confirmed_ids & gtk_ids),
+            'can_manage_status': _can_manage_pengumpulan_status(user),
             'rekap': rekap,
         }
     else:
@@ -639,19 +661,66 @@ async def confirm_pengumpulan_upload(
 ):
     """GTK menandai bahwa mereka sudah upload dokumen ke link yang disediakan."""
     _validate_pengumpulan_type_period(type, period)
-    now = datetime.utcnow().isoformat()
-    key = {'type': type, 'year': year, 'period': period, 'gtk_id': user['id']}
-    existing = await db.ekinerja_pengumpulan_konfirmasi.find_one(key)
-    if existing:
-        await db.ekinerja_pengumpulan_konfirmasi.update_one(key, {'$set': {'confirmed_at': now}})
-    else:
-        await db.ekinerja_pengumpulan_konfirmasi.insert_one({
-            'id': str(uuid.uuid4()), **key,
-            'gtk_name': user.get('full_name', user.get('username')),
-            'confirmed_at': now,
-        })
+    await _set_konfirmasi(type, year, period, user['id'], user.get('full_name', user.get('username')))
     await log_audit(user, 'ekinerja_pengumpulan_confirm', f"Confirmed upload {type} {period} {year}")
     return {'message': 'Konfirmasi upload berhasil disimpan'}
+
+
+async def _set_konfirmasi(type_: str, year: int, period: str, gtk_id: str, gtk_name: str,
+                          by_user: Optional[Dict] = None):
+    now = _utc_now_iso()
+    key = {'type': type_, 'year': year, 'period': period, 'gtk_id': gtk_id}
+    data = {
+        'confirmed_at': now,
+        # Kosong = dikonfirmasi GTK sendiri; terisi = ditandai KTU/admin atas nama GTK
+        'confirmed_by_id': by_user['id'] if by_user else None,
+        'confirmed_by_name': by_user.get('full_name', by_user.get('username')) if by_user else None,
+    }
+    existing = await db.ekinerja_pengumpulan_konfirmasi.find_one(key)
+    if existing:
+        await db.ekinerja_pengumpulan_konfirmasi.update_one(key, {'$set': data})
+    else:
+        await db.ekinerja_pengumpulan_konfirmasi.insert_one({
+            'id': str(uuid.uuid4()), **key, 'gtk_name': gtk_name, **data,
+        })
+
+
+@router.put("/ekinerja/pengumpulan/confirm/{gtk_id}")
+async def manage_confirm_pengumpulan_upload(
+    gtk_id: str,
+    type: str,
+    year: int,
+    period: str,
+    user: Dict = Depends(require_role(*PENGUMPULAN_STATUS_MANAGER_ROLES)),
+):
+    """KTU/admin menandai "Sudah Upload" atas nama GTK (mis. berkas diserahkan langsung)."""
+    _validate_pengumpulan_type_period(type, period)
+    gtk = await db.users.find_one({'id': gtk_id}, {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1})
+    if not gtk:
+        raise HTTPException(404, "GTK tidak ditemukan")
+    gtk_name = gtk.get('full_name') or gtk.get('username')
+    by = None if gtk_id == user['id'] else user
+    await _set_konfirmasi(type, year, period, gtk_id, gtk_name, by_user=by)
+    await log_audit(user, 'ekinerja_pengumpulan_confirm_by_manager', 'ekinerja_pengumpulan', gtk_id,
+                    details={'type': type, 'year': year, 'period': period, 'gtk_name': gtk_name})
+    return {'message': f'Status upload {gtk_name} ditandai Sudah Upload'}
+
+
+@router.delete("/ekinerja/pengumpulan/confirm/{gtk_id}")
+async def manage_unconfirm_pengumpulan_upload(
+    gtk_id: str,
+    type: str,
+    year: int,
+    period: str,
+    user: Dict = Depends(require_role(*PENGUMPULAN_STATUS_MANAGER_ROLES)),
+):
+    """KTU/admin mengembalikan status GTK menjadi "Belum Upload"."""
+    _validate_pengumpulan_type_period(type, period)
+    res = await db.ekinerja_pengumpulan_konfirmasi.delete_one(
+        {'type': type, 'year': year, 'period': period, 'gtk_id': gtk_id})
+    await log_audit(user, 'ekinerja_pengumpulan_unconfirm_by_manager', 'ekinerja_pengumpulan', gtk_id,
+                    details={'type': type, 'year': year, 'period': period, 'deleted': res.deleted_count})
+    return {'message': 'Status upload dikembalikan menjadi Belum Upload'}
 
 
 @router.delete("/ekinerja/pengumpulan/confirm")

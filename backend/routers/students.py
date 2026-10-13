@@ -30,7 +30,7 @@ from excel_io import (
 )
 from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_SISWA, selaraskan_alamat
 from data_master_service import alasan_siswa_kosong, jumlah_siswa_per_tingkat, normalisasi_tingkat, siswa_per_tingkat
-from journal_core import now_wib
+from journal_core import WIB_TZ, now_wib, parse_waktu_wib
 from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, tambah_keterangan_kosong, workbook_bytes
 from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
@@ -1188,16 +1188,17 @@ async def get_my_attendance_stats(
 
     # Calculate weekly stats (last 7 days)
     week_ago = now - timedelta(days=7)
-    weekly_records = [a for a in attendance_records if datetime.fromisoformat(a.get('created_at')) >= week_ago]
+    # created_at bisa ber-zona (now_wib) atau UTC tanpa zona (data lama); samakan ke WIB agar tidak TypeError
+    weekly_records = [a for a in attendance_records if (parse_waktu_wib(a.get('created_at')) or week_ago) >= week_ago]
     weekly_total = len(weekly_records)
     weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
     weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
 
     # Calculate daily stats (today)
-    today_start = datetime(now.year, now.month, now.day)
-    today_end = datetime(now.year, now.month, now.day, 23, 59, 59)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=WIB_TZ)
+    today_end = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=WIB_TZ)
     daily_records = [a for a in attendance_records
-                     if today_start <= datetime.fromisoformat(a.get('created_at')) <= today_end]
+                     if (w := parse_waktu_wib(a.get('created_at'))) and today_start <= w <= today_end]
     daily_total = len(daily_records)
     daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
     daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
