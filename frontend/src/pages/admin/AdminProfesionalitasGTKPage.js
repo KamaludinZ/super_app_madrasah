@@ -13,6 +13,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { PengumpulanPanel } from '@/pages/admin/AdminEKinerjaPage';
+import { useViewYear } from '@/lib/useViewYear';
+import { ViewYearNotice } from '@/components/layout/ViewYearNotice';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
@@ -26,15 +28,13 @@ export default function AdminProfesionalitasGTKPage() {
   const { activeRole } = useAuth();
   const isAuthor = EKINERJA_AUTHOR_ROLES.includes(activeRole);
   const [activeTab, setActiveTab] = useState('profesionalitas');
-  const [activeTahunTakwim, setActiveTahunTakwim] = useState(null);
-  const activeYear = activeTahunTakwim?.year || new Date().getFullYear();
-
-  useEffect(() => {
-    api.get('/tahun-takwim/active').then(({ data }) => setActiveTahunTakwim(data)).catch(() => {});
-  }, []);
+  // Tahun yang DILIHAT pengguna ini: ikut "Konteks Lihat" pribadi bila dipilih, selain itu tahun aktif madrasah
+  const viewYear = useViewYear();
+  const activeYear = viewYear.year || new Date().getFullYear();
 
   return (
     <div className="space-y-6">
+      <ViewYearNotice viewYear={viewYear} />
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
@@ -98,7 +98,7 @@ function SertifikasiPanel({ year }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className="text-xs">Tahun Takwim Aktif: {year}</Badge>
+        <Badge variant="outline" className="text-xs">Tahun Takwim: {year}</Badge>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Pilih periode..." /></SelectTrigger>
           <SelectContent>

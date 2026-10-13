@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
+import { notifyViewContextChanged } from '@/lib/useViewYear';
 import { toast } from 'sonner';
 
 /**
@@ -85,6 +86,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
       const payload = { semester_id: selSem };
       const { data } = await api.put('/auth/view-context', payload);
       toast.success(`Konteks lihat: ${data.year_name} - ${data.semester_name || 'aktif'}`);
+      notifyViewContextChanged(data);
       onUpdated?.(data);
       onOpenChange(false);
     } catch (e) {
@@ -97,6 +99,7 @@ export default function ViewContextDialog({ open, onOpenChange, onUpdated }) {
     try {
       const { data } = await api.put('/auth/view-context', {});
       toast.success('Kembali ke TP aktif');
+      notifyViewContextChanged(data);
       onUpdated?.(data);
       onOpenChange(false);
     } catch (e) {

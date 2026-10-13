@@ -19,6 +19,9 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { formatWIB } from '@/lib/datetime';
+import { useViewYear } from '@/lib/useViewYear';
+import { ViewYearNotice } from '@/components/layout/ViewYearNotice';
 
 const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
 
@@ -58,11 +61,12 @@ export default function AdminEKinerjaPage() {
   const [rhkEditing, setRhkEditing] = useState(null);
   const [rhkForm, setRhkForm] = useState(RHK_EMPTY_FORM);
   const [rhkSubmitting, setRhkSubmitting] = useState(false);
-  const [activeTahunTakwim, setActiveTahunTakwim] = useState(null);
   const [rhkImporting, setRhkImporting] = useState(false);
   const [rhkDownloadingTemplate, setRhkDownloadingTemplate] = useState(false);
 
-  const activeYear = activeTahunTakwim?.year || new Date().getFullYear();
+  // Tahun yang DILIHAT pengguna ini: ikut "Konteks Lihat" pribadi bila dipilih, selain itu tahun aktif madrasah
+  const viewYear = useViewYear();
+  const activeYear = viewYear.year || new Date().getFullYear();
   const currentMonthName = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][new Date().getMonth()];
 
   // LCKB state
@@ -179,16 +183,13 @@ export default function AdminEKinerjaPage() {
 
   useEffect(() => {
     loadData();
-    (async () => {
-      try {
-        const { data } = await api.get('/tahun-takwim/active');
-        setActiveTahunTakwim(data);
-        loadRhk(data?.year);
-      } catch (e) {
-        loadRhk();
-      }
-    })();
   }, []);
+
+  // Muat ulang RHK setiap tahun yang dilihat berubah (mis. pengguna pindah ke tahun lampau)
+  useEffect(() => {
+    if (!viewYear.loading) loadRhk(activeYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeYear, viewYear.loading]);
 
   const loadData = async () => {
     try {
@@ -369,6 +370,7 @@ export default function AdminEKinerjaPage() {
 
   return (
     <div className="space-y-6">
+      <ViewYearNotice viewYear={viewYear} />
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2">
@@ -410,7 +412,7 @@ export default function AdminEKinerjaPage() {
             <CardContent className="p-0">
               <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Tahun Takwim Aktif: {activeYear}</Badge>
+                  <Badge variant="outline" className="text-xs">Tahun Takwim: {activeYear}</Badge>
                 </div>
                 {isEkinerjaAuthor && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -675,7 +677,7 @@ export default function AdminEKinerjaPage() {
                 <CardContent className="p-0">
                   <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="text-xs">Tahun Takwim Aktif: {activeYear}</Badge>
+                      <Badge variant="outline" className="text-xs">Tahun Takwim: {activeYear}</Badge>
                       <Select value={lckbMonth} onValueChange={(v) => { setLckbMonth(v); setLckbSelectedGtk(null); }}>
                         <SelectTrigger className="w-40"><SelectValue placeholder="Pilih bulan..." /></SelectTrigger>
                         <SelectContent>
@@ -996,6 +998,7 @@ export function PengumpulanPanel({
   const [linkDraft, setLinkDraft] = useState('');
   const [savingLink, setSavingLink] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [togglingGtkId, setTogglingGtkId] = useState(null);
 
   useEffect(() => {
     if (!isMonthly) {
@@ -1057,13 +1060,34 @@ export function PengumpulanPanel({
     }
   };
 
+  // KTU/admin: ubah status "Sudah Upload" milik GTK (mis. berkas diserahkan langsung ke TU)
+  const handleToggleGtk = async (row) => {
+    const tandai = !row.sudah_upload;
+    if (!tandai && !(await confirmDialog(`Kembalikan status ${label} ${row.gtk_name} menjadi "Belum Upload"?`))) return;
+    setTogglingGtkId(row.gtk_id);
+    try {
+      const params = { type, year, period };
+      if (tandai) await api.put(`/ekinerja/pengumpulan/confirm/${row.gtk_id}`, null, { params });
+      else await api.delete(`/ekinerja/pengumpulan/confirm/${row.gtk_id}`, { params });
+      toast.success(tandai ? `${row.gtk_name} ditandai Sudah Upload` : `${row.gtk_name} dikembalikan ke Belum Upload`);
+      loadStatus();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Gagal mengubah status upload');
+    } finally {
+      setTogglingGtkId(null);
+    }
+  };
+
+  const canManageStatus = !!status?.can_manage_status;
+  const colCount = canManageStatus ? 4 : 3;
+
   const periodLabel = isMonthly ? period : (quarterOptions.find((p) => p.value === period)?.label || period);
 
   return (
     <div className="space-y-4">
       {!hidePeriodSelector && (
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="text-xs">Tahun Takwim Aktif: {year}</Badge>
+          <Badge variant="outline" className="text-xs">Tahun Takwim: {year}</Badge>
           <Select value={period} onValueChange={setPeriod}>
             <SelectTrigger className="w-56"><SelectValue placeholder={isMonthly ? 'Pilih bulan...' : 'Pilih triwulan...'} /></SelectTrigger>
             <SelectContent>
@@ -1124,13 +1148,14 @@ export function PengumpulanPanel({
                 <TableHead>GTK</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Waktu Konfirmasi</TableHead>
+                {canManageStatus && <TableHead className="text-right">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colCount} className="text-center py-8 text-slate-500">Memuat data...</TableCell></TableRow>
               ) : (status?.rekap || []).length === 0 ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-slate-500">Belum ada data GTK.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colCount} className="text-center py-8 text-slate-500">Belum ada data GTK.</TableCell></TableRow>
               ) : (
                 status.rekap.map((r) => (
                   <TableRow key={r.gtk_id}>
@@ -1142,7 +1167,26 @@ export function PengumpulanPanel({
                         <Badge className="bg-amber-100 text-amber-700">Belum Upload</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-500">{r.confirmed_at ? new Date(r.confirmed_at).toLocaleString('id-ID') : '-'}</TableCell>
+                    <TableCell className="text-sm text-slate-500">
+                      {formatWIB(r.confirmed_at, '', { dateStyle: 'medium', timeStyle: 'short' })}
+                      {r.sudah_upload && r.confirmed_by_name && (
+                        <div className="text-xs text-slate-400">ditandai oleh {r.confirmed_by_name}</div>
+                      )}
+                    </TableCell>
+                    {canManageStatus && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant={r.sudah_upload ? 'outline' : 'default'}
+                          disabled={togglingGtkId === r.gtk_id}
+                          onClick={() => handleToggleGtk(r)}
+                          className={r.sudah_upload ? '' : 'bg-[#006837] hover:bg-[#0B7A3B]'}
+                          data-testid={`toggle-upload-${r.gtk_id}`}
+                        >
+                          {togglingGtkId === r.gtk_id ? 'Menyimpan...' : r.sudah_upload ? 'Batalkan' : 'Tandai Sudah Upload'}
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
