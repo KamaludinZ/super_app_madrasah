@@ -157,6 +157,11 @@ async def _riwayat_rombel(db):
     return await migrate(db)
 
 
+async def _kehadiran_jurnal(db):
+    from migrations.migrate_kehadiran_jurnal import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -172,6 +177,7 @@ MIGRASI = [
     ('2026-10-13_waktu_wib', _waktu_wib),
     ('2026-10-13_uks_obat_nama_key', _uks_obat_nama_key),
     ('2026-10-14_riwayat_rombel', _riwayat_rombel),
+    ('2026-10-14_kehadiran_jurnal', _kehadiran_jurnal),
 ]
 
 

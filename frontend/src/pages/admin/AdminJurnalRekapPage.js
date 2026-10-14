@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/AuthContext';
 import * as XLSX from 'xlsx';
 import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
 import { formatWIB } from '@/lib/datetime';
+import KehadiranPerkiraanNotice from '@/components/journal/KehadiranPerkiraanNotice';
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
@@ -582,6 +583,7 @@ export default function AdminJurnalRekapPage() {
               ) : attendanceDetail && (
                 <div>
                   <Label className="text-sm font-semibold mb-2 block">Detail Kehadiran Siswa</Label>
+                  <KehadiranPerkiraanNotice show={attendanceDetail.kehadiran_perkiraan} />
                   <div className="grid grid-cols-1 gap-3">
                     {/* Siswa Hadir */}
                     {attendanceDetail.attendance.hadir.length > 0 && (
@@ -814,6 +816,7 @@ export default function AdminJurnalRekapPage() {
               {/* Student Attendance */}
               <div>
                 <Label className="text-sm font-semibold mb-2 block">Kehadiran Siswa</Label>
+                <KehadiranPerkiraanNotice show={editDialog.journal.kehadiran_perkiraan} bisaEdit />
 
                 {/* Ringkasan Kehadiran */}
                 {editForm.attendances.length > 0 && (

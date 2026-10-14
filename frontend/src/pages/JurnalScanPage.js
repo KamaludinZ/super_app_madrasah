@@ -303,6 +303,13 @@ export default function JurnalScanPage() {
     }
 
     const isClassToken = qrToken?.startsWith('CLASS:');
+    // Kehadiran per siswa (nama + status yang dipilih) — server menyimpannya per siswa dan menghitung
+    // jumlah H/S/I/A dari daftar ini. Dulu hanya jumlah yang terkirim sehingga nama tidak tersimpan.
+    const attendanceDetails = students.map((s) => ({
+      student_id: s.id,
+      student_name: s.full_name || s.username || '-',
+      status: attendanceRecords[s.id] || 'hadir',
+    }));
     const payload = isClassToken
       ? {
           class_token: qrToken.replace('CLASS:', ''),
@@ -316,6 +323,7 @@ export default function JurnalScanPage() {
           siswa_tidak_hadir: attendanceSummary.alpa,
           siswa_izin: attendanceSummary.izin,
           siswa_sakit: attendanceSummary.sakit,
+          attendance_details: attendanceDetails,
         }
       : {
           qr_token: qrToken,
@@ -329,6 +337,7 @@ export default function JurnalScanPage() {
           siswa_tidak_hadir: attendanceSummary.alpa,
           siswa_izin: attendanceSummary.izin,
           siswa_sakit: attendanceSummary.sakit,
+          attendance_details: attendanceDetails,
         };
 
     setPhase('submitting');
