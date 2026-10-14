@@ -502,7 +502,8 @@ class JournalAttendanceDetail(BaseModel):
     """Detail absensi siswa per entri jurnal."""
     model_config = ConfigDict(extra="ignore")
     student_id: str
-    status: Literal['hadir', 'sakit', 'izin', 'alpa'] = 'hadir'
+    student_name: Optional[str] = None
+    status: Literal['hadir', 'sakit', 'izin', 'alpa', 'alpha'] = 'hadir'  # 'alpha' (klien lama) dinormalkan ke 'alpa'
     note: Optional[str] = None
 
 

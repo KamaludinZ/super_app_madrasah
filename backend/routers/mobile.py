@@ -568,7 +568,8 @@ async def submit_offline_journal_mobile(payload: OfflineJournalIn, request: Requ
     if records:
         await db.attendances.insert_many([{
             'id': str(uuid.uuid4()), 'journal_id': j_id, 'student_id': r['student_id'],
-            'student_name': r.get('student_name'), 'status': r['status'], 'created_at': now.isoformat(),
+            'student_name': r.get('student_name'), 'status': r['status'],
+            'tanggal': trusted.strftime('%Y-%m-%d'), 'created_at': now.isoformat(),
         } for r in records])
 
     await log_audit(user, 'mobile_offline_journal', 'journal', j_id, details={

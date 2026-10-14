@@ -417,6 +417,7 @@ async def piket_fill_journal(payload: Dict, request: Request,
                 'student_name': record.get('student_name'),
                 # Ejaan baku 'alpa' (sama dengan scan QR & ekspor); form piket lama mengirim 'alpha'.
                 'status': 'alpa' if record.get('status') == 'alpha' else record.get('status'),
+                'tanggal': now_wib().strftime('%Y-%m-%d'),
                 'created_at': now_wib().isoformat(),
             })
         if attendance_docs:

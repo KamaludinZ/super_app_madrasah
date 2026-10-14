@@ -52,6 +52,12 @@ def parse_waktu_wib(nilai) -> Optional[datetime]:
     return (dt.replace(tzinfo=timezone.utc).astimezone(WIB_TZ) if punya_detik else dt.replace(tzinfo=WIB_TZ))
 
 
+def tanggal_wib(nilai=None) -> str:
+    """Tanggal kalender WIB 'YYYY-MM-DD' dari nilai waktu tersimpan (bawaan: sekarang)."""
+    dt = parse_waktu_wib(nilai) if nilai is not None else now_wib()
+    return (dt or now_wib()).strftime('%Y-%m-%d')
+
+
 def _derive_key(secret: str = MASTER_SECRET) -> bytes:
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
