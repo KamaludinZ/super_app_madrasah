@@ -17,7 +17,7 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import day_started_at_filter, now_wib, WIB_TZ
+from journal_core import day_started_at_filter, now_wib, parse_waktu_wib, WIB_TZ
 from fastapi.responses import StreamingResponse
 from journal_exports import (
     export_monthly_teacher_journal_excel,
@@ -1389,12 +1389,16 @@ async def _simpan_kehadiran(journal_id: str, details: Any) -> Optional[Dict[str,
     if tanpa_nama:
         async for u in db.users.find({'id': {'$in': tanpa_nama}}, {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}):
             baris[u['id']]['student_name'] = u.get('full_name') or u.get('username')
-    waktu = now_wib().isoformat()
+    # Tanggal kehadiran = tanggal pelajaran (started_at jurnal), BUKAN waktu simpan/edit, agar
+    # riwayat kehadiran di akun siswa tidak berpindah hari/bulan saat jurnal diperbaiki belakangan.
+    j = await db.journals.find_one({'id': journal_id}, {'_id': 0, 'started_at': 1, 'class_id': 1, 'subject_id': 1})
+    mulai = parse_waktu_wib((j or {}).get('started_at')) or now_wib()
     await db.attendances.delete_many({'journal_id': journal_id})
     await db.attendances.insert_many([{
         'id': str(uuid.uuid4()), 'journal_id': journal_id, 'student_id': d['student_id'],
         'student_name': d.get('student_name') or '-', 'status': d['status'], **({'note': d['note']} if d.get('note') else {}),
-        'created_at': waktu,
+        'tanggal': mulai.strftime('%Y-%m-%d'), 'class_id': (j or {}).get('class_id'), 'subject_id': (j or {}).get('subject_id'),
+        'created_at': mulai.isoformat(),
     } for d in baris.values()])
     jumlah = {s: sum(1 for d in baris.values() if d['status'] == s) for s in STATUS_KEHADIRAN}
     field = {

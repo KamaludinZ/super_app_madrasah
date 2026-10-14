@@ -30,7 +30,7 @@ from excel_io import (
 )
 from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_SISWA, selaraskan_alamat
 from data_master_service import alasan_siswa_kosong, jumlah_siswa_per_tingkat, normalisasi_tingkat, siswa_per_tingkat
-from journal_core import WIB_TZ, now_wib, parse_waktu_wib
+from journal_core import now_wib, tanggal_wib
 from data_master_excel import KOLOM_DATA_SISWA, buat_berkas, nilai_kolom_siswa, tambah_keterangan_kosong, workbook_bytes
 from data_master_template import template_bytes
 from journal_core import current_day_id, now_wib
@@ -1101,72 +1101,81 @@ async def update_rekam_didik_period(
 # STUDENT ATTENDANCE ENDPOINTS
 # ============================================================
 
+STATUS_KEHADIRAN_SISWA = ('hadir', 'sakit', 'izin', 'alpa')
+
+
+async def _kehadiran_siswa(student_id: str, awal: str, akhir: str) -> List[Dict[str, Any]]:
+    """Kehadiran siswa dari jurnal mengajar (koleksi attendances) pada rentang tanggal WIB [awal, akhir].
+
+    Tanggal = tanggal pelajaran (field `tanggal`; data lama: dari jurnal/created_at, dinormalkan ke WIB).
+    Hanya kehadiran yang jurnalnya masih ada; ejaan lama 'alpha' dibaca sebagai 'alpa'."""
+    from datetime import date as _date, timedelta as _td
+    sebelum = (_date.fromisoformat(awal) - _td(days=1)).isoformat()
+    sesudah = (_date.fromisoformat(akhir) + _td(days=2)).isoformat()
+    recs = await db.attendances.find({'student_id': student_id, '$or': [
+        {'tanggal': {'$gte': awal, '$lte': akhir}},
+        {'tanggal': {'$exists': False}, 'created_at': {'$gte': sebelum, '$lt': sesudah}},
+    ]}, {'_id': 0}).to_list(5000)
+    jurnal = {j['id']: j for j in await db.journals.find(
+        {'id': {'$in': list({r.get('journal_id') for r in recs if r.get('journal_id')})}},
+        {'_id': 0, 'id': 1, 'started_at': 1, 'subject_id': 1, 'teacher_id': 1, 'class_id': 1}).to_list(5000)}
+    hasil = []
+    for r in recs:
+        j = jurnal.get(r.get('journal_id'))
+        if not j:
+            continue
+        tgl = r.get('tanggal') or tanggal_wib(j.get('started_at') or r.get('created_at'))
+        if not (awal <= tgl <= akhir):
+            continue
+        st = str(r.get('status') or '').lower()
+        r['status'] = 'alpa' if st in ('alpha', 'alpa') else (st if st in STATUS_KEHADIRAN_SISWA else 'hadir')
+        r['tanggal'] = tgl
+        r['_jurnal'] = j
+        hasil.append(r)
+    hasil.sort(key=lambda r: (r['tanggal'], r['_jurnal'].get('started_at') or ''), reverse=True)
+    return hasil
+
+
+def _rentang_bulan(month: Optional[int], year: Optional[int]):
+    import calendar
+    now = now_wib()
+    m, y = month or now.month, year or now.year
+    return m, y, f"{y:04d}-{m:02d}-01", f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+
+
+def _ringkas(recs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    n = {s: sum(1 for r in recs if r['status'] == s) for s in STATUS_KEHADIRAN_SISWA}
+    total = len(recs)
+    return {'total': total, **n, 'percentage': round(n['hadir'] / total * 100, 2) if total else 0}
+
+
 @router.get("/students/my-attendance")
 async def get_my_attendance(
     user: Dict = Depends(require_role('siswa')),
     month: Optional[int] = None,
     year: Optional[int] = None
 ):
-    """Get attendance records for current student"""
-    from datetime import datetime
-    import calendar
-
-    student_id = user['id']
-
-    # Default to current month/year if not provided
-    now = now_wib()
-    target_month = month if month else now.month
-    target_year = year if year else now.year
-
-    # Get first and last day of the month
-    first_day = datetime(target_year, target_month, 1)
-    last_day_num = calendar.monthrange(target_year, target_month)[1]
-    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
-
-    # Get all attendance records for this student in the month
-    attendance_records = await db.attendances.find({
-        'student_id': student_id,
-        'created_at': {
-            '$gte': first_day.isoformat(),
-            '$lte': last_day.isoformat()
-        }
-    }, {'_id': 0}).sort('created_at', -1).to_list(1000)
-
-    # Enrich with journal details
-    enriched_records = []
-    for att in attendance_records:
-        journal = await db.journals.find_one(
-            {'id': att.get('journal_id')},
-            {'_id': 0, 'started_at': 1, 'subject_id': 1, 'teacher_id': 1, 'class_id': 1}
-        )
-
-        if journal:
-            # Get subject name
-            subject = await db.subjects.find_one(
-                {'id': journal.get('subject_id')},
-                {'_id': 0, 'name': 1, 'code': 1}
-            )
-
-            # Get teacher name
-            teacher = await db.users.find_one(
-                {'id': journal.get('teacher_id')},
-                {'_id': 0, 'full_name': 1}
-            )
-
-            enriched_records.append({
-                'id': att.get('id'),
-                'date': journal.get('started_at'),
-                'status': att.get('status'),
-                'subject_name': subject.get('name') if subject else None,
-                'subject_code': subject.get('code') if subject else None,
-                'teacher_name': teacher.get('full_name') if teacher else None,
-            })
-
-    return {
-        'month': target_month,
-        'year': target_year,
-        'records': enriched_records
-    }
+    """Riwayat kehadiran siswa per pertemuan (dari jurnal mengajar) pada bulan tertentu."""
+    m, y, awal, akhir = _rentang_bulan(month, year)
+    recs = await _kehadiran_siswa(user['id'], awal, akhir)
+    mapel = {x['id']: x for x in await db.subjects.find(
+        {'id': {'$in': list({r['_jurnal'].get('subject_id') for r in recs})}}, {'_id': 0, 'id': 1, 'name': 1, 'code': 1}).to_list(500)}
+    guru = {x['id']: x for x in await db.users.find(
+        {'id': {'$in': list({r['_jurnal'].get('teacher_id') for r in recs})}}, {'_id': 0, 'id': 1, 'full_name': 1}).to_list(500)}
+    records = []
+    for r in recs:
+        j = r['_jurnal']
+        sub, t = mapel.get(j.get('subject_id')) or {}, guru.get(j.get('teacher_id')) or {}
+        records.append({
+            'id': r.get('id'),
+            'date': j.get('started_at') or r['tanggal'],
+            'tanggal': r['tanggal'],
+            'status': r['status'],
+            'subject_name': sub.get('name'),
+            'subject_code': sub.get('code'),
+            'teacher_name': t.get('full_name'),
+        })
+    return {'month': m, 'year': y, 'records': records}
 
 
 @router.get("/students/my-attendance/stats")
@@ -1175,74 +1184,17 @@ async def get_my_attendance_stats(
     month: Optional[int] = None,
     year: Optional[int] = None
 ):
-    """Get attendance statistics for current student (daily, weekly, monthly)"""
-    from datetime import datetime, timedelta
-    import calendar
-
-    student_id = user['id']
-    now = now_wib()
-    target_month = month if month else now.month
-    target_year = year if year else now.year
-
-    # Get first and last day of the month
-    first_day = datetime(target_year, target_month, 1)
-    last_day_num = calendar.monthrange(target_year, target_month)[1]
-    last_day = datetime(target_year, target_month, last_day_num, 23, 59, 59)
-
-    # Get all attendance records for this month
-    attendance_records = await db.attendances.find({
-        'student_id': student_id,
-        'created_at': {
-            '$gte': first_day.isoformat(),
-            '$lte': last_day.isoformat()
-        }
-    }, {'_id': 0}).to_list(1000)
-
-    # Calculate monthly stats
-    total = len(attendance_records)
-    hadir = sum(1 for a in attendance_records if a.get('status') == 'hadir')
-    sakit = sum(1 for a in attendance_records if a.get('status') == 'sakit')
-    izin = sum(1 for a in attendance_records if a.get('status') == 'izin')
-    alpa = sum(1 for a in attendance_records if a.get('status') == 'alpa')
-
-    monthly_percentage = (hadir / total * 100) if total > 0 else 0
-
-    # Calculate weekly stats (last 7 days)
-    week_ago = now - timedelta(days=7)
-    # created_at bisa ber-zona (now_wib) atau UTC tanpa zona (data lama); samakan ke WIB agar tidak TypeError
-    weekly_records = [a for a in attendance_records if (parse_waktu_wib(a.get('created_at')) or week_ago) >= week_ago]
-    weekly_total = len(weekly_records)
-    weekly_hadir = sum(1 for a in weekly_records if a.get('status') == 'hadir')
-    weekly_percentage = (weekly_hadir / weekly_total * 100) if weekly_total > 0 else 0
-
-    # Calculate daily stats (today)
-    today_start = datetime(now.year, now.month, now.day, tzinfo=WIB_TZ)
-    today_end = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=WIB_TZ)
-    daily_records = [a for a in attendance_records
-                     if (w := parse_waktu_wib(a.get('created_at'))) and today_start <= w <= today_end]
-    daily_total = len(daily_records)
-    daily_hadir = sum(1 for a in daily_records if a.get('status') == 'hadir')
-    daily_percentage = (daily_hadir / daily_total * 100) if daily_total > 0 else 0
-
+    """Statistik kehadiran siswa: bulan dipilih, 7 hari terakhir, dan hari ini (WIB)."""
+    from datetime import timedelta
+    m, y, awal, akhir = _rentang_bulan(month, year)
+    hari_ini = now_wib().strftime('%Y-%m-%d')
+    bulanan = _ringkas(await _kehadiran_siswa(user['id'], awal, akhir))
+    mingguan = _ringkas(await _kehadiran_siswa(user['id'], (now_wib() - timedelta(days=6)).strftime('%Y-%m-%d'), hari_ini))
+    harian = _ringkas(await _kehadiran_siswa(user['id'], hari_ini, hari_ini))
     return {
-        'month': target_month,
-        'year': target_year,
-        'monthly': {
-            'total': total,
-            'hadir': hadir,
-            'sakit': sakit,
-            'izin': izin,
-            'alpa': alpa,
-            'percentage': round(monthly_percentage, 2)
-        },
-        'weekly': {
-            'total': weekly_total,
-            'hadir': weekly_hadir,
-            'percentage': round(weekly_percentage, 2)
-        },
-        'daily': {
-            'total': daily_total,
-            'hadir': daily_hadir,
-            'percentage': round(daily_percentage, 2)
-        }
+        'month': m,
+        'year': y,
+        'monthly': {k: bulanan[k] for k in ('total', 'hadir', 'sakit', 'izin', 'alpa', 'percentage')},
+        'weekly': {k: mingguan[k] for k in ('total', 'hadir', 'percentage')},
+        'daily': {k: harian[k] for k in ('total', 'hadir', 'percentage')},
     }

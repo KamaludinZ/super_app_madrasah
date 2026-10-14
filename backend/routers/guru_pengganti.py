@@ -1006,6 +1006,7 @@ async def fill_substitute_journal(payload: SubstituteJournalIn, request: Request
             'student_id': r['student_id'],
             'student_name': r.get('student_name'),
             'status': r['status'],
+            'tanggal': now[:10],
             'created_at': now,
         } for r in records])
 
