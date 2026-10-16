@@ -305,7 +305,7 @@ async def pastikan_index_riwayat_tindakan(db) -> None:
 # ============================================================
 # PENGATURAN AMBANG SP (koleksi `pengaturan_ambang_sp` + riwayat audit)
 # ============================================================
-# Satu dokumen berlaku: {_id: 'ambang_sp', sp1, sp2, sp3, diubah_oleh_id, diubah_oleh_nama, diubah_pada}.
+# Satu dokumen berlaku: {_id: 'ambang_sp', sp1, sp2, sp3, alasan, diubah_oleh_id, diubah_oleh_nama, diubah_pada}.
 # Nilai = akumulasi poin pelanggaran (nilai mutlak) minimal untuk tiap tingkat; wajib 1 <= sp1 < sp2 < sp3.
 # Setiap perubahan dicatat di `pengaturan_ambang_sp_riwayat`: {id, waktu, oleh_id, oleh_nama, dari, ke, alasan}.
 KOLEKSI_AMBANG_SP = 'pengaturan_ambang_sp'
@@ -333,8 +333,9 @@ async def ambil_ambang_sp(db) -> dict:
     try:
         nilai = validasi_ambang_sp(doc.get('sp1'), doc.get('sp2'), doc.get('sp3'))
     except ValueError:
-        return {**AMBANG_SP_BAWAAN, 'diubah_oleh_nama': None, 'diubah_pada': None, 'bawaan': True}
-    return {**nilai, 'diubah_oleh_nama': doc.get('diubah_oleh_nama'), 'diubah_pada': doc.get('diubah_pada'), 'bawaan': False}
+        return {**AMBANG_SP_BAWAAN, 'alasan': None, 'diubah_oleh_nama': None, 'diubah_pada': None, 'bawaan': True}
+    return {**nilai, 'alasan': doc.get('alasan'), 'diubah_oleh_nama': doc.get('diubah_oleh_nama'),
+            'diubah_pada': doc.get('diubah_pada'), 'bawaan': False}
 
 
 # ============================================================

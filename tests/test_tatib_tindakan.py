@@ -100,3 +100,15 @@ async def test_migrasi_ambang_sp_mengisi_bawaan_dan_memperbaiki_nilai_rusak(db):
     assert await migrate_ambang(db) == {'ambang': 'diperbaiki ke bawaan'}
     riwayat = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).to_list(None)
     assert len(riwayat) == 1 and riwayat[0]['dari'] == {'sp1': 60, 'sp2': 50, 'sp3': 75} and riwayat[0]['ke'] == {'sp1': 25, 'sp2': 50, 'sp3': 75}
+
+
+async def test_ambang_sp_menyimpan_alasan_dan_migrasi_terdaftar(db):
+    import migrasi_otomatis
+    nama = [n for n, _ in migrasi_otomatis.MIGRASI]
+    assert nama.index('2026-10-16_pengaturan_ambang_sp') > nama.index('2026-10-16_tatib_tindakan')
+    await migrate_ambang(db)
+    a = await ambil_ambang_sp(db)
+    assert a['alasan'] == 'Nilai bawaan sistem'
+    await db.pengaturan_ambang_sp.update_one({'_id': 'ambang_sp'}, {'$unset': {'alasan': ''}})
+    await migrate_ambang(db)  # dokumen lama tanpa alasan dilengkapi
+    assert 'alasan' in await db.pengaturan_ambang_sp.find_one({'_id': 'ambang_sp'})

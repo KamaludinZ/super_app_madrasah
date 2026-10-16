@@ -39,12 +39,15 @@ async def migrate(db) -> dict:
     if doc:
         try:
             validasi_ambang_sp(doc.get('sp1'), doc.get('sp2'), doc.get('sp3'))
+            if 'alasan' not in doc:
+                await db[KOLEKSI_AMBANG_SP].update_one({'_id': ID_AMBANG_SP}, {'$set': {'alasan': None}})
             return {'ambang': 'sudah ada'}
         except ValueError:
             pass
     sekarang = datetime.now(timezone.utc).isoformat()
     await db[KOLEKSI_AMBANG_SP].update_one({'_id': ID_AMBANG_SP}, {'$set': {
-        **AMBANG_SP_BAWAAN, 'diubah_oleh_id': None, 'diubah_oleh_nama': 'Sistem', 'diubah_pada': sekarang,
+        **AMBANG_SP_BAWAAN, 'alasan': 'Nilai bawaan sistem', 'diubah_oleh_id': None, 'diubah_oleh_nama': 'Sistem',
+        'diubah_pada': sekarang,
     }}, upsert=True)
     if doc:
         await db[KOLEKSI_RIWAYAT_AMBANG_SP].insert_one({
