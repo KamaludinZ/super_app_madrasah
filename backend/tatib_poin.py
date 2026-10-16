@@ -9,10 +9,17 @@ Satu dokumen = satu catatan poin. Field poin (selain field penanganan lama):
     kondisi        kondisi pelaksanaan saat dicatat (opsional, mis. "Tingkat kota").
     tindak_lanjut  daftar tindak lanjut penanganan pelanggaran:
                    [{id, tanggal, uraian, petugas_id, petugas_nama, created_at}]
+    jenis_id       jenis aturan (Master Jenis Pelanggaran; = tatib_id)
+    kategori_id    kategori jenis saat dicatat (kategori_nama disalin agar riwayat tetap)
+    asal_input     sumber pencatatan, salah satu ASAL_INPUT (BIPH, Screening pagi, Ibadah,
+                   Keputrian, Whatsapp, BAP, Razia, Laporan langsung); wajib untuk catatan
+                   baru, None untuk catatan sebelum fitur ini (migrasi 2026-10-16_tatib_struktur_baru)
+    keterangan     catatan singkat petugas (= catatan, field lama)
 
 `tatib_poin` (nilai aturan saat dicatat) tetap dipertahankan untuk kompatibilitas
 endpoint statistik lama.
 """
+import uuid
 from typing import Optional
 
 KOLEKSI_POIN = 'tatib_penanganan'
@@ -123,6 +130,246 @@ async def pastikan_index_aturan(db) -> None:
 
 
 # ============================================================
+# STRUKTUR BARU: kategori -> jenis aturan -> pencatatan (Input Tata Tertib terpadu)
+# ============================================================
+# `tatib_kategori`  + nama_key (huruf kecil, unik) agar nama kategori tidak ganda.
+# `tatib_aturan`    = master JENIS aturan; field kanonis baru (field lama tetap diisi demi kompatibilitas):
+#     kode_aturan (unik, = kode), nama (= nama_aturan), jalur_poin 'minus'|'plus' (= jenis_poin),
+#     besar_poin (int >= 0; nilai bertanda = poin), kategori_id/kategori_nama, deskripsi, aktif (= is_active).
+#     Jenis nonaktif tidak bisa dipakai mencatat, tetapi riwayatnya tetap ada.
+# `tatib_penanganan` (KOLEKSI_POIN) mendapat: jenis_id (= tatib_id), kategori_id, keterangan (= catatan),
+#     asal_input (daftar ASAL_INPUT; catatan lama = None).
+JALUR_MINUS = 'minus'
+JALUR_PLUS = 'plus'
+JALUR_POIN = (JALUR_MINUS, JALUR_PLUS)
+ASAL_INPUT = ('BIPH', 'Screening pagi', 'Ibadah', 'Keputrian', 'Whatsapp', 'BAP', 'Razia', 'Laporan langsung')
+
+
+def jalur_dari_jenis_poin(jenis_poin: Optional[str]) -> str:
+    return JALUR_MINUS if jenis_poin == JENIS_PELANGGARAN else JALUR_PLUS
+
+
+def jenis_poin_dari_jalur(jalur: Optional[str]) -> str:
+    return JENIS_PELANGGARAN if jalur == JALUR_MINUS else JENIS_KEBAIKAN
+
+
+def kunci_nama(teks: Optional[str]) -> str:
+    """Kunci pembanding nama (spasi dirapikan, huruf kecil) untuk mencegah nama kategori ganda."""
+    return ' '.join((teks or '').split()).lower()
+
+
+def field_jenis_aturan(aturan: dict) -> dict:
+    """Field kanonis jenis aturan yang diturunkan dari field lama (untuk migrasi & dokumen lama)."""
+    jenis = aturan.get('jenis_poin') or jenis_dari_poin(aturan.get('poin'))
+    return {
+        'kode_aturan': aturan.get('kode_aturan') or aturan.get('kode'),
+        'nama': aturan.get('nama') or aturan.get('nama_aturan'),
+        'jalur_poin': aturan.get('jalur_poin') or jalur_dari_jenis_poin(jenis),
+        'besar_poin': abs(int(aturan.get('besar_poin') if aturan.get('besar_poin') is not None else (aturan.get('poin') or 0))),
+        'aktif': aturan.get('aktif') if aturan.get('aktif') is not None else aturan.get('is_active', True) is not False,
+    }
+
+
+# Master Jenis Pelanggaran: kode aturan disimpan HURUF BESAR tanpa spasi tepi (unik tanpa beda huruf).
+POLA_KODE_ATURAN = r'^[A-Z0-9][A-Z0-9._/-]{0,19}$'
+MAKS_BESAR_POIN = 1000
+MAKS_NAMA_JENIS = 150
+MAKS_DESKRIPSI_JENIS = 500
+
+
+def normalisasi_kode(kode: Optional[str]) -> str:
+    """Kode aturan baku: spasi dibuang, huruf besar (mis. ' dis-01 ' -> 'DIS-01')."""
+    return ''.join((kode or '').split()).upper()
+
+
+def poin_jenis_aturan(aturan: dict) -> int:
+    """Nilai bertanda satu pencatatan dari master jenis: jalur minus -> negatif."""
+    f = field_jenis_aturan(aturan)
+    return -f['besar_poin'] if f['jalur_poin'] == JALUR_MINUS else f['besar_poin']
+
+
+INDEX_STRUKTUR = {
+    'tatib_kategori': [([('nama_key', 1)], {'unique': True, 'name': 'nama_key_unik',
+                                            'partialFilterExpression': {'nama_key': {'$type': 'string'}}})],
+    'tatib_aturan': [
+        ([('kode_aturan', 1)], {'unique': True, 'name': 'kode_aturan_unik',
+                                'partialFilterExpression': {'kode_aturan': {'$type': 'string'}}}),
+        ([('kategori_id', 1), ('aktif', 1)], {}),
+    ],
+    KOLEKSI_POIN: [
+        ([('created_at', -1)], {}),
+        ([('jenis_id', 1), ('tanggal', -1)], {}),
+        ([('asal_input', 1), ('tanggal', -1)], {}),
+    ],
+}
+
+
+# ============================================================
+# TINDAKAN TATIB: usulan SP otomatis + status pembinaan manual (koleksi `tatib_tindakan`)
+# ============================================================
+# Satu dokumen per siswa per semester (semester_id; None = tanpa semester):
+#     id, siswa_id, semester_id,
+#     keterangan_sp            'SP1'|'SP2'|'SP3'|None   — keputusan sekolah (manual)
+#     status_panggilan_wali    STATUS_PANGGILAN_WALI
+#     status_sp                STATUS_SP
+#     status_rtlpd             STATUS_RTLPD
+#     catatan, diubah_pada, diubah_oleh_id, diubah_oleh_nama, created_at
+# Riwayat perubahan disimpan terpisah di `tatib_tindakan_riwayat` (satu dokumen per perubahan):
+#     id, tindakan_id, siswa_id, semester_id, waktu, oleh_id, oleh_nama,
+#     perubahan [{field, dari, ke}], catatan, usulan_sp (usulan otomatis saat perubahan dibuat), poin_negatif
+# Usulan SP TIDAK disimpan sebagai keputusan: dihitung dari akumulasi poin pelanggaran & ambang (usulkan_sp).
+# Catatan: `tatib_penanganan` di codebase ini adalah koleksi catatan poin, bukan status pembinaan.
+KOLEKSI_TINDAKAN = 'tatib_tindakan'
+KOLEKSI_RIWAYAT_TINDAKAN = 'tatib_tindakan_riwayat'
+TINGKAT_SP = ('SP1', 'SP2', 'SP3')
+STATUS_PANGGILAN_WALI = ('Tidak diperlukan', 'Diajukan', 'Terlaksana')
+STATUS_SP = ('Tidak perlu', 'Diserahkan')
+STATUS_RTLPD = ('Tidak diperlukan', 'Disusun')
+FIELD_STATUS_TINDAKAN = ('keterangan_sp', 'status_panggilan_wali', 'status_sp', 'status_rtlpd')
+STATUS_TINDAKAN_AWAL = {
+    'keterangan_sp': None,
+    'status_panggilan_wali': STATUS_PANGGILAN_WALI[0],
+    'status_sp': STATUS_SP[0],
+    'status_rtlpd': STATUS_RTLPD[0],
+}
+# Ambang bawaan (akumulasi poin pelanggaran, nilai mutlak); sama dengan AMBANG_SP_BAWAAN di frontend/src/lib/tindakanTatib.js.
+AMBANG_SP_BAWAAN = {'sp1': 25, 'sp2': 50, 'sp3': 75}
+
+INDEX_TINDAKAN = [
+    ([('siswa_id', 1), ('semester_id', 1)], {'unique': True, 'name': 'siswa_semester_unik'}),
+    ([('keterangan_sp', 1)], {}),
+]
+INDEX_RIWAYAT_TINDAKAN = [
+    ([('siswa_id', 1), ('semester_id', 1), ('waktu', -1)], {}),
+    ([('tindakan_id', 1), ('waktu', -1)], {}),
+    ([('id', 1)], {'unique': True, 'name': 'id_unik'}),
+]
+
+
+def usulkan_sp(poin_negatif, ambang: Optional[dict] = None) -> Optional[str]:
+    """SP tertinggi yang ambangnya terlampaui oleh akumulasi pelanggaran (nilai mutlak), atau None."""
+    ambang = ambang or AMBANG_SP_BAWAAN
+    n = abs(int(poin_negatif or 0))
+    for sp in reversed(TINGKAT_SP):
+        if n >= int(ambang[sp.lower()]):
+            return sp
+    return None
+
+
+def ambang_berikutnya(poin_negatif, ambang: Optional[dict] = None) -> Optional[dict]:
+    """Tingkat SP berikutnya yang belum terlampaui: {sp, ambang, sisa}, atau None bila sudah SP3."""
+    ambang = ambang or AMBANG_SP_BAWAAN
+    n = abs(int(poin_negatif or 0))
+    for sp in TINGKAT_SP:
+        batas = int(ambang[sp.lower()])
+        if n < batas:
+            return {'sp': sp, 'ambang': batas, 'sisa': batas - n}
+    return None
+
+
+def usulan_lebih_tinggi(usulan: Optional[str], ditetapkan: Optional[str]) -> bool:
+    """True bila usulan otomatis lebih berat dari SP yang sudah ditetapkan (perlu ditinjau)."""
+    tingkat = {sp: i for i, sp in enumerate(TINGKAT_SP, start=1)}
+    return tingkat.get(usulan, 0) > tingkat.get(ditetapkan, 0)
+
+
+def perubahan_status(lama: dict, baru: dict) -> list:
+    """Daftar perubahan field status [{field, dari, ke}] antara dua keadaan tindakan."""
+    lama = {**STATUS_TINDAKAN_AWAL, **{k: v for k, v in (lama or {}).items() if k in FIELD_STATUS_TINDAKAN}}
+    return [{'field': f, 'dari': lama.get(f), 'ke': baru.get(f)} for f in FIELD_STATUS_TINDAKAN if lama.get(f) != baru.get(f)]
+
+
+def entri_riwayat_tindakan(tindakan: dict, perubahan: list, oleh: dict, waktu: str, catatan: Optional[str] = None,
+                           usulan_sp: Optional[str] = None, poin_negatif: int = 0) -> dict:
+    """Satu dokumen riwayat perubahan tindakan (koleksi KOLEKSI_RIWAYAT_TINDAKAN)."""
+    return {
+        'id': str(uuid.uuid4()),
+        'tindakan_id': tindakan.get('id'),
+        'siswa_id': tindakan.get('siswa_id'),
+        'semester_id': tindakan.get('semester_id'),
+        'waktu': waktu,
+        'oleh_id': oleh.get('id'),
+        'oleh_nama': oleh.get('full_name') or oleh.get('username'),
+        'perubahan': perubahan,
+        'catatan': catatan or None,
+        'usulan_sp': usulan_sp,
+        'poin_negatif': poin_negatif,
+    }
+
+
+async def pastikan_index_tindakan(db) -> None:
+    for keys, opsi in INDEX_TINDAKAN:
+        await db[KOLEKSI_TINDAKAN].create_index(keys, **opsi)
+    await db[KOLEKSI_POIN].create_index([('semester_id', 1), ('siswa_id', 1)])
+
+
+async def pastikan_index_riwayat_tindakan(db) -> None:
+    for keys, opsi in INDEX_RIWAYAT_TINDAKAN:
+        await db[KOLEKSI_RIWAYAT_TINDAKAN].create_index(keys, **opsi)
+
+
+# ============================================================
+# PENGATURAN AMBANG SP (koleksi `pengaturan_ambang_sp` + riwayat audit)
+# ============================================================
+# Satu dokumen berlaku: {_id: 'ambang_sp', sp1, sp2, sp3, alasan, diubah_oleh_id, diubah_oleh_nama, diubah_pada}.
+# Nilai = akumulasi poin pelanggaran (nilai mutlak) minimal untuk tiap tingkat; wajib 1 <= sp1 < sp2 < sp3.
+# Setiap perubahan dicatat di `pengaturan_ambang_sp_riwayat` (audit, tidak pernah diubah/dihapus):
+#     {id, waktu, oleh_id, oleh_nama, dari: {sp1,sp2,sp3}|None, ke: {sp1,sp2,sp3}, alasan}
+KOLEKSI_AMBANG_SP = 'pengaturan_ambang_sp'
+KOLEKSI_RIWAYAT_AMBANG_SP = 'pengaturan_ambang_sp_riwayat'
+ID_AMBANG_SP = 'ambang_sp'
+MAKS_AMBANG_SP = 10000
+INDEX_RIWAYAT_AMBANG_SP = [
+    ([('waktu', -1)], {}),
+    ([('oleh_id', 1), ('waktu', -1)], {}),
+    ([('id', 1)], {'unique': True, 'name': 'id_unik'}),
+]
+
+
+def validasi_ambang_sp(sp1, sp2, sp3) -> dict:
+    """{sp1, sp2, sp3} bilangan bulat dengan 1 <= sp1 < sp2 < sp3 <= MAKS_AMBANG_SP; ValueError bila tidak."""
+    try:
+        nilai = {'sp1': int(sp1), 'sp2': int(sp2), 'sp3': int(sp3)}
+    except (TypeError, ValueError):
+        raise ValueError('Ambang SP harus berupa bilangan bulat')
+    if any(isinstance(v, bool) for v in (sp1, sp2, sp3)):
+        raise ValueError('Ambang SP harus berupa bilangan bulat')
+    if not 1 <= nilai['sp1'] < nilai['sp2'] < nilai['sp3'] <= MAKS_AMBANG_SP:
+        raise ValueError(f'Ambang SP harus naik: 1 <= SP1 < SP2 < SP3 <= {MAKS_AMBANG_SP}')
+    return nilai
+
+
+def entri_riwayat_ambang(dari: Optional[dict], ke: dict, oleh: Optional[dict], waktu: str, alasan: Optional[str] = None) -> dict:
+    """Satu dokumen riwayat perubahan ambang SP. `oleh` None = perubahan oleh sistem."""
+    ambil = lambda d: {k: d.get(k) for k in ('sp1', 'sp2', 'sp3')} if d else None  # noqa: E731
+    return {
+        'id': str(uuid.uuid4()),
+        'waktu': waktu,
+        'oleh_id': (oleh or {}).get('id'),
+        'oleh_nama': ((oleh or {}).get('full_name') or (oleh or {}).get('username')) if oleh else 'Sistem',
+        'dari': ambil(dari),
+        'ke': ambil(ke),
+        'alasan': (alasan or '').strip() or None,
+    }
+
+
+async def pastikan_index_riwayat_ambang(db) -> None:
+    for keys, opsi in INDEX_RIWAYAT_AMBANG_SP:
+        await db[KOLEKSI_RIWAYAT_AMBANG_SP].create_index(keys, **opsi)
+
+
+async def ambil_ambang_sp(db) -> dict:
+    """Ambang SP yang berlaku ({sp1, sp2, sp3, diubah_oleh_nama, diubah_pada}); bawaan bila belum diatur."""
+    doc = await db[KOLEKSI_AMBANG_SP].find_one({'_id': ID_AMBANG_SP}, {'_id': 0}) or {}
+    try:
+        nilai = validasi_ambang_sp(doc.get('sp1'), doc.get('sp2'), doc.get('sp3'))
+    except ValueError:
+        return {**AMBANG_SP_BAWAAN, 'alasan': None, 'diubah_oleh_nama': None, 'diubah_pada': None, 'bawaan': True}
+    return {**nilai, 'alasan': doc.get('alasan'), 'diubah_oleh_nama': doc.get('diubah_oleh_nama'),
+            'diubah_pada': doc.get('diubah_pada'), 'bawaan': False}
+
+
+# ============================================================
 # AKSES & RANGKUMAN (dipakai routers/tatib_poin.py)
 # ============================================================
 # Sama dengan frontend/src/lib/aksesTatib.js.
@@ -177,11 +424,39 @@ def rangkum_poin(records, batas: int = BATAS_MINUS_PERHATIAN) -> dict:
     }
 
 
+def rekap_kategori_asal(records) -> tuple:
+    """(per_kategori, per_asal_input) dari catatan poin — dipakai Rekap Pengawas & Pantauan Walikelas.
+    per_kategori: [{kategori, jumlah_pelanggaran, jumlah_kebaikan, total_minus, total_plus}] saldo terendah dulu;
+    per_asal_input: [{asal_input (None = catatan lama), jumlah, total_minus, total_plus}] urut daftar ASAL_INPUT."""
+    per_kategori: dict = {}
+    per_asal: dict = {}
+    for r in records:
+        n = nilai_poin(r)
+        k = per_kategori.setdefault(r.get('kategori_nama') or 'Lainnya', {
+            'kategori': r.get('kategori_nama') or 'Lainnya', 'jumlah_pelanggaran': 0, 'jumlah_kebaikan': 0, 'total_minus': 0, 'total_plus': 0})
+        asal = (r.get('asal_input') or '').strip() or None
+        a = per_asal.setdefault(asal, {'asal_input': asal, 'jumlah': 0, 'total_minus': 0, 'total_plus': 0})
+        a['jumlah'] += 1
+        if n < 0:
+            k['jumlah_pelanggaran'] += 1
+            k['total_minus'] += n
+            a['total_minus'] += n
+        elif n > 0:
+            k['jumlah_kebaikan'] += 1
+            k['total_plus'] += n
+            a['total_plus'] += n
+    urut_asal = {nama: i for i, nama in enumerate(ASAL_INPUT)}
+    return (sorted(per_kategori.values(), key=lambda k: (k['total_plus'] + k['total_minus'], k['kategori'])),
+            sorted(per_asal.values(), key=lambda a: urut_asal.get(a['asal_input'], len(ASAL_INPUT))))
+
+
 def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, teratas: int = 5) -> dict:
     """Rekap lintas kelas dari catatan poin.
     kelas_siswa: {nama_kelas: [siswa_id, ...]} — kelas yang ditampilkan (termasuk yang belum punya catatan).
     Kelas catatan = kelas siswa saat ini bila dikenal, selain itu salinan `siswa_kelas` saat dicatat.
-    -> {ringkasan, per_kelas, teratas_pelanggaran, teratas_kebaikan} (bentuk sama dengan ambilRekapTiruan)."""
+    -> {ringkasan, per_kelas, teratas_pelanggaran, teratas_kebaikan, per_kategori, per_asal_input}.
+    per_kategori: [{kategori, jumlah_pelanggaran, jumlah_kebaikan, total_minus, total_plus}] saldo terendah dulu;
+    per_asal_input: [{asal_input (None = catatan lama), jumlah, total_minus, total_plus}] urut daftar ASAL_INPUT."""
     kelas_dari_siswa = {sid: k for k, ids in kelas_siswa.items() for sid in ids}
     per_kelas_rec = {k: [] for k in kelas_siswa}
     per_siswa = {}
@@ -219,6 +494,8 @@ def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, 
             h['jumlah'] += 1
         return sorted(hit.values(), key=lambda x: (-x['jumlah'], x['nama']))[:teratas]
 
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
+
     total = rangkum_poin(records, batas)
     return {
         'ringkasan': {
@@ -231,4 +508,6 @@ def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, 
         'per_kelas': per_kelas,
         'teratas_pelanggaran': _teratas(False),
         'teratas_kebaikan': _teratas(True),
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
     }

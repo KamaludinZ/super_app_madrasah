@@ -1,503 +1,177 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, TrendingDown, TrendingUp, Award, AlertTriangle, Loader2 } from 'lucide-react';
+import { Database, Loader2, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
-import { hariIniWIB } from '@/lib/tanggal';
+import { pesanGalatTatib } from '@/lib/aksesTatib';
+import { formatPoin } from '@/components/tatib/RingkasanPoin';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
+import FilterDataTatib from '@/components/tatib/FilterDataTatib';
+import {
+  ASAL_KOSONG, FILTER_DATA_KOSONG, ambilDataTatib, pilihanFilterData, ringkasData, saringData, sebaranAsalInput,
+} from '@/lib/dataTatib';
 
+const formatTanggal = (tgl) => {
+  if (!tgl) return '-';
+  const d = new Date(`${tgl}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? tgl : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+function KartuRingkasan({ ikon: Ikon, label, nilai, sub, warna = 'text-slate-900' }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Ikon className="h-3.5 w-3.5" /> {label}</p>
+        <p className={`mt-1 text-2xl font-bold tabular-nums ${warna}`}>{nilai}</p>
+        {sub && <p className="text-xs text-slate-500">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Data Tata Tertib (struktur baru): seluruh catatan poin dengan kategori, kode & jenis aturan, jalur, poin,
+// asal input, dan keterangan. Cakupan data dibatasi server per peran.
 const AdminTatibDataPage = () => {
-  const [penangananList, setPenangananList] = useState([]);
-  const [studentsList, setStudentsList] = useState([]);
-  const [aturanList, setAturanList] = useState([]);
-  const [kategoriList, setKategoriList] = useState([]);
-  const [tahunTakwimList, setTahunTakwimList] = useState([]);
-  const [semesterList, setSemesterList] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // Filters
-  const [filterTahunTakwim, setFilterTahunTakwim] = useState('');
-  const [filterSemester, setFilterSemester] = useState('');
-  const [filterKategori, setFilterKategori] = useState('');
-
-  // Statistics
-  const [stats, setStats] = useState({
-    total_penanganan: 0,
-    total_pelanggaran: 0,
-    total_prestasi: 0,
-    total_poin_negatif: 0,
-    total_poin_positif: 0,
-  });
-
-  const [studentStats, setStudentStats] = useState([]);
+  const [baris, setBaris] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState(FILTER_DATA_KOSONG);
 
   useEffect(() => {
-    loadData();
+    ambilDataTatib()
+      .then(setBaris)
+      .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat data tata tertib')))
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    calculateStats();
-  }, [penangananList, aturanList, filterTahunTakwim, filterSemester, filterKategori]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [penangananRes, studentsRes, aturanRes, kategoriRes, tahunTakwimRes, semesterRes] = await Promise.all([
-        api.get('/tatib/penanganan'),
-        api.get('/students'),
-        api.get('/tatib/aturan'),
-        api.get('/tatib/kategori'),
-        api.get('/tahun-takwim'),
-        api.get('/semesters'),
-      ]);
-      setPenangananList(penangananRes.data || []);
-      setStudentsList(studentsRes.data || []);
-      setAturanList(aturanRes.data || []);
-      setKategoriList(kategoriRes.data || []);
-      setTahunTakwimList(tahunTakwimRes.data || []);
-      setSemesterList(semesterRes.data || []);
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateStats = () => {
-    // Filter penanganan based on active filters
-    const filteredPenanganan = penangananList.filter(p => {
-      // Filter by semester (which includes tahun takwim and tahun pelajaran)
-      if (filterSemester) {
-        const semester = semesterList.find(s => s.id === filterSemester);
-        if (semester) {
-          const penangananDate = new Date(p.tanggal);
-          const startDate = new Date(semester.tanggal_mulai);
-          const endDate = new Date(semester.tanggal_selesai);
-          if (penangananDate < startDate || penangananDate > endDate) return false;
-        }
-      } else if (filterTahunTakwim) {
-        // Filter by tahun takwim only
-        const tahunTakwim = tahunTakwimList.find(t => t.id === filterTahunTakwim);
-        if (tahunTakwim) {
-          const penangananDate = new Date(p.tanggal);
-          const startDate = new Date(tahunTakwim.tanggal_mulai);
-          const endDate = new Date(tahunTakwim.tanggal_selesai);
-          if (penangananDate < startDate || penangananDate > endDate) return false;
-        }
-      }
-
-      // Filter by kategori
-      if (filterKategori) {
-        const aturan = aturanList.find(a => a.id === p.aturan_id);
-        if (!aturan || aturan.kategori_id !== filterKategori) return false;
-      }
-
-      return true;
-    });
-
-    // Calculate overall statistics
-    let total_pelanggaran = 0;
-    let total_prestasi = 0;
-    let total_poin_negatif = 0;
-    let total_poin_positif = 0;
-
-    filteredPenanganan.forEach(p => {
-      const aturan = aturanList.find(a => a.id === p.aturan_id);
-      if (aturan) {
-        if (aturan.poin < 0) {
-          total_pelanggaran++;
-          total_poin_negatif += aturan.poin;
-        } else {
-          total_prestasi++;
-          total_poin_positif += aturan.poin;
-        }
-      }
-    });
-
-    setStats({
-      total_penanganan: filteredPenanganan.length,
-      total_pelanggaran,
-      total_prestasi,
-      total_poin_negatif,
-      total_poin_positif,
-    });
-
-    // Calculate per-student statistics
-    const studentStatsMap = {};
-    filteredPenanganan.forEach(p => {
-      if (!studentStatsMap[p.siswa_id]) {
-        studentStatsMap[p.siswa_id] = {
-          siswa_id: p.siswa_id,
-          pelanggaran: 0,
-          prestasi: 0,
-          poin_negatif: 0,
-          poin_positif: 0,
-          total_poin: 0,
-        };
-      }
-
-      const aturan = aturanList.find(a => a.id === p.aturan_id);
-      if (aturan) {
-        if (aturan.poin < 0) {
-          studentStatsMap[p.siswa_id].pelanggaran++;
-          studentStatsMap[p.siswa_id].poin_negatif += aturan.poin;
-        } else {
-          studentStatsMap[p.siswa_id].prestasi++;
-          studentStatsMap[p.siswa_id].poin_positif += aturan.poin;
-        }
-        studentStatsMap[p.siswa_id].total_poin += aturan.poin;
-      }
-    });
-
-    const studentStatsArray = Object.values(studentStatsMap).sort((a, b) => b.total_poin - a.total_poin);
-    setStudentStats(studentStatsArray);
-  };
-
-  const getStudentInfo = (id) => {
-    const student = studentsList.find(s => s.id === id);
-    return student || { nis: '-', nama: '-', kelas: '-' };
-  };
-
-  const handleExportData = () => {
-    // Simple CSV export
-    const headers = ['NIS', 'Nama', 'Kelas', 'Pelanggaran', 'Prestasi', 'Poin Negatif', 'Poin Positif', 'Total Poin'];
-    const rows = studentStats.map(stat => {
-      const student = getStudentInfo(stat.siswa_id);
-      return [
-        student.nis,
-        student.nama,
-        student.kelas,
-        stat.pelanggaran,
-        stat.prestasi,
-        stat.poin_negatif,
-        stat.poin_positif,
-        stat.total_poin,
-      ];
-    });
-
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `rekapitulasi_tatib_${hariIniWIB()}.csv`;
-    link.click();
-    toast.success('Data berhasil diekspor');
-  };
+  // Ringkasan & tabel mengikuti filter; pilihan jenis mengikuti kategori terpilih.
+  const tersaring = useMemo(() => saringData(baris, filter), [baris, filter]);
+  const pilihan = useMemo(() => pilihanFilterData(baris, filter.kategori), [baris, filter.kategori]);
+  const ringkas = useMemo(() => ringkasData(tersaring), [tersaring]);
+  // Sebaran dihitung tanpa filter asal: chip asal lain tetap bisa dipilih saat satu asal aktif.
+  const tanpaAsal = useMemo(() => saringData(baris, { ...filter, asal: '' }), [baris, filter]);
+  const sebaran = useMemo(() => sebaranAsalInput(tanpaAsal), [tanpaAsal]);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Data Tata Tertib - Rekapitulasi</h1>
-        <Button onClick={handleExportData}>
-          <Download className="h-4 w-4 mr-2" />
-          Export Data
-        </Button>
+    <div className="p-6 space-y-6" data-testid="tatib-data-page">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Database className="h-6 w-6" /> Data Tata Tertib</h1>
+        <p className="text-sm text-slate-600">Seluruh pencatatan poin menurut kategori dan jenis aturan, beserta asal input dan keterangannya.</p>
       </div>
 
-      {/* Filters */}
+      <FilterDataTatib value={filter} onChange={setFilter} pilihan={pilihan} kosong={FILTER_DATA_KOSONG} />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="data-ringkasan">
+        <KartuRingkasan ikon={Database} label="Pencatatan" nilai={ringkas.jumlah} sub={`${ringkas.siswa} siswa`} />
+        <KartuRingkasan ikon={ThumbsDown} label="Pelanggaran" nilai={ringkas.jumlah_pelanggaran} sub={`${formatPoin(ringkas.total_minus)} poin`} warna="text-red-700" />
+        <KartuRingkasan ikon={ThumbsUp} label="Kebaikan" nilai={ringkas.jumlah_kebaikan} sub={`${formatPoin(ringkas.total_plus)} poin`} warna="text-emerald-700" />
+        <KartuRingkasan ikon={Users} label="Saldo poin" nilai={formatPoin(ringkas.total_plus + ringkas.total_minus)} sub="kebaikan + pelanggaran" />
+      </div>
+
+      {!loading && tanpaAsal.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="data-sebaran-asal">
+          <span className="text-xs font-medium text-slate-500">Asal input:</span>
+          {sebaran.map(({ asal, jumlah }) => {
+            // Klik chip = saring asal itu; klik lagi = lepas.
+            const nilai = asal || ASAL_KOSONG;
+            const terpilih = filter.asal === nilai;
+            return (
+              <button
+                key={nilai}
+                type="button"
+                onClick={() => setFilter((f) => ({ ...f, asal: terpilih ? '' : nilai }))}
+                disabled={!jumlah && !terpilih}
+                aria-pressed={terpilih}
+                className={`inline-flex items-center gap-1 rounded-md p-0.5 ${terpilih ? 'ring-2 ring-slate-900' : ''} ${jumlah ? 'hover:bg-slate-100' : 'opacity-40'}`}
+                data-testid={`data-sebaran-${nilai}`}
+              >
+                <LabelAsalInput asal={asal} labelKosong="- belum diisi" /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Tahun Takwim</Label>
-              <Select
-                value={filterTahunTakwim || "all"}
-                onValueChange={(v) => {
-                  setFilterTahunTakwim(v === "all" ? "" : v);
-                  setFilterSemester(''); // Clear semester when tahun takwim changes
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Semua Tahun Takwim" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Tahun Takwim</SelectItem>
-                  {tahunTakwimList.map(t => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.nama} ({t.tahun_mulai}/{t.tahun_selesai})
-                    </SelectItem>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center p-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data...</div>
+          ) : (
+            <>
+            {/* Layar kecil: kartu per catatan (asal input & poin tetap terlihat tanpa menggeser tabel). */}
+            <ul className="divide-y md:hidden" data-testid="data-kartu">
+              {tersaring.map((b) => (
+                <li key={b.id} className="space-y-1.5 p-4" data-testid={`data-kartu-${b.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{b.siswa_nama}</p>
+                      <p className="text-xs text-slate-500">{[b.siswa_kelas, b.siswa_nisn || b.siswa_nis].filter(Boolean).join(' · ') || '-'}</p>
+                    </div>
+                    <span className={`shrink-0 text-lg font-bold tabular-nums ${b.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(b.poin)}</span>
+                  </div>
+                  <p className="text-sm"><span className="font-mono text-xs text-slate-500 mr-1">{b.kode_aturan}</span>{b.jenis_nama}</p>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    <span>{formatTanggal(b.tanggal)}</span>
+                    <Badge variant="outline" className="px-1.5 py-0 font-normal text-[11px]">{b.kategori_nama}</Badge>
+                    <span className="inline-flex items-center gap-1">Asal: <LabelAsalInput asal={b.asal_input} /></span>
+                  </div>
+                  {b.keterangan && <p className="text-xs italic text-slate-600">“{b.keterangan}”</p>}
+                </li>
+              ))}
+              {tersaring.length === 0 && (
+                <li className="py-8 text-center text-sm text-slate-500">
+                  {baris.length ? 'Tidak ada pencatatan yang cocok dengan filter.' : 'Belum ada pencatatan tata tertib.'}
+                </li>
+              )}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Siswa</TableHead>
+                    <TableHead>Kelas</TableHead>
+                    <TableHead>Kategori</TableHead>
+                    <TableHead>Jenis Aturan</TableHead>
+                    <TableHead className="text-right">Poin</TableHead>
+                    <TableHead>Asal Input</TableHead>
+                    <TableHead>Keterangan</TableHead>
+                    <TableHead>Pencatat</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tersaring.map((b) => (
+                    <TableRow key={b.id} data-testid={`data-${b.id}`}>
+                      <TableCell className="whitespace-nowrap">{formatTanggal(b.tanggal)}</TableCell>
+                      <TableCell>
+                        <div className="font-medium whitespace-nowrap">{b.siswa_nama}</div>
+                        <div className="text-xs text-slate-500">{b.siswa_nisn || b.siswa_nis || '-'}</div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{b.siswa_kelas || '-'}</TableCell>
+                      <TableCell><Badge variant="outline" className="font-normal whitespace-nowrap">{b.kategori_nama}</Badge></TableCell>
+                      <TableCell>
+                        <span className="font-mono text-xs text-slate-500 mr-1">{b.kode_aturan}</span>{b.jenis_nama}
+                      </TableCell>
+                      <TableCell className={`text-right font-semibold tabular-nums ${b.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(b.poin)}</TableCell>
+                      <TableCell data-testid={`data-asal-${b.id}`}><LabelAsalInput asal={b.asal_input} /></TableCell>
+                      <TableCell className="max-w-[16rem] text-sm text-slate-600"><span className="line-clamp-2">{b.keterangan || <span className="text-slate-300">-</span>}</span></TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">{b.petugas_nama}</TableCell>
+                    </TableRow>
                   ))}
-                </SelectContent>
-              </Select>
+                  {tersaring.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="py-8 text-center text-slate-500">
+                        {baris.length ? 'Tidak ada pencatatan yang cocok dengan filter.' : 'Belum ada pencatatan tata tertib.'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
-
-            <div>
-              <Label>Semester</Label>
-              <Select
-                value={filterSemester || "all"}
-                onValueChange={(v) => setFilterSemester(v === "all" ? "" : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Semua Semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Semester</SelectItem>
-                  {semesterList.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.nama} - {s.tahun_pelajaran}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Kategori</Label>
-              <Select value={filterKategori || "all"} onValueChange={(v) => setFilterKategori(v === "all" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Semua Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Kategori</SelectItem>
-                  {kategoriList.map(k => (
-                    <SelectItem key={k.id} value={k.id}>{k.nama}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Penanganan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_penanganan}</div>
-            <p className="text-xs text-muted-foreground">Pelanggaran & Prestasi</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-              Pelanggaran
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{stats.total_pelanggaran}</div>
-            <p className="text-xs text-muted-foreground">Total: {stats.total_poin_negatif} poin</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Award className="h-4 w-4 text-green-500" />
-              Prestasi
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">{stats.total_prestasi}</div>
-            <p className="text-xs text-muted-foreground">Total: +{stats.total_poin_positif} poin</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingDown className="h-4 w-4" />
-              Total Poin Negatif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{stats.total_poin_negatif}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Total Poin Positif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">+{stats.total_poin_positif}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="rekapitulasi" className="w-full">
-        <TabsList>
-          <TabsTrigger value="rekapitulasi">Rekapitulasi Per Siswa</TabsTrigger>
-          <TabsTrigger value="top_pelanggar">Top Pelanggar</TabsTrigger>
-          <TabsTrigger value="top_prestasi">Top Prestasi</TabsTrigger>
-        </TabsList>
-
-        {/* Rekapitulasi Tab */}
-        <TabsContent value="rekapitulasi">
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex justify-center items-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="ml-2">Memuat data...</span>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>NIS</TableHead>
-                      <TableHead>Nama Siswa</TableHead>
-                      <TableHead>Kelas</TableHead>
-                      <TableHead className="text-right">Pelanggaran</TableHead>
-                      <TableHead className="text-right">Prestasi</TableHead>
-                      <TableHead className="text-right">Poin Negatif</TableHead>
-                      <TableHead className="text-right">Poin Positif</TableHead>
-                      <TableHead className="text-right">Total Poin</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {studentStats.map(stat => {
-                      const student = getStudentInfo(stat.siswa_id);
-                      return (
-                        <TableRow key={stat.siswa_id}>
-                          <TableCell>{student.nis}</TableCell>
-                          <TableCell>{student.nama}</TableCell>
-                          <TableCell>{student.kelas}</TableCell>
-                          <TableCell className="text-right">{stat.pelanggaran}</TableCell>
-                          <TableCell className="text-right">{stat.prestasi}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="destructive">{stat.poin_negatif}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="default">+{stat.poin_positif}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant={stat.total_poin >= 0 ? 'default' : 'destructive'}>
-                              {stat.total_poin >= 0 ? `+${stat.total_poin}` : stat.total_poin}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {studentStats.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                          Belum ada data penanganan
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Top Pelanggar Tab */}
-        <TabsContent value="top_pelanggar">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ranking</TableHead>
-                    <TableHead>NIS</TableHead>
-                    <TableHead>Nama Siswa</TableHead>
-                    <TableHead>Kelas</TableHead>
-                    <TableHead className="text-right">Jumlah Pelanggaran</TableHead>
-                    <TableHead className="text-right">Total Poin Negatif</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {studentStats
-                    .filter(s => s.pelanggaran > 0)
-                    .sort((a, b) => b.pelanggaran - a.pelanggaran)
-                    .slice(0, 20)
-                    .map((stat, idx) => {
-                      const student = getStudentInfo(stat.siswa_id);
-                      const variant = idx === 0 ? 'destructive' : idx < 3 ? 'secondary' : 'outline';
-                      return (
-                        <TableRow key={stat.siswa_id}>
-                          <TableCell>
-                            <Badge variant={variant}>#{idx + 1}</Badge>
-                          </TableCell>
-                          <TableCell>{student.nis}</TableCell>
-                          <TableCell>{student.nama}</TableCell>
-                          <TableCell>{student.kelas}</TableCell>
-                          <TableCell className="text-right font-bold">{stat.pelanggaran}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="destructive">{stat.poin_negatif}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  {studentStats.filter(s => s.pelanggaran > 0).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                        Tidak ada data pelanggaran
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Top Prestasi Tab */}
-        <TabsContent value="top_prestasi">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ranking</TableHead>
-                    <TableHead>NIS</TableHead>
-                    <TableHead>Nama Siswa</TableHead>
-                    <TableHead>Kelas</TableHead>
-                    <TableHead className="text-right">Jumlah Prestasi</TableHead>
-                    <TableHead className="text-right">Total Poin Positif</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {studentStats
-                    .filter(s => s.prestasi > 0)
-                    .sort((a, b) => b.prestasi - a.prestasi)
-                    .slice(0, 20)
-                    .map((stat, idx) => {
-                      const student = getStudentInfo(stat.siswa_id);
-                      const variant = idx === 0 ? 'default' : idx < 3 ? 'secondary' : 'outline';
-                      return (
-                        <TableRow key={stat.siswa_id}>
-                          <TableCell>
-                            <Badge variant={variant}>#{idx + 1}</Badge>
-                          </TableCell>
-                          <TableCell>{student.nis}</TableCell>
-                          <TableCell>{student.nama}</TableCell>
-                          <TableCell>{student.kelas}</TableCell>
-                          <TableCell className="text-right font-bold">{stat.prestasi}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="default">+{stat.poin_positif}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  {studentStats.filter(s => s.prestasi > 0).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                        Tidak ada data prestasi
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 };

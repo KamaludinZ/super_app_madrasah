@@ -1,4 +1,4 @@
-import { ClipboardEdit, BookMarked, ShieldCheck, Database, BarChart3 } from 'lucide-react';
+import { ClipboardEdit, Gavel, ListChecks, SlidersHorizontal, ShieldCheck, Database, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Hak akses & menu Tata Tertib per peran aktif — satu sumber untuk navigasi (navForRole)
@@ -31,6 +31,13 @@ export const aksesTatib = (activeRole) => AKSES_TATIB_PER_PERAN[activeRole] || n
 export const bolehInputTatib = (activeRole) => aksesTatib(activeRole) === 'input';
 
 export const bolehHapusTatib = (activeRole) => activeRole === 'admin';
+
+// Pengaturan Ambang SP hanya untuk admin (lihat & ubah), sama dengan backend PUT /tatib/ambang-sp.
+export const bolehAturAmbangSP = (activeRole) => activeRole === 'admin';
+
+// Halaman Input Tata Tertib & Tindakan Tatib: peran input mengubah; peran lihat hanya melihat.
+// Wali kelas & siswa diarahkan ke halaman poinnya sendiri.
+export const bolehBukaInputTatib = (activeRole) => ['input', 'lihat'].includes(aksesTatib(activeRole));
 
 export const PESAN_TOLAK_TATIB = 'Peran Anda hanya dapat melihat data tata tertib. Perubahan hanya oleh admin, guru tata tertib, atau waka kesiswaan.';
 export const PESAN_TOLAK_HAPUS_TATIB = 'Hanya admin yang dapat menghapus data tata tertib.';
@@ -68,11 +75,12 @@ export function menuTatib(role, prefix) {
     return [{ to: '/wali-kelas/poin-tatib', label: 'Pantauan Walikelas', icon: ShieldCheck, testid: `${prefix}-poin-tatib` }];
   }
   const items = [];
+  if (akses === 'input') {
+    items.push({ to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: `${prefix}-tatib-input` });
+  }
+  // Kategori dikelola langsung di Input Tata Tertib; master aturan lama digantikan Master Jenis Pelanggaran.
   if (PERAN_KELOLA_ATURAN.includes(role)) {
-    items.push(
-      { to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: `${prefix}-tatib-input` },
-      { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: `${prefix}-tatib-kategori` },
-    );
+    items.push({ to: '/admin/tatib/jenis-pelanggaran', label: 'Master Jenis Pelanggaran', icon: ListChecks, testid: `${prefix}-tatib-jenis` });
   }
   items.push(
     {
@@ -81,6 +89,11 @@ export function menuTatib(role, prefix) {
       icon: ShieldCheck,
       testid: `${prefix}-tatib-penanganan`,
     },
+    { to: '/admin/tatib/tindakan', label: 'Tindakan Tatib', icon: Gavel, testid: `${prefix}-tatib-tindakan` },
+    // Ambang SP diatur admin (PRD: "ambang dapat diatur admin").
+    ...(bolehAturAmbangSP(role)
+      ? [{ to: '/admin/tatib/ambang-sp', label: 'Pengaturan Ambang SP', icon: SlidersHorizontal, testid: `${prefix}-tatib-ambang-sp` }]
+      : []),
     { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: `${prefix}-tatib-data` },
     { to: '/tatib/rekap', label: 'Rekap Pengawas', icon: BarChart3, testid: `${prefix}-tatib-rekap` },
   );

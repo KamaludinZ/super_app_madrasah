@@ -274,7 +274,7 @@ def test_ekspor_rekap_xlsx(db):
     async def _baca():
         return b''.join([c async for c in resp.body_iterator])
     wb = load_workbook(_io.BytesIO(asyncio.run(_baca())))
-    assert wb.sheetnames == ['Rekap per Kelas', 'Aturan Terbanyak']
+    assert wb.sheetnames == ['Rekap per Kelas', 'Aturan Terbanyak', 'Per Kategori', 'Per Asal Input']
     ws = wb['Rekap per Kelas']
     assert [c.value for c in ws[2]][:2] == ['7A', 2] and ws[3][0].value == 'TOTAL'
 
@@ -319,7 +319,7 @@ def tatib_db(db, monkeypatch):
 
 
 def _req(tatib, **kw):
-    dasar = {'siswa_id': 's1', 'tatib_id': 'a-telat', 'tanggal': '2026-10-08'}
+    dasar = {'siswa_id': 's1', 'tatib_id': 'a-telat', 'tanggal': '2026-10-08', 'asal_input': 'Screening pagi'}
     return tatib.PenangananRequest(**{**dasar, **kw})
 
 
@@ -337,6 +337,8 @@ def test_catat_poin_nilai_dari_kondisi(tatib_db):
         ('pelanggaran', {'kondisi_id': 'tak-ada'}, 400),
         ('pelanggaran', {'tatib_id': 'a-mati'}, 400),           # aturan nonaktif
         ('pelanggaran', {'siswa_id': 'tidak-ada', 'kondisi_id': 'ringan'}, 404),
+        ('pelanggaran', {'kondisi_id': 'ringan', 'asal_input': None}, 400),  # asal input wajib
+        ('pelanggaran', {'kondisi_id': 'ringan', 'asal_input': 'Lainnya'}, 400),
         ('prestasi', {'kondisi_id': 'ringan'}, 404),
     ):
         with pytest.raises(HTTPException) as e:

@@ -4,6 +4,8 @@ import { ShieldCheck, Loader2 } from 'lucide-react';
 import RingkasanPoin from '@/components/tatib/RingkasanPoin';
 import RiwayatPoin from '@/components/tatib/RiwayatPoin';
 import RincianPoinDialog from '@/components/tatib/RincianPoinDialog';
+import TabelPerKategori from '@/components/tatib/TabelPerKategori';
+import { rekapPerKategori } from '@/lib/dataTatib';
 import { ambilPoinSaya } from '@/lib/poinTatib';
 import { toast } from 'sonner';
 import { Navigate } from 'react-router-dom';
@@ -71,6 +73,10 @@ export default function SiswaPoinPage() {
         jumlahKebaikan={data.jumlah_kebaikan}
         jumlahPelanggaran={data.jumlah_pelanggaran}
       />
+
+      {(data.records || []).length > 0 && (
+        <TabelPerKategori items={data.per_kategori ?? rekapPerKategori(data.records)} judul="Poin per Kategori" testid="poin-per-kategori" />
+      )}
 
       <RiwayatPoin records={data.records || []} onPilih={setDipilih} />
 

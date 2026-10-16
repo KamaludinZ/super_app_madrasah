@@ -980,4 +980,14 @@ def export_rekap_tatib_xlsx(rekap: Dict[str, Any], keterangan: str = '') -> byte
                 for t in rekap.get('teratas_kebaikan') or []]
     _isi_sheet_ekspor(wb.create_sheet(), 'Aturan Terbanyak', ['Jenis', 'Kode', 'Aturan', 'Kategori', 'Jumlah'],
                       teratas, [14, 10, 40, 18, 10])
+    kategori = [[k.get('kategori'), k.get('jumlah_pelanggaran', 0), k.get('total_minus', 0), k.get('jumlah_kebaikan', 0),
+                 k.get('total_plus', 0), (k.get('total_plus', 0) or 0) + (k.get('total_minus', 0) or 0)]
+                for k in rekap.get('per_kategori') or []]
+    _isi_sheet_ekspor(wb.create_sheet(), 'Per Kategori',
+                      ['Kategori', 'Catatan Pelanggaran', 'Poin Pelanggaran', 'Catatan Kebaikan', 'Poin Kebaikan', 'Saldo'],
+                      kategori, [24, 20, 17, 18, 15, 10])
+    asal = [[a.get('asal_input') or '- (belum diisi)', a.get('jumlah', 0), a.get('total_minus', 0), a.get('total_plus', 0)]
+            for a in rekap.get('per_asal_input') or []]
+    _isi_sheet_ekspor(wb.create_sheet(), 'Per Asal Input', ['Asal Input', 'Jumlah Catatan', 'Poin Pelanggaran', 'Poin Kebaikan'],
+                      asal, [20, 16, 17, 15])
     return workbook_to_bytes(wb)

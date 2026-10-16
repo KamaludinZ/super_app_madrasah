@@ -17,8 +17,8 @@ from pydantic import BaseModel, Field
 from core import db, get_current_user, serialize_doc
 from routers._shared import FILTER_SISWA_AKTIF, sembunyikan_siswa_nonaktif
 from tatib_poin import (
-    BATAS_MINUS_PERHATIAN, FIELD_BATAS_PERHATIAN, KOLEKSI_POIN, akses_tatib, jenis_dari_poin, nilai_poin,
-    rangkum_poin, susun_rekap,
+    ASAL_INPUT, BATAS_MINUS_PERHATIAN, FIELD_BATAS_PERHATIAN, KOLEKSI_POIN, akses_tatib, jenis_dari_poin, nilai_poin,
+    rangkum_poin, rekap_kategori_asal, susun_rekap,
 )
 
 router = APIRouter()
@@ -36,6 +36,8 @@ def wajib_akses(*diizinkan: str):
 # Dependency bersama: tulis data tatib (input) & baca rekap/statistik (input + lihat/pimpinan).
 wajib_input_tatib = wajib_akses('input')
 wajib_lihat_tatib = wajib_akses('input', 'lihat')
+# Master kategori/jenis/aturan: semua peran yang punya akses tatib (termasuk wali kelas & siswa), bukan peran lain.
+wajib_akses_tatib = wajib_akses('input', 'lihat', 'kelas', 'pribadi')
 
 
 # ============================================================
@@ -59,7 +61,7 @@ async def lihat_ambang(user: Dict = Depends(wajib_akses('input', 'lihat', 'kelas
 
 
 @router.put("/tatib/ambang")
-async def ubah_ambang(req: AmbangRequest, user: Dict = Depends(wajib_akses('input'))):
+async def ubah_ambang(req: AmbangRequest, user: Dict = Depends(wajib_input_tatib)):
     """Ubah batas penanda perlu perhatian (hanya peran input tatib)."""
     await db.settings.update_one({'id': 'global_config'}, {'$set': {FIELD_BATAS_PERHATIAN: req.batas_minus_perhatian}}, upsert=True)
     return {'batas_minus_perhatian': req.batas_minus_perhatian}
@@ -139,11 +141,12 @@ async def batasi_query_tatib(user: Dict, query: Dict, field: str = 'siswa_id') -
 @router.get("/tatib/walikelas/siswa")
 async def daftar_siswa_walikelas(user: Dict = Depends(wajib_wali_kelas)):
     """Daftar siswa kelas yang diampu wali kelas login + rangkuman poin masing-masing.
-    -> {kelas: {id, name} | null, siswa: [{id, full_name, nis, nisn, class_name, total_plus, total_minus,
-        saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian}]}"""
+    -> {kelas: {id, name} | null, batas_minus_perhatian, siswa: [{id, full_name, nis, nisn, class_name, total_plus,
+        total_minus, saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian}],
+        per_kategori, per_asal_input} — rekap kelas per kategori & asal input (bentuk sama dengan Rekap Pengawas)."""
     kelas = await kelas_diampu(user)
     if not kelas:
-        return {'kelas': None, 'siswa': []}
+        return {'kelas': None, 'siswa': [], 'per_kategori': [], 'per_asal_input': []}
     siswa = await siswa_kelas(kelas['id'])
     records = await catatan_siswa([s['id'] for s in siswa])
     per_siswa: Dict[str, List[Dict]] = {}
@@ -151,10 +154,13 @@ async def daftar_siswa_walikelas(user: Dict = Depends(wajib_wali_kelas)):
         per_siswa.setdefault(r.get('siswa_id'), []).append(r)
     batas = await ambang_perhatian()
     hasil = [{**s, 'class_name': kelas.get('name'), **rangkum_poin(per_siswa.get(s['id'], []), batas)} for s in siswa]
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
     return {
         'kelas': {'id': kelas['id'], 'name': kelas.get('name')},
         'batas_minus_perhatian': batas,
         'siswa': [serialize_doc(h) for h in hasil],
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
     }
 
 
@@ -171,8 +177,9 @@ async def siswa_perlu_perhatian(user: Dict = Depends(wajib_wali_kelas)):
 # RINGKASAN POIN & RIWAYAT SATU SISWA
 # ============================================================
 
-def _rapikan_catatan(r: Dict) -> Dict:
-    """Catatan untuk tampilan: nilai bertanda + jenis + field poin baku walau catatan lama."""
+def rapikan_catatan(r: Dict) -> Dict:
+    """Catatan untuk tampilan: nilai bertanda + jenis + field poin baku walau catatan lama
+    (asal_input selalu ada: catatan sebelum fitur asal input = None)."""
     poin = nilai_poin(r)
     return serialize_doc({
         **r,
@@ -180,12 +187,19 @@ def _rapikan_catatan(r: Dict) -> Dict:
         'jenis_poin': r.get('jenis_poin') or jenis_dari_poin(poin),
         'kondisi': r.get('kondisi'),
         'tindak_lanjut': r.get('tindak_lanjut') or [],
+        'asal_input': r.get('asal_input'),
+        'keterangan': r.get('keterangan') if r.get('keterangan') is not None else r.get('catatan'),
+        # struktur baru: jenis aturan (catatan lama: tatib_id/tatib_kode)
+        'jenis_id': r.get('jenis_id') or r.get('tatib_id'),
+        'kode_aturan': r.get('tatib_kode'),
+        'kategori_id': r.get('kategori_id'),
     })
 
 
 async def paket_poin_siswa(siswa_id: str, filter_periode: Optional[Dict] = None) -> Dict:
     """{siswa, total_plus, total_minus, saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian,
-    records (terbaru dulu)} — bentuk yang sama dengan data tiruan frontend (ambilPoinSayaTiruan)."""
+    batas_minus_perhatian, per_kategori, per_asal_input, records (terbaru dulu; kode, kategori, asal input,
+    keterangan sudah dirapikan)}."""
     akun = await db.users.find_one({'id': siswa_id}, {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nisn': 1, 'student_class_id': 1})
     if not akun:
         raise HTTPException(404, "Siswa tidak ditemukan")
@@ -194,12 +208,15 @@ async def paket_poin_siswa(siswa_id: str, filter_periode: Optional[Dict] = None)
     records = await db[KOLEKSI_POIN].find(query, {'_id': 0}).to_list(2000)
     records.sort(key=lambda r: (r.get('tanggal') or '', r.get('created_at') or ''), reverse=True)
     batas = await ambang_perhatian()
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
     return {
         'siswa': {'id': akun['id'], 'nama': akun.get('full_name'), 'nis': akun.get('nis'), 'nisn': akun.get('nisn'),
                   'kelas': (kelas or {}).get('name')},
         **rangkum_poin(records, batas),
         'batas_minus_perhatian': batas,
-        'records': [_rapikan_catatan(r) for r in records],
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
+        'records': [rapikan_catatan(r) for r in records],
     }
 
 
@@ -254,12 +271,35 @@ async def detail_catatan_poin(catatan_id: str, user: Dict = Depends(get_current_
     if not doc:
         raise HTTPException(404, "Catatan poin tidak ditemukan")
     await batasi_query_tatib(user, {'siswa_id': doc.get('siswa_id')})
-    return _rapikan_catatan(doc)
+    return rapikan_catatan(doc)
 
 
 # ============================================================
 # REKAP PENGAWAS (read-only pimpinan & pengelola tatib)
 # ============================================================
+
+def cek_asal_input(nilai: Optional[str], wajib: bool = False) -> Optional[str]:
+    """Asal input harus salah satu dari daftar baku (ASAL_INPUT); kosong boleh bila tidak wajib."""
+    if nilai in (None, '') and not wajib:
+        return None
+    if nilai not in ASAL_INPUT:
+        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
+    return nilai
+
+
+# Nilai filter untuk catatan lama yang belum punya asal input (ditampilkan '-' di aplikasi).
+ASAL_INPUT_KOSONG = '-'
+
+
+def syarat_asal_input(nilai: Optional[str]) -> Optional[Dict]:
+    """Fragmen query filter asal input: nilai baku -> sama persis; '-' -> catatan tanpa asal input;
+    kosong -> None (tanpa filter); nilai lain -> 400."""
+    if nilai in (None, ''):
+        return None
+    if nilai == ASAL_INPUT_KOSONG:
+        return {'$or': [{'asal_input': None}, {'asal_input': ''}, {'asal_input': {'$exists': False}}]}
+    return {'asal_input': cek_asal_input(nilai)}
+
 
 def _tanggal_valid(nilai: Optional[str], nama: str) -> Optional[str]:
     """Tanggal filter harus YYYY-MM-DD (400 bila tidak)."""
@@ -282,8 +322,9 @@ def _rentang_tanggal(dari: Optional[str], sampai: Optional[str]) -> Dict:
 
 
 async def query_rekap(kelas: Optional[str], semester_id: Optional[str], tahun_takwim_id: Optional[str],
-                      start_date: Optional[str], end_date: Optional[str], semester: Optional[str] = None) -> Dict:
-    """Query catatan untuk rekap (filter kelas & periode).
+                      start_date: Optional[str], end_date: Optional[str], semester: Optional[str] = None,
+                      asal_input: Optional[str] = None) -> Dict:
+    """Query catatan untuk rekap (filter kelas, periode, dan asal input pencatatan).
     semester_id: catatan ber-semester_id itu, atau catatan lama tanpa semester_id yang tanggalnya
     di dalam rentang semester. semester (kode lama, mis. 'ganjil') mencocokkan field `semester`."""
     syarat: List[Dict] = []
@@ -302,6 +343,8 @@ async def query_rekap(kelas: Optional[str], semester_id: Optional[str], tahun_ta
         syarat.append({'$or': [{'semester_id': semester_id}, lama]})
     if start_date or end_date:
         syarat.append({'tanggal': _rentang_tanggal(start_date, end_date)})
+    if asal_input:
+        syarat.append(syarat_asal_input(asal_input))
     if not syarat:
         return {}
     return syarat[0] if len(syarat) == 1 else {'$and': syarat}
@@ -326,12 +369,13 @@ async def kelas_dan_siswa(kelas: Optional[str]) -> Dict[str, List[str]]:
 
 
 async def data_rekap(kelas=None, semester_id=None, tahun_takwim_id=None, start_date=None, end_date=None,
-                     semester=None) -> Dict:
+                     semester=None, asal_input=None) -> Dict:
+    syarat_asal_input(asal_input)  # validasi lebih awal (400 bila tidak dikenal)
     start_date = _tanggal_valid(start_date, 'tanggal awal')
     end_date = _tanggal_valid(end_date, 'tanggal akhir')
     if start_date and end_date and start_date > end_date:
         raise HTTPException(400, "Tanggal awal tidak boleh setelah tanggal akhir")
-    query = await query_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    query = await query_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
     await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)
     records = await db[KOLEKSI_POIN].find(query, {'_id': 0}).to_list(20000)
     return susun_rekap(records, await kelas_dan_siswa(kelas), await ambang_perhatian())
@@ -345,11 +389,13 @@ async def rekap_poin(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
-    user: Dict = Depends(wajib_akses('input', 'lihat')),
+    asal_input: Optional[str] = None,
+    user: Dict = Depends(wajib_lihat_tatib),
 ):
     """Rekap poin lintas kelas & periode: ringkasan, per kelas, aturan terbanyak (kebaikan & pelanggaran).
-    Filter: kelas (nama), semester_id / semester (kode lama), tahun_takwim_id, start_date..end_date (YYYY-MM-DD)."""
-    return await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    Filter: kelas (nama), semester_id / semester (kode lama), tahun_takwim_id, start_date..end_date (YYYY-MM-DD),
+    asal_input (salah satu ASAL_INPUT)."""
+    return await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
 
 
 
@@ -361,19 +407,23 @@ async def ekspor_rekap_poin(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
-    user: Dict = Depends(wajib_akses('input', 'lihat')),
+    asal_input: Optional[str] = None,
+    user: Dict = Depends(wajib_lihat_tatib),
 ):
     """Unduh Rekap Pengawas (.xlsx) dengan filter yang sama seperti GET /tatib/rekap."""
     from excel_io import export_rekap_tatib_xlsx
-    rekap = await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    rekap = await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
     sem = await db.semesters.find_one({'id': semester_id}, {'_id': 0, 'name': 1}) if semester_id else None
     bagian = [f"Kelas {kelas}" if kelas else 'Semua kelas']
     if sem:
         bagian.append(f"Semester {sem.get('name')}")
     if start_date or end_date:
         bagian.append(f"Tanggal {start_date or '…'} s.d. {end_date or '…'}")
+    if asal_input:
+        bagian.append(f"Asal input {asal_input}")
     keterangan = 'Filter: ' + ' · '.join(bagian) + f" · diunduh {now_wib().strftime('%Y-%m-%d %H:%M')}"
-    nama = '_'.join(filter(None, ['rekap_poin_tatib', f"kelas-{kelas}" if kelas else '', start_date, end_date,
+    asal = '-'.join(asal_input.lower().split()) if asal_input else ''
+    nama = '_'.join(filter(None, ['rekap_poin_tatib', f"kelas-{kelas}" if kelas else '', asal, start_date, end_date,
                                   now_wib().strftime('%Y%m%d')]))
     return StreamingResponse(
         io.BytesIO(export_rekap_tatib_xlsx(rekap, keterangan)),

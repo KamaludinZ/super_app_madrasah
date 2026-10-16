@@ -162,6 +162,36 @@ async def _kehadiran_jurnal(db):
     return await migrate(db)
 
 
+async def _tatib_struktur_baru(db):
+    from migrations.migrate_tatib_struktur_baru import migrate
+    return await migrate(db)
+
+
+async def _tatib_jenis_pelanggaran(db):
+    from migrations.migrate_tatib_jenis_pelanggaran import migrate
+    return await migrate(db)
+
+
+async def _tatib_tindakan(db):
+    from migrations.migrate_tatib_tindakan import migrate
+    return await migrate(db)
+
+
+async def _tatib_tindakan_riwayat(db):
+    from migrations.migrate_tatib_tindakan_riwayat import migrate
+    return await migrate(db)
+
+
+async def _pengaturan_ambang_sp_riwayat(db):
+    from migrations.migrate_pengaturan_ambang_sp_riwayat import migrate
+    return await migrate(db)
+
+
+async def _pengaturan_ambang_sp(db):
+    from migrations.migrate_pengaturan_ambang_sp import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -178,11 +208,21 @@ MIGRASI = [
     ('2026-10-13_uks_obat_nama_key', _uks_obat_nama_key),
     ('2026-10-14_riwayat_rombel', _riwayat_rombel),
     ('2026-10-14_kehadiran_jurnal', _kehadiran_jurnal),
+    ('2026-10-16_tatib_struktur_baru', _tatib_struktur_baru),
+    ('2026-10-16_tatib_jenis_pelanggaran', _tatib_jenis_pelanggaran),
+    ('2026-10-16_tatib_tindakan', _tatib_tindakan),
+    ('2026-10-16_tatib_tindakan_riwayat', _tatib_tindakan_riwayat),
+    ('2026-10-16_pengaturan_ambang_sp_riwayat', _pengaturan_ambang_sp_riwayat),
+    ('2026-10-16_pengaturan_ambang_sp', _pengaturan_ambang_sp),
 ]
 
 
 # Migrasi yang hanya boleh dijalankan setelah migrasi lain berstatus selesai.
-PRASYARAT = {'2026-10-06_alamat_kode_wilayah': '2026-10-06_master_wilayah'}
+PRASYARAT = {
+    '2026-10-06_alamat_kode_wilayah': '2026-10-06_master_wilayah',
+    '2026-10-16_tatib_struktur_baru': '2026-10-08_tatib_aturan_kondisi',
+    '2026-10-16_tatib_jenis_pelanggaran': '2026-10-16_tatib_struktur_baru',
+}
 
 
 async def jalankan_semua(db, jeda_detik: float = 5) -> Dict[str, Optional[str]]:

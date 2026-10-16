@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
+import { ASAL_INPUT } from '@/lib/inputTatib';
 
-export const FILTER_REKAP_KOSONG = { kelas: '', semester_id: '', tahun_takwim_id: '', start_date: '', end_date: '' };
+export const FILTER_REKAP_KOSONG = { kelas: '', semester_id: '', tahun_takwim_id: '', asal_input: '', start_date: '', end_date: '' };
 
 // Filter Rekap Pengawas: kelas, semester (dari /auth/view-context, bawaan = semester yang sedang
-// dilihat pengguna), dan rentang tanggal. `onChange` menerima objek filter siap dikirim ke API.
+// dilihat pengguna), asal input pencatatan, dan rentang tanggal. `onChange` menerima objek filter siap dikirim ke API.
 export default function FilterRekapTatib({ value, onChange }) {
   const [kelasList, setKelasList] = useState([]);
   const [semesterList, setSemesterList] = useState([]);
@@ -35,7 +36,7 @@ export default function FilterRekapTatib({ value, onChange }) {
 
   return (
     <Card data-testid="rekap-filter">
-      <CardContent className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_1fr_1fr_auto] lg:items-end">
+      <CardContent className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_1fr_1fr_1fr_auto] lg:items-end">
         <div>
           <Label>Kelas</Label>
           <Select value={value.kelas || 'all'} onValueChange={(v) => set({ kelas: v === 'all' ? '' : v })}>
@@ -59,6 +60,16 @@ export default function FilterRekapTatib({ value, onChange }) {
           </Select>
         </div>
         <div>
+          <Label>Asal input</Label>
+          <Select value={value.asal_input || 'all'} onValueChange={(v) => set({ asal_input: v === 'all' ? '' : v })}>
+            <SelectTrigger data-testid="rekap-filter-asal"><SelectValue placeholder="Semua asal" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua asal</SelectItem>
+              {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label>Dari tanggal</Label>
           <Input type="date" value={value.start_date} max={value.end_date || undefined} onChange={(e) => set({ start_date: e.target.value })} data-testid="rekap-filter-dari" />
         </div>
@@ -70,7 +81,7 @@ export default function FilterRekapTatib({ value, onChange }) {
           <RotateCcw className="h-4 w-4 mr-2" /> Atur ulang
         </Button>
         {tanggalTerbalik && (
-          <p className="text-xs text-red-600 sm:col-span-2 lg:col-span-5">Tanggal awal tidak boleh setelah tanggal akhir.</p>
+          <p className="text-xs text-red-600 sm:col-span-2 lg:col-span-6">Tanggal awal tidak boleh setelah tanggal akhir.</p>
         )}
       </CardContent>
     </Card>

@@ -11,6 +11,7 @@ import { formatPoin, rangkumPoin } from '@/components/tatib/RingkasanPoin';
 import { ambilAturanPoin, catatPoin, hitungNilaiPoin, sarankanKondisi } from '@/lib/poinTatib';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { hariIniWIB } from '@/lib/tanggal';
+import { ASAL_INPUT } from '@/lib/inputTatib';
 
 const TEMA = {
   kebaikan: {
@@ -40,7 +41,7 @@ const TEMA = {
 };
 
 const hariIni = () => hariIniWIB();
-const formKosong = () => ({ siswa_id: '', kategori: '', aturan_id: '', kondisi_id: '', tanggal: hariIni(), catatan: '' });
+const formKosong = () => ({ siswa_id: '', kategori: '', aturan_id: '', kondisi_id: '', tanggal: hariIni(), asal_input: '', catatan: '' });
 
 // Formulir pencatatan poin per jalur: 'kebaikan' (PLUS) atau 'pelanggaran' (MINUS).
 // Alur: kategori → aturan → kondisi pelaksanaan; nilai poin dihitung otomatis
@@ -86,8 +87,8 @@ export default function FormPoinTatib({ jenis, open, onOpenChange, studentsList 
 
   const simpan = async () => {
     const siswa = studentsList.find((s) => s.id === form.siswa_id);
-    if (!siswa || !aturan || !nilai || !form.tanggal) {
-      toast.error(`Siswa, ${tema.labelAturan.toLowerCase()}, kondisi, dan tanggal wajib diisi`);
+    if (!siswa || !aturan || !nilai || !form.tanggal || !ASAL_INPUT.includes(form.asal_input)) {
+      toast.error(`Siswa, ${tema.labelAturan.toLowerCase()}, kondisi, tanggal, dan asal input wajib diisi`);
       return;
     }
     setSaving(true);
@@ -202,9 +203,20 @@ export default function FormPoinTatib({ jenis, open, onOpenChange, studentsList 
             </fieldset>
           )}
 
-          <div>
-            <Label>Tanggal*</Label>
-            <Input type="date" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Tanggal*</Label>
+              <Input type="date" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
+            </div>
+            <div>
+              <Label>Asal input*</Label>
+              <Select value={form.asal_input || ''} onValueChange={(asal_input) => setForm({ ...form, asal_input })}>
+                <SelectTrigger data-testid={`${jenis}-asal`}><SelectValue placeholder="Pilih sumber pencatatan" /></SelectTrigger>
+                <SelectContent>
+                  {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>
