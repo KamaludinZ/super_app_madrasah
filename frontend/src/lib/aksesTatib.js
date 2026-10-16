@@ -1,4 +1,4 @@
-import { ClipboardEdit, BookMarked, ListChecks, ShieldCheck, Database, BarChart3 } from 'lucide-react';
+import { ClipboardEdit, ListChecks, ShieldCheck, Database, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Hak akses & menu Tata Tertib per peran aktif — satu sumber untuk navigasi (navForRole)
@@ -75,11 +75,9 @@ export function menuTatib(role, prefix) {
   if (akses === 'input') {
     items.push({ to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: `${prefix}-tatib-input` });
   }
+  // Kategori dikelola langsung di Input Tata Tertib; master aturan lama digantikan Master Jenis Pelanggaran.
   if (PERAN_KELOLA_ATURAN.includes(role)) {
-    items.push(
-      { to: '/admin/tatib/aturan', label: 'Master Aturan', icon: ListChecks, testid: `${prefix}-tatib-aturan` },
-      { to: '/admin/tatib/kategori', label: 'Input Kategori', icon: BookMarked, testid: `${prefix}-tatib-kategori` },
-    );
+    items.push({ to: '/admin/tatib/jenis-pelanggaran', label: 'Master Jenis Pelanggaran', icon: ListChecks, testid: `${prefix}-tatib-jenis` });
   }
   items.push(
     {
