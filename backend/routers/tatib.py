@@ -394,6 +394,100 @@ async def list_jenis_aturan(
     return items
 
 
+async def _cek_kode_unik(kode: str, kecuali_id: Optional[str] = None) -> None:
+    """409 bila kode aturan sudah dipakai jenis lain (kode tersimpan sudah huruf besar; field lama `kode` ikut dicek)."""
+    query: Dict = {'$or': [{'kode_aturan': kode}, {'kode': kode}]}
+    if kecuali_id:
+        query['id'] = {'$ne': kecuali_id}
+    lain = await db.tatib_aturan.find_one(query, {'_id': 0, 'nama': 1, 'nama_aturan': 1})
+    if lain:
+        raise HTTPException(409, f'Kode {kode} sudah dipakai oleh "{lain.get("nama") or lain.get("nama_aturan") or "-"}"')
+
+
+def _field_jenis_dari_request(req: JenisAturanRequest, kategori: Dict) -> Dict:
+    """Field kanonis + field lama (kode, nama_aturan, jenis_poin, poin, is_active) agar endpoint lama tetap konsisten."""
+    jenis_poin = jenis_poin_dari_jalur(req.jalur_poin)
+    poin = -req.besar_poin if req.jalur_poin == 'minus' else req.besar_poin
+    return {
+        'kode_aturan': req.kode_aturan,
+        'kode': req.kode_aturan,
+        'nama': req.nama,
+        'nama_aturan': req.nama,
+        'jalur_poin': req.jalur_poin,
+        'jenis_poin': jenis_poin,
+        'besar_poin': req.besar_poin,
+        'poin': poin,
+        'kategori_id': req.kategori_id,
+        'kategori_nama': kategori.get('nama'),
+        'deskripsi': req.deskripsi,
+    }
+
+
+async def _kategori_atau_404(kategori_id: str) -> Dict:
+    kategori = await db.tatib_kategori.find_one({'id': kategori_id}, {'_id': 0, 'id': 1, 'nama': 1})
+    if not kategori:
+        raise HTTPException(404, "Kategori tidak ditemukan")
+    return kategori
+
+
+async def _jenis_tampil_lengkap(jenis_id: str) -> Dict:
+    doc = await db.tatib_aturan.find_one({'id': jenis_id}, {'_id': 0})
+    item = jenis_aturan_tampil(doc)
+    item['jumlah_catatan'] = (await jumlah_catatan_per_jenis([jenis_id])).get(jenis_id, 0)
+    return item
+
+
+@router.post("/tatib/jenis-aturan")
+async def tambah_jenis_aturan(req: JenisAturanRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Tambah jenis aturan di Master Jenis Pelanggaran. Kode aturan unik tanpa beda huruf (409)."""
+    kategori = await _kategori_atau_404(req.kategori_id)
+    await _cek_kode_unik(req.kode_aturan)
+    field = _field_jenis_dari_request(req, kategori)
+    sekarang = datetime.utcnow().isoformat()
+    doc = {
+        'id': str(uuid.uuid4()),
+        **field,
+        # satu kondisi bawaan: nilai pencatatan = besar poin jenis (alur Catat Poin lama tetap bisa memakainya)
+        'kondisi': normalisasi_kondisi([], field['jenis_poin'], field['poin']),
+        'aktif': True,
+        'is_active': True,
+        'jenis_id': None,
+        'tingkat_kelas': None,
+        'created_by': user['id'],
+        'created_at': sekarang,
+        'updated_at': sekarang,
+    }
+    try:
+        await db.tatib_aturan.insert_one(doc)
+    except DuplicateKeyError:  # balapan dua penyimpanan bersamaan (index kode_aturan unik)
+        raise HTTPException(409, f'Kode {req.kode_aturan} sudah dipakai')
+    await log_audit(user, 'tatib_jenis_aturan_create', f"Tambah jenis aturan {req.kode_aturan} - {req.nama} ({field['poin']})")
+    return await _jenis_tampil_lengkap(doc['id'])
+
+
+@router.put("/tatib/jenis-aturan/{jenis_id}")
+async def ubah_jenis_aturan(jenis_id: str, req: JenisAturanRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Ubah jenis aturan. Riwayat pencatatan lama tetap memakai poin & nama saat dicatat."""
+    lama = await db.tatib_aturan.find_one({'id': jenis_id}, {'_id': 0})
+    if not lama:
+        raise HTTPException(404, "Jenis aturan tidak ditemukan")
+    kategori = await _kategori_atau_404(req.kategori_id)
+    await _cek_kode_unik(req.kode_aturan, kecuali_id=jenis_id)
+    field = _field_jenis_dari_request(req, kategori)
+    f_lama = field_jenis_aturan(lama)
+    isian = {**field, 'updated_at': datetime.utcnow().isoformat(), 'diubah_oleh_id': user['id']}
+    # Nilai berubah (atau aturan lama tanpa kondisi) -> kondisi diganti satu kondisi bawaan bernilai baru.
+    if (f_lama['jalur_poin'], f_lama['besar_poin']) != (req.jalur_poin, req.besar_poin) or not lama.get('kondisi'):
+        isian['kondisi'] = normalisasi_kondisi([], field['jenis_poin'], field['poin'])
+    try:
+        await db.tatib_aturan.update_one({'id': jenis_id}, {'$set': isian})
+    except DuplicateKeyError:
+        raise HTTPException(409, f'Kode {req.kode_aturan} sudah dipakai')
+    await log_audit(user, 'tatib_jenis_aturan_update',
+                    f"Ubah jenis aturan {f_lama['kode_aturan']} -> {req.kode_aturan} ({field['poin']})")
+    return await _jenis_tampil_lengkap(jenis_id)
+
+
 # ============================================================
 # TATA TERTIB (ATURAN) ENDPOINTS
 # ============================================================

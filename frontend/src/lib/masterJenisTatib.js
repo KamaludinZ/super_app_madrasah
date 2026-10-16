@@ -1,5 +1,5 @@
 // Master Jenis Pelanggaran: kelola jenis aturan (kode, nama, jalur poin, besar poin, kategori, deskripsi, aktif).
-// Daftar & kategori lewat API; simpan/status jenis SEMENTARA masih data tiruan di memori. Kontrak:
+// Daftar, kategori, dan simpan jenis lewat API; status aktif SEMENTARA masih data tiruan di memori. Kontrak:
 //   GET    /tatib/jenis-aturan                  -> [{ id, kode_aturan, nama, jalur_poin, besar_poin, poin, kategori_id,
 //                                                     kategori_nama, deskripsi, aktif, jumlah_catatan }]
 //   POST   /tatib/jenis-aturan                  -> jenis ; PUT /tatib/jenis-aturan/{id} -> jenis
@@ -48,7 +48,8 @@ export async function ambilMasterJenis({ cari } = {}) {
 
 export const ambilKategoriMaster = ambilKategoriTatib;
 
-// Tambah (tanpa id) atau ubah jenis aturan. Kode dirapikan huruf besar tanpa spasi tepi.
+// Tambah (tanpa id) atau ubah jenis aturan. Server menormalkan kode (huruf besar) dan menolak kode ganda (409)
+// atau kategori yang tidak ada (404) dengan pesan di `detail`.
 export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, besar_poin, kategori_id, deskripsi }) {
   const isian = {
     kode_aturan: (kode_aturan || '').trim().toUpperCase(),
@@ -56,19 +57,10 @@ export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, bes
     jalur_poin,
     besar_poin: Math.abs(parseInt(besar_poin, 10) || 0),
     kategori_id,
-    deskripsi: (deskripsi || '').trim(),
+    deskripsi: (deskripsi || '').trim() || null,
   };
-  const kembar = cariKodeGanda(jenisTiruan, isian.kode_aturan, id);
-  if (kembar) throw new Error(`Kode ${isian.kode_aturan} sudah dipakai oleh "${kembar.nama}"`);
-  if (id) {
-    const i = jenisTiruan.findIndex((j) => j.id === id);
-    if (i < 0) throw new Error('Jenis aturan tidak ditemukan');
-    jenisTiruan[i] = { ...jenisTiruan[i], ...isian };
-    return jeda(tampil(jenisTiruan[i]));
-  }
-  const baru = { id: `jen-${Date.now()}`, ...isian, aktif: true, jumlah_catatan: 0 };
-  jenisTiruan.push(baru);
-  return jeda(tampil(baru));
+  const { data } = id ? await api.put(`/tatib/jenis-aturan/${id}`, isian) : await api.post('/tatib/jenis-aturan', isian);
+  return data;
 }
 
 // Tambah kategori dari form jenis (endpoint sama dengan Input Tata Tertib: POST /tatib/kategori).

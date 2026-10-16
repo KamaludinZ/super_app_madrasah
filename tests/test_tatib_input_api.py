@@ -366,3 +366,49 @@ async def test_jenis_aturan_pencarian_dan_jumlah_catatan(db):
     assert [j['id'] for j in await cari('', aktif=True)] == ['a1', 'a2']
     jumlah = {j['id']: j['jumlah_catatan'] for j in await api.list_jenis_aturan(user=PETUGAS)}
     assert jumlah == {'a1': 2, 'a2': 0, 'a3': 1}
+
+
+def _jenis_req(**kw):
+    return api.JenisAturanRequest(**{'kode_aturan': 'dis-01', 'nama': 'Terlambat', 'jalur_poin': 'minus', 'besar_poin': 5, 'kategori_id': 'k?', **kw})
+
+
+async def test_simpan_jenis_aturan_kode_unik_dan_field_kompatibel(db):
+    k = await api.create_kategori(_req(api.KategoriTatibRequest, nama='Kedisiplinan'), PETUGAS)
+    j = await api.tambah_jenis_aturan(_jenis_req(kategori_id=k['id'], deskripsi=' Datang telat '), PETUGAS)
+    assert (j['kode_aturan'], j['poin'], j['aktif'], j['kategori_nama'], j['deskripsi'], j['jumlah_catatan']) == ('DIS-01', -5, True, 'Kedisiplinan', 'Datang telat', 0)
+    doc = await db.tatib_aturan.find_one({'id': j['id']}, {'_id': 0})
+    # field lama ikut terisi: alur Catat Poin Tatib & endpoint /tatib/aturan tetap bisa memakai jenis ini
+    assert (doc['kode'], doc['nama_aturan'], doc['jenis_poin'], doc['poin'], doc['is_active']) == ('DIS-01', 'Terlambat', 'pelanggaran', -5, True)
+    assert doc['kondisi'] == [{'id': 'umum', 'label': 'Setiap kejadian', 'poin': -5}]
+
+    for kode in ('DIS-01', ' dis-01 '):
+        with pytest.raises(HTTPException) as e:
+            await api.tambah_jenis_aturan(_jenis_req(kode_aturan=kode, kategori_id=k['id']), PETUGAS)
+        assert e.value.status_code == 409 and 'Terlambat' in e.value.detail
+    await db.tatib_aturan.insert_one({'id': 'lama', 'kode': 'OLD-1', 'nama_aturan': 'Format lama', 'poin': -1})
+    with pytest.raises(HTTPException) as e:  # kode di field lama juga dicek
+        await api.tambah_jenis_aturan(_jenis_req(kode_aturan='old-1', kategori_id=k['id']), PETUGAS)
+    assert e.value.status_code == 409
+    with pytest.raises(HTTPException) as e:
+        await api.tambah_jenis_aturan(_jenis_req(kode_aturan='X-1', kategori_id='tidak-ada'), PETUGAS)
+    assert e.value.status_code == 404
+
+
+async def test_ubah_jenis_aturan(db, data_input):
+    k2 = await api.create_kategori(_req(api.KategoriTatibRequest, nama='Akhlak'), PETUGAS)
+    # j1 dipakai satu catatan: riwayatnya tidak berubah saat jenis diubah
+    c = await api.simpan_input_tatib(_input(), PETUGAS)
+    u = await api.ubah_jenis_aturan('j1', _jenis_req(kode_aturan='dis-01', nama='Terlambat datang', jalur_poin='minus', besar_poin=7,
+                                                      kategori_id=k2['id']), PETUGAS)
+    assert (u['nama'], u['poin'], u['kategori_nama'], u['jumlah_catatan']) == ('Terlambat datang', -7, 'Akhlak', 1)
+    doc = await db.tatib_aturan.find_one({'id': 'j1'}, {'_id': 0})
+    assert doc['kondisi'][0]['poin'] == -7 and doc['poin'] == -7
+    catatan = await db.tatib_penanganan.find_one({'id': c['id']}, {'_id': 0})
+    assert (catatan['poin'], catatan['tatib_nama']) == (-5, 'Terlambat')
+
+    with pytest.raises(HTTPException) as e:  # pakai kode jenis lain
+        await api.ubah_jenis_aturan('j1', _jenis_req(kode_aturan='akh-01', kategori_id=k2['id']), PETUGAS)
+    assert e.value.status_code == 409
+    with pytest.raises(HTTPException) as e:
+        await api.ubah_jenis_aturan('tidak-ada', _jenis_req(kategori_id=k2['id']), PETUGAS)
+    assert e.value.status_code == 404
