@@ -72,6 +72,7 @@ class PenangananRequest(BaseModel):
     bukti_url: Optional[str] = None  # Photo/document evidence
     kondisi_id: Optional[str] = None  # kondisi pelaksanaan; nilai poin dihitung dari aturan + kondisi
     semester_id: Optional[str] = None
+    asal_input: Optional[str] = None  # sumber pencatatan (ASAL_INPUT)
 
 
 class TindakLanjutRequest(BaseModel):
@@ -627,6 +628,15 @@ async def _cari_siswa(siswa_id: str) -> Optional[Dict]:
     return await db.students.find_one({'id': siswa_id}, {'_id': 0})
 
 
+def cek_asal_input(nilai: Optional[str], wajib: bool = False) -> Optional[str]:
+    """Asal input harus salah satu dari daftar baku (ASAL_INPUT); kosong boleh bila tidak wajib."""
+    if nilai in (None, '') and not wajib:
+        return None
+    if nilai not in ASAL_INPUT:
+        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
+    return nilai
+
+
 def _nilai_atau_400(tatib: Dict, kondisi_id: Optional[str]) -> Dict:
     try:
         return hitung_poin_aturan(tatib, kondisi_id)
@@ -637,6 +647,7 @@ def _nilai_atau_400(tatib: Dict, kondisi_id: Optional[str]) -> Dict:
 async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[str] = None) -> Dict:
     """Simpan satu catatan poin. Nilai SELALU dihitung server dari aturan + kondisi;
     `jenis_wajib` memastikan aturan sesuai jalur (kebaikan/pelanggaran)."""
+    asal_input = cek_asal_input(req.asal_input)
     siswa = await _cari_siswa(req.siswa_id)
     if not siswa:
         raise HTTPException(404, "Siswa tidak ditemukan")
@@ -662,7 +673,9 @@ async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[s
         'tatib_poin': tatib.get('poin'),
         **nilai,
         'tindak_lanjut': [],
+        'kategori_id': tatib.get('kategori_id'),
         'kategori_nama': tatib.get('kategori_nama'),
+        'jenis_id': req.tatib_id,
         'jenis_nama': tatib.get('jenis_nama'),
         'tanggal': req.tanggal,
         'tahun_takwim_id': req.tahun_takwim_id,
@@ -670,6 +683,8 @@ async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[s
         'semester': req.semester,
         'semester_id': req.semester_id,
         'catatan': req.catatan,
+        'keterangan': req.catatan,
+        'asal_input': asal_input,
         'bukti_url': req.bukti_url,
         'petugas_id': user['id'],
         'petugas_nama': user.get('full_name', user.get('username')),
@@ -742,8 +757,7 @@ async def _isian_input_tatib(req: InputTatibRequest, jenis_lama_id: Optional[str
         raise HTTPException(400, "Tanggal kejadian tidak valid (format YYYY-MM-DD)")
     if tanggal > tanggal_wib():
         raise HTTPException(400, "Tanggal kejadian tidak boleh melewati hari ini")
-    if req.asal_input not in ASAL_INPUT:
-        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
+    cek_asal_input(req.asal_input, wajib=True)
     keterangan = (req.keterangan or '').strip()
     if len(keterangan) > MAKS_KETERANGAN:
         raise HTTPException(400, f"Keterangan maksimal {MAKS_KETERANGAN} karakter")
@@ -920,11 +934,18 @@ async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Di
             'tatib_nama': tatib.get('nama_aturan'),
             'tatib_poin': tatib.get('poin'),
             **_nilai_atau_400(tatib, kondisi_id),
+            'kategori_id': tatib.get('kategori_id'),
             'kategori_nama': tatib.get('kategori_nama'),
             'jenis_nama': tatib.get('jenis_nama'),
         })
 
     update_data.update(req.model_dump(exclude_unset=True, exclude={'kondisi_id'}))
+    if 'asal_input' in req.model_fields_set:
+        update_data['asal_input'] = cek_asal_input(req.asal_input)
+    if 'catatan' in req.model_fields_set:
+        update_data['keterangan'] = req.catatan
+    if 'tatib_id' in update_data:
+        update_data['jenis_id'] = update_data['tatib_id']
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
     await db.tatib_penanganan.update_one({'id': penanganan_id}, {'$set': update_data})

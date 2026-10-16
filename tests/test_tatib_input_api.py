@@ -258,3 +258,32 @@ async def test_master_tatib_ditolak_untuk_peran_tanpa_akses_tatib():
         with pytest.raises(HTTPException) as e:
             await wajib_akses_tatib({'id': 'x', 'roles': [r], 'active_role': r})
         assert e.value.status_code == 403
+
+
+async def test_jalur_catat_lama_menerima_dan_menyimpan_asal_input(db, data_input):
+    # aturan format lama berkondisi (dipakai Catat Poin Tatib)
+    await db.tatib_aturan.insert_one({'id': 'lama1', 'kode': 'L-1', 'nama_aturan': 'Lama', 'poin': -4, 'jenis_poin': 'pelanggaran',
+                                      'kategori_id': data_input['kategori']['id'], 'kategori_nama': 'Kedisiplinan'})
+    req = api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', catatan='x', asal_input='Whatsapp')
+    c = await api.catat_poin_jalur('pelanggaran', req, PETUGAS)
+    assert (c['asal_input'], c['jenis_id'], c['kategori_id'], c['keterangan'], c['poin']) == ('Whatsapp', 'lama1', data_input['kategori']['id'], 'x', -4)
+
+    tanpa = await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01'), PETUGAS)
+    assert tanpa['asal_input'] is None  # belum diwajibkan pada jalur lama
+
+    with pytest.raises(HTTPException) as e:
+        await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', asal_input='SMS'), PETUGAS)
+    assert e.value.status_code == 400
+
+    u = await api.update_penanganan(c['id'], api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', asal_input='BAP', catatan='y'), PETUGAS)
+    assert (u['asal_input'], u['keterangan']) == ('BAP', 'y')
+    with pytest.raises(HTTPException):
+        await api.update_penanganan(c['id'], api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', asal_input='x'), PETUGAS)
+
+
+def test_cek_asal_input():
+    assert api.cek_asal_input(None) is None and api.cek_asal_input('') is None
+    assert api.cek_asal_input('Razia', wajib=True) == 'Razia'
+    for salah, wajib in (('razia', False), (None, True), ('', True)):
+        with pytest.raises(HTTPException):
+            api.cek_asal_input(salah, wajib=wajib)
