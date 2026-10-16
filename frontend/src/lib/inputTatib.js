@@ -5,7 +5,7 @@ import { hariIniWIB } from '@/lib/tanggal';
 //   GET  /tatib/kategori            -> [{ id, nama, deskripsi }]
 //   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, kategori_id, kategori_nama, deskripsi, aktif }]
 //   GET  /students                  -> [{ id, nis, nisn, full_name, class_name }]
-//   GET  /tatib/input/terbaru       -> catatan terbaru (lihat bentuk `catatan` di bawah)
+//   GET  /tatib/input/terbaru       -> { items: catatan terbaru (bentuk `lengkapiCatatan`), ada_lagi }
 //   POST /tatib/input               -> { siswa_id, jenis_id, tanggal, keterangan } ; poin dihitung server dari jenis
 // Fungsi di sini diganti ke pemanggil API saat backend fase ini dikerjakan.
 
@@ -73,7 +73,12 @@ export const ambilJenisAturan = () => jeda(jenisTiruan.map((j) => ({ ...j, kateg
 
 export const ambilSiswaTatib = () => jeda(siswaTiruan);
 
-export const ambilRiwayatInputTerbaru = (batas = 10) => jeda(catatanTiruan.slice(0, batas));
+// Catatan terbaru (urut waktu input, terbaru dulu); `siswa_id` membatasi ke satu siswa.
+// Kontrak: GET /tatib/input/terbaru?batas=&siswa_id= -> { items, ada_lagi }.
+export function ambilRiwayatInputTerbaru({ batas = 10, siswa_id } = {}) {
+  const cocok = catatanTiruan.filter((c) => !siswa_id || c.siswa_id === siswa_id);
+  return jeda({ items: cocok.slice(0, batas), ada_lagi: cocok.length > batas });
+}
 
 export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, keterangan }) {
   const jenis = jenisTiruan.find((j) => j.id === jenis_id);

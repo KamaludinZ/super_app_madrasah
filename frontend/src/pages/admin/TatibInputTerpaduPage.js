@@ -15,6 +15,8 @@ import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
 import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
 import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
 import PilihJenisAturan from '@/components/tatib/PilihJenisAturan';
+import RiwayatInputTerbaru from '@/components/tatib/RiwayatInputTerbaru';
+import { Switch } from '@/components/ui/switch';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
@@ -22,6 +24,7 @@ import {
 } from '@/lib/inputTatib';
 
 const MAKS_KETERANGAN = 500;
+const BATAS_RIWAYAT = 10;
 
 // Tanggal kemarin (YYYY-MM-DD) relatif terhadap hari ini WIB.
 const kemarinWIB = () => {
@@ -43,24 +46,38 @@ export default function TatibInputTerpaduPage() {
   const [siswaList, setSiswaList] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
-  const [riwayat, setRiwayat] = useState([]);
+  const [riwayat, setRiwayat] = useState({ items: [], ada_lagi: false });
+  const [memuatRiwayat, setMemuatRiwayat] = useState(true);
+  const [batasRiwayat, setBatasRiwayat] = useState(BATAS_RIWAYAT);
+  const [hanyaSiswaTerpilih, setHanyaSiswaTerpilih] = useState(false);
+  const [versiRiwayat, setVersiRiwayat] = useState(0);
+  const [idBaru, setIdBaru] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(formKosong);
 
-  const muatRiwayat = () => ambilRiwayatInputTerbaru().then(setRiwayat);
-
   useEffect(() => {
-    Promise.all([ambilSiswaTatib(), ambilKategoriTatib(), ambilJenisAturan(), ambilRiwayatInputTerbaru()])
-      .then(([siswa, kategori, jenis, terbaru]) => {
+    Promise.all([ambilSiswaTatib(), ambilKategoriTatib(), ambilJenisAturan()])
+      .then(([siswa, kategori, jenis]) => {
         setSiswaList(siswa);
         setKategoriList(kategori);
         setJenisList(jenis);
-        setRiwayat(terbaru);
       })
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat data tata tertib')))
       .finally(() => setLoading(false));
   }, []);
+
+  // Riwayat dimuat ulang saat batas, filter siswa, atau versi (setelah simpan) berubah.
+  const siswaRiwayat = hanyaSiswaTerpilih ? form.siswa_id : '';
+  useEffect(() => {
+    let batal = false;
+    setMemuatRiwayat(true);
+    ambilRiwayatInputTerbaru({ batas: batasRiwayat, siswa_id: siswaRiwayat || undefined })
+      .then((hasil) => { if (!batal) setRiwayat(hasil); })
+      .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat pencatatan terbaru')))
+      .finally(() => { if (!batal) setMemuatRiwayat(false); });
+    return () => { batal = true; };
+  }, [batasRiwayat, siswaRiwayat, versiRiwayat]);
 
   const jenisTersaring = useMemo(
     () => jenisList.filter((j) => j.aktif !== false && (!form.kategori_id || j.kategori_id === form.kategori_id)),
@@ -117,7 +134,8 @@ export default function TatibInputTerpaduPage() {
       toast.success(`${catatan.jenis_nama} (${formatPoin(catatan.poin)}) dicatat untuk ${catatan.siswa_nama}`);
       // Siswa & tanggal dipertahankan agar pencatatan beruntun lebih cepat.
       setForm((f) => ({ ...formKosong(), siswa_id: f.siswa_id, tanggal: f.tanggal }));
-      await muatRiwayat();
+      setIdBaru(catatan.id);
+      setVersiRiwayat((v) => v + 1);
     } catch (e) {
       toast.error(pesanGalatTatib(e, e?.message || 'Gagal menyimpan catatan tata tertib'));
     } finally {
@@ -278,27 +296,25 @@ export default function TatibInputTerpaduPage() {
             <CardDescription>Periksa kembali catatan terakhir yang masuk.</CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
-            ) : riwayat.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-500">Belum ada pencatatan.</p>
-            ) : (
-              <ul className="divide-y" data-testid="input-tatib-riwayat">
-                {riwayat.map((r) => (
-                  <li key={r.id} className="flex items-start justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{r.siswa_nama} <span className="text-xs font-normal text-slate-500">{r.siswa_kelas}</span></p>
-                      <p className="text-sm text-slate-700 truncate">[{r.kode_aturan}] {r.jenis_nama}</p>
-                      <p className="text-xs text-slate-500">
-                        {r.tanggal} · <Badge variant="outline" className="px-1.5 py-0 text-[11px]">{r.kategori_nama}</Badge>
-                        {r.keterangan ? ` · ${r.keterangan}` : ''}
-                      </p>
-                    </div>
-                    <span className={`shrink-0 font-semibold tabular-nums ${warnaPoin(r.poin)}`}>{formatPoin(r.poin)}</span>
-                  </li>
-                ))}
-              </ul>
+            {form.siswa_id && (
+              <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
+                <Switch
+                  checked={hanyaSiswaTerpilih}
+                  onCheckedChange={(v) => { setHanyaSiswaTerpilih(v); setBatasRiwayat(BATAS_RIWAYAT); }}
+                  data-testid="input-tatib-riwayat-siswa"
+                />
+                Hanya siswa terpilih
+              </label>
             )}
+            <RiwayatInputTerbaru
+              items={riwayat.items}
+              loading={memuatRiwayat && riwayat.items.length === 0}
+              memuatLagi={memuatRiwayat}
+              adaLagi={riwayat.ada_lagi}
+              onMuatLagi={() => setBatasRiwayat((n) => n + BATAS_RIWAYAT)}
+              idBaru={idBaru}
+              kosong={siswaRiwayat ? 'Siswa ini belum punya pencatatan.' : 'Belum ada pencatatan.'}
+            />
           </CardContent>
         </Card>
       </div>
