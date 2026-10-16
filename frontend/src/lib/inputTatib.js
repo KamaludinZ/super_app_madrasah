@@ -6,8 +6,11 @@ import { hariIniWIB } from '@/lib/tanggal';
 //   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, kategori_id, kategori_nama, deskripsi, aktif }]
 //   GET  /students                  -> [{ id, nis, nisn, full_name, class_name }]
 //   GET  /tatib/input/terbaru       -> { items: catatan terbaru (bentuk `lengkapiCatatan`), ada_lagi }
-//   POST /tatib/input               -> { siswa_id, jenis_id, tanggal, keterangan } ; poin dihitung server dari jenis
+//   POST /tatib/input               -> { siswa_id, jenis_id, tanggal, asal_input, keterangan } ; poin dihitung server dari jenis
 // Fungsi di sini diganti ke pemanggil API saat backend fase ini dikerjakan.
+
+// Sumber pencatatan (daftar baku); disimpan bersama catatan dan tampil di laporan/rekap.
+export const ASAL_INPUT = ['BIPH', 'Screening pagi', 'Ibadah', 'Keputrian', 'Whatsapp', 'BAP', 'Razia', 'Laporan langsung'];
 
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
 
@@ -38,9 +41,9 @@ const siswaTiruan = [
 const namaKategori = (id) => kategoriTiruan.find((k) => k.id === id)?.nama || 'Lainnya';
 
 let catatanTiruan = [
-  { id: 'cat-1', siswa_id: 'sis-3', jenis_id: 'jen-1', tanggal: hariIniWIB(), keterangan: 'Terlambat 15 menit', petugas_nama: 'Guru Tatib' },
-  { id: 'cat-2', siswa_id: 'sis-2', jenis_id: 'jen-6', tanggal: hariIniWIB(), keterangan: 'Dompet di musala', petugas_nama: 'Guru Tatib' },
-  { id: 'cat-3', siswa_id: 'sis-5', jenis_id: 'jen-3', tanggal: hariIniWIB(), keterangan: '', petugas_nama: 'Waka Kesiswaan' },
+  { id: 'cat-1', siswa_id: 'sis-3', jenis_id: 'jen-1', tanggal: hariIniWIB(), asal_input: 'Screening pagi', keterangan: 'Terlambat 15 menit', petugas_nama: 'Guru Tatib' },
+  { id: 'cat-2', siswa_id: 'sis-2', jenis_id: 'jen-6', tanggal: hariIniWIB(), asal_input: 'Laporan langsung', keterangan: 'Dompet di musala', petugas_nama: 'Guru Tatib' },
+  { id: 'cat-3', siswa_id: 'sis-5', jenis_id: 'jen-3', tanggal: hariIniWIB(), asal_input: 'Razia', keterangan: '', petugas_nama: 'Waka Kesiswaan' },
 ].map(lengkapiCatatan);
 
 // Poin bertanda mengikuti master jenis: jalur 'minus' -> negatif, 'plus' -> positif.
@@ -80,11 +83,12 @@ export function ambilRiwayatInputTerbaru({ batas = 10, siswa_id } = {}) {
   return jeda({ items: cocok.slice(0, batas), ada_lagi: cocok.length > batas });
 }
 
-export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, keterangan }) {
+export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, asal_input, keterangan }) {
   const jenis = jenisTiruan.find((j) => j.id === jenis_id);
   if (!jenis || jenis.aktif === false) throw new Error('Jenis aturan tidak ditemukan atau sudah nonaktif');
+  if (!ASAL_INPUT.includes(asal_input)) throw new Error('Asal input wajib dipilih dari daftar');
   const catatan = lengkapiCatatan({
-    id: `cat-${Date.now()}`, siswa_id, jenis_id, tanggal, keterangan: keterangan || '', petugas_nama: 'Anda',
+    id: `cat-${Date.now()}`, siswa_id, jenis_id, tanggal, asal_input, keterangan: keterangan || '', petugas_nama: 'Anda',
   });
   catatanTiruan = [catatan, ...catatanTiruan];
   return jeda(catatan);
@@ -111,14 +115,15 @@ export async function simpanKategoriTatib({ id, nama, deskripsi }) {
 
 // Perbaiki catatan yang salah input; poin dihitung ulang dari jenis yang dipilih.
 // Kontrak: PUT /tatib/input/{id} -> catatan; DELETE /tatib/input/{id} (hanya admin).
-export async function ubahInputTatib(id, { siswa_id, jenis_id, tanggal, keterangan }) {
+export async function ubahInputTatib(id, { siswa_id, jenis_id, tanggal, asal_input, keterangan }) {
   const i = catatanTiruan.findIndex((c) => c.id === id);
   if (i < 0) throw new Error('Catatan tidak ditemukan');
+  if (!ASAL_INPUT.includes(asal_input)) throw new Error('Asal input wajib dipilih dari daftar');
   const jenis = jenisTiruan.find((j) => j.id === jenis_id);
   if (!jenis) throw new Error('Jenis aturan tidak ditemukan');
   const lama = catatanTiruan[i];
   // Kategori lama dipertahankan bila jenis tidak berganti, agar riwayat tetap konsisten.
-  const baru = lengkapiCatatan({ ...lama, siswa_id, jenis_id, tanggal, keterangan: keterangan || '' });
+  const baru = lengkapiCatatan({ ...lama, siswa_id, jenis_id, tanggal, asal_input, keterangan: keterangan || '' });
   catatanTiruan[i] = lama.jenis_id === jenis_id ? { ...baru, kategori_nama: lama.kategori_nama } : baru;
   return jeda(catatanTiruan[i]);
 }

@@ -19,10 +19,11 @@ import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
 import PilihJenisAturan from '@/components/tatib/PilihJenisAturan';
 import RiwayatInputTerbaru from '@/components/tatib/RiwayatInputTerbaru';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
-  simpanKategoriTatib, ubahInputTatib, hapusInputTatib,
+  simpanKategoriTatib, ubahInputTatib, hapusInputTatib, ASAL_INPUT,
 } from '@/lib/inputTatib';
 
 const MAKS_KETERANGAN = 500;
@@ -35,7 +36,7 @@ const kemarinWIB = () => {
   return d.toISOString().slice(0, 10);
 };
 
-const formKosong = () => ({ siswa_id: '', kategori_id: '', jenis_id: '', tanggal: hariIniWIB(), keterangan: '' });
+const formKosong = () => ({ siswa_id: '', kategori_id: '', jenis_id: '', tanggal: hariIniWIB(), asal_input: '', keterangan: '' });
 
 const warnaPoin = (poin) => (poin < 0 ? 'text-red-700' : 'text-emerald-700');
 
@@ -133,6 +134,7 @@ export default function TatibInputTerpaduPage() {
       kategori_id: catatan.kategori_id || '',
       jenis_id: catatan.jenis_id,
       tanggal: (catatan.tanggal || '').slice(0, 10),
+      asal_input: catatan.asal_input || '',
       keterangan: catatan.keterangan || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -163,8 +165,8 @@ export default function TatibInputTerpaduPage() {
 
   const simpan = async () => {
     if (tolakUbahTatib(activeRole)) return;
-    if (!form.siswa_id || !form.jenis_id || !form.tanggal) {
-      toast.error('Siswa, jenis aturan, dan tanggal kejadian wajib diisi');
+    if (!form.siswa_id || !form.jenis_id || !form.tanggal || !form.asal_input) {
+      toast.error('Siswa, jenis aturan, tanggal kejadian, dan asal input wajib diisi');
       return;
     }
     if (galatTanggal) {
@@ -178,7 +180,8 @@ export default function TatibInputTerpaduPage() {
         ? `Catatan ${catatan.siswa_nama} diperbaiki (${formatPoin(catatan.poin)})`
         : `${catatan.jenis_nama} (${formatPoin(catatan.poin)}) dicatat untuk ${catatan.siswa_nama}`);
       // Siswa & tanggal dipertahankan agar pencatatan beruntun lebih cepat.
-      setForm((f) => ({ ...formKosong(), siswa_id: f.siswa_id, tanggal: f.tanggal }));
+      // Asal input juga dipertahankan: satu sesi (mis. razia) biasanya mencatat banyak siswa.
+      setForm((f) => ({ ...formKosong(), siswa_id: f.siswa_id, tanggal: f.tanggal, asal_input: f.asal_input }));
       setDiperbaiki(null);
       setIdBaru(catatan.id);
       setVersiRiwayat((v) => v + 1);
@@ -283,7 +286,7 @@ export default function TatibInputTerpaduPage() {
                     </span>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <Label htmlFor="input-tatib-tanggal">Tanggal kejadian*</Label>
                       <Input
@@ -314,6 +317,15 @@ export default function TatibInputTerpaduPage() {
                       )}
                     </div>
                     <div>
+                      <Label>Asal input*</Label>
+                      <Select value={form.asal_input || undefined} onValueChange={(asal_input) => ubah({ asal_input })}>
+                        <SelectTrigger data-testid="input-tatib-asal"><SelectValue placeholder="Pilih sumber pencatatan" /></SelectTrigger>
+                        <SelectContent>
+                          {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
                       <Label htmlFor="input-tatib-keterangan">Keterangan</Label>
                       <Textarea
                         id="input-tatib-keterangan"
