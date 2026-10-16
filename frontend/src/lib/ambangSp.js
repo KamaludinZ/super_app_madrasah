@@ -44,3 +44,11 @@ export async function simpanAmbangSP({ sp1, sp2, sp3, alasan }) {
   });
   return jeda(ambangTiruan);
 }
+
+// Ringkasan perubahan untuk konfirmasi: "SP1 25 → 30, SP3 75 → 90" (hanya tingkat yang berubah).
+export function ringkasPerubahanAmbang(lama, baru) {
+  return ['sp1', 'sp2', 'sp3']
+    .filter((k) => Number(lama?.[k]) !== Number(baru?.[k]))
+    .map((k) => `${k.toUpperCase()} ${lama?.[k] ?? '-'} → ${baru[k]}`)
+    .join(', ');
+}

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, SlidersHorizontal } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, Loader2, SlidersHorizontal } from 'lucide-react';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { TINGKAT_SP, WARNA_SP } from '@/lib/tindakanTatib';
 import FormAmbangSp from '@/components/tatib/FormAmbangSp';
-import { ambilAmbangSP, simpanAmbangSP } from '@/lib/ambangSp';
+import { ambilAmbangSP, ringkasPerubahanAmbang, simpanAmbangSP } from '@/lib/ambangSp';
 
 const formatWaktu = (iso) => {
   if (!iso) return '-';
@@ -39,6 +41,7 @@ function SkalaAmbang({ ambang }) {
 export default function TatibAmbangSpPage() {
   const [ambang, setAmbang] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [galatSimpan, setGalatSimpan] = useState('');
 
   useEffect(() => {
     ambilAmbangSP()
@@ -47,13 +50,24 @@ export default function TatibAmbangSpPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Konfirmasi dulu (ringkasan lama -> baru); galat server ditampilkan di atas form tanpa menghapus isian.
   const simpan = async (nilai) => {
+    const ringkas = ringkasPerubahanAmbang(ambang, nilai);
+    const ok = await confirmDialog(
+      `Simpan ambang SP baru (${ringkas})? Ambang baru langsung dipakai untuk usulan SP di Tindakan Tatib dan perubahan ini dicatat di riwayat.`,
+    );
+    if (!ok) return;
+    setGalatSimpan('');
     try {
       const hasil = await simpanAmbangSP(nilai);
       setAmbang(hasil);
       toast.success(`Ambang SP disimpan: ${hasil.sp1} / ${hasil.sp2} / ${hasil.sp3} poin`);
     } catch (e) {
-      toast.error(pesanGalatTatib(e, e?.message || 'Gagal menyimpan ambang SP'));
+      const pesan = e?.response?.status === 403
+        ? 'Hanya admin yang dapat mengubah ambang SP.'
+        : (e?.response?.data?.detail && typeof e.response.data.detail === 'string' ? e.response.data.detail : e?.message) || 'Gagal menyimpan ambang SP';
+      setGalatSimpan(pesan);
+      toast.error(pesan);
     }
   };
 
@@ -97,7 +111,14 @@ export default function TatibAmbangSpPage() {
             <CardTitle className="text-lg">Ubah ambang</CardTitle>
             <CardDescription>Nilai harus naik: SP1 &lt; SP2 &lt; SP3. Ambang baru langsung dipakai saat sistem mengusulkan SP.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {galatSimpan && (
+              <Alert variant="destructive" data-testid="ambang-galat-simpan">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Ambang belum tersimpan</AlertTitle>
+                <AlertDescription>{galatSimpan}</AlertDescription>
+              </Alert>
+            )}
             <FormAmbangSp ambang={ambang} onSimpan={simpan} />
           </CardContent>
         </Card>
