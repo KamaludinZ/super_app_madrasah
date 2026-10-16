@@ -550,3 +550,20 @@ async def test_filter_asal_input_termasuk_catatan_lama(db, data_input, monkeypat
     assert kosong['ringkasan']['jumlah_pelanggaran'] == 2
     with pytest.raises(HTTPException):
         await poin_api.rekap_poin(asal_input='x', user=pimpinan)
+
+
+async def test_api_data_tatib_filter_kategori_jenis(db, data_input):
+    admin = {'id': 'u9', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+    kid = data_input['kategori']['id']
+    a = await api.simpan_input_tatib(_input(), PETUGAS)                           # j1 (kategori kid)
+    b = await api.simpan_input_tatib(_input(jenis_id='j2', asal_input='BAP'), PETUGAS)  # j2 (kategori kid)
+    await db.tatib_penanganan.insert_one({'id': 'lama', 'siswa_id': 's1', 'tatib_id': 'j1', 'tatib_kode': 'DIS-01', 'tatib_poin': -5,
+                                          'kategori_nama': 'Kedisiplinan', 'tanggal': '2026-09-01'})  # tanpa jenis_id & kategori_id
+    ids = lambda items: sorted(i['id'] for i in items)  # noqa: E731
+    assert ids(await api.list_penanganan(jenis_id='j1', user=admin)) == sorted([a['id'], 'lama'])
+    assert ids(await api.list_penanganan(jenis_id='j2', user=admin)) == [b['id']]
+    assert ids(await api.list_penanganan(kategori_id=kid, user=admin)) == sorted([a['id'], b['id']])
+    assert ids(await api.list_penanganan(kategori='Kedisiplinan', user=admin)) == sorted([a['id'], b['id'], 'lama'])
+    assert ids(await api.list_penanganan(kategori='Kedisiplinan', jenis_id='j1', asal_input='-', user=admin)) == ['lama']
+    lama = next(i for i in await api.list_penanganan(user=admin) if i['id'] == 'lama')
+    assert (lama['jenis_id'], lama['kode_aturan'], lama['kategori_id']) == ('j1', 'DIS-01', None)

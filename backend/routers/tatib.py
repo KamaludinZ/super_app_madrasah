@@ -760,15 +760,28 @@ async def list_penanganan(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     asal_input: Optional[str] = None,
+    kategori_id: Optional[str] = None,
+    kategori: Optional[str] = None,
+    jenis_id: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
     """Daftar catatan poin (pelanggaran & kebaikan), terbaru dulu; tiap catatan memuat asal_input
     (catatan lama = null). Filter opsional: siswa, aturan, periode, rentang tanggal, asal input
-    (nilai baku, atau '-' untuk catatan lama tanpa asal input)."""
+    (nilai baku, atau '-' untuk catatan lama tanpa asal input), kategori_id / kategori (nama, juga untuk
+    catatan lama tanpa kategori_id), jenis_id (jenis aturan; catatan lama lewat tatib_id)."""
     query = {}
+    syarat: List[Dict] = []
     syarat_asal = syarat_asal_input(asal_input)
     if syarat_asal:
-        query['$and'] = [syarat_asal]
+        syarat.append(syarat_asal)
+    if kategori_id:
+        syarat.append({'kategori_id': kategori_id})
+    if kategori:
+        syarat.append({'kategori_nama': kategori})
+    if jenis_id:
+        syarat.append({'$or': [{'jenis_id': jenis_id}, {'tatib_id': jenis_id}]})
+    if syarat:
+        query['$and'] = syarat
     if siswa_id:
         query['siswa_id'] = siswa_id
     if tatib_id:

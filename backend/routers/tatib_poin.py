@@ -185,6 +185,10 @@ def rapikan_catatan(r: Dict) -> Dict:
         'tindak_lanjut': r.get('tindak_lanjut') or [],
         'asal_input': r.get('asal_input'),
         'keterangan': r.get('keterangan') if r.get('keterangan') is not None else r.get('catatan'),
+        # struktur baru: jenis aturan (catatan lama: tatib_id/tatib_kode)
+        'jenis_id': r.get('jenis_id') or r.get('tatib_id'),
+        'kode_aturan': r.get('tatib_kode'),
+        'kategori_id': r.get('kategori_id'),
     })
 
 
