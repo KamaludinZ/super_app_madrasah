@@ -306,3 +306,28 @@ async def test_daftar_riwayat_ambang_terbaru_dulu(db, tanpa_audit):
     assert [x['ke']['sp1'] for x in r] == [32, 31, 30] and r[0]['alasan'] == 'a32' and r[0]['oleh_nama'] == 'Admin'
     assert [x['ke']['sp1'] for x in await api.riwayat_ambang_sp(batas=2, user=ADMIN)] == [32, 31]
     assert len(await api.riwayat_ambang_sp(batas=0, user=ADMIN)) == 1  # batas minimal 1
+
+
+async def test_ambang_baru_langsung_dipakai_semua_perhitungan_usulan(db, tanpa_audit):
+    """Ubah ambang -> rekap, usulan per siswa, ringkasan, dan riwayat tindakan memakai ambang baru;
+    keterangan SP yang sudah ditetapkan manual tidak berubah."""
+    await api.ubah_status_tindakan('s1', _status(keterangan_sp='SP1'), GURU)  # s1 -35, s2 -60 (sem1)
+    awal = {s['siswa_id']: s['usulan_sp'] for s in (await api.daftar_tindakan(semester_id='sem1', user=PIMPINAN))['items']}
+    assert awal == {'s2': 'SP2', 's1': 'SP1', 's3': None}
+
+    await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=10, sp2=30, sp3=60), ADMIN)
+    rekap = await api.daftar_tindakan(semester_id='sem1', user=PIMPINAN)
+    assert rekap['ambang'] == {'sp1': 10, 'sp2': 30, 'sp3': 60}
+    baru = {s['siswa_id']: (s['usulan_sp'], s['keterangan_sp']) for s in rekap['items']}
+    assert baru == {'s2': ('SP3', None), 's1': ('SP2', 'SP1'), 's3': (None, None)}  # keputusan manual tetap SP1
+    u = await api.usulan_sp_siswa('s1', semester_id='sem1', user=PIMPINAN)
+    assert (u['usulan_sp'], u['ambang_berikutnya'], u['perlu_ditinjau']) == ('SP2', {'sp': 'SP3', 'ambang': 60, 'sisa': 25}, True)
+    ring = await api.ringkasan_usulan_sp(semester_id='sem1', user=PIMPINAN)
+    assert ring['jumlah'] == {'SP1': 0, 'SP2': 1, 'SP3': 1} and ring['perlu_ditinjau'] == 2
+    # riwayat tindakan berikutnya mencatat usulan menurut ambang baru
+    await api.ubah_status_tindakan('s1', _status(keterangan_sp='SP2'), GURU)
+    terbaru = await api.riwayat_tindakan_siswa('s1', semester_id='sem1', user=PIMPINAN)
+    assert terbaru[0]['usulan_sp'] == 'SP2'
+
+    # pencarian per usulan juga mengikuti ambang baru
+    assert [s['siswa_id'] for s in (await api.daftar_tindakan(semester_id='sem1', usulan_sp='SP3', user=PIMPINAN))['items']] == ['s2']
