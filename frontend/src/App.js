@@ -108,6 +108,7 @@ import TatibInputTerpaduPage from '@/pages/admin/TatibInputTerpaduPage';
 import TatibMasterJenisPage from '@/pages/admin/TatibMasterJenisPage';
 import TatibTindakanPage from '@/pages/admin/TatibTindakanPage';
 import TatibAmbangSpPage from '@/pages/admin/TatibAmbangSpPage';
+import PenjagaTatib from '@/components/tatib/PenjagaTatib';
 import AdminTatibPenangananPage from '@/pages/admin/AdminTatibPenangananPage';
 import AdminTatibDataPage from '@/pages/admin/AdminTatibDataPage';
 import AdminBKKunjunganPage from '@/pages/admin/bk/AdminBKKunjunganPage';
@@ -380,11 +381,11 @@ function App() {
             <Route path="/admin/tatib/kategori" element={<AdminTatibKategoriPage />} />
             <Route path="/admin/tatib/input" element={<TatibInputTerpaduPage />} />
             <Route path="/admin/tatib/aturan" element={<AdminTatibInputPage />} />
-            <Route path="/admin/tatib/jenis-pelanggaran" element={<TatibMasterJenisPage />} />
+            <Route path="/admin/tatib/jenis-pelanggaran" element={<PenjagaTatib><TatibMasterJenisPage /></PenjagaTatib>} />
             <Route path="/admin/tatib/tindakan" element={<TatibTindakanPage />} />
             <Route path="/admin/tatib/ambang-sp" element={<TatibAmbangSpPage />} />
-            <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
-            <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
+            <Route path="/admin/tatib/penanganan" element={<PenjagaTatib><AdminTatibPenangananPage /></PenjagaTatib>} />
+            <Route path="/admin/tatib/data" element={<PenjagaTatib><AdminTatibDataPage /></PenjagaTatib>} />
             <Route path="/tatib/rekap" element={<TatibRekapPage />} />
             <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
             <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
