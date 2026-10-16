@@ -491,3 +491,19 @@ async def test_jenis_hanya_field_kanonis_bisa_dicatat_lewat_jalur_lama(db, data_
     with pytest.raises(HTTPException):  # jalur salah
         await api.catat_poin_jalur('kebaikan', api.PenangananRequest(siswa_id='s1', tatib_id='j1', tanggal='2026-10-01',
                                                                    asal_input='Razia'), PETUGAS)
+
+
+async def test_setiap_jalur_pencatatan_menulis_asal_input(db, data_input):
+    """Model pencatatan: kunci asal_input selalu ada di dokumen yang ditulis jalur mana pun."""
+    await db.tatib_aturan.insert_one({'id': 'lama1', 'kode': 'L-1', 'nama_aturan': 'Lama', 'poin': -4, 'jenis_poin': 'pelanggaran',
+                                      'kategori_id': data_input['kategori']['id']})
+    a = await api.simpan_input_tatib(_input(asal_input='BIPH'), PETUGAS)
+    b = await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01',
+                                                                      asal_input='Keputrian'), PETUGAS)
+    c = await api.create_penanganan(api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01',
+                                                          asal_input='Whatsapp'), PETUGAS)
+    docs = {d['id']: d async for d in db.tatib_penanganan.find({}, {'_id': 0})}
+    assert {docs[x['id']]['asal_input'] for x in (a, b, c)} == {'BIPH', 'Keputrian', 'Whatsapp'}
+    await api.ubah_input_tatib(a['id'], _input(asal_input='Screening pagi'), PETUGAS)
+    assert (await db.tatib_penanganan.find_one({'id': a['id']}))['asal_input'] == 'Screening pagi'
+    assert all('asal_input' in d for d in docs.values())

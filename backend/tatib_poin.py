@@ -9,6 +9,12 @@ Satu dokumen = satu catatan poin. Field poin (selain field penanganan lama):
     kondisi        kondisi pelaksanaan saat dicatat (opsional, mis. "Tingkat kota").
     tindak_lanjut  daftar tindak lanjut penanganan pelanggaran:
                    [{id, tanggal, uraian, petugas_id, petugas_nama, created_at}]
+    jenis_id       jenis aturan (Master Jenis Pelanggaran; = tatib_id)
+    kategori_id    kategori jenis saat dicatat (kategori_nama disalin agar riwayat tetap)
+    asal_input     sumber pencatatan, salah satu ASAL_INPUT (BIPH, Screening pagi, Ibadah,
+                   Keputrian, Whatsapp, BAP, Razia, Laporan langsung); wajib untuk catatan
+                   baru, None untuk catatan sebelum fitur ini (migrasi 2026-10-16_tatib_struktur_baru)
+    keterangan     catatan singkat petugas (= catatan, field lama)
 
 `tatib_poin` (nilai aturan saat dicatat) tetap dipertahankan untuk kompatibilitas
 endpoint statistik lama.
