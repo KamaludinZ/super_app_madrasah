@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
+import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
@@ -118,17 +119,13 @@ export default function TatibInputTerpaduPage() {
               <fieldset disabled={!bolehInput} className="space-y-4">
                 <div>
                   <Label>Siswa*</Label>
-                  <Select value={form.siswa_id || 'none'} onValueChange={(v) => ubah({ siswa_id: v === 'none' ? '' : v })}>
-                    <SelectTrigger data-testid="input-tatib-siswa"><SelectValue placeholder="Pilih Siswa" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Pilih Siswa</SelectItem>
-                      {siswaList.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.nis || '-'} - {s.full_name}{s.class_name ? ` (${s.class_name})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <PilihSiswaTatib
+                    siswaList={siswaList}
+                    value={form.siswa_id}
+                    onPilih={(siswa_id) => ubah({ siswa_id })}
+                    disabled={!bolehInput}
+                    testid="input-tatib-siswa"
+                  />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
