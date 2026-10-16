@@ -4,15 +4,20 @@ Skema koleksi ada di tatib_poin.py (bagian TINDAKAN TATIB & PENGATURAN AMBANG SP
 Baca: peran input + lihat tatib (wajib_lihat_tatib). Ubah: peran input tatib (admin, guru tata tertib,
 waka kesiswaan) — sama dengan hak input tatib.
 """
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, field_validator
+from pymongo.errors import DuplicateKeyError
 
-from core import db, serialize_doc
+from core import db, log_audit, serialize_doc
 from routers._shared import sembunyikan_siswa_nonaktif
-from routers.tatib_poin import query_rekap, wajib_lihat_tatib
-from tatib_poin import (KOLEKSI_POIN, KOLEKSI_TINDAKAN, STATUS_TINDAKAN_AWAL, TINGKAT_SP, ambang_berikutnya, ambil_ambang_sp,
-                        nilai_poin, usulan_lebih_tinggi, usulkan_sp)
+from routers.tatib_poin import query_rekap, wajib_input_tatib, wajib_lihat_tatib
+from tatib_poin import (KOLEKSI_POIN, KOLEKSI_RIWAYAT_TINDAKAN, KOLEKSI_TINDAKAN, STATUS_PANGGILAN_WALI, STATUS_RTLPD,
+                        STATUS_SP, STATUS_TINDAKAN_AWAL, TINGKAT_SP, ambang_berikutnya, ambil_ambang_sp,
+                        entri_riwayat_tindakan, nilai_poin, perubahan_status, usulan_lebih_tinggi, usulkan_sp)
 
 router = APIRouter()
 
@@ -151,3 +156,105 @@ async def usulan_sp_siswa(siswa_id: str, semester_id: Optional[str] = None, user
         'keterangan_sp': tindakan.get('keterangan_sp'),
         'perlu_ditinjau': usulan_lebih_tinggi(usulan, tindakan.get('keterangan_sp')),
     }
+
+
+MAKS_CATATAN_TINDAKAN = 300
+
+
+class StatusTindakanRequest(BaseModel):
+    """Keputusan status pembinaan satu siswa (manual). Nilai harus dari daftar baku."""
+    semester_id: Optional[str] = None
+    keterangan_sp: Optional[str] = None
+    status_panggilan_wali: str
+    status_sp: str
+    status_rtlpd: str
+    catatan: Optional[str] = None
+
+    @field_validator('keterangan_sp')
+    @classmethod
+    def _sp(cls, v):
+        if v in (None, ''):
+            return None
+        if v not in TINGKAT_SP:
+            raise ValueError(f"Keterangan SP harus salah satu dari {', '.join(TINGKAT_SP)} atau kosong")
+        return v
+
+    @field_validator('status_panggilan_wali')
+    @classmethod
+    def _wali(cls, v):
+        if v not in STATUS_PANGGILAN_WALI:
+            raise ValueError(f"Status panggilan wali harus salah satu dari: {', '.join(STATUS_PANGGILAN_WALI)}")
+        return v
+
+    @field_validator('status_sp')
+    @classmethod
+    def _status_sp(cls, v):
+        if v not in STATUS_SP:
+            raise ValueError(f"Status SP harus salah satu dari: {', '.join(STATUS_SP)}")
+        return v
+
+    @field_validator('status_rtlpd')
+    @classmethod
+    def _rtlpd(cls, v):
+        if v not in STATUS_RTLPD:
+            raise ValueError(f"Status RTLPD harus salah satu dari: {', '.join(STATUS_RTLPD)}")
+        return v
+
+    @field_validator('catatan')
+    @classmethod
+    def _catatan(cls, v):
+        v = (v or '').strip()
+        if len(v) > MAKS_CATATAN_TINDAKAN:
+            raise ValueError(f'Catatan maksimal {MAKS_CATATAN_TINDAKAN} karakter')
+        return v or None
+
+
+async def _baris_siswa(siswa_id: str, semester_id: Optional[str]) -> Dict:
+    """Baris rekap satu siswa (bentuk sama dengan item GET /tatib/tindakan)."""
+    query = await query_rekap(None, semester_id, None, None, None)
+    query = {'$and': [query, {'siswa_id': siswa_id}]} if query else {'siswa_id': siswa_id}
+    records = await db[KOLEKSI_POIN].find(query, {'_id': 0}).to_list(5000)
+    tindakan = await db[KOLEKSI_TINDAKAN].find_one({'siswa_id': siswa_id, 'semester_id': semester_id}, {'_id': 0}) or {}
+    ambang = await ambil_ambang_sp(db)
+    akun = await _akun_siswa([siswa_id])
+    baris = rekap_siswa_berpoin(records, akun, {siswa_id: tindakan}, ambang)
+    if baris:
+        return baris[0]
+    a = akun.get(siswa_id) or {}
+    return {'siswa_id': siswa_id, 'nisn': a.get('nisn'), 'nis': a.get('nis'), 'nama': a.get('full_name') or '-',
+            'kelas': a.get('class_name'), 'poin_positif': 0, 'kategori_positif': [], 'poin_negatif': 0, 'kategori_negatif': [],
+            'jumlah_catatan': 0, 'usulan_sp': None, **{f: tindakan.get(f, v) for f, v in STATUS_TINDAKAN_AWAL.items()},
+            'catatan': tindakan.get('catatan'), 'diubah_pada': tindakan.get('diubah_pada'), 'diubah_oleh_nama': tindakan.get('diubah_oleh_nama')}
+
+
+@router.put("/tatib/tindakan/{siswa_id}")
+async def ubah_status_tindakan(siswa_id: str, req: StatusTindakanRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Tetapkan status pembinaan siswa untuk satu semester (keterangan SP, panggilan wali, status SP, RTLPD).
+    Hanya admin, guru tata tertib, dan waka kesiswaan. Setiap perubahan (atau catatan) dicatat di riwayat
+    beserta usulan SP & akumulasi pelanggaran saat itu. -> baris rekap siswa terbaru."""
+    if not await db.users.find_one({'id': siswa_id, 'roles': 'siswa'}, {'_id': 1}):
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    lama = await db[KOLEKSI_TINDAKAN].find_one({'siswa_id': siswa_id, 'semester_id': req.semester_id}, {'_id': 0})
+    baru = {f: getattr(req, f) for f in STATUS_TINDAKAN_AWAL}
+    perubahan = perubahan_status(lama or {}, baru)
+    sekarang = datetime.now(timezone.utc).isoformat()
+    oleh_nama = user.get('full_name') or user.get('username')
+
+    if perubahan or req.catatan or not lama:
+        isian = {**baru, 'catatan': req.catatan, 'diubah_pada': sekarang, 'diubah_oleh_id': user['id'], 'diubah_oleh_nama': oleh_nama}
+        try:
+            await db[KOLEKSI_TINDAKAN].update_one(
+                {'siswa_id': siswa_id, 'semester_id': req.semester_id},
+                {'$set': isian, '$setOnInsert': {'id': str(uuid.uuid4()), 'created_at': sekarang}},
+                upsert=True)
+        except DuplicateKeyError:  # dua penyimpanan pertama bersamaan: yang kalah cukup memperbarui
+            await db[KOLEKSI_TINDAKAN].update_one({'siswa_id': siswa_id, 'semester_id': req.semester_id}, {'$set': isian})
+    tindakan = await db[KOLEKSI_TINDAKAN].find_one({'siswa_id': siswa_id, 'semester_id': req.semester_id}, {'_id': 0})
+
+    if perubahan or req.catatan:
+        poin = await _baris_siswa(siswa_id, req.semester_id)
+        await db[KOLEKSI_RIWAYAT_TINDAKAN].insert_one(entri_riwayat_tindakan(
+            tindakan, perubahan, user, sekarang, catatan=req.catatan, usulan_sp=poin['usulan_sp'], poin_negatif=poin['poin_negatif']))
+        await log_audit(user, 'tatib_tindakan_update',
+                        f"Tindakan tatib {siswa_id}: " + (', '.join(f"{p['field']} {p['dari']}->{p['ke']}" for p in perubahan) or 'catatan'))
+    return serialize_doc(await _baris_siswa(siswa_id, req.semester_id))

@@ -1,5 +1,5 @@
 // Tindakan Tatib: rekap siswa berpoin + usulan SP otomatis + status pembinaan yang ditetapkan manual.
-// Daftar lewat API; simpan status & riwayat SEMENTARA masih data tiruan di memori. Kontrak:
+// Daftar & simpan status lewat API; riwayat SEMENTARA masih data tiruan di memori. Kontrak:
 //   GET /tatib/tindakan?semester_id=&kelas=&cari=&usulan_sp= -> { ambang: { sp1, sp2, sp3 }, semester_id, items: [{ siswa_id, nisn, nama, kelas,
 //        poin_positif, kategori_positif: [{ nama, poin, jumlah }], poin_negatif, kategori_negatif: [{ nama, poin, jumlah }], usulan_sp,
 //        status_panggilan_wali, status_sp, status_rtlpd, keterangan_sp, diubah_pada, diubah_oleh_nama }] }
@@ -39,26 +39,6 @@ export const usulanLebihTinggi = (usulan, ditetapkan) => TINGKAT_SP.indexOf(usul
 
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
 
-const statusAwal = { status_panggilan_wali: 'Tidak diperlukan', status_sp: 'Tidak perlu', status_rtlpd: 'Tidak diperlukan', keterangan_sp: null };
-
-const k = (nama, poin, jumlah) => ({ nama, poin, jumlah });
-
-const siswaTiruan = [
-  { siswa_id: 'sis-3', nisn: '0098765315', nama: 'Muhammad Rizki Pratama', kelas: 'VIII B', poin_positif: 5, kategori_positif: [k('Akhlak & Ibadah', 5, 1)],
-    poin_negatif: -80, kategori_negatif: [k('Kedisiplinan', -60, 6), k('Kerapian', -20, 4)], ...statusAwal,
-    status_panggilan_wali: 'Terlaksana', status_sp: 'Diserahkan', keterangan_sp: 'SP2', status_rtlpd: 'Disusun', diubah_pada: '2026-10-12T09:00:00', diubah_oleh_nama: 'Guru Tatib' },
-  { siswa_id: 'sis-5', nisn: '0098765207', nama: 'Fikri Hidayatullah', kelas: 'IX C', poin_positif: 0, kategori_positif: [],
-    poin_negatif: -55, kategori_negatif: [k('Kedisiplinan', -55, 5)], ...statusAwal, status_panggilan_wali: 'Diajukan' },
-  { siswa_id: 'sis-1', nisn: '0098765401', nama: 'Ahmad Fauzan', kelas: 'VII A', poin_positif: 10, kategori_positif: [k('Akhlak & Ibadah', 10, 2)],
-    poin_negatif: -30, kategori_negatif: [k('Kerapian', -30, 6)], ...statusAwal },
-  { siswa_id: 'sis-4', nisn: '0098765316', nama: 'Nur Halimah', kelas: 'VIII B', poin_positif: 15, kategori_positif: [k('Akhlak & Ibadah', 10, 2), k('Kedisiplinan', 5, 1)],
-    poin_negatif: -5, kategori_negatif: [k('Kedisiplinan', -5, 1)], ...statusAwal },
-  { siswa_id: 'sis-2', nisn: '0098765402', nama: 'Aisyah Putri Ramadhani', kelas: 'VII A', poin_positif: 20, kategori_positif: [k('Akhlak & Ibadah', 20, 3)],
-    poin_negatif: 0, kategori_negatif: [], ...statusAwal },
-];
-
-const ambangTiruan = { ...AMBANG_SP_BAWAAN };
-
 // Label field status untuk riwayat perubahan.
 export const LABEL_FIELD_TINDAKAN = {
   keterangan_sp: 'Keterangan SP',
@@ -89,26 +69,17 @@ export async function ambilTindakan({ semester_id, ...filter } = {}) {
   return { ambang: data?.ambang || AMBANG_SP_BAWAAN, semester_id: data?.semester_id ?? null, items: data?.items || [] };
 }
 
-// Simpan status pembinaan satu siswa (keputusan manual). Kontrak: PUT /tatib/tindakan/{siswa_id}
-// { keterangan_sp: 'SP1'|'SP2'|'SP3'|null, status_panggilan_wali, status_sp, status_rtlpd, catatan } -> item siswa.
-export async function simpanStatusTindakan(siswaId, { keterangan_sp, status_panggilan_wali, status_sp, status_rtlpd, catatan }) {
-  const s = siswaTiruan.find((x) => x.siswa_id === siswaId);
-  if (!s) throw new Error('Siswa tidak ditemukan');
+// Simpan status pembinaan satu siswa untuk semester tertentu (keputusan manual; server mencatat riwayat).
+// Kontrak: PUT /tatib/tindakan/{siswa_id} { semester_id, keterangan_sp, status_panggilan_wali, status_sp, status_rtlpd, catatan }
+// -> baris rekap siswa terbaru (bentuk sama dengan item GET /tatib/tindakan).
+export async function simpanStatusTindakan(siswaId, { semester_id, keterangan_sp, status_panggilan_wali, status_sp, status_rtlpd, catatan }) {
   if (keterangan_sp && !TINGKAT_SP.includes(keterangan_sp)) throw new Error('Keterangan SP tidak dikenal');
   if (!STATUS_PANGGILAN_WALI.includes(status_panggilan_wali) || !STATUS_SP.includes(status_sp) || !STATUS_RTLPD.includes(status_rtlpd)) {
     throw new Error('Status pembinaan tidak dikenal');
   }
-  const baru = { keterangan_sp: keterangan_sp || null, status_panggilan_wali, status_sp, status_rtlpd };
-  const perubahan = Object.keys(LABEL_FIELD_TINDAKAN)
-    .filter((f) => (s[f] ?? null) !== baru[f])
-    .map((f) => ({ field: f, dari: s[f] ?? null, ke: baru[f] }));
-  const waktu = new Date().toISOString();
-  if (perubahan.length || (catatan || '').trim()) {
-    riwayatTiruan[siswaId] = [{
-      id: `r-${Date.now()}`, waktu, oleh_nama: 'Anda', usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan),
-      catatan: (catatan || '').trim() || null, perubahan,
-    }, ...(riwayatTiruan[siswaId] || [])];
-  }
-  Object.assign(s, { ...baru, diubah_pada: waktu, diubah_oleh_nama: 'Anda' });
-  return jeda({ ...s, usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan) });
+  const { data } = await api.put(`/tatib/tindakan/${siswaId}`, {
+    semester_id: semester_id ?? null, keterangan_sp: keterangan_sp || null, status_panggilan_wali, status_sp, status_rtlpd,
+    catatan: (catatan || '').trim() || null,
+  });
+  return data;
 }

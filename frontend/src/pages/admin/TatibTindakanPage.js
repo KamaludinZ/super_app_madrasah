@@ -87,7 +87,7 @@ export default function TatibTindakanPage() {
   // Simpan lalu perbarui baris itu saja di state (tanpa memuat ulang seluruh daftar).
   const simpanTindakan = async (isian) => {
     if (!bolehUbah) throw new Error('Peran Anda hanya dapat melihat tindakan tatib');
-    const hasil = await simpanStatusTindakan(diubah.siswa_id, isian);
+    const hasil = await simpanStatusTindakan(diubah.siswa_id, { ...isian, semester_id: data.semester_id });
     setData((d) => ({ ...d, items: d.items.map((x) => (x.siswa_id === hasil.siswa_id ? { ...x, ...hasil } : x)) }));
     setVersiRiwayat((v) => v + 1);
     return hasil;

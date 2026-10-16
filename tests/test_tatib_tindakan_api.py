@@ -117,3 +117,61 @@ def test_ambang_berikutnya_dan_usulan_lebih_tinggi():
     assert ambang_berikutnya(-75) is None
     assert usulan_lebih_tinggi('SP2', 'SP1') and usulan_lebih_tinggi('SP1', None)
     assert not usulan_lebih_tinggi('SP1', 'SP2') and not usulan_lebih_tinggi(None, None)
+
+
+GURU = {'id': 'g1', 'full_name': 'Guru Tatib', 'roles': ['guru_tata_tertib'], 'active_role': 'guru_tata_tertib'}
+
+
+@pytest.fixture
+def tanpa_audit(monkeypatch):
+    async def _noop(*_a, **_k):
+        return None
+    monkeypatch.setattr(api, 'log_audit', _noop)
+
+
+def _status(**kw):
+    dasar = {'semester_id': 'sem1', 'keterangan_sp': 'SP1', 'status_panggilan_wali': 'Diajukan', 'status_sp': 'Tidak perlu',
+             'status_rtlpd': 'Tidak diperlukan'}
+    return api.StatusTindakanRequest(**{**dasar, **kw})
+
+
+async def test_ubah_status_menyimpan_dan_mencatat_riwayat(db, tanpa_audit):
+    b = await api.ubah_status_tindakan('s1', _status(catatan='  telepon wali  '), GURU)
+    assert (b['keterangan_sp'], b['status_panggilan_wali'], b['usulan_sp'], b['poin_negatif'], b['diubah_oleh_nama']) == ('SP1', 'Diajukan', 'SP1', -35, 'Guru Tatib')
+    r = await db.tatib_tindakan_riwayat.find({'siswa_id': 's1'}, {'_id': 0}).to_list(None)
+    assert len(r) == 1 and r[0]['perubahan'] == [{'field': 'keterangan_sp', 'dari': None, 'ke': 'SP1'},
+                                                {'field': 'status_panggilan_wali', 'dari': 'Tidak diperlukan', 'ke': 'Diajukan'}]
+    assert (r[0]['catatan'], r[0]['usulan_sp'], r[0]['poin_negatif'], r[0]['oleh_nama'], r[0]['semester_id']) == ('telepon wali', 'SP1', -35, 'Guru Tatib', 'sem1')
+
+    # simpan ulang tanpa perubahan & tanpa catatan: riwayat tidak bertambah
+    await api.ubah_status_tindakan('s1', _status(), GURU)
+    assert await db.tatib_tindakan_riwayat.count_documents({}) == 1
+    # perubahan berikutnya hanya field yang berubah
+    await api.ubah_status_tindakan('s1', _status(status_panggilan_wali='Terlaksana', status_sp='Diserahkan'), GURU)
+    terbaru = await db.tatib_tindakan_riwayat.find({}, {'_id': 0}).sort('waktu', -1).to_list(1)
+    assert [p['field'] for p in terbaru[0]['perubahan']] == ['status_panggilan_wali', 'status_sp']
+    assert await db.tatib_tindakan.count_documents({'siswa_id': 's1'}) == 1  # satu dokumen per siswa+semester
+    # semester lain terpisah
+    await api.ubah_status_tindakan('s1', _status(semester_id='sem0', keterangan_sp='SP3'), GURU)
+    assert await db.tatib_tindakan.count_documents({'siswa_id': 's1'}) == 2
+    assert (await api.daftar_tindakan(semester_id='sem1', user=PIMPINAN))['items'][1]['keterangan_sp'] == 'SP1'
+
+
+async def test_ubah_status_siswa_tanpa_catatan_poin_dan_validasi(db, tanpa_audit):
+    await db.users.insert_one({'id': 's9', 'roles': ['siswa'], 'full_name': 'Dewi', 'student_class_id': 'c7a'})
+    b = await api.ubah_status_tindakan('s9', _status(keterangan_sp=None, status_panggilan_wali='Tidak diperlukan'), GURU)
+    assert (b['nama'], b['poin_negatif'], b['jumlah_catatan'], b['kelas']) == ('Dewi', 0, 0, 'VII A')
+    with pytest.raises(HTTPException) as e:
+        await api.ubah_status_tindakan('tidak-ada', _status(), GURU)
+    assert e.value.status_code == 404
+    from pydantic import ValidationError
+    for salah in ({'keterangan_sp': 'SP4'}, {'status_panggilan_wali': 'Selesai'}, {'status_sp': 'Ya'}, {'status_rtlpd': 'x'}, {'catatan': 'x' * 301}):
+        with pytest.raises(ValidationError):
+            _status(**salah)
+    assert _status(keterangan_sp='').keterangan_sp is None
+
+
+def test_ubah_status_hanya_peran_input():
+    from routers.tatib_poin import wajib_input_tatib
+    route = next(r for r in api.router.routes if r.path == '/tatib/tindakan/{siswa_id}' and 'PUT' in r.methods)
+    assert wajib_input_tatib in [d.call for d in route.dependant.dependencies]
