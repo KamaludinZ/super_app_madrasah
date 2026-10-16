@@ -10,12 +10,13 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from core import db, log_audit, require_role, serialize_doc
 from routers._shared import sembunyikan_siswa_nonaktif
 from routers.tatib_poin import query_rekap, wajib_input_tatib, wajib_lihat_tatib
-from tatib_poin import (ID_AMBANG_SP, KOLEKSI_AMBANG_SP, KOLEKSI_POIN, KOLEKSI_RIWAYAT_AMBANG_SP, KOLEKSI_RIWAYAT_TINDAKAN,
+from tatib_poin import (AMBANG_SP_BAWAAN, ID_AMBANG_SP, KOLEKSI_AMBANG_SP, KOLEKSI_POIN, KOLEKSI_RIWAYAT_AMBANG_SP, KOLEKSI_RIWAYAT_TINDAKAN,
                         KOLEKSI_TINDAKAN, STATUS_PANGGILAN_WALI, STATUS_RTLPD, STATUS_SP, STATUS_TINDAKAN_AWAL, TINGKAT_SP,
                         ambang_berikutnya, ambil_ambang_sp, entri_riwayat_ambang, entri_riwayat_tindakan, nilai_poin,
                         perubahan_status, usulan_lebih_tinggi, usulkan_sp, validasi_ambang_sp)
@@ -289,6 +290,14 @@ async def lihat_ambang_sp(user: Dict = Depends(wajib_lihat_tatib)):
 MAKS_ALASAN_AMBANG = 300
 
 
+def ambang_dari_dokumen(doc: Optional[Dict]) -> Dict:
+    """Nilai ambang yang berlaku menurut dokumen tersimpan; bawaan bila belum ada atau rusak."""
+    try:
+        return validasi_ambang_sp((doc or {}).get('sp1'), (doc or {}).get('sp2'), (doc or {}).get('sp3'))
+    except ValueError:
+        return dict(AMBANG_SP_BAWAAN)
+
+
 class AmbangSpRequest(BaseModel):
     sp1: int
     sp2: int
@@ -311,12 +320,14 @@ async def simpan_ambang_sp(req: AmbangSpRequest, user: Dict = Depends(require_ro
     if all(lama[k] == nilai[k] for k in nilai) and not lama['bawaan']:
         return serialize_doc(lama)  # tidak ada perubahan: tidak dicatat
     sekarang = datetime.now(timezone.utc).isoformat()
-    await db[KOLEKSI_AMBANG_SP].update_one({'_id': ID_AMBANG_SP}, {'$set': {
+    # Dokumen SEBELUM update diambil atomik: nilai "dari" di riwayat tetap benar walau dua admin menyimpan bersamaan.
+    sebelum = await db[KOLEKSI_AMBANG_SP].find_one_and_update({'_id': ID_AMBANG_SP}, {'$set': {
         **nilai, 'alasan': alasan, 'diubah_oleh_id': user['id'],
         'diubah_oleh_nama': user.get('full_name') or user.get('username'), 'diubah_pada': sekarang,
-    }}, upsert=True)
-    await db[KOLEKSI_RIWAYAT_AMBANG_SP].insert_one(
-        entri_riwayat_ambang(None if lama['bawaan'] and not lama.get('diubah_pada') else lama, nilai, user, sekarang, alasan))
+    }}, upsert=True, return_document=ReturnDocument.BEFORE)
+    dari = ambang_dari_dokumen(sebelum)
+    await db[KOLEKSI_RIWAYAT_AMBANG_SP].insert_one(entri_riwayat_ambang(dari, nilai, user, sekarang, alasan))
     await log_audit(user, 'tatib_ambang_sp_update',
-                    f"Ambang SP {lama['sp1']}/{lama['sp2']}/{lama['sp3']} -> {nilai['sp1']}/{nilai['sp2']}/{nilai['sp3']}")
+                    f"Ambang SP {dari['sp1']}/{dari['sp2']}/{dari['sp3']} -> {nilai['sp1']}/{nilai['sp2']}/{nilai['sp3']}"
+                    + (f" · {alasan}" if alasan else ''))
     return serialize_doc(await ambil_ambang_sp(db))

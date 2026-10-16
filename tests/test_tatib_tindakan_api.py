@@ -243,7 +243,9 @@ async def test_simpan_ambang_sp_admin_dan_riwayat(db, tanpa_audit):
     a = await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=30, sp2=60, sp3=90, alasan='  rapat dewan guru '), ADMIN)
     assert (a['sp1'], a['sp2'], a['sp3'], a['alasan'], a['diubah_oleh_nama'], a['bawaan']) == (30, 60, 90, 'rapat dewan guru', 'Admin', False)
     r = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).to_list(None)
-    assert len(r) == 1 and r[0]['dari'] is None and r[0]['ke'] == {'sp1': 30, 'sp2': 60, 'sp3': 90} and r[0]['oleh_id'] == 'a1'
+    # perubahan pertama: "dari" = nilai bawaan yang sebelumnya berlaku
+    assert len(r) == 1 and r[0]['dari'] == {'sp1': 25, 'sp2': 50, 'sp3': 75} and r[0]['ke'] == {'sp1': 30, 'sp2': 60, 'sp3': 90}
+    assert (r[0]['oleh_id'], r[0]['oleh_nama'], r[0]['alasan']) == ('a1', 'Admin', 'rapat dewan guru')
     # langsung dipakai untuk usulan SP
     usulan = {s['siswa_id']: s['usulan_sp'] for s in (await api.daftar_tindakan(semester_id='sem1', user=PIMPINAN))['items']}
     assert usulan == {'s2': 'SP2', 's1': 'SP1', 's3': None}  # s2 -60 >= 60, s1 -35 >= 30
@@ -272,3 +274,25 @@ async def test_simpan_ambang_sp_hanya_admin():
             await penjaga[0]({'id': 'x', 'roles': [peran], 'active_role': peran})
         assert e.value.status_code == 403
     assert await penjaga[0](ADMIN)
+
+
+async def test_riwayat_ambang_berantai_dan_dari_selalu_nilai_sebelumnya(db, tanpa_audit):
+    urutan = [(30, 60, 90), (30, 55, 90), (20, 55, 80), (25, 50, 75)]
+    for sp1, sp2, sp3 in urutan:
+        await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=sp1, sp2=sp2, sp3=sp3, alasan=f'ubah {sp1}'), ADMIN)
+    r = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).sort('waktu', 1).to_list(None)
+    assert len(r) == 4
+    for sebelum, sesudah in zip(r, r[1:]):
+        assert sesudah['dari'] == sebelum['ke']  # rantai riwayat utuh
+    assert r[-1]['ke'] == {'sp1': 25, 'sp2': 50, 'sp3': 75} and r[-1]['alasan'] == 'ubah 25'
+    # dokumen rusak dianggap bawaan saat menjadi "dari"
+    await db.pengaturan_ambang_sp.update_one({'_id': 'ambang_sp'}, {'$set': {'sp1': 99}})
+    await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=10, sp2=20, sp3=30), ADMIN)
+    terbaru = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).sort('waktu', -1).to_list(1)
+    assert terbaru[0]['dari'] == {'sp1': 25, 'sp2': 50, 'sp3': 75}
+
+
+def test_ambang_dari_dokumen():
+    assert api.ambang_dari_dokumen(None) == {'sp1': 25, 'sp2': 50, 'sp3': 75}
+    assert api.ambang_dari_dokumen({'sp1': 5, 'sp2': 6, 'sp3': 7}) == {'sp1': 5, 'sp2': 6, 'sp3': 7}
+    assert api.ambang_dari_dokumen({'sp1': 9, 'sp2': 6, 'sp3': 7}) == {'sp1': 25, 'sp2': 50, 'sp3': 75}
