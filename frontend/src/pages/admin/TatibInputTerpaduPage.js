@@ -14,9 +14,11 @@ import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
 import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
+import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
+  simpanKategoriTatib,
 } from '@/lib/inputTatib';
 
 const formKosong = () => ({ siswa_id: '', kategori_id: '', jenis_id: '', tanggal: hariIniWIB(), keterangan: '' });
@@ -70,6 +72,17 @@ export default function TatibInputTerpaduPage() {
     // Jenis yang sudah dipilih dilepas bila tidak termasuk kategori baru.
     const jenisMasihCocok = jenis && (!kategori_id || jenis.kategori_id === kategori_id);
     ubah({ kategori_id, jenis_id: jenisMasihCocok ? form.jenis_id : '' });
+  };
+
+  // Kategori ditambah/diubah dari halaman ini; daftar jenis dimuat ulang agar nama kategorinya ikut berubah.
+  const simpanKategori = async (isian) => {
+    if (tolakUbahTatib(activeRole)) throw new Error('Tidak berhak mengubah kategori');
+    const kategori = await simpanKategoriTatib(isian);
+    const [kategoriBaru, jenisBaru] = await Promise.all([ambilKategoriTatib(), ambilJenisAturan()]);
+    setKategoriList(kategoriBaru);
+    setJenisList(jenisBaru);
+    if (!isian.id) pilihKategori(kategori.id);
+    return kategori;
   };
 
   const pilihJenis = (v) => {
@@ -144,6 +157,13 @@ export default function TatibInputTerpaduPage() {
                     disabled={!bolehInput}
                     testid="input-tatib-kategori"
                   />
+                  <div className="mt-2">
+                    <KelolaKategoriInline
+                      kategori={kategoriList.find((k) => k.id === form.kategori_id)}
+                      onSimpan={simpanKategori}
+                      disabled={!bolehInput}
+                    />
+                  </div>
                 </div>
 
                 <div>

@@ -84,3 +84,22 @@ export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, keterangan
   catatanTiruan = [catatan, ...catatanTiruan];
   return jeda(catatan);
 }
+
+// Tambah (tanpa id) atau ubah kategori langsung dari halaman input.
+// Kontrak: POST /tatib/kategori | PUT /tatib/kategori/{id} -> { id, nama, deskripsi }.
+export async function simpanKategoriTatib({ id, nama, deskripsi }) {
+  const namaRapi = (nama || '').trim();
+  if (!namaRapi) throw new Error('Nama kategori wajib diisi');
+  const ganda = kategoriTiruan.some((k) => k.id !== id && k.nama.toLowerCase() === namaRapi.toLowerCase());
+  if (ganda) throw new Error(`Kategori "${namaRapi}" sudah ada`);
+  const isian = { nama: namaRapi, deskripsi: (deskripsi || '').trim() };
+  if (id) {
+    const i = kategoriTiruan.findIndex((k) => k.id === id);
+    if (i < 0) throw new Error('Kategori tidak ditemukan');
+    kategoriTiruan[i] = { ...kategoriTiruan[i], ...isian };
+    return jeda(kategoriTiruan[i]);
+  }
+  const baru = { id: `kat-${Date.now()}`, ...isian };
+  kategoriTiruan.push(baru);
+  return jeda(baru);
+}
