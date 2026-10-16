@@ -1,4 +1,4 @@
-import { ClipboardEdit, ListChecks, ShieldCheck, Database, BarChart3 } from 'lucide-react';
+import { ClipboardEdit, Gavel, ListChecks, ShieldCheck, Database, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Hak akses & menu Tata Tertib per peran aktif — satu sumber untuk navigasi (navForRole)
@@ -86,6 +86,7 @@ export function menuTatib(role, prefix) {
       icon: ShieldCheck,
       testid: `${prefix}-tatib-penanganan`,
     },
+    { to: '/admin/tatib/tindakan', label: 'Tindakan Tatib', icon: Gavel, testid: `${prefix}-tatib-tindakan` },
     { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: `${prefix}-tatib-data` },
     { to: '/tatib/rekap', label: 'Rekap Pengawas', icon: BarChart3, testid: `${prefix}-tatib-rekap` },
   );
