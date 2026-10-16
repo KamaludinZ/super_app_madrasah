@@ -11,6 +11,7 @@ import RingkasanPoin, { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FilterRekapTatib, { FILTER_REKAP_KOSONG } from '@/components/tatib/FilterRekapTatib';
 import { ambilRekap, unduhRekap } from '@/lib/poinTatib';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
 import { Button } from '@/components/ui/button';
 
 const KOLOM_KELAS = [
@@ -23,6 +24,72 @@ const KOLOM_KELAS = [
 ];
 const JUMLAHKAN = ['jumlah_siswa', 'total_plus', 'total_minus', 'saldo', 'siswa_perlu_perhatian'];
 
+// Rekap per kategori tatib (struktur baru): jumlah & total poin pelanggaran dan kebaikan.
+function TabelPerKategori({ items }) {
+  return (
+    <Card data-testid="rekap-per-kategori">
+      <CardHeader className="pb-3"><CardTitle className="text-base">Per Kategori</CardTitle></CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kategori</TableHead>
+                <TableHead className="text-right">Pelanggaran</TableHead>
+                <TableHead className="text-right">Kebaikan</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((k) => (
+                <TableRow key={k.kategori} data-testid={`rekap-kategori-${k.kategori}`}>
+                  <TableCell className="font-medium">{k.kategori}</TableCell>
+                  <TableCell className="text-right tabular-nums text-red-700">
+                    {formatPoin(k.total_minus)} <span className="text-xs text-slate-400">({k.jumlah_pelanggaran})</span>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-emerald-700">
+                    {formatPoin(k.total_plus)} <span className="text-xs text-slate-400">({k.jumlah_kebaikan})</span>
+                  </TableCell>
+                  <TableCell className={`text-right font-semibold tabular-nums ${k.total_plus + k.total_minus < 0 ? 'text-red-700' : ''}`}>
+                    {formatPoin(k.total_plus + k.total_minus)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {items.length === 0 && (
+                <TableRow><TableCell colSpan={4} className="py-6 text-center text-sm text-slate-500">Belum ada data.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Jumlah catatan per asal input (catatan lama tanpa asal = 'Belum diisi').
+function DaftarAsalInput({ items }) {
+  const maks = Math.max(1, ...items.map((a) => a.jumlah));
+  return (
+    <Card data-testid="rekap-per-asal">
+      <CardHeader className="pb-3"><CardTitle className="text-base">Per Asal Input</CardTitle></CardHeader>
+      <CardContent className="space-y-2.5">
+        {items.length === 0 && <p className="text-sm text-slate-500">Belum ada data.</p>}
+        {items.map((a) => (
+          <div key={a.asal_input || 'belum'} className="flex items-center gap-3 text-sm" data-testid={`rekap-asal-${a.asal_input || 'belum'}`}>
+            <span className="w-32 shrink-0"><LabelAsalInput asal={a.asal_input} /></span>
+            <div className="h-1.5 flex-1 rounded-full bg-slate-100">
+              <div className="h-1.5 rounded-full bg-slate-500" style={{ width: `${(a.jumlah / maks) * 100}%` }} />
+            </div>
+            <span className="w-24 shrink-0 text-right text-xs tabular-nums text-slate-600">
+              {a.jumlah}× · <span className="text-red-700">{formatPoin(a.total_minus)}</span>
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DaftarTeratas({ judul, items, warna, testid }) {
   const maks = Math.max(1, ...items.map((p) => p.jumlah));
   return (
@@ -33,9 +100,13 @@ function DaftarTeratas({ judul, items, warna, testid }) {
       <CardContent className="space-y-3">
         {items.length === 0 && <p className="text-sm text-slate-500">Belum ada data.</p>}
         {items.map((p) => (
-          <div key={p.kode || p.nama} className="space-y-1">
+          <div key={p.kode || p.nama} className="space-y-1" data-testid={`${testid}-${p.kode || p.nama}`}>
             <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="truncate text-slate-800">{p.nama}</span>
+              <span className="min-w-0 truncate text-slate-800">
+                {p.kode && <span className="mr-1 font-mono text-xs text-slate-500">{p.kode}</span>}
+                {p.nama}
+                {p.kategori_nama && <span className="ml-1 text-xs text-slate-400">· {p.kategori_nama}</span>}
+              </span>
               <span className="shrink-0 tabular-nums text-slate-500">{p.jumlah}×</span>
             </div>
             <div className="h-1.5 rounded-full bg-slate-100">
@@ -151,7 +222,7 @@ export default function TatibRekapPage() {
         </Button>
       </div>
 
-      <BannerModeLihat>Rekap ini hanya untuk dilihat — data dicatat lewat halaman Catat Poin Tatib.</BannerModeLihat>
+      <BannerModeLihat>Rekap ini hanya untuk dilihat — data dicatat lewat halaman Input Tata Tertib.</BannerModeLihat>
 
 
       <FilterRekapTatib value={filter} onChange={setFilter} />
@@ -241,6 +312,13 @@ export default function TatibRekapPage() {
         </Card>
 
       </div>
+
+      {(data.per_kategori || data.per_asal_input) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {data.per_kategori && <TabelPerKategori items={data.per_kategori} />}
+          {data.per_asal_input && <DaftarAsalInput items={data.per_asal_input} />}
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <DaftarTeratas judul="Kebaikan Terbanyak" items={data.teratas_kebaikan || []} warna="bg-emerald-500" testid="rekap-teratas-kebaikan" />

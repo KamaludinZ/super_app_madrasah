@@ -82,6 +82,9 @@ export async function ambilCatatanKelas() {
   return data || [];
 }
 
+// Rekap Pengawas -> { ringkasan, per_kelas, teratas_pelanggaran, teratas_kebaikan ([{kode, nama, kategori_nama, jumlah}]),
+//   per_kategori: [{ kategori, jumlah_pelanggaran, jumlah_kebaikan, total_minus, total_plus }],
+//   per_asal_input: [{ asal_input|null, jumlah, total_minus, total_plus }] }.
 export async function ambilRekap(filter) {
   const { data } = await api.get('/tatib/rekap', { params: tanpaKosong(filter) });
   return data;
