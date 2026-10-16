@@ -1,5 +1,5 @@
 // Pengaturan Ambang SP: batas akumulasi poin pelanggaran (nilai mutlak) untuk usulan SP1/SP2/SP3.
-// Ambang berlaku lewat API; simpan & riwayat SEMENTARA masih data tiruan di memori. Kontrak:
+// Ambang berlaku & simpan lewat API; riwayat SEMENTARA masih data tiruan di memori. Kontrak:
 //   GET /tatib/ambang-sp          -> { sp1, sp2, sp3, diubah_oleh_nama, diubah_pada, bawaan }
 //   PUT /tatib/ambang-sp          { sp1, sp2, sp3, alasan } -> sama dengan GET (hanya admin)
 //   GET /tatib/ambang-sp/riwayat  -> [{ id, waktu, oleh_nama, dari: {sp1,sp2,sp3}, ke: {sp1,sp2,sp3}, alasan }]
@@ -8,7 +8,6 @@ import { AMBANG_SP_BAWAAN } from '@/lib/tindakanTatib';
 
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
 
-const ambangTiruan = { sp1: 25, sp2: 50, sp3: 75, diubah_oleh_nama: 'Sistem', diubah_pada: '2026-10-16T00:00:00', bawaan: false };
 
 const riwayatTiruan = [
   { id: 'ra1', waktu: '2026-10-16T00:00:00', oleh_nama: 'Sistem', dari: null, ke: { sp1: 25, sp2: 50, sp3: 75 }, alasan: 'Nilai bawaan saat pemasangan' },
@@ -45,20 +44,14 @@ export function validasiAmbang(nilai) {
   return galat;
 }
 
-// Simpan ambang baru (hanya admin di server). `alasan` opsional, ikut dicatat di riwayat audit.
+// Simpan ambang baru (server: hanya admin, validasi sama, perubahan dicatat di riwayat). `alasan` opsional.
 export async function simpanAmbangSP({ sp1, sp2, sp3, alasan }) {
   const galat = validasiAmbang({ sp1, sp2, sp3 });
   if (Object.keys(galat).length) throw new Error('Ambang SP tidak valid');
-  riwayatTiruan.unshift({
-    id: `ra-${Date.now()}`, waktu: new Date().toISOString(), oleh_nama: 'Anda',
-    dari: { sp1: ambangTiruan.sp1, sp2: ambangTiruan.sp2, sp3: ambangTiruan.sp3 },
-    ke: { sp1: Number(sp1), sp2: Number(sp2), sp3: Number(sp3) }, alasan: (alasan || '').trim() || null,
-  });
-  Object.assign(ambangTiruan, {
+  const { data } = await api.put('/tatib/ambang-sp', {
     sp1: Number(sp1), sp2: Number(sp2), sp3: Number(sp3), alasan: (alasan || '').trim() || null,
-    diubah_oleh_nama: 'Anda', diubah_pada: new Date().toISOString(), bawaan: false,
   });
-  return jeda(ambangTiruan);
+  return data;
 }
 
 // Ringkasan perubahan untuk konfirmasi: "SP1 25 → 30, SP3 75 → 90" (hanya tingkat yang berubah).

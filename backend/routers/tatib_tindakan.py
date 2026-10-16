@@ -12,12 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from pymongo.errors import DuplicateKeyError
 
-from core import db, log_audit, serialize_doc
+from core import db, log_audit, require_role, serialize_doc
 from routers._shared import sembunyikan_siswa_nonaktif
 from routers.tatib_poin import query_rekap, wajib_input_tatib, wajib_lihat_tatib
-from tatib_poin import (KOLEKSI_POIN, KOLEKSI_RIWAYAT_TINDAKAN, KOLEKSI_TINDAKAN, STATUS_PANGGILAN_WALI, STATUS_RTLPD,
-                        STATUS_SP, STATUS_TINDAKAN_AWAL, TINGKAT_SP, ambang_berikutnya, ambil_ambang_sp,
-                        entri_riwayat_tindakan, nilai_poin, perubahan_status, usulan_lebih_tinggi, usulkan_sp)
+from tatib_poin import (ID_AMBANG_SP, KOLEKSI_AMBANG_SP, KOLEKSI_POIN, KOLEKSI_RIWAYAT_AMBANG_SP, KOLEKSI_RIWAYAT_TINDAKAN,
+                        KOLEKSI_TINDAKAN, STATUS_PANGGILAN_WALI, STATUS_RTLPD, STATUS_SP, STATUS_TINDAKAN_AWAL, TINGKAT_SP,
+                        ambang_berikutnya, ambil_ambang_sp, entri_riwayat_ambang, entri_riwayat_tindakan, nilai_poin,
+                        perubahan_status, usulan_lebih_tinggi, usulkan_sp, validasi_ambang_sp)
 
 router = APIRouter()
 
@@ -282,4 +283,40 @@ async def riwayat_tindakan_siswa(siswa_id: str, semester_id: Optional[str] = Non
 async def lihat_ambang_sp(user: Dict = Depends(wajib_lihat_tatib)):
     """Ambang SP yang berlaku: {sp1, sp2, sp3, alasan, diubah_oleh_nama, diubah_pada, bawaan}.
     bawaan=true bila belum pernah diatur (atau nilai tersimpan rusak) sehingga AMBANG_SP_BAWAAN dipakai."""
+    return serialize_doc(await ambil_ambang_sp(db))
+
+
+MAKS_ALASAN_AMBANG = 300
+
+
+class AmbangSpRequest(BaseModel):
+    sp1: int
+    sp2: int
+    sp3: int
+    alasan: Optional[str] = None
+
+
+@router.put("/tatib/ambang-sp")
+async def simpan_ambang_sp(req: AmbangSpRequest, user: Dict = Depends(require_role('admin'))):
+    """Ubah ambang SP (hanya admin). Wajib 1 <= SP1 < SP2 < SP3 <= MAKS_AMBANG_SP (400 bila tidak).
+    Ambang baru langsung dipakai untuk usulan SP; setiap perubahan dicatat di riwayat audit."""
+    try:
+        nilai = validasi_ambang_sp(req.sp1, req.sp2, req.sp3)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    alasan = (req.alasan or '').strip() or None
+    if alasan and len(alasan) > MAKS_ALASAN_AMBANG:
+        raise HTTPException(400, f"Alasan maksimal {MAKS_ALASAN_AMBANG} karakter")
+    lama = await ambil_ambang_sp(db)
+    if all(lama[k] == nilai[k] for k in nilai) and not lama['bawaan']:
+        return serialize_doc(lama)  # tidak ada perubahan: tidak dicatat
+    sekarang = datetime.now(timezone.utc).isoformat()
+    await db[KOLEKSI_AMBANG_SP].update_one({'_id': ID_AMBANG_SP}, {'$set': {
+        **nilai, 'alasan': alasan, 'diubah_oleh_id': user['id'],
+        'diubah_oleh_nama': user.get('full_name') or user.get('username'), 'diubah_pada': sekarang,
+    }}, upsert=True)
+    await db[KOLEKSI_RIWAYAT_AMBANG_SP].insert_one(
+        entri_riwayat_ambang(None if lama['bawaan'] and not lama.get('diubah_pada') else lama, nilai, user, sekarang, alasan))
+    await log_audit(user, 'tatib_ambang_sp_update',
+                    f"Ambang SP {lama['sp1']}/{lama['sp2']}/{lama['sp3']} -> {nilai['sp1']}/{nilai['sp2']}/{nilai['sp3']}")
     return serialize_doc(await ambil_ambang_sp(db))

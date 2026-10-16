@@ -196,12 +196,16 @@ async def test_riwayat_tindakan_per_siswa(db, tanpa_audit):
 
 
 def test_semua_endpoint_tindakan_berpenjaga_peran():
-    """Baca (GET): peran input + lihat tatib. Ubah (selain GET): hanya peran input (admin, guru tatib, waka kesiswaan)."""
+    """Baca (GET): peran input + lihat tatib. Ubah (selain GET): hanya peran input (admin, guru tatib, waka kesiswaan);
+    ambang SP lebih ketat: hanya admin."""
     from routers.tatib_poin import wajib_input_tatib, wajib_lihat_tatib
     assert api.router.routes, 'router tindakan kosong'
     for route in api.router.routes:
         calls = [d.call for d in route.dependant.dependencies]
         for method in route.methods:
+            if method != 'GET' and route.path == '/tatib/ambang-sp':
+                assert any('require_role' in c.__qualname__ for c in calls), f'{method} {route.path}'
+                continue
             harus = wajib_lihat_tatib if method == 'GET' else wajib_input_tatib
             assert harus in calls, f'{method} {route.path}'
 
@@ -230,3 +234,41 @@ async def test_lihat_ambang_sp_aktif(db):
                                               'diubah_oleh_nama': 'Admin', 'diubah_pada': '2026-10-16T01:00:00'})
     a = await api.lihat_ambang_sp(PIMPINAN)
     assert (a['sp1'], a['sp2'], a['sp3'], a['alasan'], a['diubah_oleh_nama'], a['bawaan']) == (10, 20, 30, 'rapat', 'Admin', False)
+
+
+ADMIN = {'id': 'a1', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+
+
+async def test_simpan_ambang_sp_admin_dan_riwayat(db, tanpa_audit):
+    a = await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=30, sp2=60, sp3=90, alasan='  rapat dewan guru '), ADMIN)
+    assert (a['sp1'], a['sp2'], a['sp3'], a['alasan'], a['diubah_oleh_nama'], a['bawaan']) == (30, 60, 90, 'rapat dewan guru', 'Admin', False)
+    r = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).to_list(None)
+    assert len(r) == 1 and r[0]['dari'] is None and r[0]['ke'] == {'sp1': 30, 'sp2': 60, 'sp3': 90} and r[0]['oleh_id'] == 'a1'
+    # langsung dipakai untuk usulan SP
+    usulan = {s['siswa_id']: s['usulan_sp'] for s in (await api.daftar_tindakan(semester_id='sem1', user=PIMPINAN))['items']}
+    assert usulan == {'s2': 'SP2', 's1': 'SP1', 's3': None}  # s2 -60 >= 60, s1 -35 >= 30
+    # simpan nilai sama: tidak dicatat
+    await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=30, sp2=60, sp3=90), ADMIN)
+    assert await db.pengaturan_ambang_sp_riwayat.count_documents({}) == 1
+    await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=30, sp2=55, sp3=90), ADMIN)
+    terbaru = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).sort('waktu', -1).to_list(1)
+    assert terbaru[0]['dari'] == {'sp1': 30, 'sp2': 60, 'sp3': 90} and terbaru[0]['ke']['sp2'] == 55
+
+
+@pytest.mark.parametrize('nilai', [(0, 10, 20), (20, 10, 30), (10, 20, 20), (10, 20, 10001)])
+async def test_simpan_ambang_sp_validasi(db, tanpa_audit, nilai):
+    with pytest.raises(HTTPException) as e:
+        await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=nilai[0], sp2=nilai[1], sp3=nilai[2]), ADMIN)
+    assert e.value.status_code == 400
+    assert await db.pengaturan_ambang_sp.count_documents({}) == 0
+
+
+async def test_simpan_ambang_sp_hanya_admin():
+    route = next(r for r in api.router.routes if r.path == '/tatib/ambang-sp' and 'PUT' in r.methods)
+    penjaga = [d.call for d in route.dependant.dependencies]
+    assert len(penjaga) == 1 and 'require_role' in penjaga[0].__qualname__
+    for peran in ('guru_tata_tertib', 'waka_kesiswaan', 'kepala_sekolah'):
+        with pytest.raises(HTTPException) as e:
+            await penjaga[0]({'id': 'x', 'roles': [peran], 'active_role': peran})
+        assert e.value.status_code == 403
+    assert await penjaga[0](ADMIN)
