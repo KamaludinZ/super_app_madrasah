@@ -167,7 +167,7 @@ const AdminTatibPenangananPage = () => {
     if (filterKategori && p.kategori_nama !== filterKategori) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const teks = [p.siswa_nama, p.siswa_nis, p.siswa_nisn, p.tatib_nama, p.tatib_kode].filter(Boolean).join(' ').toLowerCase();
+      const teks = [p.siswa_nama, p.siswa_nis, p.siswa_nisn, p.tatib_nama, p.tatib_kode, p.asal_input].filter(Boolean).join(' ').toLowerCase();
       if (!teks.includes(q)) return false;
     }
     return true;
@@ -234,7 +234,7 @@ const AdminTatibPenangananPage = () => {
             </Select>
           </div>
           <div className="md:col-span-2">
-            <Label>Cari (Nama/NIS/Aturan)</Label>
+            <Label>Cari (Nama/NIS/Aturan/Asal Input)</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -267,6 +267,7 @@ const AdminTatibPenangananPage = () => {
                   <TableHead>Kode</TableHead>
                   <TableHead>Aturan</TableHead>
                   <TableHead>Kategori</TableHead>
+                  <TableHead>Asal Input</TableHead>
                   <TableHead className="text-right">Poin</TableHead>
                   <TableHead>Dicatat Oleh</TableHead>
                   <TableHead>Aksi</TableHead>
@@ -293,6 +294,9 @@ const AdminTatibPenangananPage = () => {
                       <TableCell className="font-bold">{p.tatib_kode || '-'}</TableCell>
                       <TableCell>{p.tatib_nama || '-'}</TableCell>
                       <TableCell>{p.kategori_nama || '-'}</TableCell>
+                      <TableCell className="whitespace-nowrap" data-testid={`tatib-asal-${p.id}`}>
+                        {p.asal_input ? <Badge variant="outline" className="font-normal">{p.asal_input}</Badge> : <span className="text-slate-400">-</span>}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Badge
                           className={poin >= 0 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-red-100 text-red-800 border-red-200'}
@@ -334,7 +338,7 @@ const AdminTatibPenangananPage = () => {
                 })}
                 {filteredPenanganan.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                       {JALUR[jalur].kosong}
                     </TableCell>
                   </TableRow>
