@@ -21,6 +21,15 @@ import {
   simpanKategoriTatib,
 } from '@/lib/inputTatib';
 
+const MAKS_KETERANGAN = 500;
+
+// Tanggal kemarin (YYYY-MM-DD) relatif terhadap hari ini WIB.
+const kemarinWIB = () => {
+  const d = new Date(`${hariIniWIB()}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+
 const formKosong = () => ({ siswa_id: '', kategori_id: '', jenis_id: '', tanggal: hariIniWIB(), keterangan: '' });
 
 const warnaPoin = (poin) => (poin < 0 ? 'text-red-700' : 'text-emerald-700');
@@ -61,6 +70,8 @@ export default function TatibInputTerpaduPage() {
   const poin = poinJenis(jenis);
 
   const ubah = (isian) => setForm((f) => ({ ...f, ...isian }));
+  // Format YYYY-MM-DD bisa dibandingkan sebagai teks.
+  const galatTanggal = form.tanggal && form.tanggal > hariIniWIB() ? 'Tanggal kejadian tidak boleh melewati hari ini' : '';
 
   const jumlahJenis = useMemo(() => {
     const n = {};
@@ -93,7 +104,11 @@ export default function TatibInputTerpaduPage() {
   const simpan = async () => {
     if (tolakUbahTatib(activeRole)) return;
     if (!form.siswa_id || !form.jenis_id || !form.tanggal) {
-      toast.error('Siswa, jenis aturan, dan tanggal wajib diisi');
+      toast.error('Siswa, jenis aturan, dan tanggal kejadian wajib diisi');
+      return;
+    }
+    if (galatTanggal) {
+      toast.error(galatTanggal);
       return;
     }
     setSaving(true);
@@ -201,18 +216,45 @@ export default function TatibInputTerpaduPage() {
 
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                   <div>
-                    <Label>Tanggal*</Label>
-                    <Input type="date" value={form.tanggal} max={hariIniWIB()} onChange={(e) => ubah({ tanggal: e.target.value })} data-testid="input-tatib-tanggal" />
+                    <Label htmlFor="input-tatib-tanggal">Tanggal kejadian*</Label>
+                    <Input
+                      id="input-tatib-tanggal"
+                      type="date"
+                      value={form.tanggal}
+                      max={hariIniWIB()}
+                      onChange={(e) => ubah({ tanggal: e.target.value })}
+                      aria-invalid={Boolean(galatTanggal)}
+                      className={galatTanggal ? 'border-red-500' : ''}
+                      data-testid="input-tatib-tanggal"
+                    />
+                    {galatTanggal ? (
+                      <p className="mt-1 text-xs text-red-600">{galatTanggal}</p>
+                    ) : (
+                      <div className="mt-1 flex gap-1">
+                        {[['Hari ini', hariIniWIB()], ['Kemarin', kemarinWIB()]].map(([label, tgl]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => ubah({ tanggal: tgl })}
+                            className={`rounded px-2 py-0.5 text-xs ${form.tanggal === tgl ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <Label>Keterangan</Label>
+                    <Label htmlFor="input-tatib-keterangan">Keterangan</Label>
                     <Textarea
+                      id="input-tatib-keterangan"
                       value={form.keterangan}
-                      onChange={(e) => ubah({ keterangan: e.target.value })}
-                      placeholder="Kronologi singkat atau catatan (opsional)"
-                      rows={2}
+                      onChange={(e) => ubah({ keterangan: e.target.value.slice(0, MAKS_KETERANGAN) })}
+                      placeholder="Kronologi singkat, lokasi, atau saksi (opsional)"
+                      rows={3}
                       data-testid="input-tatib-keterangan"
                     />
+                    <p className="mt-1 text-right text-xs text-slate-400 tabular-nums">{form.keterangan.length}/{MAKS_KETERANGAN}</p>
                   </div>
                 </div>
 
