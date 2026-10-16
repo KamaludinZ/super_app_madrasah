@@ -15,6 +15,13 @@ export const STATUS_SP = ['Tidak perlu', 'Diserahkan'];
 export const STATUS_RTLPD = ['Tidak diperlukan', 'Disusun'];
 export const TINGKAT_SP = ['SP1', 'SP2', 'SP3'];
 
+// Warna label tingkat SP (kelas Tailwind) — dipakai Tindakan Tatib & Pengaturan Ambang SP.
+export const WARNA_SP = {
+  SP1: 'bg-amber-100 text-amber-800 border-amber-200',
+  SP2: 'bg-orange-100 text-orange-800 border-orange-200',
+  SP3: 'bg-red-100 text-red-800 border-red-200',
+};
+
 // Ambang bawaan (akumulasi poin pelanggaran, nilai mutlak) — dapat diatur admin di Pengaturan Ambang SP.
 export const AMBANG_SP_BAWAAN = { sp1: 25, sp2: 50, sp3: 75 };
 

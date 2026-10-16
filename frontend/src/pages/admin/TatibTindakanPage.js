@@ -12,13 +12,7 @@ import UbahTindakanDialog from '@/components/tatib/UbahTindakanDialog';
 import RiwayatTindakanPanel from '@/components/tatib/RiwayatTindakanPanel';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
-import { TINGKAT_SP, ambangBerikutnya, ambilTindakan, simpanStatusTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
-
-export const WARNA_SP = {
-  SP1: 'bg-amber-100 text-amber-800 border-amber-200',
-  SP2: 'bg-orange-100 text-orange-800 border-orange-200',
-  SP3: 'bg-red-100 text-red-800 border-red-200',
-};
+import { TINGKAT_SP, WARNA_SP, ambangBerikutnya, ambilTindakan, simpanStatusTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
 
 const WARNA_STATUS = {
   'Tidak diperlukan': 'text-slate-500',
