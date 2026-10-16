@@ -54,3 +54,13 @@ export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, bes
   jenisTiruan.push(baru);
   return jeda(tampil(baru));
 }
+
+// Tambah kategori dari form jenis (kontrak sama dengan Input Tata Tertib: POST /tatib/kategori).
+export async function simpanKategoriMaster({ nama, deskripsi }) {
+  const rapi = (nama || '').trim();
+  if (!rapi) throw new Error('Nama kategori wajib diisi');
+  if (kategoriTiruan.some((k) => k.nama.toLowerCase() === rapi.toLowerCase())) throw new Error(`Kategori "${rapi}" sudah ada`);
+  const baru = { id: `kat-${Date.now()}`, nama: rapi, deskripsi: (deskripsi || '').trim() };
+  kategoriTiruan.push(baru);
+  return jeda(baru);
+}

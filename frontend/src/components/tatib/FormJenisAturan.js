@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
+import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
 
 const kosong = () => ({ kode_aturan: '', nama: '', jalur_poin: 'minus', besar_poin: '', kategori_id: '', deskripsi: '' });
 
@@ -20,8 +21,9 @@ const JALUR = [
 /**
  * Dialog tambah/ubah jenis aturan. `jenis` = null untuk tambah.
  * `onSimpan(isian)` -> Promise jenis tersimpan (galat dilempar dengan pesan siap tampil).
+ * `onTambahKategori(isian)` (opsional) -> Promise kategori baru; kategori itu langsung dipilih.
  */
-export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriList = [], onSimpan }) {
+export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriList = [], onSimpan, onTambahKategori }) {
   const [form, setForm] = useState(kosong);
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +36,15 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
   }, [open, jenis]);
 
   const ubah = (isian) => setForm((f) => ({ ...f, ...isian }));
+  const kategori = kategoriList.find((k) => k.id === form.kategori_id);
+  // Kategori lama yang sudah dihapus tetap ditandai agar petugas memilih ulang.
+  const kategoriHilang = Boolean(form.kategori_id) && kategoriList.length > 0 && !kategori;
+
+  const tambahKategori = async (isian) => {
+    const baru = await onTambahKategori(isian);
+    ubah({ kategori_id: baru.id });
+    return baru;
+  };
   const besar = Math.abs(parseInt(form.besar_poin, 10) || 0);
   const pratinjau = form.jalur_poin === 'minus' ? -besar : besar;
 
@@ -93,11 +104,20 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
           <div>
             <Label>Kategori*</Label>
             <Select value={form.kategori_id || undefined} onValueChange={(kategori_id) => ubah({ kategori_id })}>
-              <SelectTrigger data-testid="jenis-kategori"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+              <SelectTrigger className={kategoriHilang ? 'border-amber-500' : ''} data-testid="jenis-kategori">
+                <SelectValue placeholder={kategoriList.length ? 'Pilih kategori' : 'Belum ada kategori — tambahkan dulu'} />
+              </SelectTrigger>
               <SelectContent>
                 {kategoriList.map((k) => <SelectItem key={k.id} value={k.id}>{k.nama}</SelectItem>)}
               </SelectContent>
             </Select>
+            {kategoriHilang && <p className="mt-1 text-xs text-amber-700">Kategori sebelumnya sudah tidak ada; pilih kategori lain.</p>}
+            {kategori?.deskripsi && <p className="mt-1 text-xs text-slate-500">{kategori.deskripsi}</p>}
+            {onTambahKategori && (
+              <div className="mt-2">
+                <KelolaKategoriInline onSimpan={tambahKategori} />
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

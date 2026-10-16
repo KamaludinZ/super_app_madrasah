@@ -19,8 +19,7 @@ export default function KelolaKategoriInline({ kategori, onSimpan, disabled }) {
     setIsian(m === 'ubah' && kategori ? { nama: kategori.nama, deskripsi: kategori.deskripsi || '' } : { nama: '', deskripsi: '' });
   };
 
-  const simpan = async (e) => {
-    e?.preventDefault();
+  const simpan = async () => {
     if (!isian.nama.trim()) {
       toast.error('Nama kategori wajib diisi');
       return;
@@ -55,7 +54,17 @@ export default function KelolaKategoriInline({ kategori, onSimpan, disabled }) {
   }
 
   return (
-    <form onSubmit={simpan} className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 space-y-2" data-testid="kategori-inline-form">
+    // Bukan <form>: komponen ini bisa berada di dalam form lain (mis. form jenis aturan). Enter menyimpan kategori saja.
+    <div
+      role="group"
+      aria-label={mode === 'ubah' ? 'Ubah kategori' : 'Kategori baru'}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); simpan(); }
+        if (e.key === 'Escape') { e.stopPropagation(); setMode(null); }
+      }}
+      className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 space-y-2"
+      data-testid="kategori-inline-form"
+    >
       <p className="text-xs font-medium text-slate-600">{mode === 'ubah' ? 'Ubah kategori' : 'Kategori baru'}</p>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <Input
@@ -77,10 +86,10 @@ export default function KelolaKategoriInline({ kategori, onSimpan, disabled }) {
         <Button type="button" variant="ghost" size="sm" onClick={() => setMode(null)} disabled={saving}>
           <X className="h-3.5 w-3.5 mr-1" /> Batal
         </Button>
-        <Button type="submit" size="sm" disabled={saving} data-testid="kategori-inline-simpan">
+        <Button type="button" size="sm" onClick={simpan} disabled={saving} data-testid="kategori-inline-simpan">
           {saving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />} Simpan kategori
         </Button>
       </div>
-    </form>
+    </div>
   );
 }

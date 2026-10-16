@@ -11,7 +11,8 @@ import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTat
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FormJenisAturan from '@/components/tatib/FormJenisAturan';
-import { ambilKategoriMaster, ambilMasterJenis, simpanMasterJenis } from '@/lib/masterJenisTatib';
+import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
+import { ambilKategoriMaster, ambilMasterJenis, simpanKategoriMaster, simpanMasterJenis } from '@/lib/masterJenisTatib';
 
 // Master Jenis Pelanggaran: daftar jenis aturan (pelanggaran & kebaikan) beserta kode, kategori,
 // jalur, dan besar poin yang dipakai otomatis saat mencatat di Input Tata Tertib.
@@ -23,16 +24,29 @@ export default function TatibMasterJenisPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ open: false, jenis: null });
   const [cari, setCari] = useState('');
+  const [filterKategori, setFilterKategori] = useState('');
 
   // Pencarian tanpa beda huruf pada kode aturan dan nama jenis (semua kata harus cocok).
   const tersaring = useMemo(() => {
     const kata = cari.toLowerCase().split(/\s+/).filter(Boolean);
-    if (!kata.length) return jenisList;
     return jenisList.filter((j) => {
+      if (filterKategori && j.kategori_id !== filterKategori) return false;
       const teks = `${j.kode_aturan} ${j.nama}`.toLowerCase();
       return kata.every((k) => teks.includes(k));
     });
-  }, [jenisList, cari]);
+  }, [jenisList, cari, filterKategori]);
+
+  const jumlahPerKategori = useMemo(() => {
+    const n = {};
+    jenisList.forEach((j) => { n[j.kategori_id] = (n[j.kategori_id] || 0) + 1; });
+    return n;
+  }, [jenisList]);
+
+  const tambahKategori = async (isian) => {
+    const baru = await simpanKategoriMaster(isian);
+    setKategoriList(await ambilKategoriMaster());
+    return baru;
+  };
 
   useEffect(() => {
     Promise.all([ambilMasterJenis(), ambilKategoriMaster()])
@@ -94,10 +108,20 @@ export default function TatibMasterJenisPage() {
         </div>
         {!loading && (
           <span className="text-sm text-slate-500" data-testid="master-jenis-jumlah">
-            {cari ? `${tersaring.length} dari ${jenisList.length} jenis` : `${jenisList.length} jenis`}
+            {cari || filterKategori ? `${tersaring.length} dari ${jenisList.length} jenis` : `${jenisList.length} jenis`}
           </span>
         )}
       </div>
+
+      {kategoriList.length > 0 && (
+        <PilihKategoriTatib
+          kategoriList={kategoriList}
+          value={filterKategori}
+          onPilih={setFilterKategori}
+          jumlahJenis={jumlahPerKategori}
+          testid="master-jenis-kategori"
+        />
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -151,7 +175,7 @@ export default function TatibMasterJenisPage() {
                   {tersaring.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={bolehUbah ? 7 : 6} className="py-8 text-center text-slate-500">
-                        {jenisList.length === 0 ? 'Belum ada jenis aturan.' : `Tidak ada jenis yang cocok dengan "${cari}".`}
+                        {jenisList.length === 0 ? 'Belum ada jenis aturan.' : 'Tidak ada jenis yang cocok dengan pencarian/kategori.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -168,6 +192,7 @@ export default function TatibMasterJenisPage() {
         jenis={form.jenis}
         kategoriList={kategoriList}
         onSimpan={simpan}
+        onTambahKategori={tambahKategori}
       />
     </div>
   );
