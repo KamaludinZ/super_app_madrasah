@@ -7,7 +7,10 @@ import { toast } from 'sonner';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import LabelAsalInput from '@/components/tatib/LabelAsalInput';
-import { ambilDataTatib, ringkasData, sebaranAsalInput } from '@/lib/dataTatib';
+import FilterDataTatib from '@/components/tatib/FilterDataTatib';
+import {
+  FILTER_DATA_KOSONG, ambilDataTatib, pilihanFilterData, ringkasData, saringData, sebaranAsalInput,
+} from '@/lib/dataTatib';
 
 const formatTanggal = (tgl) => {
   if (!tgl) return '-';
@@ -32,6 +35,7 @@ function KartuRingkasan({ ikon: Ikon, label, nilai, sub, warna = 'text-slate-900
 const AdminTatibDataPage = () => {
   const [baris, setBaris] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState(FILTER_DATA_KOSONG);
 
   useEffect(() => {
     ambilDataTatib()
@@ -40,8 +44,11 @@ const AdminTatibDataPage = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const ringkas = useMemo(() => ringkasData(baris), [baris]);
-  const sebaran = useMemo(() => sebaranAsalInput(baris), [baris]);
+  // Ringkasan & tabel mengikuti filter; pilihan jenis mengikuti kategori terpilih.
+  const tersaring = useMemo(() => saringData(baris, filter), [baris, filter]);
+  const pilihan = useMemo(() => pilihanFilterData(baris, filter.kategori), [baris, filter.kategori]);
+  const ringkas = useMemo(() => ringkasData(tersaring), [tersaring]);
+  const sebaran = useMemo(() => sebaranAsalInput(tersaring), [tersaring]);
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-data-page">
@@ -50,6 +57,8 @@ const AdminTatibDataPage = () => {
         <p className="text-sm text-slate-600">Seluruh pencatatan poin menurut kategori dan jenis aturan, beserta asal input dan keterangannya.</p>
       </div>
 
+      <FilterDataTatib value={filter} onChange={setFilter} pilihan={pilihan} kosong={FILTER_DATA_KOSONG} />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="data-ringkasan">
         <KartuRingkasan ikon={Database} label="Pencatatan" nilai={ringkas.jumlah} sub={`${ringkas.siswa} siswa`} />
         <KartuRingkasan ikon={ThumbsDown} label="Pelanggaran" nilai={ringkas.jumlah_pelanggaran} sub={`${formatPoin(ringkas.total_minus)} poin`} warna="text-red-700" />
@@ -57,7 +66,7 @@ const AdminTatibDataPage = () => {
         <KartuRingkasan ikon={Users} label="Saldo poin" nilai={formatPoin(ringkas.total_plus + ringkas.total_minus)} sub="kebaikan + pelanggaran" />
       </div>
 
-      {!loading && baris.length > 0 && (
+      {!loading && tersaring.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="data-sebaran-asal">
           <span className="text-xs font-medium text-slate-500">Asal input:</span>
           {sebaran.map(({ asal, jumlah }) => (
@@ -89,7 +98,7 @@ const AdminTatibDataPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {baris.map((b) => (
+                  {tersaring.map((b) => (
                     <TableRow key={b.id} data-testid={`data-${b.id}`}>
                       <TableCell className="whitespace-nowrap">{formatTanggal(b.tanggal)}</TableCell>
                       <TableCell>
@@ -107,9 +116,11 @@ const AdminTatibDataPage = () => {
                       <TableCell className="whitespace-nowrap text-sm">{b.petugas_nama}</TableCell>
                     </TableRow>
                   ))}
-                  {baris.length === 0 && (
+                  {tersaring.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-8 text-center text-slate-500">Belum ada pencatatan tata tertib.</TableCell>
+                      <TableCell colSpan={9} className="py-8 text-center text-slate-500">
+                        {baris.length ? 'Tidak ada pencatatan yang cocok dengan filter.' : 'Belum ada pencatatan tata tertib.'}
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>

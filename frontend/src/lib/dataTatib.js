@@ -59,3 +59,30 @@ export function sebaranAsalInput(baris) {
   if (n[null]) hasil.push({ asal: null, jumlah: n[null] });
   return hasil;
 }
+
+export const FILTER_DATA_KOSONG = { kategori: '', jenis: '', cari: '' };
+
+// Pilihan filter dari data yang dimuat: kategori (nama) dan jenis ({id: kode-nama}) — jenis disaring kategori.
+export function pilihanFilterData(baris, kategori = '') {
+  const kategoriList = [...new Set(baris.map((b) => b.kategori_nama))].sort((a, b) => a.localeCompare(b, 'id'));
+  const jenis = new Map();
+  baris.filter((b) => !kategori || b.kategori_nama === kategori).forEach((b) => {
+    const kunci = b.jenis_id || b.kode_aturan;
+    if (!jenis.has(kunci)) jenis.set(kunci, { id: kunci, kode: b.kode_aturan, nama: b.jenis_nama });
+  });
+  return { kategori: kategoriList, jenis: [...jenis.values()].sort((a, b) => (a.kode || '').localeCompare(b.kode || '')) };
+}
+
+// Saring baris menurut kategori (nama), jenis (id/kode), dan kata kunci siswa (nama/NIS/NISN/kelas).
+export function saringData(baris, { kategori, jenis, cari } = {}) {
+  const kata = (cari || '').toLowerCase().split(/\s+/).filter(Boolean);
+  return baris.filter((b) => {
+    if (kategori && b.kategori_nama !== kategori) return false;
+    if (jenis && (b.jenis_id || b.kode_aturan) !== jenis) return false;
+    if (kata.length) {
+      const teks = `${b.siswa_nama} ${b.siswa_nis || ''} ${b.siswa_nisn || ''} ${b.siswa_kelas || ''}`.toLowerCase();
+      if (!kata.every((k) => teks.includes(k))) return false;
+    }
+    return true;
+  });
+}
