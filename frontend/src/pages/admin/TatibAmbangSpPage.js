@@ -4,7 +4,8 @@ import { Loader2, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { TINGKAT_SP, WARNA_SP } from '@/lib/tindakanTatib';
-import { ambilAmbangSP } from '@/lib/ambangSp';
+import FormAmbangSp from '@/components/tatib/FormAmbangSp';
+import { ambilAmbangSP, simpanAmbangSP } from '@/lib/ambangSp';
 
 const formatWaktu = (iso) => {
   if (!iso) return '-';
@@ -46,6 +47,16 @@ export default function TatibAmbangSpPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const simpan = async (nilai) => {
+    try {
+      const hasil = await simpanAmbangSP(nilai);
+      setAmbang(hasil);
+      toast.success(`Ambang SP disimpan: ${hasil.sp1} / ${hasil.sp2} / ${hasil.sp3} poin`);
+    } catch (e) {
+      toast.error(pesanGalatTatib(e, e?.message || 'Gagal menyimpan ambang SP'));
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="tatib-ambang-sp-page">
       <div>
@@ -76,6 +87,18 @@ export default function TatibAmbangSpPage() {
               ))}
             </div>
             <SkalaAmbang ambang={ambang} />
+          </CardContent>
+        </Card>
+      )}
+
+      {ambang && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Ubah ambang</CardTitle>
+            <CardDescription>Nilai harus naik: SP1 &lt; SP2 &lt; SP3. Ambang baru langsung dipakai saat sistem mengusulkan SP.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormAmbangSp ambang={ambang} onSimpan={simpan} />
           </CardContent>
         </Card>
       )}
