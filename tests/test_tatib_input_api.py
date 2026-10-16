@@ -434,3 +434,60 @@ async def test_toggle_status_jenis_tanpa_menghapus_riwayat(db, data_input):
     with pytest.raises(HTTPException) as e:
         await api.ubah_status_jenis_aturan('tidak-ada', api.StatusJenisRequest(aktif=True), PETUGAS)
     assert e.value.status_code == 404
+
+
+async def test_jenis_nonaktif_tersaring_dari_semua_jalur_pencatatan(db, data_input):
+    kid = data_input['kategori']['id']
+    # aturan lama: hanya `aktif` (dari Master Jenis) / hanya `is_active` / tanpa keduanya
+    await db.tatib_aturan.insert_many([
+        {'id': 'x1', 'kode': 'X-1', 'nama_aturan': 'Nonaktif baru', 'poin': -2, 'jenis_poin': 'pelanggaran', 'kategori_id': kid, 'aktif': False},
+        {'id': 'x2', 'kode': 'X-2', 'nama_aturan': 'Nonaktif lama', 'poin': -2, 'jenis_poin': 'pelanggaran', 'kategori_id': kid, 'is_active': False},
+        {'id': 'x3', 'kode': 'X-3', 'nama_aturan': 'Lama aktif', 'poin': -2, 'jenis_poin': 'pelanggaran', 'kategori_id': kid},
+    ])
+    pilihan = await api.list_aturan(jenis_poin='pelanggaran', is_active=True, user=PETUGAS)
+    ids = {a['id'] for a in pilihan}
+    assert 'x3' in ids and 'j1' in ids and not ids & {'x1', 'x2', 'j3'}
+    nonaktif = {a['id'] for a in await api.list_aturan(is_active=False, user=PETUGAS)}
+    assert {'x1', 'x2', 'j3'} <= nonaktif
+
+    for tatib_id in ('x1', 'x2', 'j3'):
+        with pytest.raises(HTTPException) as e:
+            await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id=tatib_id, tanggal='2026-10-01',
+                                                                          asal_input='Razia'), PETUGAS)
+        assert e.value.status_code == 400
+    c = await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='x3', tanggal='2026-10-01',
+                                                                      asal_input='Razia'), PETUGAS)
+    with pytest.raises(HTTPException) as e:  # memindahkan catatan KE aturan nonaktif ditolak
+        await api.update_penanganan(c['id'], api.PenangananRequest(siswa_id='s1', tatib_id='x1', tanggal='2026-10-01'), PETUGAS)
+    assert e.value.status_code == 400
+
+
+async def test_endpoint_aturan_lama_sinkron_dengan_master_jenis(db, data_input, monkeypatch):
+    kid = data_input['kategori']['id']
+    await db.tatib_jenis.insert_one({'id': 'sj', 'kategori_id': kid, 'nama': 'Sub'})
+    req = api.TatibRequest(kategori_id=kid, jenis_id='sj', kode='ker-5', nama_aturan='Kuku', poin=-3)
+    a = await api.create_aturan(req, PETUGAS)
+    doc = await db.tatib_aturan.find_one({'id': a['id']}, {'_id': 0})
+    assert (doc['kode'], doc['kode_aturan'], doc['nama'], doc['jalur_poin'], doc['besar_poin'], doc['aktif']) == ('KER-5', 'KER-5', 'Kuku', 'minus', 3, True)
+    with pytest.raises(HTTPException) as e:  # kode ganda tanpa beda huruf, juga terhadap master jenis
+        await api.create_aturan(api.TatibRequest(kategori_id=kid, jenis_id='sj', kode='dis-01', nama_aturan='X', poin=-1), PETUGAS)
+    assert e.value.status_code == 409
+
+    await api.update_aturan(a['id'], api.TatibRequest(kategori_id=kid, jenis_id='sj', kode='KER-5', nama_aturan='Kuku panjang',
+                                                      poin=-4, is_active=False), PETUGAS)
+    doc = await db.tatib_aturan.find_one({'id': a['id']}, {'_id': 0})
+    assert (doc['nama'], doc['besar_poin'], doc['aktif'], doc['is_active']) == ('Kuku panjang', 4, False, False)
+    master = {j['id']: j for j in await api.list_jenis_aturan(user=PETUGAS)}
+    assert master[a['id']]['aktif'] is False
+
+
+async def test_jenis_hanya_field_kanonis_bisa_dicatat_lewat_jalur_lama(db, data_input):
+    """Jenis j1/j2 (fixture) hanya punya field Master Jenis: Catat Poin Tatib lama harus menghitungnya benar."""
+    pilihan = {a['id']: a for a in await api.list_aturan(jenis_poin='kebaikan', is_active=True, user=PETUGAS)}
+    assert 'j2' in pilihan and (pilihan['j2']['poin'], pilihan['j2']['jenis_poin'], pilihan['j2']['kode']) == (10, 'kebaikan', 'AKH-01')
+    c = await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='j1', tanggal='2026-10-01',
+                                                                      asal_input='Razia'), PETUGAS)
+    assert (c['poin'], c['jenis_poin'], c['tatib_kode'], c['tatib_nama']) == (-5, 'pelanggaran', 'DIS-01', 'Terlambat')
+    with pytest.raises(HTTPException):  # jalur salah
+        await api.catat_poin_jalur('kebaikan', api.PenangananRequest(siswa_id='s1', tatib_id='j1', tanggal='2026-10-01',
+                                                                   asal_input='Razia'), PETUGAS)

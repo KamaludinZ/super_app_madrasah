@@ -44,9 +44,10 @@ export function konteksPeriode() {
 
 // Aturan aktif satu jalur ('kebaikan' | 'pelanggaran') dalam bentuk yang dipakai formulir.
 export async function ambilAturanPoin(jenis) {
-  const { data } = await api.get('/tatib/aturan', { params: { jenis_poin: jenis } });
+  // Server menyaring jenis nonaktif (is_active=true); saringan klien tetap sebagai pengaman.
+  const { data } = await api.get('/tatib/aturan', { params: { jenis_poin: jenis, is_active: true } });
   return (data || [])
-    .filter((a) => a.is_active !== false)
+    .filter((a) => a.is_active !== false && a.aktif !== false)
     .map((a) => ({ id: a.id, kode: a.kode, nama: a.nama_aturan, kategori_nama: a.kategori_nama || 'Lainnya', kondisi: a.kondisi || [] }));
 }
 

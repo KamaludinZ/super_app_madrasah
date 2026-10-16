@@ -15,7 +15,8 @@ from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 from routers._shared import sembunyikan_siswa_nonaktif
 from journal_core import tanggal_wib
 from tatib_poin import (ASAL_INPUT, JALUR_POIN, JENIS_POIN, MAKS_BESAR_POIN, MAKS_DESKRIPSI_JENIS, MAKS_NAMA_JENIS,
-                        POLA_KODE_ATURAN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
+                        POLA_KODE_ATURAN, field_jenis_aturan, hitung_poin_aturan, jalur_dari_jenis_poin, jenis_dari_poin,
+                        jenis_poin_dari_jalur,
                         kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kode, normalisasi_kondisi, poin_jenis_aturan)
 from routers.tatib_poin import (batasi_query_tatib, cek_asal_input, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib,
                                 wajib_lihat_tatib)
@@ -137,10 +138,19 @@ def _skema_aturan(req: TatibRequest) -> Dict:
     return {'jenis_poin': jenis, 'kondisi': kondisi, 'poin': kondisi[0]['poin']}
 
 
+def dengan_field_lama(doc: Dict) -> Dict:
+    """Lengkapi jenis_poin, poin, kode & nama_aturan dari field kanonis bila kosong, agar perhitungan
+    lama (hitung_poin_aturan, kondisi) benar untuk jenis yang hanya punya field Master Jenis."""
+    jenis = doc.get('jenis_poin') or (jenis_poin_dari_jalur(doc['jalur_poin']) if doc.get('jalur_poin') else jenis_dari_poin(doc.get('poin')))
+    poin = doc.get('poin') if doc.get('poin') is not None else poin_jenis_aturan(doc)
+    return {**doc, 'jenis_poin': jenis, 'poin': poin,
+            'kode': doc.get('kode') or doc.get('kode_aturan'), 'nama_aturan': doc.get('nama_aturan') or doc.get('nama')}
+
+
 def _aturan_tampil(doc: Dict) -> Dict:
-    """Aturan untuk respons: selalu ada jenis_poin & kondisi (aturan lama -> kondisi bawaan)."""
-    return serialize_doc({**doc, 'jenis_poin': doc.get('jenis_poin') or jenis_dari_poin(doc.get('poin')),
-                          'kondisi': kondisi_aturan(doc)})
+    """Aturan untuk respons: selalu ada jenis_poin, poin, aktif & kondisi (aturan lama -> kondisi bawaan)."""
+    doc = dengan_field_lama(doc)
+    return serialize_doc({**doc, 'aktif': field_jenis_aturan(doc)['aktif'], 'kondisi': kondisi_aturan(doc)})
 
 
 # ============================================================
@@ -512,6 +522,19 @@ async def ubah_status_jenis_aturan(jenis_id: str, req: StatusJenisRequest, user:
 # TATA TERTIB (ATURAN) ENDPOINTS
 # ============================================================
 
+def _kanonis_dari_lama(doc: Dict) -> Dict:
+    """Field jenis kanonis yang diturunkan dari field lama — dipakai endpoint /tatib/aturan lama agar
+    perubahan lewat jalur itu (mis. is_active) tetap sinkron dengan Master Jenis Pelanggaran."""
+    jenis = doc.get('jenis_poin') or jenis_dari_poin(doc.get('poin'))
+    return {
+        'kode_aturan': normalisasi_kode(doc.get('kode')) or None,
+        'nama': doc.get('nama_aturan'),
+        'jalur_poin': jalur_dari_jenis_poin(jenis),
+        'besar_poin': abs(int(doc.get('poin') or 0)),
+        'aktif': doc.get('is_active', True) is not False,
+    }
+
+
 @router.get("/tatib/aturan")
 async def list_aturan(
     kategori_id: Optional[str] = None,
@@ -523,17 +546,19 @@ async def list_aturan(
     """List all tata tertib rules (opsional per jalur jenis_poin: kebaikan/pelanggaran)."""
     query = {}
     if jenis_poin == 'pelanggaran':
-        query['$or'] = [{'jenis_poin': 'pelanggaran'}, {'jenis_poin': None, 'poin': {'$lt': 0}}]
+        query['$or'] = [{'jenis_poin': 'pelanggaran'}, {'jenis_poin': None, 'jalur_poin': 'minus'},
+                        {'jenis_poin': None, 'jalur_poin': None, 'poin': {'$lt': 0}}]
     elif jenis_poin == 'kebaikan':
-        query['$or'] = [{'jenis_poin': 'kebaikan'}, {'jenis_poin': None, 'poin': {'$gte': 0}}]
+        query['$or'] = [{'jenis_poin': 'kebaikan'}, {'jenis_poin': None, 'jalur_poin': 'plus'},
+                        {'jenis_poin': None, 'jalur_poin': None, 'poin': {'$gte': 0}}]
     if kategori_id:
         query['kategori_id'] = kategori_id
     if jenis_id:
         query['jenis_id'] = jenis_id
-    if is_active is not None:
-        query['is_active'] = is_active
-
     items = await db.tatib_aturan.find(query, {'_id': 0}).sort([('kategori_id', 1), ('jenis_id', 1), ('kode', 1)]).to_list(1000)
+    if is_active is not None:
+        # status kanonis (aktif, cadangan is_active; aturan lama tanpa keduanya = aktif)
+        items = [i for i in items if field_jenis_aturan(i)['aktif'] is is_active]
     return [_aturan_tampil(i) for i in items]
 
 
@@ -558,10 +583,7 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(wajib_input_tati
     if not jenis:
         raise HTTPException(404, "Jenis tidak ditemukan")
 
-    # Check for duplicate kode
-    existing = await db.tatib_aturan.find_one({'kode': req.kode})
-    if existing:
-        raise HTTPException(400, f"Kode '{req.kode}' sudah digunakan")
+    await _cek_kode_unik(normalisasi_kode(req.kode))
 
     doc = {
         'id': str(uuid.uuid4()),
@@ -569,7 +591,7 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(wajib_input_tati
         'kategori_nama': kategori.get('nama'),
         'jenis_id': req.jenis_id,
         'jenis_nama': jenis.get('nama'),
-        'kode': req.kode,
+        'kode': normalisasi_kode(req.kode),
         'nama_aturan': req.nama_aturan,
         'deskripsi': req.deskripsi,
         **_skema_aturan(req),
@@ -580,6 +602,7 @@ async def create_aturan(req: TatibRequest, user: Dict = Depends(wajib_input_tati
         'updated_at': datetime.utcnow().isoformat(),
     }
 
+    doc.update(_kanonis_dari_lama(doc))
     await db.tatib_aturan.insert_one(doc)
     await log_audit(user, 'tatib_aturan_create', f"Created aturan: {req.kode} - {req.nama_aturan}")
     doc.pop('_id', None)
@@ -593,11 +616,7 @@ async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(
     if not existing:
         raise HTTPException(404, "Aturan tidak ditemukan")
 
-    # Check for duplicate kode (excluding current aturan)
-    if req.kode != existing.get('kode'):
-        duplicate = await db.tatib_aturan.find_one({'kode': req.kode})
-        if duplicate:
-            raise HTTPException(400, f"Kode '{req.kode}' sudah digunakan")
+    await _cek_kode_unik(normalisasi_kode(req.kode), kecuali_id=aturan_id)
 
     # Verify kategori and jenis if changed
     update_data = {}
@@ -617,6 +636,8 @@ async def update_aturan(aturan_id: str, req: TatibRequest, user: Dict = Depends(
     update_data.update(_skema_aturan(req))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
+    update_data['kode'] = normalisasi_kode(req.kode)
+    update_data.update(_kanonis_dari_lama({**existing, **update_data}))
     await db.tatib_aturan.update_one({'id': aturan_id}, {'$set': update_data})
     await log_audit(user, 'tatib_aturan_update', f"Updated aturan: {aturan_id}")
 
@@ -683,9 +704,9 @@ async def import_aturan_excel(
                     errors.append(f"Baris {idx + 2}: Jenis ID '{row['jenis_id']}' tidak ditemukan")
                     continue
 
-                # Check for duplicate kode
-                existing = await db.tatib_aturan.find_one({'kode': row['kode']})
-                if existing:
+                # Check for duplicate kode (tanpa beda huruf, sama dengan Master Jenis Pelanggaran)
+                kode = normalisasi_kode(str(row['kode']))
+                if await db.tatib_aturan.find_one({'$or': [{'kode_aturan': kode}, {'kode': kode}]}, {'_id': 1}):
                     errors.append(f"Baris {idx + 2}: Kode '{row['kode']}' sudah ada")
                     continue
 
@@ -695,7 +716,7 @@ async def import_aturan_excel(
                     'kategori_nama': kategori.get('nama'),
                     'jenis_id': row['jenis_id'],
                     'jenis_nama': jenis.get('nama'),
-                    'kode': row['kode'],
+                    'kode': kode,
                     'nama_aturan': row['nama_aturan'],
                     'deskripsi': row.get('deskripsi', ''),
                     'poin': int(row['poin']),
@@ -705,6 +726,7 @@ async def import_aturan_excel(
                     'created_at': datetime.utcnow().isoformat(),
                     'updated_at': datetime.utcnow().isoformat(),
                 }
+                doc.update(_kanonis_dari_lama(doc))
 
                 await db.tatib_aturan.insert_one(doc)
                 imported += 1
@@ -831,7 +853,8 @@ async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[s
     tatib = await db.tatib_aturan.find_one({'id': req.tatib_id}, {'_id': 0})
     if not tatib:
         raise HTTPException(404, "Aturan tata tertib tidak ditemukan")
-    if tatib.get('is_active') is False:
+    tatib = dengan_field_lama(tatib)
+    if not field_jenis_aturan(tatib)['aktif']:
         raise HTTPException(400, "Aturan tata tertib ini sudah tidak aktif")
     nilai = _nilai_atau_400(tatib, req.kondisi_id)
     if jenis_wajib and nilai['jenis_poin'] != jenis_wajib:
@@ -1105,6 +1128,9 @@ async def update_penanganan(penanganan_id: str, req: PenangananRequest, user: Di
         tatib = await db.tatib_aturan.find_one({'id': req.tatib_id}, {'_id': 0})
         if not tatib:
             raise HTTPException(404, "Aturan tidak ditemukan")
+        if req.tatib_id != existing.get('tatib_id') and not field_jenis_aturan(tatib)['aktif']:
+            raise HTTPException(400, "Aturan tata tertib ini sudah tidak aktif")
+        tatib = dengan_field_lama(tatib)
         kondisi_id = req.kondisi_id if 'kondisi_id' in req.model_fields_set else None
         update_data.update({
             'tatib_kode': tatib.get('kode'),
