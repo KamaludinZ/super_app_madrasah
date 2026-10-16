@@ -73,3 +73,11 @@ export async function simpanKategoriMaster({ nama, deskripsi }) {
   kategoriTiruan.push(baru);
   return jeda(baru);
 }
+
+// Aktif/nonaktifkan jenis. Jenis nonaktif tidak bisa dipilih saat mencatat, tetapi riwayat catatannya tetap ada.
+export async function ubahStatusJenis(id, aktif) {
+  const j = jenisTiruan.find((x) => x.id === id);
+  if (!j) throw new Error('Jenis aturan tidak ditemukan');
+  j.aktif = Boolean(aktif);
+  return jeda(tampil(j));
+}

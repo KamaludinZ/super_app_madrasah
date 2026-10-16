@@ -12,7 +12,11 @@ import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FormJenisAturan from '@/components/tatib/FormJenisAturan';
 import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
-import { ambilKategoriMaster, ambilMasterJenis, simpanKategoriMaster, simpanMasterJenis } from '@/lib/masterJenisTatib';
+import { Switch } from '@/components/ui/switch';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  ambilKategoriMaster, ambilMasterJenis, simpanKategoriMaster, simpanMasterJenis, ubahStatusJenis,
+} from '@/lib/masterJenisTatib';
 
 // Master Jenis Pelanggaran: daftar jenis aturan (pelanggaran & kebaikan) beserta kode, kategori,
 // jalur, dan besar poin yang dipakai otomatis saat mencatat di Input Tata Tertib.
@@ -41,6 +45,27 @@ export default function TatibMasterJenisPage() {
     jenisList.forEach((j) => { n[j.kategori_id] = (n[j.kategori_id] || 0) + 1; });
     return n;
   }, [jenisList]);
+
+  const [mengubahStatus, setMengubahStatus] = useState(null); // id jenis yang statusnya sedang disimpan
+
+  const ubahStatus = async (j, aktif) => {
+    if (tolakUbahTatib(activeRole)) return;
+    if (!aktif) {
+      const riwayat = j.jumlah_catatan ? ` ${j.jumlah_catatan} catatan yang sudah ada tetap tersimpan.` : '';
+      const ok = await confirmDialog(`Nonaktifkan ${j.kode_aturan} "${j.nama}"? Jenis ini tidak bisa dipilih lagi saat mencatat.${riwayat}`);
+      if (!ok) return;
+    }
+    setMengubahStatus(j.id);
+    try {
+      const hasil = await ubahStatusJenis(j.id, aktif);
+      setJenisList((daftar) => daftar.map((x) => (x.id === j.id ? { ...x, aktif: hasil.aktif } : x)));
+      toast.success(`${j.kode_aturan} ${hasil.aktif ? 'diaktifkan' : 'dinonaktifkan'}`);
+    } catch (e) {
+      toast.error(pesanGalatTatib(e, e?.message || 'Gagal mengubah status jenis'));
+    } finally {
+      setMengubahStatus(null);
+    }
+  };
 
   const tambahKategori = async (isian) => {
     const baru = await simpanKategoriMaster(isian);
@@ -161,7 +186,21 @@ export default function TatibMasterJenisPage() {
                         {formatPoin(j.poin)}
                       </TableCell>
                       <TableCell>
-                        {j.aktif ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Aktif</Badge> : <Badge variant="secondary">Nonaktif</Badge>}
+                        <div className="flex items-center gap-2">
+                          {bolehUbah && (
+                            <Switch
+                              checked={j.aktif}
+                              disabled={mengubahStatus === j.id}
+                              onCheckedChange={(aktif) => ubahStatus(j, aktif)}
+                              aria-label={`${j.aktif ? 'Nonaktifkan' : 'Aktifkan'} ${j.kode_aturan}`}
+                              data-testid={`master-jenis-status-${j.id}`}
+                            />
+                          )}
+                          {j.aktif ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Aktif</Badge> : <Badge variant="secondary">Nonaktif</Badge>}
+                        </div>
+                        {!j.aktif && j.jumlah_catatan > 0 && (
+                          <div className="mt-1 text-[11px] text-slate-400">{j.jumlah_catatan} catatan tetap tersimpan</div>
+                        )}
                       </TableCell>
                       {bolehUbah && (
                         <TableCell className="text-right">
