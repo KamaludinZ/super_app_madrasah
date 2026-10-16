@@ -24,7 +24,7 @@ export function barisCatatan(c) {
     jenis_nama: c.tatib_nama || c.jenis_nama || '-',
     jalur_poin: poin < 0 ? 'minus' : 'plus',
     poin,
-    asal_input: c.asal_input || null,
+    asal_input: String(c.asal_input ?? '').trim() || null,
     keterangan: c.keterangan ?? c.catatan ?? null,
     petugas_nama: c.petugas_nama || '-',
     semester_id: c.semester_id || null,

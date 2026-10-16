@@ -76,7 +76,7 @@ function DaftarAsalInput({ items }) {
         {items.length === 0 && <p className="text-sm text-slate-500">Belum ada data.</p>}
         {items.map((a) => (
           <div key={a.asal_input || 'belum'} className="flex items-center gap-3 text-sm" data-testid={`rekap-asal-${a.asal_input || 'belum'}`}>
-            <span className="w-32 shrink-0"><LabelAsalInput asal={a.asal_input} /></span>
+            <span className="w-32 shrink-0"><LabelAsalInput asal={a.asal_input} labelKosong="- belum diisi" /></span>
             <div className="h-1.5 flex-1 rounded-full bg-slate-100">
               <div className="h-1.5 rounded-full bg-slate-500" style={{ width: `${(a.jumlah / maks) * 100}%` }} />
             </div>

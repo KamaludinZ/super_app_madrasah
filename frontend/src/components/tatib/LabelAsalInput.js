@@ -13,13 +13,24 @@ const WARNA = [
   'border-slate-300 bg-slate-50 text-slate-800',
 ];
 
+// Asal input kosong (null, '', spasi) = catatan lama sebelum fitur asal input.
+export const asalKosong = (asal) => !String(asal ?? '').trim();
+
 export const warnaAsalInput = (asal) => WARNA[ASAL_INPUT.indexOf(asal)] || 'border-dashed border-slate-300 text-slate-400';
 
-/** Label asal input; catatan lama tanpa asal input tampil "Belum diisi". */
-export default function LabelAsalInput({ asal }) {
+/**
+ * Label asal input. Kosong tampil tanda strip "-" (keterangan "belum diisi" lewat tooltip/aria);
+ * `labelKosong` dipakai di ringkasan/sebaran agar tetap jelas (mis. "- belum diisi").
+ */
+export default function LabelAsalInput({ asal, labelKosong }) {
+  if (asalKosong(asal)) {
+    return (
+      <span className="text-slate-400" title="Asal input belum diisi (catatan lama)" aria-label="Asal input belum diisi">
+        {labelKosong || '-'}
+      </span>
+    );
+  }
   return (
-    <span className={`inline-flex whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] ${warnaAsalInput(asal)}`}>
-      {asal || 'Belum diisi'}
-    </span>
+    <span className={`inline-flex whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] ${warnaAsalInput(asal)}`}>{asal}</span>
   );
 }

@@ -46,7 +46,7 @@ export default function RiwayatInputTerbaru({
               </p>
               <div className="text-xs text-slate-500">
                 {formatTanggal(r.tanggal)} · <Badge variant="outline" className="px-1.5 py-0 text-[11px]">{r.kategori_nama}</Badge>
-                {r.asal_input ? ` · ${r.asal_input}` : ''}
+                {` · ${String(r.asal_input ?? '').trim() || '-'}`}
                 {r.petugas_nama ? ` · oleh ${r.petugas_nama}` : ''}
               </div>
               {r.keterangan && <p className="mt-0.5 text-xs italic text-slate-500 line-clamp-2">“{r.keterangan}”</p>}

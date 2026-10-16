@@ -85,7 +85,7 @@ const AdminTatibDataPage = () => {
                 className={`inline-flex items-center gap-1 rounded-md p-0.5 ${terpilih ? 'ring-2 ring-slate-900' : ''} ${jumlah ? 'hover:bg-slate-100' : 'opacity-40'}`}
                 data-testid={`data-sebaran-${nilai}`}
               >
-                <LabelAsalInput asal={asal} /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
+                <LabelAsalInput asal={asal} labelKosong="- belum diisi" /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
               </button>
             );
           })}

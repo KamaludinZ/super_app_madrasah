@@ -18,6 +18,7 @@ import PanelPoinSiswa from '@/components/tatib/PanelPoinSiswa';
 import TindakLanjutDialog from '@/components/tatib/TindakLanjutDialog';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FormPoinTatib from '@/components/tatib/FormPoinTatib';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
 import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, bolehHapusTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
 import { hariIniWIB } from '@/lib/tanggal';
@@ -295,7 +296,7 @@ const AdminTatibPenangananPage = () => {
                       <TableCell>{p.tatib_nama || '-'}</TableCell>
                       <TableCell>{p.kategori_nama || '-'}</TableCell>
                       <TableCell className="whitespace-nowrap" data-testid={`tatib-asal-${p.id}`}>
-                        {p.asal_input ? <Badge variant="outline" className="font-normal">{p.asal_input}</Badge> : <span className="text-slate-400">-</span>}
+                        <LabelAsalInput asal={p.asal_input} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge
