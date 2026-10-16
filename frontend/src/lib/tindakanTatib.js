@@ -1,5 +1,5 @@
 // Tindakan Tatib: rekap siswa berpoin + usulan SP otomatis + status pembinaan yang ditetapkan manual.
-// Daftar & simpan status lewat API; riwayat SEMENTARA masih data tiruan di memori. Kontrak:
+// Semua data lewat API. Kontrak:
 //   GET /tatib/tindakan?semester_id=&kelas=&cari=&usulan_sp= -> { ambang: { sp1, sp2, sp3 }, semester_id, items: [{ siswa_id, nisn, nama, kelas,
 //        poin_positif, kategori_positif: [{ nama, poin, jumlah }], poin_negatif, kategori_negatif: [{ nama, poin, jumlah }], usulan_sp,
 //        status_panggilan_wali, status_sp, status_rtlpd, keterangan_sp, diubah_pada, diubah_oleh_nama }] }
@@ -37,8 +37,6 @@ export function ambangBerikutnya(poinNegatif, ambang = AMBANG_SP_BAWAAN) {
 // true bila usulan otomatis lebih berat daripada SP yang sudah ditetapkan (perlu ditinjau).
 export const usulanLebihTinggi = (usulan, ditetapkan) => TINGKAT_SP.indexOf(usulan) > TINGKAT_SP.indexOf(ditetapkan || '');
 
-const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
-
 // Label field status untuk riwayat perubahan.
 export const LABEL_FIELD_TINDAKAN = {
   keterangan_sp: 'Keterangan SP',
@@ -47,19 +45,13 @@ export const LABEL_FIELD_TINDAKAN = {
   status_rtlpd: 'RTLPD',
 };
 
-// Riwayat per siswa (terbaru dulu): [{ id, waktu, oleh_nama, perubahan: [{ field, dari, ke }], catatan, usulan_sp }].
-const riwayatTiruan = {
-  'sis-3': [
-    { id: 'r2', waktu: '2026-10-12T09:00:00', oleh_nama: 'Guru Tatib', usulan_sp: 'SP3', catatan: 'Wali hadir, SP2 diserahkan',
-      perubahan: [{ field: 'keterangan_sp', dari: 'SP1', ke: 'SP2' }, { field: 'status_sp', dari: 'Tidak perlu', ke: 'Diserahkan' },
-        { field: 'status_rtlpd', dari: 'Tidak diperlukan', ke: 'Disusun' }] },
-    { id: 'r1', waktu: '2026-10-05T10:30:00', oleh_nama: 'Waka Kesiswaan', usulan_sp: 'SP2', catatan: null,
-      perubahan: [{ field: 'keterangan_sp', dari: null, ke: 'SP1' }, { field: 'status_panggilan_wali', dari: 'Tidak diperlukan', ke: 'Terlaksana' }] },
-  ],
-};
-
-// Kontrak: GET /tatib/tindakan/{siswa_id}/riwayat -> riwayat terbaru dulu.
-export const ambilRiwayatTindakan = (siswaId) => jeda(riwayatTiruan[siswaId] || []);
+// Riwayat perubahan per siswa, terbaru dulu: [{ id, waktu, oleh_nama, perubahan: [{ field, dari, ke }], catatan, usulan_sp, poin_negatif }].
+// Kontrak: GET /tatib/tindakan/{siswa_id}/riwayat?semester_id= (atau semua_semester=true).
+export async function ambilRiwayatTindakan(siswaId, { semester_id, semuaSemester = false } = {}) {
+  const params = semuaSemester ? { semua_semester: true } : (semester_id ? { semester_id } : {});
+  const { data } = await api.get(`/tatib/tindakan/${siswaId}/riwayat`, { params });
+  return data || [];
+}
 
 // Rekap tindakan untuk semester yang sedang dilihat pengguna (/auth/view-context), atau `semester_id` yang diberikan.
 export async function ambilTindakan({ semester_id, ...filter } = {}) {

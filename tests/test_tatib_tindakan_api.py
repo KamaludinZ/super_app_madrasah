@@ -175,3 +175,21 @@ def test_ubah_status_hanya_peran_input():
     from routers.tatib_poin import wajib_input_tatib
     route = next(r for r in api.router.routes if r.path == '/tatib/tindakan/{siswa_id}' and 'PUT' in r.methods)
     assert wajib_input_tatib in [d.call for d in route.dependant.dependencies]
+
+
+async def test_riwayat_tindakan_per_siswa(db, tanpa_audit):
+    await api.ubah_status_tindakan('s1', _status(catatan='awal'), GURU)
+    await api.ubah_status_tindakan('s1', _status(status_sp='Diserahkan'), GURU)
+    await api.ubah_status_tindakan('s1', _status(semester_id='sem0', keterangan_sp='SP2'), GURU)
+    await api.ubah_status_tindakan('s2', _status(), GURU)
+
+    r = await api.riwayat_tindakan_siswa('s1', semester_id='sem1', user=PIMPINAN)
+    assert len(r) == 2 and r[0]['perubahan'] == [{'field': 'status_sp', 'dari': 'Tidak perlu', 'ke': 'Diserahkan'}]
+    assert r[1]['catatan'] == 'awal' and r[0]['waktu'] >= r[1]['waktu']  # terbaru dulu
+    assert all(x['siswa_id'] == 's1' for x in r)
+    semua = await api.riwayat_tindakan_siswa('s1', semua_semester=True, user=PIMPINAN)
+    assert len(semua) == 3
+    assert await api.riwayat_tindakan_siswa('s3', semester_id='sem1', user=PIMPINAN) == []
+    with pytest.raises(HTTPException) as e:
+        await api.riwayat_tindakan_siswa('tidak-ada', user=PIMPINAN)
+    assert e.value.status_code == 404

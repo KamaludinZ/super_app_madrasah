@@ -15,7 +15,7 @@ const formatWaktu = (iso) => {
  * Panel samping riwayat perubahan tindakan satu siswa (terbaru dulu). `versi` dinaikkan pemanggil
  * setelah menyimpan agar riwayat dimuat ulang.
  */
-export default function RiwayatTindakanPanel({ siswa, onClose, versi = 0 }) {
+export default function RiwayatTindakanPanel({ siswa, semesterId, onClose, versi = 0 }) {
   const [riwayat, setRiwayat] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -23,12 +23,12 @@ export default function RiwayatTindakanPanel({ siswa, onClose, versi = 0 }) {
     if (!siswa) return undefined;
     let batal = false;
     setLoading(true);
-    ambilRiwayatTindakan(siswa.siswa_id)
+    ambilRiwayatTindakan(siswa.siswa_id, { semester_id: semesterId })
       .then((r) => { if (!batal) setRiwayat(r); })
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat riwayat tindakan')))
       .finally(() => { if (!batal) setLoading(false); });
     return () => { batal = true; };
-  }, [siswa, versi]);
+  }, [siswa, semesterId, versi]);
 
   return (
     <Sheet open={Boolean(siswa)} onOpenChange={(open) => !open && onClose()}>

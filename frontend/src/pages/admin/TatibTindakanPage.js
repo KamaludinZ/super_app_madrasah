@@ -228,7 +228,7 @@ export default function TatibTindakanPage() {
       </Card>
 
       <UbahTindakanDialog siswa={diubah} onClose={() => setDiubah(null)} onSimpan={simpanTindakan} />
-      <RiwayatTindakanPanel siswa={riwayatSiswa} onClose={() => setRiwayatSiswa(null)} versi={versiRiwayat} />
+      <RiwayatTindakanPanel siswa={riwayatSiswa} semesterId={data.semester_id} onClose={() => setRiwayatSiswa(null)} versi={versiRiwayat} />
     </div>
   );
 }

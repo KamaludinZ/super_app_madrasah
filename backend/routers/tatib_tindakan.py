@@ -258,3 +258,17 @@ async def ubah_status_tindakan(siswa_id: str, req: StatusTindakanRequest, user: 
         await log_audit(user, 'tatib_tindakan_update',
                         f"Tindakan tatib {siswa_id}: " + (', '.join(f"{p['field']} {p['dari']}->{p['ke']}" for p in perubahan) or 'catatan'))
     return serialize_doc(await _baris_siswa(siswa_id, req.semester_id))
+
+
+@router.get("/tatib/tindakan/{siswa_id}/riwayat")
+async def riwayat_tindakan_siswa(siswa_id: str, semester_id: Optional[str] = None, semua_semester: bool = False,
+                                 user: Dict = Depends(wajib_lihat_tatib)):
+    """Riwayat perubahan status pembinaan satu siswa, terbaru dulu. Bawaan: semester `semester_id`;
+    `semua_semester=true` memuat riwayat semua semester. Peran input & lihat tatib."""
+    if not await db.users.find_one({'id': siswa_id, 'roles': 'siswa'}, {'_id': 1}):
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    query: Dict = {'siswa_id': siswa_id}
+    if not semua_semester:
+        query['semester_id'] = semester_id
+    items = await db[KOLEKSI_RIWAYAT_TINDAKAN].find(query, {'_id': 0}).sort('waktu', -1).to_list(500)
+    return [serialize_doc(i) for i in items]
