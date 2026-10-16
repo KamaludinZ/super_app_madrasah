@@ -62,3 +62,19 @@ export async function ambilTindakan() {
     items: siswaTiruan.map((s) => ({ ...s, usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan) })),
   });
 }
+
+// Simpan status pembinaan satu siswa (keputusan manual). Kontrak: PUT /tatib/tindakan/{siswa_id}
+// { keterangan_sp: 'SP1'|'SP2'|'SP3'|null, status_panggilan_wali, status_sp, status_rtlpd, catatan } -> item siswa.
+export async function simpanStatusTindakan(siswaId, { keterangan_sp, status_panggilan_wali, status_sp, status_rtlpd, catatan }) {
+  const s = siswaTiruan.find((x) => x.siswa_id === siswaId);
+  if (!s) throw new Error('Siswa tidak ditemukan');
+  if (keterangan_sp && !TINGKAT_SP.includes(keterangan_sp)) throw new Error('Keterangan SP tidak dikenal');
+  if (!STATUS_PANGGILAN_WALI.includes(status_panggilan_wali) || !STATUS_SP.includes(status_sp) || !STATUS_RTLPD.includes(status_rtlpd)) {
+    throw new Error('Status pembinaan tidak dikenal');
+  }
+  Object.assign(s, {
+    keterangan_sp: keterangan_sp || null, status_panggilan_wali, status_sp, status_rtlpd,
+    catatan: (catatan || '').trim() || null, diubah_pada: new Date().toISOString(), diubah_oleh_nama: 'Anda',
+  });
+  return jeda({ ...s, usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan) });
+}

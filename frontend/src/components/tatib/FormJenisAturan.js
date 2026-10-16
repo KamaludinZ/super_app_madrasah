@@ -113,7 +113,7 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
 
           <div>
             <Label>Kategori*</Label>
-            <Select value={form.kategori_id || undefined} onValueChange={(kategori_id) => ubah({ kategori_id })}>
+            <Select value={form.kategori_id || ''} onValueChange={(kategori_id) => ubah({ kategori_id })}>
               <SelectTrigger className={kategoriHilang ? 'border-amber-500' : ''} data-testid="jenis-kategori">
                 <SelectValue placeholder={kategoriList.length ? 'Pilih kategori' : 'Belum ada kategori — tambahkan dulu'} />
               </SelectTrigger>

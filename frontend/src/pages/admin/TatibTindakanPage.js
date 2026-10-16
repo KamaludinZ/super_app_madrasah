@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, Gavel, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, Gavel, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { bolehInputTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
+import UbahTindakanDialog from '@/components/tatib/UbahTindakanDialog';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
-import { TINGKAT_SP, ambangBerikutnya, ambilTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
+import { TINGKAT_SP, ambangBerikutnya, ambilTindakan, simpanStatusTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
 
 export const WARNA_SP = {
   SP1: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -69,6 +71,19 @@ export default function TatibTindakanPage() {
   const bolehUbah = bolehInputTatib(activeRole);
   const [data, setData] = useState({ ambang: null, items: [] });
   const [loading, setLoading] = useState(true);
+  const [diubah, setDiubah] = useState(null); // siswa yang dialog ubah tindakannya terbuka
+
+  const bukaUbah = (s) => {
+    if (tolakUbahTatib(activeRole)) return;
+    setDiubah(s);
+  };
+
+  // Simpan lalu perbarui baris itu saja di state (tanpa memuat ulang seluruh daftar).
+  const simpanTindakan = async (isian) => {
+    const hasil = await simpanStatusTindakan(diubah.siswa_id, isian);
+    setData((d) => ({ ...d, items: d.items.map((x) => (x.siswa_id === hasil.siswa_id ? { ...x, ...hasil } : x)) }));
+    return hasil;
+  };
 
   useEffect(() => {
     ambilTindakan()
@@ -123,6 +138,7 @@ export default function TatibTindakanPage() {
                     <TableHead rowSpan={2} className="align-bottom">Usulan SP</TableHead>
                     <TableHead rowSpan={2} className="align-bottom">Keterangan SP</TableHead>
                     <TableHead colSpan={3} className="h-8 border-b text-center">Status Pembinaan</TableHead>
+                    {bolehUbah && <TableHead rowSpan={2} className="align-bottom text-right">Aksi</TableHead>}
                   </TableRow>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="bg-emerald-50/60 text-right">Jumlah</TableHead>
@@ -164,11 +180,18 @@ export default function TatibTindakanPage() {
                       <TableCell><BadgeStatus nilai={s.status_panggilan_wali} /></TableCell>
                       <TableCell><BadgeStatus nilai={s.status_sp} /></TableCell>
                       <TableCell><BadgeStatus nilai={s.status_rtlpd} /></TableCell>
+                      {bolehUbah && (
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => bukaUbah(s)} data-testid={`tindakan-ubah-${s.siswa_id}`}>
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Ubah
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={12} className="py-8 text-center text-slate-500">Belum ada siswa yang tercatat poin.</TableCell>
+                      <TableCell colSpan={bolehUbah ? 13 : 12} className="py-8 text-center text-slate-500">Belum ada siswa yang tercatat poin.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -177,6 +200,8 @@ export default function TatibTindakanPage() {
           )}
         </CardContent>
       </Card>
+
+      <UbahTindakanDialog siswa={diubah} onClose={() => setDiubah(null)} onSimpan={simpanTindakan} />
     </div>
   );
 }

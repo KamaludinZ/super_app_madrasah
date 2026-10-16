@@ -334,7 +334,7 @@ export default function TatibInputTerpaduPage() {
                     </div>
                     <div>
                       <Label>Asal input*</Label>
-                      <Select value={form.asal_input || undefined} onValueChange={(asal_input) => ubah({ asal_input })}>
+                      <Select value={form.asal_input || ''} onValueChange={(asal_input) => ubah({ asal_input })}>
                         <SelectTrigger
                           aria-invalid={Boolean(galat('asal_input'))}
                           className={galat('asal_input') ? 'border-red-500' : ''}

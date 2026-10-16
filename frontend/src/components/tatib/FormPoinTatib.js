@@ -210,7 +210,7 @@ export default function FormPoinTatib({ jenis, open, onOpenChange, studentsList 
             </div>
             <div>
               <Label>Asal input*</Label>
-              <Select value={form.asal_input || undefined} onValueChange={(asal_input) => setForm({ ...form, asal_input })}>
+              <Select value={form.asal_input || ''} onValueChange={(asal_input) => setForm({ ...form, asal_input })}>
                 <SelectTrigger data-testid={`${jenis}-asal`}><SelectValue placeholder="Pilih sumber pencatatan" /></SelectTrigger>
                 <SelectContent>
                   {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
