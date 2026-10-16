@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
+import { cariKodeGanda } from '@/lib/masterJenisTatib';
 
 const kosong = () => ({ kode_aturan: '', nama: '', jalur_poin: 'minus', besar_poin: '', kategori_id: '', deskripsi: '' });
 
@@ -22,8 +23,9 @@ const JALUR = [
  * Dialog tambah/ubah jenis aturan. `jenis` = null untuk tambah.
  * `onSimpan(isian)` -> Promise jenis tersimpan (galat dilempar dengan pesan siap tampil).
  * `onTambahKategori(isian)` (opsional) -> Promise kategori baru; kategori itu langsung dipilih.
+ * `jenisList`: jenis yang sudah ada, untuk menolak kode aturan ganda sebelum disimpan.
  */
-export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriList = [], onSimpan, onTambahKategori }) {
+export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriList = [], jenisList = [], onSimpan, onTambahKategori }) {
   const [form, setForm] = useState(kosong);
   const [saving, setSaving] = useState(false);
 
@@ -37,6 +39,8 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
 
   const ubah = (isian) => setForm((f) => ({ ...f, ...isian }));
   const kategori = kategoriList.find((k) => k.id === form.kategori_id);
+  const kodeKembar = cariKodeGanda(jenisList, form.kode_aturan, jenis?.id);
+  const galatKode = kodeKembar ? `Kode ${form.kode_aturan.trim()} sudah dipakai oleh "${kodeKembar.nama}"` : '';
   // Kategori lama yang sudah dihapus tetap ditandai agar petugas memilih ulang.
   const kategoriHilang = Boolean(form.kategori_id) && kategoriList.length > 0 && !kategori;
 
@@ -52,6 +56,10 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
     e?.preventDefault();
     if (!form.kode_aturan.trim() || !form.nama.trim() || !form.kategori_id || !besar) {
       toast.error('Kode aturan, nama jenis, kategori, dan besar poin (minimal 1) wajib diisi');
+      return;
+    }
+    if (galatKode) {
+      toast.error(galatKode);
       return;
     }
     setSaving(true);
@@ -84,9 +92,11 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
                 onChange={(e) => ubah({ kode_aturan: e.target.value.toUpperCase() })}
                 placeholder="Mis. DIS-01"
                 maxLength={20}
-                className="font-mono"
+                aria-invalid={Boolean(galatKode)}
+                className={`font-mono ${galatKode ? 'border-red-500' : ''}`}
                 data-testid="jenis-kode"
               />
+              {galatKode && <p className="mt-1 text-xs text-red-600" role="alert" data-testid="jenis-kode-galat">{galatKode}</p>}
             </div>
             <div>
               <Label htmlFor="jenis-nama">Nama jenis pelanggaran*</Label>
@@ -177,7 +187,7 @@ export default function FormJenisAturan({ open, onOpenChange, jenis, kategoriLis
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Batal</Button>
-          <Button type="submit" form="form-jenis-aturan" disabled={saving} data-testid="jenis-simpan">
+          <Button type="submit" form="form-jenis-aturan" disabled={saving || Boolean(galatKode)} data-testid="jenis-simpan">
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Simpan
           </Button>
         </DialogFooter>

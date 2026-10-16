@@ -191,6 +191,7 @@ export default function TatibMasterJenisPage() {
         onOpenChange={(open) => setForm((f) => ({ ...f, open }))}
         jenis={form.jenis}
         kategoriList={kategoriList}
+        jenisList={jenisList}
         onSimpan={simpan}
         onTambahKategori={tambahKategori}
       />

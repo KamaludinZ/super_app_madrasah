@@ -30,6 +30,13 @@ const tampil = (j) => ({
   poin: j.jalur_poin === 'minus' ? -Math.abs(j.besar_poin) : Math.abs(j.besar_poin),
 });
 
+// Jenis lain yang sudah memakai kode yang sama (tanpa beda huruf/spasi tepi), atau null. `kecualiId` = jenis yang sedang diubah.
+export function cariKodeGanda(jenisList, kode, kecualiId) {
+  const kunci = (kode || '').trim().toUpperCase();
+  if (!kunci) return null;
+  return jenisList.find((j) => j.id !== kecualiId && (j.kode_aturan || '').trim().toUpperCase() === kunci) || null;
+}
+
 export const ambilMasterJenis = () => jeda(jenisTiruan.map(tampil));
 
 export const ambilKategoriMaster = () => jeda(kategoriTiruan);
@@ -44,6 +51,8 @@ export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, bes
     kategori_id,
     deskripsi: (deskripsi || '').trim(),
   };
+  const kembar = cariKodeGanda(jenisTiruan, isian.kode_aturan, id);
+  if (kembar) throw new Error(`Kode ${isian.kode_aturan} sudah dipakai oleh "${kembar.nama}"`);
   if (id) {
     const i = jenisTiruan.findIndex((j) => j.id === id);
     if (i < 0) throw new Error('Jenis aturan tidak ditemukan');
