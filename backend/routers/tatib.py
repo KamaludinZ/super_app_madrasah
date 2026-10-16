@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 import uuid
 import pandas as pd
 import io
@@ -11,7 +12,7 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
-from tatib_poin import JENIS_POIN, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, normalisasi_kondisi
+from tatib_poin import JENIS_POIN, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, kunci_nama, normalisasi_kondisi
 from routers.tatib_poin import batasi_query_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
@@ -95,10 +96,23 @@ def _aturan_tampil(doc: Dict) -> Dict:
 # KATEGORI ENDPOINTS
 # ============================================================
 
+async def _cek_nama_kategori(nama: str, kecuali_id: Optional[str] = None) -> str:
+    """Rapikan nama kategori; 400 bila kosong, 409 bila sudah dipakai (tanpa beda huruf besar/kecil)."""
+    nama = ' '.join((nama or '').split())
+    if not nama:
+        raise HTTPException(400, "Nama kategori wajib diisi")
+    query = {'nama_key': kunci_nama(nama)}
+    if kecuali_id:
+        query['id'] = {'$ne': kecuali_id}
+    if await db.tatib_kategori.find_one(query, {'_id': 1}):
+        raise HTTPException(409, f'Kategori "{nama}" sudah ada')
+    return nama
+
+
 @router.get("/tatib/kategori")
 async def list_kategori(user: Dict = Depends(get_current_user)):
     """List all kategori tata tertib."""
-    items = await db.tatib_kategori.find({}, {'_id': 0}).sort('urutan', 1).to_list(1000)
+    items = await db.tatib_kategori.find({}, {'_id': 0}).sort([('urutan', 1), ('nama', 1)]).to_list(1000)
     return [serialize_doc(i) for i in items]
 
 
@@ -113,33 +127,54 @@ async def get_kategori(kategori_id: str, user: Dict = Depends(get_current_user))
 
 @router.post("/tatib/kategori")
 async def create_kategori(req: KategoriTatibRequest, user: Dict = Depends(wajib_input_tatib)):
-    """Create a new kategori tata tertib."""
+    """Tambah kategori (juga langsung dari halaman Input Tata Tertib); nama unik tanpa beda huruf."""
+    nama = await _cek_nama_kategori(req.nama)
     doc = {
         'id': str(uuid.uuid4()),
-        'nama': req.nama,
-        'deskripsi': req.deskripsi,
+        'nama': nama,
+        'nama_key': kunci_nama(nama),
+        'deskripsi': (req.deskripsi or '').strip() or None,
         'urutan': req.urutan,
         'created_by': user['id'],
         'created_at': datetime.utcnow().isoformat(),
         'updated_at': datetime.utcnow().isoformat(),
     }
-
-    await db.tatib_kategori.insert_one(doc)
-    await log_audit(user, 'tatib_kategori_create', f"Created kategori: {req.nama}")
+    try:
+        await db.tatib_kategori.insert_one(doc)
+    except DuplicateKeyError:  # balapan dua penyimpanan bersamaan (index nama_key unik)
+        raise HTTPException(409, f'Kategori "{nama}" sudah ada')
+    await log_audit(user, 'tatib_kategori_create', f"Created kategori: {nama}")
+    doc.pop('_id', None)
     return serialize_doc(doc)
 
 
 @router.put("/tatib/kategori/{kategori_id}")
 async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dict = Depends(wajib_input_tatib)):
-    """Update a kategori."""
+    """Ubah kategori. Nama baru ikut diperbarui pada jenis aturan; riwayat pencatatan tetap
+    menyimpan nama kategori saat dicatat."""
     existing = await db.tatib_kategori.find_one({'id': kategori_id})
     if not existing:
         raise HTTPException(404, "Kategori tidak ditemukan")
 
-    update_data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
-    update_data['updated_at'] = datetime.utcnow().isoformat()
+    nama = await _cek_nama_kategori(req.nama, kecuali_id=kategori_id)
+    update_data = {
+        'nama': nama,
+        'nama_key': kunci_nama(nama),
+        'updated_at': datetime.utcnow().isoformat(),
+    }
+    isian = req.model_dump(exclude_unset=True)
+    if 'deskripsi' in isian:
+        update_data['deskripsi'] = (req.deskripsi or '').strip() or None
+    if req.urutan is not None and 'urutan' in isian:
+        update_data['urutan'] = req.urutan
 
-    await db.tatib_kategori.update_one({'id': kategori_id}, {'$set': update_data})
+    try:
+        await db.tatib_kategori.update_one({'id': kategori_id}, {'$set': update_data})
+    except DuplicateKeyError:
+        raise HTTPException(409, f'Kategori "{nama}" sudah ada')
+    if nama != existing.get('nama'):
+        await db.tatib_aturan.update_many({'kategori_id': kategori_id}, {'$set': {'kategori_nama': nama}})
+        await db.tatib_jenis.update_many({'kategori_id': kategori_id}, {'$set': {'kategori_nama': nama}})
     await log_audit(user, 'tatib_kategori_update', f"Updated kategori: {kategori_id}")
 
     updated = await db.tatib_kategori.find_one({'id': kategori_id}, {'_id': 0})
@@ -148,17 +183,18 @@ async def update_kategori(kategori_id: str, req: KategoriTatibRequest, user: Dic
 
 @router.delete("/tatib/kategori/{kategori_id}")
 async def delete_kategori(kategori_id: str, user: Dict = Depends(wajib_input_tatib)):
-    """Delete a kategori."""
+    """Hapus kategori; ditolak bila masih dipakai jenis aturan atau pencatatan."""
     existing = await db.tatib_kategori.find_one({'id': kategori_id})
     if not existing:
         raise HTTPException(404, "Kategori tidak ditemukan")
 
-    # Check if any jenis or tatib uses this kategori
     jenis_count = await db.tatib_jenis.count_documents({'kategori_id': kategori_id})
     tatib_count = await db.tatib_aturan.count_documents({'kategori_id': kategori_id})
+    catatan_count = await db.tatib_penanganan.count_documents({'kategori_id': kategori_id})
 
-    if jenis_count > 0 or tatib_count > 0:
-        raise HTTPException(400, f"Kategori masih digunakan oleh {jenis_count} jenis dan {tatib_count} aturan")
+    if jenis_count or tatib_count or catatan_count:
+        raise HTTPException(
+            400, f"Kategori masih digunakan oleh {tatib_count} jenis aturan, {jenis_count} sub-jenis, dan {catatan_count} pencatatan")
 
     await db.tatib_kategori.delete_one({'id': kategori_id})
     await log_audit(user, 'tatib_kategori_delete', f"Deleted kategori: {kategori_id}")

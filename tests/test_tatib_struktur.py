@@ -1,12 +1,10 @@
 """Struktur baru tatib: kategori -> jenis aturan -> pencatatan (helper skema & migrasi).
 
-Uji migrasi memakai MongoDB sungguhan (MONGO_URL_UJI, bawaan mongodb://127.0.0.1:27017) pada database
-sementara; dilewati bila server tidak tersedia.
+Uji migrasi memakai fixture `mongo_db` (tests/conftest.py): MongoDB sungguhan pada database sementara.
 """
 
 import os
 import sys
-import uuid
 
 import pytest
 
@@ -28,18 +26,8 @@ def test_helper_struktur():
 
 
 @pytest.fixture
-async def db():
-    from motor.motor_asyncio import AsyncIOMotorClient
-    client = AsyncIOMotorClient(os.getenv('MONGO_URL_UJI', 'mongodb://127.0.0.1:27017'), serverSelectionTimeoutMS=800)
-    try:
-        await client.admin.command('ping')
-    except Exception:  # noqa: BLE001
-        client.close()
-        pytest.skip('MongoDB uji tidak tersedia')
-    nama = f'uji_tatib_{uuid.uuid4().hex[:8]}'
-    yield client[nama]
-    await client.drop_database(nama)
-    client.close()
+def db(mongo_db):
+    return mongo_db
 
 
 async def _isi_data_lama(db):

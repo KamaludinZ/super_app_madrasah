@@ -1,7 +1,9 @@
+import { api } from '@/lib/api';
 import { hariIniWIB } from '@/lib/tanggal';
 
 // Input Tata Tertib terpadu: siswa → kategori → jenis aturan (poin otomatis) → tanggal & keterangan.
-// SEMENTARA memakai data tiruan di memori (frontend dibangun lebih dulu); kontrak yang diasumsikan:
+// Fungsi yang sudah tersambung ke API memakai `api`; sisanya SEMENTARA memakai data tiruan di memori
+// (frontend dibangun lebih dulu). Kontrak:
 //   GET  /tatib/kategori            -> [{ id, nama, deskripsi }]
 //   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, kategori_id, kategori_nama, deskripsi, aktif }]
 //   GET  /students                  -> [{ id, nis, nisn, full_name, class_name }]
@@ -70,7 +72,10 @@ function lengkapiCatatan(c) {
   };
 }
 
-export const ambilKategoriTatib = () => jeda(kategoriTiruan);
+export async function ambilKategoriTatib() {
+  const { data } = await api.get('/tatib/kategori');
+  return (data || []).map(({ id, nama, deskripsi }) => ({ id, nama, deskripsi: deskripsi || '' }));
+}
 
 export const ambilJenisAturan = () => jeda(jenisTiruan.map((j) => ({ ...j, kategori_nama: namaKategori(j.kategori_id) })));
 
@@ -95,22 +100,12 @@ export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, asal_input
 }
 
 // Tambah (tanpa id) atau ubah kategori langsung dari halaman input.
-// Kontrak: POST /tatib/kategori | PUT /tatib/kategori/{id} -> { id, nama, deskripsi }.
+// Server menolak nama kosong (400) atau ganda tanpa beda huruf (409) dengan pesan di `detail`.
 export async function simpanKategoriTatib({ id, nama, deskripsi }) {
-  const namaRapi = (nama || '').trim();
-  if (!namaRapi) throw new Error('Nama kategori wajib diisi');
-  const ganda = kategoriTiruan.some((k) => k.id !== id && k.nama.toLowerCase() === namaRapi.toLowerCase());
-  if (ganda) throw new Error(`Kategori "${namaRapi}" sudah ada`);
-  const isian = { nama: namaRapi, deskripsi: (deskripsi || '').trim() };
-  if (id) {
-    const i = kategoriTiruan.findIndex((k) => k.id === id);
-    if (i < 0) throw new Error('Kategori tidak ditemukan');
-    kategoriTiruan[i] = { ...kategoriTiruan[i], ...isian };
-    return jeda(kategoriTiruan[i]);
-  }
-  const baru = { id: `kat-${Date.now()}`, ...isian };
-  kategoriTiruan.push(baru);
-  return jeda(baru);
+  const isian = { nama: (nama || '').trim(), deskripsi: (deskripsi || '').trim() || null };
+  if (!isian.nama) throw new Error('Nama kategori wajib diisi');
+  const { data } = id ? await api.put(`/tatib/kategori/${id}`, isian) : await api.post('/tatib/kategori', isian);
+  return data;
 }
 
 // Perbaiki catatan yang salah input; poin dihitung ulang dari jenis yang dipilih.
