@@ -29,7 +29,23 @@ export const BadgeStatus = ({ nilai }) => (
   <Badge variant="outline" className={`whitespace-nowrap font-normal ${WARNA_STATUS[nilai] || ''}`}>{nilai || '-'}</Badge>
 );
 
-const DaftarKategori = ({ items }) => (items?.length ? <span className="text-xs text-slate-600">{items.join(', ')}</span> : <span className="text-slate-300">-</span>);
+// Label kategori: nama · total poin (jumlah catatan); warna mengikuti jalur poin.
+const LabelKategori = ({ items, negatif }) => {
+  if (!items?.length) return <span className="text-slate-300">-</span>;
+  const warna = negatif ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  return (
+    <div className="flex max-w-[16rem] flex-wrap gap-1">
+      {items.map((k) => (
+        <span key={k.nama} className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] ${warna}`}
+          title={`${k.jumlah} catatan`}>
+          {k.nama}
+          <span className="font-semibold tabular-nums">{formatPoin(k.poin)}</span>
+          <span className="opacity-60">({k.jumlah}×)</span>
+        </span>
+      ))}
+    </div>
+  );
+};
 
 // Tindakan Tatib: siswa yang tercatat poin (plus & minus), usulan SP otomatis dari ambang poin,
 // dan status pembinaan (panggilan wali, SP, RTLPD) yang ditetapkan manual oleh peran input tatib.
@@ -83,15 +99,20 @@ export default function TatibTindakanPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>NISN</TableHead>
-                    <TableHead>Nama Siswa</TableHead>
-                    <TableHead>Kelas</TableHead>
-                    <TableHead className="text-right">Poin Positif</TableHead>
-                    <TableHead>Kategori Positif</TableHead>
-                    <TableHead className="text-right">Poin Negatif</TableHead>
-                    <TableHead>Kategori Negatif</TableHead>
-                    <TableHead>Keterangan SP</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead rowSpan={2} className="align-bottom">NISN</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom">Nama Siswa</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom">Kelas</TableHead>
+                    <TableHead colSpan={2} className="h-8 border-b border-emerald-200 bg-emerald-50 text-center text-emerald-800">Poin Positif</TableHead>
+                    <TableHead colSpan={2} className="h-8 border-b border-red-200 bg-red-50 text-center text-red-800">Poin Negatif</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom">Keterangan SP</TableHead>
+                    <TableHead colSpan={3} className="h-8 border-b text-center">Status Pembinaan</TableHead>
+                  </TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="bg-emerald-50/60 text-right">Jumlah</TableHead>
+                    <TableHead className="bg-emerald-50/60">Kategori</TableHead>
+                    <TableHead className="bg-red-50/60 text-right">Jumlah</TableHead>
+                    <TableHead className="bg-red-50/60">Kategori</TableHead>
                     <TableHead>Panggilan Wali</TableHead>
                     <TableHead>Status SP</TableHead>
                     <TableHead>RTLPD</TableHead>
@@ -103,10 +124,14 @@ export default function TatibTindakanPage() {
                       <TableCell className="font-mono text-xs">{s.nisn || '-'}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{s.nama}</TableCell>
                       <TableCell className="whitespace-nowrap">{s.kelas || '-'}</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{s.poin_positif ? formatPoin(s.poin_positif) : '0'}</TableCell>
-                      <TableCell><DaftarKategori items={s.kategori_positif} /></TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums text-red-700">{s.poin_negatif || 0}</TableCell>
-                      <TableCell><DaftarKategori items={s.kategori_negatif} /></TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-emerald-700" data-testid={`tindakan-plus-${s.siswa_id}`}>
+                        {s.poin_positif ? formatPoin(s.poin_positif) : <span className="text-slate-300">0</span>}
+                      </TableCell>
+                      <TableCell><LabelKategori items={s.kategori_positif} /></TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-red-700" data-testid={`tindakan-minus-${s.siswa_id}`}>
+                        {s.poin_negatif ? formatPoin(s.poin_negatif) : <span className="text-slate-300">0</span>}
+                      </TableCell>
+                      <TableCell><LabelKategori items={s.kategori_negatif} negatif /></TableCell>
                       <TableCell data-testid={`tindakan-sp-${s.siswa_id}`}>
                         {s.keterangan_sp || s.usulan_sp ? (
                           <div className="space-y-1">
