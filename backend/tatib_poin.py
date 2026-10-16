@@ -13,6 +13,7 @@ Satu dokumen = satu catatan poin. Field poin (selain field penanganan lama):
 `tatib_poin` (nilai aturan saat dicatat) tetap dipertahankan untuk kompatibilitas
 endpoint statistik lama.
 """
+import uuid
 from typing import Optional
 
 KOLEKSI_POIN = 'tatib_penanganan'
@@ -207,10 +208,13 @@ INDEX_STRUKTUR = {
 #     status_sp                STATUS_SP
 #     status_rtlpd             STATUS_RTLPD
 #     catatan, diubah_pada, diubah_oleh_id, diubah_oleh_nama, created_at
-#     riwayat  [{id, waktu, oleh_id, oleh_nama, perubahan: [{field, dari, ke}], catatan, usulan_sp}]  (terlama dulu)
+# Riwayat perubahan disimpan terpisah di `tatib_tindakan_riwayat` (satu dokumen per perubahan):
+#     id, tindakan_id, siswa_id, semester_id, waktu, oleh_id, oleh_nama,
+#     perubahan [{field, dari, ke}], catatan, usulan_sp (usulan otomatis saat perubahan dibuat), poin_negatif
 # Usulan SP TIDAK disimpan sebagai keputusan: dihitung dari akumulasi poin pelanggaran & ambang (usulkan_sp).
 # Catatan: `tatib_penanganan` di codebase ini adalah koleksi catatan poin, bukan status pembinaan.
 KOLEKSI_TINDAKAN = 'tatib_tindakan'
+KOLEKSI_RIWAYAT_TINDAKAN = 'tatib_tindakan_riwayat'
 TINGKAT_SP = ('SP1', 'SP2', 'SP3')
 STATUS_PANGGILAN_WALI = ('Tidak diperlukan', 'Diajukan', 'Terlaksana')
 STATUS_SP = ('Tidak perlu', 'Diserahkan')
@@ -228,6 +232,11 @@ AMBANG_SP_BAWAAN = {'sp1': 25, 'sp2': 50, 'sp3': 75}
 INDEX_TINDAKAN = [
     ([('siswa_id', 1), ('semester_id', 1)], {'unique': True, 'name': 'siswa_semester_unik'}),
     ([('keterangan_sp', 1)], {}),
+]
+INDEX_RIWAYAT_TINDAKAN = [
+    ([('siswa_id', 1), ('semester_id', 1), ('waktu', -1)], {}),
+    ([('tindakan_id', 1), ('waktu', -1)], {}),
+    ([('id', 1)], {'unique': True, 'name': 'id_unik'}),
 ]
 
 
@@ -247,10 +256,33 @@ def perubahan_status(lama: dict, baru: dict) -> list:
     return [{'field': f, 'dari': lama.get(f), 'ke': baru.get(f)} for f in FIELD_STATUS_TINDAKAN if lama.get(f) != baru.get(f)]
 
 
+def entri_riwayat_tindakan(tindakan: dict, perubahan: list, oleh: dict, waktu: str, catatan: Optional[str] = None,
+                           usulan_sp: Optional[str] = None, poin_negatif: int = 0) -> dict:
+    """Satu dokumen riwayat perubahan tindakan (koleksi KOLEKSI_RIWAYAT_TINDAKAN)."""
+    return {
+        'id': str(uuid.uuid4()),
+        'tindakan_id': tindakan.get('id'),
+        'siswa_id': tindakan.get('siswa_id'),
+        'semester_id': tindakan.get('semester_id'),
+        'waktu': waktu,
+        'oleh_id': oleh.get('id'),
+        'oleh_nama': oleh.get('full_name') or oleh.get('username'),
+        'perubahan': perubahan,
+        'catatan': catatan or None,
+        'usulan_sp': usulan_sp,
+        'poin_negatif': poin_negatif,
+    }
+
+
 async def pastikan_index_tindakan(db) -> None:
     for keys, opsi in INDEX_TINDAKAN:
         await db[KOLEKSI_TINDAKAN].create_index(keys, **opsi)
     await db[KOLEKSI_POIN].create_index([('semester_id', 1), ('siswa_id', 1)])
+
+
+async def pastikan_index_riwayat_tindakan(db) -> None:
+    for keys, opsi in INDEX_RIWAYAT_TINDAKAN:
+        await db[KOLEKSI_RIWAYAT_TINDAKAN].create_index(keys, **opsi)
 
 
 # ============================================================
