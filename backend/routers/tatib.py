@@ -15,7 +15,7 @@ from routers._shared import sembunyikan_siswa_nonaktif
 from journal_core import tanggal_wib
 from tatib_poin import (ASAL_INPUT, JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
                         kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kondisi, poin_jenis_aturan)
-from routers.tatib_poin import batasi_query_tatib, wajib_input_tatib, wajib_lihat_tatib
+from routers.tatib_poin import batasi_query_tatib, wajib_akses_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
 
@@ -112,14 +112,14 @@ async def _cek_nama_kategori(nama: str, kecuali_id: Optional[str] = None) -> str
 
 
 @router.get("/tatib/kategori")
-async def list_kategori(user: Dict = Depends(get_current_user)):
+async def list_kategori(user: Dict = Depends(wajib_akses_tatib)):
     """List all kategori tata tertib."""
     items = await db.tatib_kategori.find({}, {'_id': 0}).sort([('urutan', 1), ('nama', 1)]).to_list(1000)
     return [serialize_doc(i) for i in items]
 
 
 @router.get("/tatib/kategori/{kategori_id}")
-async def get_kategori(kategori_id: str, user: Dict = Depends(get_current_user)):
+async def get_kategori(kategori_id: str, user: Dict = Depends(wajib_akses_tatib)):
     """Get a specific kategori."""
     doc = await db.tatib_kategori.find_one({'id': kategori_id}, {'_id': 0})
     if not doc:
@@ -208,7 +208,7 @@ async def delete_kategori(kategori_id: str, user: Dict = Depends(wajib_input_tat
 # ============================================================
 
 @router.get("/tatib/jenis")
-async def list_jenis(kategori_id: Optional[str] = None, user: Dict = Depends(get_current_user)):
+async def list_jenis(kategori_id: Optional[str] = None, user: Dict = Depends(wajib_akses_tatib)):
     """List all jenis tata tertib, optionally filtered by kategori."""
     query = {}
     if kategori_id:
@@ -309,7 +309,7 @@ def jenis_aturan_tampil(doc: Dict, nama_kategori: Optional[Dict] = None) -> Dict
 async def list_jenis_aturan(
     kategori_id: Optional[str] = None,
     aktif: Optional[bool] = None,
-    user: Dict = Depends(get_current_user),
+    user: Dict = Depends(wajib_akses_tatib),
 ):
     """Master jenis aturan (pelanggaran/kebaikan) per kategori, urut kategori lalu kode aturan.
     `aktif=true` untuk pilihan pencatatan; tanpa filter untuk melihat semua termasuk nonaktif."""
@@ -335,7 +335,7 @@ async def list_aturan(
     jenis_id: Optional[str] = None,
     is_active: Optional[bool] = None,
     jenis_poin: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Dict = Depends(wajib_akses_tatib)
 ):
     """List all tata tertib rules (opsional per jalur jenis_poin: kebaikan/pelanggaran)."""
     query = {}
@@ -355,7 +355,7 @@ async def list_aturan(
 
 
 @router.get("/tatib/aturan/{aturan_id}")
-async def get_aturan(aturan_id: str, user: Dict = Depends(get_current_user)):
+async def get_aturan(aturan_id: str, user: Dict = Depends(wajib_akses_tatib)):
     """Get a specific tata tertib rule."""
     doc = await db.tatib_aturan.find_one({'id': aturan_id}, {'_id': 0})
     if not doc:

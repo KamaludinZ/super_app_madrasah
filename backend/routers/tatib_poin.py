@@ -36,6 +36,8 @@ def wajib_akses(*diizinkan: str):
 # Dependency bersama: tulis data tatib (input) & baca rekap/statistik (input + lihat/pimpinan).
 wajib_input_tatib = wajib_akses('input')
 wajib_lihat_tatib = wajib_akses('input', 'lihat')
+# Master kategori/jenis/aturan: semua peran yang punya akses tatib (termasuk wali kelas & siswa), bukan peran lain.
+wajib_akses_tatib = wajib_akses('input', 'lihat', 'kelas', 'pribadi')
 
 
 # ============================================================

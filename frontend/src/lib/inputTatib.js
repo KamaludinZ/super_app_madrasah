@@ -2,7 +2,7 @@ import { api } from '@/lib/api';
 import { konteksPeriode } from '@/lib/poinTatib';
 
 // Input Tata Tertib terpadu: siswa → kategori → jenis aturan (poin otomatis) → tanggal & keterangan.
-// Semua data lewat API, kecuali daftar siswa yang SEMENTARA masih data tiruan. Kontrak:
+// Semua data lewat API. Kontrak:
 //   GET  /tatib/kategori            -> [{ id, nama, deskripsi }]
 //   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, poin, kategori_id, kategori_nama, deskripsi, aktif }]
 //   GET  /students                  -> [{ id, nis, nisn, full_name, class_name }]
@@ -12,16 +12,6 @@ import { konteksPeriode } from '@/lib/poinTatib';
 
 // Sumber pencatatan (daftar baku); disimpan bersama catatan dan tampil di laporan/rekap.
 export const ASAL_INPUT = ['BIPH', 'Screening pagi', 'Ibadah', 'Keputrian', 'Whatsapp', 'BAP', 'Razia', 'Laporan langsung'];
-
-const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
-
-const siswaTiruan = [
-  { id: 'sis-1', nis: '2401', nisn: '0098765401', full_name: 'Ahmad Fauzan', class_name: 'VII A' },
-  { id: 'sis-2', nis: '2402', nisn: '0098765402', full_name: 'Aisyah Putri Ramadhani', class_name: 'VII A' },
-  { id: 'sis-3', nis: '2315', nisn: '0098765315', full_name: 'Muhammad Rizki Pratama', class_name: 'VIII B' },
-  { id: 'sis-4', nis: '2316', nisn: '0098765316', full_name: 'Nur Halimah', class_name: 'VIII B' },
-  { id: 'sis-5', nis: '2207', nisn: '0098765207', full_name: 'Fikri Hidayatullah', class_name: 'IX C' },
-];
 
 // Poin bertanda mengikuti master jenis: jalur 'minus' -> negatif, 'plus' -> positif.
 export function poinJenis(jenis) {
@@ -44,7 +34,11 @@ export async function ambilJenisAturan({ kategori_id, aktif } = {}) {
   return data || [];
 }
 
-export const ambilSiswaTatib = () => jeda(siswaTiruan);
+// Siswa aktif (server membatasi cakupan sesuai peran; peran input tatib melihat semua kelas).
+export async function ambilSiswaTatib() {
+  const { data } = await api.get('/students');
+  return (data || []).map(({ id, nis, nisn, full_name, class_name }) => ({ id, nis, nisn, full_name, class_name }));
+}
 
 // Catatan terbaru (urut waktu input, terbaru dulu); `siswa_id` membatasi ke satu siswa.
 export async function ambilRiwayatInputTerbaru({ batas = 10, siswa_id } = {}) {

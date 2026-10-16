@@ -218,3 +218,43 @@ async def test_hak_akses_endpoint_input():
     assert await hanya_admin(peran('admin'))
     with pytest.raises(HTTPException):
         await hanya_admin(peran('guru_tata_tertib'))
+
+
+def test_semua_endpoint_tatib_berpenjaga_peran():
+    """Tiap endpoint routers/tatib.py memakai penjaga peran yang sesuai (bukan sekadar login)."""
+    import inspect
+    from routers.tatib_poin import wajib_akses_tatib, wajib_input_tatib, wajib_lihat_tatib
+
+    def penjaga(route):
+        return [d.call for d in route.dependant.dependencies]
+
+    def hanya_admin(fn):
+        return 'require_role' in fn.__qualname__ and fn.__closure__ and \
+            any(c.cell_contents == ('admin',) for c in fn.__closure__)
+
+    for route in api.router.routes:
+        method = next(iter(route.methods))
+        calls = penjaga(route)
+        kunci = f'{method} {route.path}'
+        if method == 'GET' and route.path in ('/tatib/kategori', '/tatib/kategori/{kategori_id}', '/tatib/jenis',
+                                              '/tatib/jenis-aturan', '/tatib/aturan', '/tatib/aturan/{aturan_id}'):
+            assert wajib_akses_tatib in calls, kunci
+        elif method == 'GET' and route.path in ('/tatib/input/terbaru', '/tatib/stats/summary'):
+            assert wajib_lihat_tatib in calls, kunci
+        elif method == 'GET':
+            # data per siswa: dibatasi di dalam endpoint (siswa: miliknya, wali kelas: kelasnya, lainnya 403)
+            assert 'batasi_query_tatib' in inspect.getsource(route.endpoint), kunci
+        elif method == 'DELETE' and route.path in ('/tatib/input/{catatan_id}', '/tatib/penanganan/{penanganan_id}'):
+            assert any(hanya_admin(c) for c in calls), kunci
+        else:
+            assert wajib_input_tatib in calls, kunci
+
+
+async def test_master_tatib_ditolak_untuk_peran_tanpa_akses_tatib():
+    from routers.tatib_poin import wajib_akses_tatib
+    for r in ('admin', 'guru_tata_tertib', 'guru_bk', 'kepala_sekolah', 'wali_kelas', 'siswa'):
+        assert await wajib_akses_tatib({'id': 'x', 'roles': [r], 'active_role': r})
+    for r in ('guru_mapel', 'guru_piket', 'staf_gtk'):
+        with pytest.raises(HTTPException) as e:
+            await wajib_akses_tatib({'id': 'x', 'roles': [r], 'active_role': r})
+        assert e.value.status_code == 403
