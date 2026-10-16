@@ -182,6 +182,11 @@ async def _tatib_tindakan_riwayat(db):
     return await migrate(db)
 
 
+async def _pengaturan_ambang_sp_riwayat(db):
+    from migrations.migrate_pengaturan_ambang_sp_riwayat import migrate
+    return await migrate(db)
+
+
 async def _pengaturan_ambang_sp(db):
     from migrations.migrate_pengaturan_ambang_sp import migrate
     return await migrate(db)
@@ -207,6 +212,7 @@ MIGRASI = [
     ('2026-10-16_tatib_jenis_pelanggaran', _tatib_jenis_pelanggaran),
     ('2026-10-16_tatib_tindakan', _tatib_tindakan),
     ('2026-10-16_tatib_tindakan_riwayat', _tatib_tindakan_riwayat),
+    ('2026-10-16_pengaturan_ambang_sp_riwayat', _pengaturan_ambang_sp_riwayat),
     ('2026-10-16_pengaturan_ambang_sp', _pengaturan_ambang_sp),
 ]
 

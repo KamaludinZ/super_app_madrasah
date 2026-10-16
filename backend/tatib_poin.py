@@ -307,11 +307,17 @@ async def pastikan_index_riwayat_tindakan(db) -> None:
 # ============================================================
 # Satu dokumen berlaku: {_id: 'ambang_sp', sp1, sp2, sp3, alasan, diubah_oleh_id, diubah_oleh_nama, diubah_pada}.
 # Nilai = akumulasi poin pelanggaran (nilai mutlak) minimal untuk tiap tingkat; wajib 1 <= sp1 < sp2 < sp3.
-# Setiap perubahan dicatat di `pengaturan_ambang_sp_riwayat`: {id, waktu, oleh_id, oleh_nama, dari, ke, alasan}.
+# Setiap perubahan dicatat di `pengaturan_ambang_sp_riwayat` (audit, tidak pernah diubah/dihapus):
+#     {id, waktu, oleh_id, oleh_nama, dari: {sp1,sp2,sp3}|None, ke: {sp1,sp2,sp3}, alasan}
 KOLEKSI_AMBANG_SP = 'pengaturan_ambang_sp'
 KOLEKSI_RIWAYAT_AMBANG_SP = 'pengaturan_ambang_sp_riwayat'
 ID_AMBANG_SP = 'ambang_sp'
 MAKS_AMBANG_SP = 10000
+INDEX_RIWAYAT_AMBANG_SP = [
+    ([('waktu', -1)], {}),
+    ([('oleh_id', 1), ('waktu', -1)], {}),
+    ([('id', 1)], {'unique': True, 'name': 'id_unik'}),
+]
 
 
 def validasi_ambang_sp(sp1, sp2, sp3) -> dict:
@@ -325,6 +331,25 @@ def validasi_ambang_sp(sp1, sp2, sp3) -> dict:
     if not 1 <= nilai['sp1'] < nilai['sp2'] < nilai['sp3'] <= MAKS_AMBANG_SP:
         raise ValueError(f'Ambang SP harus naik: 1 <= SP1 < SP2 < SP3 <= {MAKS_AMBANG_SP}')
     return nilai
+
+
+def entri_riwayat_ambang(dari: Optional[dict], ke: dict, oleh: Optional[dict], waktu: str, alasan: Optional[str] = None) -> dict:
+    """Satu dokumen riwayat perubahan ambang SP. `oleh` None = perubahan oleh sistem."""
+    ambil = lambda d: {k: d.get(k) for k in ('sp1', 'sp2', 'sp3')} if d else None  # noqa: E731
+    return {
+        'id': str(uuid.uuid4()),
+        'waktu': waktu,
+        'oleh_id': (oleh or {}).get('id'),
+        'oleh_nama': ((oleh or {}).get('full_name') or (oleh or {}).get('username')) if oleh else 'Sistem',
+        'dari': ambil(dari),
+        'ke': ambil(ke),
+        'alasan': (alasan or '').strip() or None,
+    }
+
+
+async def pastikan_index_riwayat_ambang(db) -> None:
+    for keys, opsi in INDEX_RIWAYAT_AMBANG_SP:
+        await db[KOLEKSI_RIWAYAT_AMBANG_SP].create_index(keys, **opsi)
 
 
 async def ambil_ambang_sp(db) -> dict:

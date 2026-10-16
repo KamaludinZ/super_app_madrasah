@@ -112,3 +112,31 @@ async def test_ambang_sp_menyimpan_alasan_dan_migrasi_terdaftar(db):
     await db.pengaturan_ambang_sp.update_one({'_id': 'ambang_sp'}, {'$unset': {'alasan': ''}})
     await migrate_ambang(db)  # dokumen lama tanpa alasan dilengkapi
     assert 'alasan' in await db.pengaturan_ambang_sp.find_one({'_id': 'ambang_sp'})
+
+
+# ---- Riwayat perubahan ambang SP ----
+from tatib_poin import entri_riwayat_ambang  # noqa: E402
+from migrations.migrate_pengaturan_ambang_sp_riwayat import migrate as migrate_riwayat_ambang  # noqa: E402
+
+
+def test_entri_riwayat_ambang():
+    e = entri_riwayat_ambang({'sp1': 25, 'sp2': 50, 'sp3': 75, 'diubah_pada': 'x'}, {'sp1': 30, 'sp2': 50, 'sp3': 90},
+                             {'id': 'u1', 'full_name': 'Admin'}, '2026-10-16T09:00:00', '  rapat  ')
+    assert e['id'] and (e['oleh_id'], e['oleh_nama'], e['alasan']) == ('u1', 'Admin', 'rapat')
+    assert e['dari'] == {'sp1': 25, 'sp2': 50, 'sp3': 75} and e['ke'] == {'sp1': 30, 'sp2': 50, 'sp3': 90}
+    sistem = entri_riwayat_ambang(None, {'sp1': 1, 'sp2': 2, 'sp3': 3}, None, 'w')
+    assert (sistem['oleh_nama'], sistem['oleh_id'], sistem['dari'], sistem['alasan']) == ('Sistem', None, None, None)
+
+
+async def test_migrasi_riwayat_ambang_merapikan_dan_index(db):
+    await db.pengaturan_ambang_sp_riwayat.insert_many([
+        {'waktu': '2026-10-01T00:00:00', 'ke': {'sp1': 20, 'sp2': 40, 'sp3': 60}},  # entri lama minim
+        {'id': 'r2', 'waktu': '2026-10-02T00:00:00', 'oleh_id': 'u1', 'oleh_nama': 'Admin', 'dari': None, 'ke': {'sp1': 25, 'sp2': 50, 'sp3': 75}, 'alasan': 'x'},
+    ])
+    hasil = await migrate_riwayat_ambang(db)
+    assert hasil == {'diberi_id': 1, 'field_dilengkapi': 4, 'jumlah_riwayat': 2}
+    lama = await db.pengaturan_ambang_sp_riwayat.find_one({'waktu': '2026-10-01T00:00:00'})
+    assert lama['id'] and (lama['oleh_nama'], lama['dari'], lama['ke']['sp1']) == ('Sistem', None, 20)
+    assert await migrate_riwayat_ambang(db) == {'diberi_id': 0, 'field_dilengkapi': 0, 'jumlah_riwayat': 2}
+    nama = {i['name'] for i in await db.pengaturan_ambang_sp_riwayat.list_indexes().to_list(None)}
+    assert {'id_unik', 'waktu_-1', 'oleh_id_1_waktu_-1'} <= nama
