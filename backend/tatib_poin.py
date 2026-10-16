@@ -163,6 +163,18 @@ def field_jenis_aturan(aturan: dict) -> dict:
     }
 
 
+# Master Jenis Pelanggaran: kode aturan disimpan HURUF BESAR tanpa spasi tepi (unik tanpa beda huruf).
+POLA_KODE_ATURAN = r'^[A-Z0-9][A-Z0-9._/-]{0,19}$'
+MAKS_BESAR_POIN = 1000
+MAKS_NAMA_JENIS = 150
+MAKS_DESKRIPSI_JENIS = 500
+
+
+def normalisasi_kode(kode: Optional[str]) -> str:
+    """Kode aturan baku: spasi dibuang, huruf besar (mis. ' dis-01 ' -> 'DIS-01')."""
+    return ''.join((kode or '').split()).upper()
+
+
 def poin_jenis_aturan(aturan: dict) -> int:
     """Nilai bertanda satu pencatatan dari master jenis: jalur minus -> negatif."""
     f = field_jenis_aturan(aturan)

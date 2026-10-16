@@ -2,19 +2,21 @@
 from typing import Dict, List, Optional
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 import uuid
 import pandas as pd
 import io
+import re
 
 from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
 from journal_core import tanggal_wib
-from tatib_poin import (ASAL_INPUT, JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
-                        kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kondisi, poin_jenis_aturan)
+from tatib_poin import (ASAL_INPUT, JALUR_POIN, JENIS_POIN, MAKS_BESAR_POIN, MAKS_DESKRIPSI_JENIS, MAKS_NAMA_JENIS,
+                        POLA_KODE_ATURAN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
+                        kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kode, normalisasi_kondisi, poin_jenis_aturan)
 from routers.tatib_poin import (batasi_query_tatib, cek_asal_input, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib,
                                 wajib_lihat_tatib)
 
@@ -74,6 +76,47 @@ class PenangananRequest(BaseModel):
     kondisi_id: Optional[str] = None  # kondisi pelaksanaan; nilai poin dihitung dari aturan + kondisi
     semester_id: Optional[str] = None
     asal_input: Optional[str] = None  # sumber pencatatan (ASAL_INPUT)
+
+
+class JenisAturanRequest(BaseModel):
+    """Isian Master Jenis Pelanggaran. Kode dinormalkan huruf besar; poin bertanda dihitung dari jalur."""
+    kode_aturan: str
+    nama: str
+    jalur_poin: str
+    besar_poin: int = Field(ge=1, le=MAKS_BESAR_POIN)
+    kategori_id: str
+    deskripsi: Optional[str] = None
+
+    @field_validator('kode_aturan')
+    @classmethod
+    def _kode(cls, v: str) -> str:
+        kode = normalisasi_kode(v)
+        if not re.match(POLA_KODE_ATURAN, kode):
+            raise ValueError('Kode aturan 1-20 karakter: huruf, angka, titik, garis miring, atau tanda hubung')
+        return kode
+
+    @field_validator('nama')
+    @classmethod
+    def _nama(cls, v: str) -> str:
+        nama = ' '.join((v or '').split())
+        if not nama or len(nama) > MAKS_NAMA_JENIS:
+            raise ValueError(f'Nama jenis wajib diisi (maks {MAKS_NAMA_JENIS} karakter)')
+        return nama
+
+    @field_validator('jalur_poin')
+    @classmethod
+    def _jalur(cls, v: str) -> str:
+        if v not in JALUR_POIN:
+            raise ValueError("Jalur poin harus 'minus' atau 'plus'")
+        return v
+
+    @field_validator('deskripsi')
+    @classmethod
+    def _deskripsi(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or '').strip()
+        if len(v) > MAKS_DESKRIPSI_JENIS:
+            raise ValueError(f'Deskripsi maksimal {MAKS_DESKRIPSI_JENIS} karakter')
+        return v or None
 
 
 class TindakLanjutRequest(BaseModel):
