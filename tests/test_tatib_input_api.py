@@ -268,8 +268,12 @@ async def test_jalur_catat_lama_menerima_dan_menyimpan_asal_input(db, data_input
     c = await api.catat_poin_jalur('pelanggaran', req, PETUGAS)
     assert (c['asal_input'], c['jenis_id'], c['kategori_id'], c['keterangan'], c['poin']) == ('Whatsapp', 'lama1', data_input['kategori']['id'], 'x', -4)
 
-    tanpa = await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01'), PETUGAS)
-    assert tanpa['asal_input'] is None  # belum diwajibkan pada jalur lama
+    # asal input wajib untuk catatan baru di semua endpoint catat
+    for catat in (lambda r: api.catat_poin_jalur('pelanggaran', r, PETUGAS), lambda r: api.create_penanganan(r, PETUGAS)):
+        with pytest.raises(HTTPException) as e:
+            await catat(api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01'))
+        assert e.value.status_code == 400 and 'Asal input' in e.value.detail
+    assert await db.tatib_penanganan.count_documents({}) == 1
 
     with pytest.raises(HTTPException) as e:
         await api.catat_poin_jalur('pelanggaran', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', asal_input='SMS'), PETUGAS)
@@ -279,6 +283,10 @@ async def test_jalur_catat_lama_menerima_dan_menyimpan_asal_input(db, data_input
     assert (u['asal_input'], u['keterangan']) == ('BAP', 'y')
     with pytest.raises(HTTPException):
         await api.update_penanganan(c['id'], api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-10-01', asal_input='x'), PETUGAS)
+    # catatan lama tanpa asal input tetap bisa diubah tanpa mengisinya
+    await db.tatib_penanganan.insert_one({'id': 'old', 'siswa_id': 's1', 'tatib_id': 'lama1', 'tanggal': '2026-09-01'})
+    o = await api.update_penanganan('old', api.PenangananRequest(siswa_id='s1', tatib_id='lama1', tanggal='2026-09-02'), PETUGAS)
+    assert o['tanggal'] == '2026-09-02' and o.get('asal_input') is None
 
 
 def test_cek_asal_input():

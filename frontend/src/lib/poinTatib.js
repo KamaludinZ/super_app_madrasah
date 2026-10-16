@@ -51,10 +51,10 @@ export async function ambilAturanPoin(jenis) {
 }
 
 // Catat poin lewat jalurnya; server menghitung nilai dari aturan + kondisi.
-export async function catatPoin(jenis, { siswa_id, aturan_id, kondisi_id, tanggal, catatan }) {
+export async function catatPoin(jenis, { siswa_id, aturan_id, kondisi_id, tanggal, asal_input, catatan }) {
   const periode = await konteksPeriode();
   const { data } = await api.post(`/tatib/poin/${jenis}`, {
-    siswa_id, tatib_id: aturan_id, kondisi_id, tanggal, catatan: catatan || null, ...periode,
+    siswa_id, tatib_id: aturan_id, kondisi_id, tanggal, asal_input, catatan: catatan || null, ...periode,
   });
   return data;
 }

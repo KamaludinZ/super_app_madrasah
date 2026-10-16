@@ -646,8 +646,8 @@ def _nilai_atau_400(tatib: Dict, kondisi_id: Optional[str]) -> Dict:
 
 async def catat_poin(req: PenangananRequest, user: Dict, jenis_wajib: Optional[str] = None) -> Dict:
     """Simpan satu catatan poin. Nilai SELALU dihitung server dari aturan + kondisi;
-    `jenis_wajib` memastikan aturan sesuai jalur (kebaikan/pelanggaran)."""
-    asal_input = cek_asal_input(req.asal_input)
+    `jenis_wajib` memastikan aturan sesuai jalur (kebaikan/pelanggaran). Asal input wajib untuk catatan baru."""
+    asal_input = cek_asal_input(req.asal_input, wajib=True)
     siswa = await _cari_siswa(req.siswa_id)
     if not siswa:
         raise HTTPException(404, "Siswa tidak ditemukan")
