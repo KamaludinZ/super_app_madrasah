@@ -24,6 +24,16 @@ export function usulkanSP(poinNegatif, ambang = AMBANG_SP_BAWAAN) {
   return null;
 }
 
+// Tingkat SP berikutnya yang belum terlampaui beserta sisa poinnya, atau null bila sudah SP3.
+export function ambangBerikutnya(poinNegatif, ambang = AMBANG_SP_BAWAAN) {
+  const n = Math.abs(Number(poinNegatif) || 0);
+  const tingkat = TINGKAT_SP.find((sp) => n < ambang[sp.toLowerCase()]);
+  return tingkat ? { sp: tingkat, ambang: ambang[tingkat.toLowerCase()], sisa: ambang[tingkat.toLowerCase()] - n } : null;
+}
+
+// true bila usulan otomatis lebih berat daripada SP yang sudah ditetapkan (perlu ditinjau).
+export const usulanLebihTinggi = (usulan, ditetapkan) => TINGKAT_SP.indexOf(usulan) > TINGKAT_SP.indexOf(ditetapkan || '');
+
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
 
 const statusAwal = { status_panggilan_wali: 'Tidak diperlukan', status_sp: 'Tidak perlu', status_rtlpd: 'Tidak diperlukan', keterangan_sp: null };

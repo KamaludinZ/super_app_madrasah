@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Gavel, Loader2 } from 'lucide-react';
+import { AlertTriangle, Gavel, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, pesanGalatTatib } from '@/lib/aksesTatib';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
-import { TINGKAT_SP, ambilTindakan } from '@/lib/tindakanTatib';
+import { TINGKAT_SP, ambangBerikutnya, ambilTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
 
 export const WARNA_SP = {
   SP1: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -43,6 +43,21 @@ const LabelKategori = ({ items, negatif }) => {
           <span className="opacity-60">({k.jumlah}×)</span>
         </span>
       ))}
+    </div>
+  );
+};
+
+// Usulan SP otomatis (dari ambang) + jarak ke tingkat berikutnya.
+const UsulanSP = ({ siswa, ambang }) => {
+  const lanjut = ambang ? ambangBerikutnya(siswa.poin_negatif, ambang) : null;
+  return (
+    <div className="space-y-1">
+      {siswa.usulan_sp ? (
+        <Badge variant="outline" className={WARNA_SP[siswa.usulan_sp]} title={`Akumulasi pelanggaran mencapai ambang ${siswa.usulan_sp}`}>{siswa.usulan_sp}</Badge>
+      ) : <span className="text-xs text-slate-400">Belum ada</span>}
+      {lanjut && siswa.poin_negatif < 0 && (
+        <div className="whitespace-nowrap text-[11px] text-slate-500">{lanjut.sisa} poin lagi ke {lanjut.sp}</div>
+      )}
     </div>
   );
 };
@@ -105,6 +120,7 @@ export default function TatibTindakanPage() {
                     <TableHead rowSpan={2} className="align-bottom">Kelas</TableHead>
                     <TableHead colSpan={2} className="h-8 border-b border-emerald-200 bg-emerald-50 text-center text-emerald-800">Poin Positif</TableHead>
                     <TableHead colSpan={2} className="h-8 border-b border-red-200 bg-red-50 text-center text-red-800">Poin Negatif</TableHead>
+                    <TableHead rowSpan={2} className="align-bottom">Usulan SP</TableHead>
                     <TableHead rowSpan={2} className="align-bottom">Keterangan SP</TableHead>
                     <TableHead colSpan={3} className="h-8 border-b text-center">Status Pembinaan</TableHead>
                   </TableRow>
@@ -132,13 +148,18 @@ export default function TatibTindakanPage() {
                         {s.poin_negatif ? formatPoin(s.poin_negatif) : <span className="text-slate-300">0</span>}
                       </TableCell>
                       <TableCell><LabelKategori items={s.kategori_negatif} negatif /></TableCell>
+                      <TableCell data-testid={`tindakan-usulan-${s.siswa_id}`}>
+                        <UsulanSP siswa={s} ambang={data.ambang} />
+                      </TableCell>
                       <TableCell data-testid={`tindakan-sp-${s.siswa_id}`}>
-                        {s.keterangan_sp || s.usulan_sp ? (
-                          <div className="space-y-1">
-                            <Badge variant="outline" className={WARNA_SP[s.keterangan_sp || s.usulan_sp]}>{s.keterangan_sp || s.usulan_sp}</Badge>
-                            {!s.keterangan_sp && <div className="text-[11px] text-slate-500">usulan otomatis</div>}
-                          </div>
+                        {s.keterangan_sp ? (
+                          <Badge variant="outline" className={WARNA_SP[s.keterangan_sp]}>{s.keterangan_sp}</Badge>
                         ) : <span className="text-slate-300">-</span>}
+                        {usulanLebihTinggi(s.usulan_sp, s.keterangan_sp) && (
+                          <div className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-amber-700" data-testid={`tindakan-tinjau-${s.siswa_id}`}>
+                            <AlertTriangle className="h-3 w-3" /> perlu ditinjau
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell><BadgeStatus nilai={s.status_panggilan_wali} /></TableCell>
                       <TableCell><BadgeStatus nilai={s.status_sp} /></TableCell>
@@ -147,7 +168,7 @@ export default function TatibTindakanPage() {
                   ))}
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={11} className="py-8 text-center text-slate-500">Belum ada siswa yang tercatat poin.</TableCell>
+                      <TableCell colSpan={12} className="py-8 text-center text-slate-500">Belum ada siswa yang tercatat poin.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
