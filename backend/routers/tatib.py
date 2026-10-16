@@ -15,7 +15,7 @@ from routers._shared import sembunyikan_siswa_nonaktif
 from journal_core import tanggal_wib
 from tatib_poin import (ASAL_INPUT, JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
                         kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kondisi, poin_jenis_aturan)
-from routers.tatib_poin import batasi_query_tatib, wajib_akses_tatib, wajib_input_tatib, wajib_lihat_tatib
+from routers.tatib_poin import batasi_query_tatib, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
 
@@ -555,10 +555,14 @@ async def list_penanganan(
     semester: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    asal_input: Optional[str] = None,
     user: Dict = Depends(get_current_user)
 ):
-    """List all penanganan (violations and achievements)."""
+    """Daftar catatan poin (pelanggaran & kebaikan), terbaru dulu; tiap catatan memuat asal_input
+    (catatan lama = null). Filter opsional: siswa, aturan, periode, rentang tanggal, asal input."""
     query = {}
+    if asal_input:
+        query['asal_input'] = cek_asal_input(asal_input)
     if siswa_id:
         query['siswa_id'] = siswa_id
     if tatib_id:
@@ -583,7 +587,7 @@ async def list_penanganan(
     await batasi_query_tatib(user, query)  # siswa: miliknya; wali kelas: kelasnya; peran lain tanpa akses: 403
     await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.tatib_penanganan.find(query, {'_id': 0}).sort('tanggal', -1).to_list(1000)
-    return [serialize_doc(i) for i in items]
+    return [rapikan_catatan(i) for i in items]
 
 
 @router.get("/tatib/penanganan/{penanganan_id}")
@@ -593,7 +597,7 @@ async def get_penanganan(penanganan_id: str, user: Dict = Depends(get_current_us
     if not doc:
         raise HTTPException(404, "Penanganan tidak ditemukan")
     await batasi_query_tatib(user, {'siswa_id': doc.get('siswa_id')})
-    return serialize_doc(doc)
+    return rapikan_catatan(doc)
 
 
 async def _notify_tatib(doc: Dict, siswa: Dict, poin):

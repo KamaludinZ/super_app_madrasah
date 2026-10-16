@@ -295,3 +295,31 @@ def test_cek_asal_input():
     for salah, wajib in (('razia', False), (None, True), ('', True)):
         with pytest.raises(HTTPException):
             api.cek_asal_input(salah, wajib=wajib)
+
+
+async def test_daftar_tatib_selalu_memuat_asal_input_dan_bisa_difilter(db, data_input):
+    admin = {'id': 'u9', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+    await api.simpan_input_tatib(_input(asal_input='Razia'), PETUGAS)
+    await api.simpan_input_tatib(_input(jenis_id='j2', asal_input='Ibadah', tanggal='2026-10-02'), PETUGAS)
+    await db.tatib_penanganan.insert_one({'id': 'lama', 'siswa_id': 's1', 'tatib_id': 'j1', 'tatib_poin': -5, 'catatan': 'c', 'tanggal': '2026-09-01'})
+
+    semua = await api.list_penanganan(user=admin)
+    assert [c['asal_input'] for c in semua] == ['Ibadah', 'Razia', None]
+    lama = semua[-1]
+    assert (lama['poin'], lama['jenis_poin'], lama['keterangan']) == (-5, 'pelanggaran', 'c')
+
+    razia = await api.list_penanganan(asal_input='Razia', user=admin)
+    assert [c['asal_input'] for c in razia] == ['Razia']
+    with pytest.raises(HTTPException) as e:
+        await api.list_penanganan(asal_input='razia', user=admin)
+    assert e.value.status_code == 400
+
+    detail = await api.get_penanganan('lama', admin)
+    assert 'asal_input' in detail and detail['asal_input'] is None
+
+
+def test_rapikan_catatan_memuat_asal_input():
+    from routers.tatib_poin import rapikan_catatan
+    r = rapikan_catatan({'id': 'x', 'tatib_poin': -3, 'catatan': 'lama'})
+    assert (r['asal_input'], r['keterangan'], r['poin']) == (None, 'lama', -3)
+    assert rapikan_catatan({'id': 'y', 'poin': 2, 'asal_input': 'BAP', 'keterangan': 'k', 'catatan': 'c'})['keterangan'] == 'k'

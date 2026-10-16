@@ -173,8 +173,9 @@ async def siswa_perlu_perhatian(user: Dict = Depends(wajib_wali_kelas)):
 # RINGKASAN POIN & RIWAYAT SATU SISWA
 # ============================================================
 
-def _rapikan_catatan(r: Dict) -> Dict:
-    """Catatan untuk tampilan: nilai bertanda + jenis + field poin baku walau catatan lama."""
+def rapikan_catatan(r: Dict) -> Dict:
+    """Catatan untuk tampilan: nilai bertanda + jenis + field poin baku walau catatan lama
+    (asal_input selalu ada: catatan sebelum fitur asal input = None)."""
     poin = nilai_poin(r)
     return serialize_doc({
         **r,
@@ -182,6 +183,8 @@ def _rapikan_catatan(r: Dict) -> Dict:
         'jenis_poin': r.get('jenis_poin') or jenis_dari_poin(poin),
         'kondisi': r.get('kondisi'),
         'tindak_lanjut': r.get('tindak_lanjut') or [],
+        'asal_input': r.get('asal_input'),
+        'keterangan': r.get('keterangan') if r.get('keterangan') is not None else r.get('catatan'),
     })
 
 
@@ -201,7 +204,7 @@ async def paket_poin_siswa(siswa_id: str, filter_periode: Optional[Dict] = None)
                   'kelas': (kelas or {}).get('name')},
         **rangkum_poin(records, batas),
         'batas_minus_perhatian': batas,
-        'records': [_rapikan_catatan(r) for r in records],
+        'records': [rapikan_catatan(r) for r in records],
     }
 
 
@@ -256,7 +259,7 @@ async def detail_catatan_poin(catatan_id: str, user: Dict = Depends(get_current_
     if not doc:
         raise HTTPException(404, "Catatan poin tidak ditemukan")
     await batasi_query_tatib(user, {'siswa_id': doc.get('siswa_id')})
-    return _rapikan_catatan(doc)
+    return rapikan_catatan(doc)
 
 
 # ============================================================
