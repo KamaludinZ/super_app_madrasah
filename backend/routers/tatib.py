@@ -15,7 +15,8 @@ from routers._shared import sembunyikan_siswa_nonaktif
 from journal_core import tanggal_wib
 from tatib_poin import (ASAL_INPUT, JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
                         kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kondisi, poin_jenis_aturan)
-from routers.tatib_poin import batasi_query_tatib, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib, wajib_lihat_tatib
+from routers.tatib_poin import (batasi_query_tatib, cek_asal_input, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib,
+                                wajib_lihat_tatib)
 
 router = APIRouter()
 
@@ -630,15 +631,6 @@ async def _cari_siswa(siswa_id: str) -> Optional[Dict]:
             kelas = await db.classes.find_one({'id': akun['student_class_id']}, {'_id': 0, 'name': 1})
         return {**akun, 'class_id': akun.get('student_class_id'), 'class_name': (kelas or {}).get('name')}
     return await db.students.find_one({'id': siswa_id}, {'_id': 0})
-
-
-def cek_asal_input(nilai: Optional[str], wajib: bool = False) -> Optional[str]:
-    """Asal input harus salah satu dari daftar baku (ASAL_INPUT); kosong boleh bila tidak wajib."""
-    if nilai in (None, '') and not wajib:
-        return None
-    if nilai not in ASAL_INPUT:
-        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
-    return nilai
 
 
 def _nilai_atau_400(tatib: Dict, kondisi_id: Optional[str]) -> Dict:

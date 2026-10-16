@@ -323,3 +323,25 @@ def test_rapikan_catatan_memuat_asal_input():
     r = rapikan_catatan({'id': 'x', 'tatib_poin': -3, 'catatan': 'lama'})
     assert (r['asal_input'], r['keterangan'], r['poin']) == (None, 'lama', -3)
     assert rapikan_catatan({'id': 'y', 'poin': 2, 'asal_input': 'BAP', 'keterangan': 'k', 'catatan': 'c'})['keterangan'] == 'k'
+
+
+async def test_rekap_bisa_difilter_asal_input(db, data_input, monkeypatch):
+    from routers import tatib_poin as rekap_api
+    monkeypatch.setattr(rekap_api, 'db', db)
+    pimpinan = {'id': 'k1', 'roles': ['kepala_sekolah'], 'active_role': 'kepala_sekolah'}
+    await api.simpan_input_tatib(_input(asal_input='Razia'), PETUGAS)
+    await api.simpan_input_tatib(_input(asal_input='Razia', tanggal='2026-10-02'), PETUGAS)
+    await api.simpan_input_tatib(_input(jenis_id='j2', asal_input='Ibadah'), PETUGAS)
+
+    semua = await rekap_api.rekap_poin(user=pimpinan)
+    assert (semua['ringkasan']['jumlah_pelanggaran'], semua['ringkasan']['jumlah_kebaikan']) == (2, 1)
+    razia = await rekap_api.rekap_poin(asal_input='Razia', user=pimpinan)
+    assert (razia['ringkasan']['jumlah_pelanggaran'], razia['ringkasan']['jumlah_kebaikan'], razia['ringkasan']['total_minus']) == (2, 0, -10)
+    ibadah = await rekap_api.rekap_poin(asal_input='Ibadah', user=pimpinan)
+    assert ibadah['ringkasan']['jumlah_kebaikan'] == 1 and ibadah['ringkasan']['jumlah_pelanggaran'] == 0
+    with pytest.raises(HTTPException) as e:
+        await rekap_api.rekap_poin(asal_input='SMS', user=pimpinan)
+    assert e.value.status_code == 400
+
+    unduh = await rekap_api.ekspor_rekap_poin(asal_input='Screening pagi', user=pimpinan)
+    assert 'screening-pagi' in unduh.headers['content-disposition']

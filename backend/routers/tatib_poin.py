@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from core import db, get_current_user, serialize_doc
 from routers._shared import FILTER_SISWA_AKTIF, sembunyikan_siswa_nonaktif
 from tatib_poin import (
-    BATAS_MINUS_PERHATIAN, FIELD_BATAS_PERHATIAN, KOLEKSI_POIN, akses_tatib, jenis_dari_poin, nilai_poin,
+    ASAL_INPUT, BATAS_MINUS_PERHATIAN, FIELD_BATAS_PERHATIAN, KOLEKSI_POIN, akses_tatib, jenis_dari_poin, nilai_poin,
     rangkum_poin, susun_rekap,
 )
 
@@ -266,6 +266,15 @@ async def detail_catatan_poin(catatan_id: str, user: Dict = Depends(get_current_
 # REKAP PENGAWAS (read-only pimpinan & pengelola tatib)
 # ============================================================
 
+def cek_asal_input(nilai: Optional[str], wajib: bool = False) -> Optional[str]:
+    """Asal input harus salah satu dari daftar baku (ASAL_INPUT); kosong boleh bila tidak wajib."""
+    if nilai in (None, '') and not wajib:
+        return None
+    if nilai not in ASAL_INPUT:
+        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
+    return nilai
+
+
 def _tanggal_valid(nilai: Optional[str], nama: str) -> Optional[str]:
     """Tanggal filter harus YYYY-MM-DD (400 bila tidak)."""
     if not nilai:
@@ -287,8 +296,9 @@ def _rentang_tanggal(dari: Optional[str], sampai: Optional[str]) -> Dict:
 
 
 async def query_rekap(kelas: Optional[str], semester_id: Optional[str], tahun_takwim_id: Optional[str],
-                      start_date: Optional[str], end_date: Optional[str], semester: Optional[str] = None) -> Dict:
-    """Query catatan untuk rekap (filter kelas & periode).
+                      start_date: Optional[str], end_date: Optional[str], semester: Optional[str] = None,
+                      asal_input: Optional[str] = None) -> Dict:
+    """Query catatan untuk rekap (filter kelas, periode, dan asal input pencatatan).
     semester_id: catatan ber-semester_id itu, atau catatan lama tanpa semester_id yang tanggalnya
     di dalam rentang semester. semester (kode lama, mis. 'ganjil') mencocokkan field `semester`."""
     syarat: List[Dict] = []
@@ -307,6 +317,8 @@ async def query_rekap(kelas: Optional[str], semester_id: Optional[str], tahun_ta
         syarat.append({'$or': [{'semester_id': semester_id}, lama]})
     if start_date or end_date:
         syarat.append({'tanggal': _rentang_tanggal(start_date, end_date)})
+    if asal_input:
+        syarat.append({'asal_input': asal_input})
     if not syarat:
         return {}
     return syarat[0] if len(syarat) == 1 else {'$and': syarat}
@@ -331,12 +343,13 @@ async def kelas_dan_siswa(kelas: Optional[str]) -> Dict[str, List[str]]:
 
 
 async def data_rekap(kelas=None, semester_id=None, tahun_takwim_id=None, start_date=None, end_date=None,
-                     semester=None) -> Dict:
+                     semester=None, asal_input=None) -> Dict:
+    asal_input = cek_asal_input(asal_input)
     start_date = _tanggal_valid(start_date, 'tanggal awal')
     end_date = _tanggal_valid(end_date, 'tanggal akhir')
     if start_date and end_date and start_date > end_date:
         raise HTTPException(400, "Tanggal awal tidak boleh setelah tanggal akhir")
-    query = await query_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    query = await query_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
     await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)
     records = await db[KOLEKSI_POIN].find(query, {'_id': 0}).to_list(20000)
     return susun_rekap(records, await kelas_dan_siswa(kelas), await ambang_perhatian())
@@ -350,11 +363,13 @@ async def rekap_poin(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
+    asal_input: Optional[str] = None,
     user: Dict = Depends(wajib_akses('input', 'lihat')),
 ):
     """Rekap poin lintas kelas & periode: ringkasan, per kelas, aturan terbanyak (kebaikan & pelanggaran).
-    Filter: kelas (nama), semester_id / semester (kode lama), tahun_takwim_id, start_date..end_date (YYYY-MM-DD)."""
-    return await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    Filter: kelas (nama), semester_id / semester (kode lama), tahun_takwim_id, start_date..end_date (YYYY-MM-DD),
+    asal_input (salah satu ASAL_INPUT)."""
+    return await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
 
 
 
@@ -366,19 +381,23 @@ async def ekspor_rekap_poin(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
+    asal_input: Optional[str] = None,
     user: Dict = Depends(wajib_akses('input', 'lihat')),
 ):
     """Unduh Rekap Pengawas (.xlsx) dengan filter yang sama seperti GET /tatib/rekap."""
     from excel_io import export_rekap_tatib_xlsx
-    rekap = await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester)
+    rekap = await data_rekap(kelas, semester_id, tahun_takwim_id, start_date, end_date, semester, asal_input)
     sem = await db.semesters.find_one({'id': semester_id}, {'_id': 0, 'name': 1}) if semester_id else None
     bagian = [f"Kelas {kelas}" if kelas else 'Semua kelas']
     if sem:
         bagian.append(f"Semester {sem.get('name')}")
     if start_date or end_date:
         bagian.append(f"Tanggal {start_date or '…'} s.d. {end_date or '…'}")
+    if asal_input:
+        bagian.append(f"Asal input {asal_input}")
     keterangan = 'Filter: ' + ' · '.join(bagian) + f" · diunduh {now_wib().strftime('%Y-%m-%d %H:%M')}"
-    nama = '_'.join(filter(None, ['rekap_poin_tatib', f"kelas-{kelas}" if kelas else '', start_date, end_date,
+    asal = '-'.join(asal_input.lower().split()) if asal_input else ''
+    nama = '_'.join(filter(None, ['rekap_poin_tatib', f"kelas-{kelas}" if kelas else '', asal, start_date, end_date,
                                   now_wib().strftime('%Y%m%d')]))
     return StreamingResponse(
         io.BytesIO(export_rekap_tatib_xlsx(rekap, keterangan)),
