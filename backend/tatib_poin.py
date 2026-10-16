@@ -123,6 +123,69 @@ async def pastikan_index_aturan(db) -> None:
 
 
 # ============================================================
+# STRUKTUR BARU: kategori -> jenis aturan -> pencatatan (Input Tata Tertib terpadu)
+# ============================================================
+# `tatib_kategori`  + nama_key (huruf kecil, unik) agar nama kategori tidak ganda.
+# `tatib_aturan`    = master JENIS aturan; field kanonis baru (field lama tetap diisi demi kompatibilitas):
+#     kode_aturan (unik, = kode), nama (= nama_aturan), jalur_poin 'minus'|'plus' (= jenis_poin),
+#     besar_poin (int >= 0; nilai bertanda = poin), kategori_id/kategori_nama, deskripsi, aktif (= is_active).
+#     Jenis nonaktif tidak bisa dipakai mencatat, tetapi riwayatnya tetap ada.
+# `tatib_penanganan` (KOLEKSI_POIN) mendapat: jenis_id (= tatib_id), kategori_id, keterangan (= catatan),
+#     asal_input (daftar ASAL_INPUT; catatan lama = None).
+JALUR_MINUS = 'minus'
+JALUR_PLUS = 'plus'
+JALUR_POIN = (JALUR_MINUS, JALUR_PLUS)
+ASAL_INPUT = ('BIPH', 'Screening pagi', 'Ibadah', 'Keputrian', 'Whatsapp', 'BAP', 'Razia', 'Laporan langsung')
+
+
+def jalur_dari_jenis_poin(jenis_poin: Optional[str]) -> str:
+    return JALUR_MINUS if jenis_poin == JENIS_PELANGGARAN else JALUR_PLUS
+
+
+def jenis_poin_dari_jalur(jalur: Optional[str]) -> str:
+    return JENIS_PELANGGARAN if jalur == JALUR_MINUS else JENIS_KEBAIKAN
+
+
+def kunci_nama(teks: Optional[str]) -> str:
+    """Kunci pembanding nama (spasi dirapikan, huruf kecil) untuk mencegah nama kategori ganda."""
+    return ' '.join((teks or '').split()).lower()
+
+
+def field_jenis_aturan(aturan: dict) -> dict:
+    """Field kanonis jenis aturan yang diturunkan dari field lama (untuk migrasi & dokumen lama)."""
+    jenis = aturan.get('jenis_poin') or jenis_dari_poin(aturan.get('poin'))
+    return {
+        'kode_aturan': aturan.get('kode_aturan') or aturan.get('kode'),
+        'nama': aturan.get('nama') or aturan.get('nama_aturan'),
+        'jalur_poin': aturan.get('jalur_poin') or jalur_dari_jenis_poin(jenis),
+        'besar_poin': abs(int(aturan.get('besar_poin') if aturan.get('besar_poin') is not None else (aturan.get('poin') or 0))),
+        'aktif': aturan.get('aktif') if aturan.get('aktif') is not None else aturan.get('is_active', True) is not False,
+    }
+
+
+def poin_jenis_aturan(aturan: dict) -> int:
+    """Nilai bertanda satu pencatatan dari master jenis: jalur minus -> negatif."""
+    f = field_jenis_aturan(aturan)
+    return -f['besar_poin'] if f['jalur_poin'] == JALUR_MINUS else f['besar_poin']
+
+
+INDEX_STRUKTUR = {
+    'tatib_kategori': [([('nama_key', 1)], {'unique': True, 'name': 'nama_key_unik',
+                                            'partialFilterExpression': {'nama_key': {'$type': 'string'}}})],
+    'tatib_aturan': [
+        ([('kode_aturan', 1)], {'unique': True, 'name': 'kode_aturan_unik',
+                                'partialFilterExpression': {'kode_aturan': {'$type': 'string'}}}),
+        ([('kategori_id', 1), ('aktif', 1)], {}),
+    ],
+    KOLEKSI_POIN: [
+        ([('created_at', -1)], {}),
+        ([('jenis_id', 1), ('tanggal', -1)], {}),
+        ([('asal_input', 1), ('tanggal', -1)], {}),
+    ],
+}
+
+
+# ============================================================
 # AKSES & RANGKUMAN (dipakai routers/tatib_poin.py)
 # ============================================================
 # Sama dengan frontend/src/lib/aksesTatib.js.
