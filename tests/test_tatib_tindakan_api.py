@@ -193,3 +193,31 @@ async def test_riwayat_tindakan_per_siswa(db, tanpa_audit):
     with pytest.raises(HTTPException) as e:
         await api.riwayat_tindakan_siswa('tidak-ada', user=PIMPINAN)
     assert e.value.status_code == 404
+
+
+def test_semua_endpoint_tindakan_berpenjaga_peran():
+    """Baca (GET): peran input + lihat tatib. Ubah (selain GET): hanya peran input (admin, guru tatib, waka kesiswaan)."""
+    from routers.tatib_poin import wajib_input_tatib, wajib_lihat_tatib
+    assert api.router.routes, 'router tindakan kosong'
+    for route in api.router.routes:
+        calls = [d.call for d in route.dependant.dependencies]
+        for method in route.methods:
+            harus = wajib_lihat_tatib if method == 'GET' else wajib_input_tatib
+            assert harus in calls, f'{method} {route.path}'
+
+
+async def test_penjaga_peran_tindakan():
+    from routers.tatib_poin import wajib_input_tatib, wajib_lihat_tatib
+    peran = lambda r: {'id': 'x', 'roles': [r], 'active_role': r}  # noqa: E731
+    for r in ('admin', 'guru_tata_tertib', 'waka_kesiswaan'):
+        assert await wajib_input_tatib(peran(r)) and await wajib_lihat_tatib(peran(r))
+    for r in ('guru_bk', 'kepala_sekolah', 'penjamin_mutu', 'kepala_tata_usaha', 'waka_kurikulum'):
+        assert await wajib_lihat_tatib(peran(r))
+        with pytest.raises(HTTPException) as e:
+            await wajib_input_tatib(peran(r))
+        assert e.value.status_code == 403
+    for r in ('wali_kelas', 'siswa', 'guru_mapel', 'guru_piket'):
+        with pytest.raises(HTTPException):
+            await wajib_lihat_tatib(peran(r))
+    # admin tetap boleh mengubah walau peran aktifnya lain
+    assert await wajib_input_tatib({'id': 'x', 'roles': ['admin', 'guru_mapel'], 'active_role': 'guru_mapel'})
