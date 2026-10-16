@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ListChecks, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ListChecks, Loader2, Pencil, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { bolehInputTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
-import { ambilMasterJenis } from '@/lib/masterJenisTatib';
+import FormJenisAturan from '@/components/tatib/FormJenisAturan';
+import { ambilKategoriMaster, ambilMasterJenis, simpanMasterJenis } from '@/lib/masterJenisTatib';
 
 // Master Jenis Pelanggaran: daftar jenis aturan (pelanggaran & kebaikan) beserta kode, kategori,
 // jalur, dan besar poin yang dipakai otomatis saat mencatat di Input Tata Tertib.
@@ -16,24 +18,47 @@ export default function TatibMasterJenisPage() {
   const { activeRole } = useAuth();
   const bolehUbah = bolehInputTatib(activeRole);
   const [jenisList, setJenisList] = useState([]);
+  const [kategoriList, setKategoriList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ open: false, jenis: null });
 
   useEffect(() => {
-    ambilMasterJenis()
-      .then(setJenisList)
+    Promise.all([ambilMasterJenis(), ambilKategoriMaster()])
+      .then(([jenis, kategori]) => {
+        setJenisList(jenis);
+        setKategoriList(kategori);
+      })
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat master jenis pelanggaran')))
       .finally(() => setLoading(false));
   }, []);
 
+  const bukaForm = (jenis = null) => {
+    if (tolakUbahTatib(activeRole)) return;
+    setForm({ open: true, jenis });
+  };
+
+  const simpan = async (isian) => {
+    const hasil = await simpanMasterJenis(isian);
+    setJenisList(await ambilMasterJenis());
+    return hasil;
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="tatib-master-jenis-page">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ListChecks className="h-6 w-6" /> Master Jenis Pelanggaran
-        </h1>
-        <p className="text-sm text-slate-600">
-          Daftar jenis aturan beserta kode, kategori, jalur, dan besar poin. Poin di sini dipakai otomatis saat mencatat tata tertib.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ListChecks className="h-6 w-6" /> Master Jenis Pelanggaran
+          </h1>
+          <p className="text-sm text-slate-600">
+            Daftar jenis aturan beserta kode, kategori, jalur, dan besar poin. Poin di sini dipakai otomatis saat mencatat tata tertib.
+          </p>
+        </div>
+        {bolehUbah && (
+          <Button onClick={() => bukaForm()} data-testid="master-jenis-tambah">
+            <Plus className="h-4 w-4 mr-2" /> Tambah Jenis
+          </Button>
+        )}
       </div>
 
       {!bolehUbah && <BannerModeLihat />}
@@ -55,6 +80,7 @@ export default function TatibMasterJenisPage() {
                     <TableHead>Jalur</TableHead>
                     <TableHead className="text-right">Besar Poin</TableHead>
                     <TableHead>Status</TableHead>
+                    {bolehUbah && <TableHead className="w-16 text-right">Aksi</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -77,11 +103,18 @@ export default function TatibMasterJenisPage() {
                       <TableCell>
                         {j.aktif ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Aktif</Badge> : <Badge variant="secondary">Nonaktif</Badge>}
                       </TableCell>
+                      {bolehUbah && (
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => bukaForm(j)} aria-label={`Ubah ${j.kode_aturan}`} data-testid={`master-jenis-ubah-${j.id}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {jenisList.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-slate-500">Belum ada jenis aturan.</TableCell>
+                      <TableCell colSpan={bolehUbah ? 7 : 6} className="py-8 text-center text-slate-500">Belum ada jenis aturan.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -90,6 +123,14 @@ export default function TatibMasterJenisPage() {
           )}
         </CardContent>
       </Card>
+
+      <FormJenisAturan
+        open={form.open}
+        onOpenChange={(open) => setForm((f) => ({ ...f, open }))}
+        jenis={form.jenis}
+        kategoriList={kategoriList}
+        onSimpan={simpan}
+      />
     </div>
   );
 }

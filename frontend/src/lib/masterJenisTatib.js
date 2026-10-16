@@ -33,3 +33,24 @@ const tampil = (j) => ({
 export const ambilMasterJenis = () => jeda(jenisTiruan.map(tampil));
 
 export const ambilKategoriMaster = () => jeda(kategoriTiruan);
+
+// Tambah (tanpa id) atau ubah jenis aturan. Kode dirapikan huruf besar tanpa spasi tepi.
+export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, besar_poin, kategori_id, deskripsi }) {
+  const isian = {
+    kode_aturan: (kode_aturan || '').trim().toUpperCase(),
+    nama: (nama || '').trim(),
+    jalur_poin,
+    besar_poin: Math.abs(parseInt(besar_poin, 10) || 0),
+    kategori_id,
+    deskripsi: (deskripsi || '').trim(),
+  };
+  if (id) {
+    const i = jenisTiruan.findIndex((j) => j.id === id);
+    if (i < 0) throw new Error('Jenis aturan tidak ditemukan');
+    jenisTiruan[i] = { ...jenisTiruan[i], ...isian };
+    return jeda(tampil(jenisTiruan[i]));
+  }
+  const baru = { id: `jen-${Date.now()}`, ...isian, aktif: true, jumlah_catatan: 0 };
+  jenisTiruan.push(baru);
+  return jeda(tampil(baru));
+}
