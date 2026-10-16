@@ -145,3 +145,76 @@ async def test_simpan_input_validasi(db, data_input, isian, status, pesan):
         await api.simpan_input_tatib(_input(**isian), PETUGAS)
     assert e.value.status_code == status and pesan in e.value.detail
     assert await db.tatib_penanganan.count_documents({}) == 0
+
+
+async def test_daftar_terbaru_urut_waktu_input_dan_filter_siswa(db, data_input):
+    await db.users.insert_one({'id': 's2', 'roles': ['siswa'], 'full_name': 'Budi', 'student_class_id': 'c7a'})
+    await db.tatib_penanganan.insert_one({'id': 'lama', 'siswa_id': 's2', 'tatib_id': 'j1', 'tatib_kode': 'DIS-01', 'tatib_nama': 'Terlambat',
+                                          'tatib_poin': -5, 'catatan': 'catatan lama', 'tanggal': '2026-09-01', 'created_at': '2026-09-01T00:00:00'})
+    a = await api.simpan_input_tatib(_input(tanggal='2026-09-05'), PETUGAS)
+    b = await api.simpan_input_tatib(_input(siswa_id='s2', jenis_id='j2', asal_input='BIPH'), PETUGAS)
+
+    hasil = await api.daftar_input_terbaru(batas=2, user=PETUGAS)
+    assert [i['id'] for i in hasil['items']] == [b['id'], a['id']] and hasil['ada_lagi'] is True
+    semua = await api.daftar_input_terbaru(batas=10, user=PETUGAS)
+    lama = semua['items'][-1]
+    # catatan format lama diterjemahkan ke bentuk daftar
+    assert (lama['jenis_id'], lama['kode_aturan'], lama['keterangan'], lama['asal_input'], lama['poin']) == ('j1', 'DIS-01', 'catatan lama', None, -5)
+    milik_s2 = await api.daftar_input_terbaru(batas=10, siswa_id='s2', user=PETUGAS)
+    assert {i['siswa_id'] for i in milik_s2['items']} == {'s2'} and len(milik_s2['items']) == 2
+
+
+async def test_ubah_input_hitung_ulang_poin_dan_pertahankan_jejak(db, data_input):
+    c = await api.simpan_input_tatib(_input(), PETUGAS)
+    await db.tatib_penanganan.update_one({'id': c['id']}, {'$set': {'tindak_lanjut': [{'uraian': 'dipanggil'}]}})
+    admin = {'id': 'u9', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+    u = await api.ubah_input_tatib(c['id'], _input(jenis_id='j2', asal_input='Ibadah', keterangan='salah pilih'), admin)
+    assert (u['poin'], u['jenis_poin'], u['kode_aturan'], u['asal_input'], u['keterangan']) == (10, 'kebaikan', 'AKH-01', 'Ibadah', 'salah pilih')
+    assert (u['petugas_nama'], u['diubah_oleh_nama'], u['created_at']) == ('Guru Tatib', 'Admin', c['created_at'])
+    assert u['tindak_lanjut'] == [{'uraian': 'dipanggil'}]
+
+    with pytest.raises(HTTPException) as e:
+        await api.ubah_input_tatib('tidak-ada', _input(), PETUGAS)
+    assert e.value.status_code == 404
+    with pytest.raises(HTTPException) as e:
+        await api.ubah_input_tatib(c['id'], _input(asal_input='Lainnya'), PETUGAS)
+    assert e.value.status_code == 400
+
+
+async def test_ubah_input_jenis_lama_nonaktif_boleh_dipertahankan(db, data_input):
+    await db.tatib_penanganan.insert_one({'id': 'x', 'siswa_id': 's1', 'tatib_id': 'j3', 'tanggal': '2026-10-01', 'created_at': '2026-10-01T00:00:00'})
+    u = await api.ubah_input_tatib('x', _input(jenis_id='j3', asal_input='BAP'), PETUGAS)
+    assert u['poin'] == -3 and u['asal_input'] == 'BAP'
+    c = await api.simpan_input_tatib(_input(), PETUGAS)
+    with pytest.raises(HTTPException) as e:  # pindah KE jenis nonaktif tetap ditolak
+        await api.ubah_input_tatib(c['id'], _input(jenis_id='j3'), PETUGAS)
+    assert e.value.status_code == 400
+
+
+async def test_hapus_input(db, data_input):
+    c = await api.simpan_input_tatib(_input(), PETUGAS)
+    admin = {'id': 'u9', 'roles': ['admin'], 'active_role': 'admin'}
+    assert (await api.hapus_input_tatib(c['id'], admin))['message']
+    assert await db.tatib_penanganan.count_documents({}) == 0
+    with pytest.raises(HTTPException) as e:
+        await api.hapus_input_tatib(c['id'], admin)
+    assert e.value.status_code == 404
+
+
+async def test_hak_akses_endpoint_input():
+    """Dependency: input (admin/guru tatib/waka kesiswaan), daftar (input + lihat), hapus hanya admin."""
+    from routers.tatib_poin import wajib_input_tatib, wajib_lihat_tatib
+    peran = lambda r: {'id': 'x', 'roles': [r], 'active_role': r}  # noqa: E731
+    for r in ('admin', 'guru_tata_tertib', 'waka_kesiswaan'):
+        assert await wajib_input_tatib(peran(r))
+    for r in ('guru_bk', 'kepala_sekolah', 'wali_kelas', 'siswa'):
+        with pytest.raises(HTTPException):
+            await wajib_input_tatib(peran(r))
+    assert await wajib_lihat_tatib(peran('kepala_sekolah'))
+    for r in ('wali_kelas', 'siswa', 'guru_mapel'):
+        with pytest.raises(HTTPException):
+            await wajib_lihat_tatib(peran(r))
+    hanya_admin = api.require_role('admin')
+    assert await hanya_admin(peran('admin'))
+    with pytest.raises(HTTPException):
+        await hanya_admin(peran('guru_tata_tertib'))

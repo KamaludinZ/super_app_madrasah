@@ -813,6 +813,52 @@ async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_
     return catatan_input_tampil(doc)
 
 
+@router.get("/tatib/input/terbaru")
+async def daftar_input_terbaru(
+    batas: int = 10,
+    siswa_id: Optional[str] = None,
+    user: Dict = Depends(wajib_lihat_tatib),
+):
+    """Pencatatan terbaru (urut waktu input) untuk diperiksa di halaman Input Tata Tertib.
+    -> {items, ada_lagi}. `siswa_id` membatasi ke satu siswa."""
+    batas = max(1, min(batas, 100))
+    query: Dict = {'siswa_id': siswa_id} if siswa_id else {}
+    await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)
+    items = await db.tatib_penanganan.find(query, {'_id': 0}).sort([('created_at', -1), ('tanggal', -1)]).to_list(batas + 1)
+    return {'items': [catatan_input_tampil(i) for i in items[:batas]], 'ada_lagi': len(items) > batas}
+
+
+@router.put("/tatib/input/{catatan_id}")
+async def ubah_input_tatib(catatan_id: str, req: InputTatibRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Perbaiki pencatatan yang salah input. Poin dihitung ulang dari jenis; jenis lama yang kini nonaktif
+    tetap boleh dipertahankan. Tindak lanjut, petugas awal, dan waktu input tidak berubah."""
+    lama = await db.tatib_penanganan.find_one({'id': catatan_id}, {'_id': 0})
+    if not lama:
+        raise HTTPException(404, "Catatan tata tertib tidak ditemukan")
+    hasil = await _isian_input_tatib(req, jenis_lama_id=lama.get('jenis_id') or lama.get('tatib_id'))
+    isian = {k: v for k, v in hasil['isian'].items() if k not in ('semester_id', 'tahun_takwim_id') or v}
+    isian.update({
+        'updated_at': datetime.utcnow().isoformat(),
+        'diubah_oleh_id': user['id'],
+        'diubah_oleh_nama': user.get('full_name', user.get('username')),
+    })
+    await db.tatib_penanganan.update_one({'id': catatan_id}, {'$set': isian})
+    await log_audit(user, 'tatib_input_update',
+                    f"Perbaiki catatan tatib {catatan_id}: {lama.get('tatib_kode')} ({nilai_poin(lama)}) -> {isian['tatib_kode']} ({isian['poin']})")
+    return catatan_input_tampil(await db.tatib_penanganan.find_one({'id': catatan_id}, {'_id': 0}))
+
+
+@router.delete("/tatib/input/{catatan_id}")
+async def hapus_input_tatib(catatan_id: str, user: Dict = Depends(require_role('admin'))):
+    """Hapus pencatatan (hanya admin, sama dengan hapus catatan poin lainnya)."""
+    lama = await db.tatib_penanganan.find_one({'id': catatan_id}, {'_id': 0, 'tatib_kode': 1, 'siswa_nama': 1})
+    if not lama:
+        raise HTTPException(404, "Catatan tata tertib tidak ditemukan")
+    await db.tatib_penanganan.delete_one({'id': catatan_id})
+    await log_audit(user, 'tatib_input_delete', f"Hapus catatan tatib {catatan_id}: {lama.get('tatib_kode')} · {lama.get('siswa_nama')}")
+    return {'message': 'Catatan tata tertib dihapus'}
+
+
 @router.post("/tatib/penanganan/{penanganan_id}/tindak-lanjut")
 async def tambah_tindak_lanjut(penanganan_id: str, req: TindakLanjutRequest,
                                user: Dict = Depends(wajib_input_tatib)):
