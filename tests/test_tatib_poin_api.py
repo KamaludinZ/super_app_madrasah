@@ -274,7 +274,7 @@ def test_ekspor_rekap_xlsx(db):
     async def _baca():
         return b''.join([c async for c in resp.body_iterator])
     wb = load_workbook(_io.BytesIO(asyncio.run(_baca())))
-    assert wb.sheetnames == ['Rekap per Kelas', 'Aturan Terbanyak']
+    assert wb.sheetnames == ['Rekap per Kelas', 'Aturan Terbanyak', 'Per Kategori', 'Per Asal Input']
     ws = wb['Rekap per Kelas']
     assert [c.value for c in ws[2]][:2] == ['7A', 2] and ws[3][0].value == 'TOTAL'
 

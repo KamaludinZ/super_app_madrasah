@@ -567,3 +567,39 @@ async def test_api_data_tatib_filter_kategori_jenis(db, data_input):
     assert ids(await api.list_penanganan(kategori='Kedisiplinan', jenis_id='j1', asal_input='-', user=admin)) == ['lama']
     lama = next(i for i in await api.list_penanganan(user=admin) if i['id'] == 'lama')
     assert (lama['jenis_id'], lama['kode_aturan'], lama['kategori_id']) == ('j1', 'DIS-01', None)
+
+
+def test_susun_rekap_per_kategori_dan_asal_input():
+    from tatib_poin import susun_rekap
+    rec = [
+        {'siswa_id': 's1', 'poin': -5, 'kategori_nama': 'Kedisiplinan', 'asal_input': 'Razia', 'tatib_kode': 'DIS-01', 'tatib_nama': 'Telat'},
+        {'siswa_id': 's1', 'poin': -10, 'kategori_nama': 'Kedisiplinan', 'asal_input': 'BIPH', 'tatib_kode': 'DIS-02', 'tatib_nama': 'Bolos'},
+        {'siswa_id': 's2', 'poin': 7, 'kategori_nama': 'Akhlak', 'asal_input': 'Razia', 'tatib_kode': 'AKH-01', 'tatib_nama': 'Imam'},
+        {'siswa_id': 's2', 'tatib_poin': -3, 'kategori_nama': None, 'asal_input': '  '},  # catatan lama
+    ]
+    r = susun_rekap(rec, {'VII A': ['s1', 's2']})
+    assert r['per_kategori'] == [
+        {'kategori': 'Kedisiplinan', 'jumlah_pelanggaran': 2, 'jumlah_kebaikan': 0, 'total_minus': -15, 'total_plus': 0},
+        {'kategori': 'Lainnya', 'jumlah_pelanggaran': 1, 'jumlah_kebaikan': 0, 'total_minus': -3, 'total_plus': 0},
+        {'kategori': 'Akhlak', 'jumlah_pelanggaran': 0, 'jumlah_kebaikan': 1, 'total_minus': 0, 'total_plus': 7},
+    ]
+    assert r['per_asal_input'] == [
+        {'asal_input': 'BIPH', 'jumlah': 1, 'total_minus': -10, 'total_plus': 0},
+        {'asal_input': 'Razia', 'jumlah': 2, 'total_minus': -5, 'total_plus': 7},
+        {'asal_input': None, 'jumlah': 1, 'total_minus': -3, 'total_plus': 0},
+    ]
+    assert {'kode': 'DIS-01', 'nama': 'Telat', 'kategori_nama': 'Kedisiplinan', 'jumlah': 1} in r['teratas_pelanggaran']
+
+
+def test_ekspor_rekap_memuat_sheet_kategori_dan_asal():
+    import io
+    from openpyxl import load_workbook
+    from excel_io import export_rekap_tatib_xlsx
+    from tatib_poin import susun_rekap
+    rec = [{'siswa_id': 's1', 'poin': -5, 'kategori_nama': 'Kedisiplinan', 'asal_input': 'Razia', 'tatib_kode': 'D', 'tatib_nama': 'T'},
+           {'siswa_id': 's1', 'tatib_poin': -3}]
+    wb = load_workbook(io.BytesIO(export_rekap_tatib_xlsx(susun_rekap(rec, {'VII A': ['s1']}))))
+    assert {'Per Kategori', 'Per Asal Input'} <= set(wb.sheetnames)
+    nilai = [c.value for row in wb['Per Asal Input'].iter_rows() for c in row]
+    assert 'Razia' in nilai and '- (belum diisi)' in nilai
+    assert 'Kedisiplinan' in [c.value for row in wb['Per Kategori'].iter_rows() for c in row]
