@@ -680,3 +680,26 @@ async def test_rekap_walikelas_per_kategori_dan_asal(db, monkeypatch):
     ]
     assert data['per_asal_input'] == [{'asal_input': 'Razia', 'jumlah': 1, 'total_minus': -5, 'total_plus': 0},
                                       {'asal_input': None, 'jumlah': 1, 'total_minus': 0, 'total_plus': 4}]
+
+
+async def test_saldo_dan_riwayat_poin_siswa_struktur_baru(db, data_input, monkeypatch):
+    from routers import tatib_poin as poin_api
+    monkeypatch.setattr(poin_api, 'db', db)
+    await api.simpan_input_tatib(_input(tanggal='2026-10-01'), PETUGAS)                                  # -5 Kedisiplinan, Razia
+    await api.simpan_input_tatib(_input(jenis_id='j2', asal_input='Ibadah', tanggal='2026-10-03'), PETUGAS)  # +10
+    await db.tatib_penanganan.insert_one({'id': 'lama', 'siswa_id': 's1', 'tatib_id': 'x', 'tatib_kode': 'L-1', 'tatib_poin': -3,
+                                          'tanggal': '2026-09-01', 'catatan': 'lama'})
+    siswa = {'id': 's1', 'full_name': 'Ahmad', 'roles': ['siswa'], 'active_role': 'siswa'}
+    p = await poin_api.poin_saya(user=siswa)
+    assert (p['total_plus'], p['total_minus'], p['saldo'], p['jumlah_kebaikan'], p['jumlah_pelanggaran']) == (10, -8, 2, 1, 2)
+    assert p['siswa']['kelas'] == 'VII A'
+    assert [r['tanggal'] for r in p['records']] == ['2026-10-03', '2026-10-01', '2026-09-01']  # terbaru dulu
+    terbaru = p['records'][0]
+    assert (terbaru['kode_aturan'], terbaru['kategori_nama'], terbaru['asal_input'], terbaru['jenis_id']) == ('AKH-01', 'Kedisiplinan', 'Ibadah', 'j2')
+    lama = p['records'][-1]
+    assert (lama['poin'], lama['keterangan'], lama['asal_input'], lama['kode_aturan']) == (-3, 'lama', None, 'L-1')
+    assert {k['kategori']: k['total_plus'] + k['total_minus'] for k in p['per_kategori']} == {'Kedisiplinan': 5, 'Lainnya': -3}
+    assert [a['asal_input'] for a in p['per_asal_input']] == ['Ibadah', 'Razia', None]
+    # pimpinan melihat poin siswa yang sama lewat /tatib/poin/siswa/{id}
+    lihat = await poin_api.poin_siswa('s1', user={'id': 'k', 'roles': ['kepala_sekolah'], 'active_role': 'kepala_sekolah'})
+    assert lihat['saldo'] == 2 and len(lihat['records']) == 3

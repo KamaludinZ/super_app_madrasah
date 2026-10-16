@@ -198,7 +198,8 @@ def rapikan_catatan(r: Dict) -> Dict:
 
 async def paket_poin_siswa(siswa_id: str, filter_periode: Optional[Dict] = None) -> Dict:
     """{siswa, total_plus, total_minus, saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian,
-    records (terbaru dulu)} — bentuk yang sama dengan data tiruan frontend (ambilPoinSayaTiruan)."""
+    batas_minus_perhatian, per_kategori, per_asal_input, records (terbaru dulu; kode, kategori, asal input,
+    keterangan sudah dirapikan)}."""
     akun = await db.users.find_one({'id': siswa_id}, {'_id': 0, 'id': 1, 'full_name': 1, 'nis': 1, 'nisn': 1, 'student_class_id': 1})
     if not akun:
         raise HTTPException(404, "Siswa tidak ditemukan")
@@ -207,11 +208,14 @@ async def paket_poin_siswa(siswa_id: str, filter_periode: Optional[Dict] = None)
     records = await db[KOLEKSI_POIN].find(query, {'_id': 0}).to_list(2000)
     records.sort(key=lambda r: (r.get('tanggal') or '', r.get('created_at') or ''), reverse=True)
     batas = await ambang_perhatian()
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
     return {
         'siswa': {'id': akun['id'], 'nama': akun.get('full_name'), 'nis': akun.get('nis'), 'nisn': akun.get('nisn'),
                   'kelas': (kelas or {}).get('name')},
         **rangkum_poin(records, batas),
         'batas_minus_perhatian': batas,
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
         'records': [rapikan_catatan(r) for r in records],
     }
 

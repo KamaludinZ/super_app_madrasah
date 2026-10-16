@@ -75,7 +75,7 @@ export default function SiswaPoinPage() {
       />
 
       {(data.records || []).length > 0 && (
-        <TabelPerKategori items={rekapPerKategori(data.records)} judul="Poin per Kategori" testid="poin-per-kategori" />
+        <TabelPerKategori items={data.per_kategori ?? rekapPerKategori(data.records)} judul="Poin per Kategori" testid="poin-per-kategori" />
       )}
 
       <RiwayatPoin records={data.records || []} onPilih={setDipilih} />
