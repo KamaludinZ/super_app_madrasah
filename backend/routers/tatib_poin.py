@@ -61,7 +61,7 @@ async def lihat_ambang(user: Dict = Depends(wajib_akses('input', 'lihat', 'kelas
 
 
 @router.put("/tatib/ambang")
-async def ubah_ambang(req: AmbangRequest, user: Dict = Depends(wajib_akses('input'))):
+async def ubah_ambang(req: AmbangRequest, user: Dict = Depends(wajib_input_tatib)):
     """Ubah batas penanda perlu perhatian (hanya peran input tatib)."""
     await db.settings.update_one({'id': 'global_config'}, {'$set': {FIELD_BATAS_PERHATIAN: req.batas_minus_perhatian}}, upsert=True)
     return {'batas_minus_perhatian': req.batas_minus_perhatian}
@@ -390,7 +390,7 @@ async def rekap_poin(
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
     asal_input: Optional[str] = None,
-    user: Dict = Depends(wajib_akses('input', 'lihat')),
+    user: Dict = Depends(wajib_lihat_tatib),
 ):
     """Rekap poin lintas kelas & periode: ringkasan, per kelas, aturan terbanyak (kebaikan & pelanggaran).
     Filter: kelas (nama), semester_id / semester (kode lama), tahun_takwim_id, start_date..end_date (YYYY-MM-DD),
@@ -408,7 +408,7 @@ async def ekspor_rekap_poin(
     end_date: Optional[str] = None,
     semester: Optional[str] = None,
     asal_input: Optional[str] = None,
-    user: Dict = Depends(wajib_akses('input', 'lihat')),
+    user: Dict = Depends(wajib_lihat_tatib),
 ):
     """Unduh Rekap Pengawas (.xlsx) dengan filter yang sama seperti GET /tatib/rekap."""
     from excel_io import export_rekap_tatib_xlsx
