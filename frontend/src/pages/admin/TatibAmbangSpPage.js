@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, SlidersHorizontal } from 'lucide-react';
+import { AlertCircle, History, Loader2, SlidersHorizontal } from 'lucide-react';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { TINGKAT_SP, WARNA_SP } from '@/lib/tindakanTatib';
 import FormAmbangSp from '@/components/tatib/FormAmbangSp';
-import { ambilAmbangSP, ringkasPerubahanAmbang, simpanAmbangSP } from '@/lib/ambangSp';
+import RiwayatAmbangSp from '@/components/tatib/RiwayatAmbangSp';
+import { ambilAmbangSP, ambilRiwayatAmbangSP, ringkasPerubahanAmbang, simpanAmbangSP } from '@/lib/ambangSp';
 
 const formatWaktu = (iso) => {
   if (!iso) return '-';
@@ -42,13 +43,21 @@ export default function TatibAmbangSpPage() {
   const [ambang, setAmbang] = useState(null);
   const [loading, setLoading] = useState(true);
   const [galatSimpan, setGalatSimpan] = useState('');
+  const [riwayat, setRiwayat] = useState([]);
+  const [memuatRiwayat, setMemuatRiwayat] = useState(true);
+
+  const muatRiwayat = () => ambilRiwayatAmbangSP()
+    .then(setRiwayat)
+    .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat riwayat ambang')))
+    .finally(() => setMemuatRiwayat(false));
 
   useEffect(() => {
     ambilAmbangSP()
       .then(setAmbang)
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat ambang SP')))
       .finally(() => setLoading(false));
-  }, []);
+    muatRiwayat();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Konfirmasi dulu (ringkasan lama -> baru); galat server ditampilkan di atas form tanpa menghapus isian.
   const simpan = async (nilai) => {
@@ -61,6 +70,7 @@ export default function TatibAmbangSpPage() {
     try {
       const hasil = await simpanAmbangSP(nilai);
       setAmbang(hasil);
+      muatRiwayat();
       toast.success(`Ambang SP disimpan: ${hasil.sp1} / ${hasil.sp2} / ${hasil.sp3} poin`);
     } catch (e) {
       const pesan = e?.response?.status === 403
@@ -123,6 +133,16 @@ export default function TatibAmbangSpPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2"><History className="h-5 w-5" /> Riwayat perubahan</CardTitle>
+          <CardDescription>Catatan audit: siapa dan kapan ambang diubah, beserta nilai lama dan baru.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-6 sm:pt-0">
+          <RiwayatAmbangSp items={riwayat} loading={memuatRiwayat} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

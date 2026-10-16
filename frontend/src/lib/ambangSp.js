@@ -9,7 +9,14 @@ const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structu
 
 const ambangTiruan = { sp1: 25, sp2: 50, sp3: 75, diubah_oleh_nama: 'Sistem', diubah_pada: '2026-10-16T00:00:00', bawaan: false };
 
+const riwayatTiruan = [
+  { id: 'ra1', waktu: '2026-10-16T00:00:00', oleh_nama: 'Sistem', dari: null, ke: { sp1: 25, sp2: 50, sp3: 75 }, alasan: 'Nilai bawaan saat pemasangan' },
+];
+
 export { AMBANG_SP_BAWAAN };
+
+// Riwayat perubahan ambang (terbaru dulu) untuk audit.
+export const ambilRiwayatAmbangSP = () => jeda(riwayatTiruan);
 
 export const ambilAmbangSP = () => jeda(ambangTiruan);
 
@@ -38,6 +45,11 @@ export function validasiAmbang(nilai) {
 export async function simpanAmbangSP({ sp1, sp2, sp3, alasan }) {
   const galat = validasiAmbang({ sp1, sp2, sp3 });
   if (Object.keys(galat).length) throw new Error('Ambang SP tidak valid');
+  riwayatTiruan.unshift({
+    id: `ra-${Date.now()}`, waktu: new Date().toISOString(), oleh_nama: 'Anda',
+    dari: { sp1: ambangTiruan.sp1, sp2: ambangTiruan.sp2, sp3: ambangTiruan.sp3 },
+    ke: { sp1: Number(sp1), sp2: Number(sp2), sp3: Number(sp3) }, alasan: (alasan || '').trim() || null,
+  });
   Object.assign(ambangTiruan, {
     sp1: Number(sp1), sp2: Number(sp2), sp3: Number(sp3), alasan: (alasan || '').trim() || null,
     diubah_oleh_nama: 'Anda', diubah_pada: new Date().toISOString(), bawaan: false,
