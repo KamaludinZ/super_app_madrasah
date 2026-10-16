@@ -275,6 +275,20 @@ def cek_asal_input(nilai: Optional[str], wajib: bool = False) -> Optional[str]:
     return nilai
 
 
+# Nilai filter untuk catatan lama yang belum punya asal input (ditampilkan '-' di aplikasi).
+ASAL_INPUT_KOSONG = '-'
+
+
+def syarat_asal_input(nilai: Optional[str]) -> Optional[Dict]:
+    """Fragmen query filter asal input: nilai baku -> sama persis; '-' -> catatan tanpa asal input;
+    kosong -> None (tanpa filter); nilai lain -> 400."""
+    if nilai in (None, ''):
+        return None
+    if nilai == ASAL_INPUT_KOSONG:
+        return {'$or': [{'asal_input': None}, {'asal_input': ''}, {'asal_input': {'$exists': False}}]}
+    return {'asal_input': cek_asal_input(nilai)}
+
+
 def _tanggal_valid(nilai: Optional[str], nama: str) -> Optional[str]:
     """Tanggal filter harus YYYY-MM-DD (400 bila tidak)."""
     if not nilai:
@@ -318,7 +332,7 @@ async def query_rekap(kelas: Optional[str], semester_id: Optional[str], tahun_ta
     if start_date or end_date:
         syarat.append({'tanggal': _rentang_tanggal(start_date, end_date)})
     if asal_input:
-        syarat.append({'asal_input': asal_input})
+        syarat.append(syarat_asal_input(asal_input))
     if not syarat:
         return {}
     return syarat[0] if len(syarat) == 1 else {'$and': syarat}
@@ -344,7 +358,7 @@ async def kelas_dan_siswa(kelas: Optional[str]) -> Dict[str, List[str]]:
 
 async def data_rekap(kelas=None, semester_id=None, tahun_takwim_id=None, start_date=None, end_date=None,
                      semester=None, asal_input=None) -> Dict:
-    asal_input = cek_asal_input(asal_input)
+    syarat_asal_input(asal_input)  # validasi lebih awal (400 bila tidak dikenal)
     start_date = _tanggal_valid(start_date, 'tanggal awal')
     end_date = _tanggal_valid(end_date, 'tanggal akhir')
     if start_date and end_date and start_date > end_date:

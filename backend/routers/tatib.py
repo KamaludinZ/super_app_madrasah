@@ -18,8 +18,8 @@ from tatib_poin import (ASAL_INPUT, JALUR_POIN, JENIS_POIN, MAKS_BESAR_POIN, MAK
                         POLA_KODE_ATURAN, field_jenis_aturan, hitung_poin_aturan, jalur_dari_jenis_poin, jenis_dari_poin,
                         jenis_poin_dari_jalur,
                         kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kode, normalisasi_kondisi, poin_jenis_aturan)
-from routers.tatib_poin import (batasi_query_tatib, cek_asal_input, rapikan_catatan, wajib_akses_tatib, wajib_input_tatib,
-                                wajib_lihat_tatib)
+from routers.tatib_poin import (batasi_query_tatib, cek_asal_input, rapikan_catatan, syarat_asal_input, wajib_akses_tatib,
+                                wajib_input_tatib, wajib_lihat_tatib)
 
 router = APIRouter()
 
@@ -763,10 +763,12 @@ async def list_penanganan(
     user: Dict = Depends(get_current_user)
 ):
     """Daftar catatan poin (pelanggaran & kebaikan), terbaru dulu; tiap catatan memuat asal_input
-    (catatan lama = null). Filter opsional: siswa, aturan, periode, rentang tanggal, asal input."""
+    (catatan lama = null). Filter opsional: siswa, aturan, periode, rentang tanggal, asal input
+    (nilai baku, atau '-' untuk catatan lama tanpa asal input)."""
     query = {}
-    if asal_input:
-        query['asal_input'] = cek_asal_input(asal_input)
+    syarat_asal = syarat_asal_input(asal_input)
+    if syarat_asal:
+        query['$and'] = [syarat_asal]
     if siswa_id:
         query['siswa_id'] = siswa_id
     if tatib_id:
@@ -1031,12 +1033,16 @@ async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_
 async def daftar_input_terbaru(
     batas: int = 10,
     siswa_id: Optional[str] = None,
+    asal_input: Optional[str] = None,
     user: Dict = Depends(wajib_lihat_tatib),
 ):
     """Pencatatan terbaru (urut waktu input) untuk diperiksa di halaman Input Tata Tertib.
-    -> {items, ada_lagi}. `siswa_id` membatasi ke satu siswa."""
+    -> {items, ada_lagi}. `siswa_id` membatasi ke satu siswa; `asal_input` (nilai baku atau '-')."""
     batas = max(1, min(batas, 100))
     query: Dict = {'siswa_id': siswa_id} if siswa_id else {}
+    syarat_asal = syarat_asal_input(asal_input)
+    if syarat_asal:
+        query['$and'] = [syarat_asal]
     await sembunyikan_siswa_nonaktif(query, 'siswa_id', db)
     items = await db.tatib_penanganan.find(query, {'_id': 0}).sort([('created_at', -1), ('tanggal', -1)]).to_list(batas + 1)
     return {'items': [catatan_input_tampil(i) for i in items[:batas]], 'ada_lagi': len(items) > batas}

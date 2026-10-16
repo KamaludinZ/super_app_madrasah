@@ -525,3 +525,28 @@ async def test_semua_endpoint_daftar_mengirim_asal_input(db, data_input, monkeyp
         assert asal == {next(i['id'] for i in items if i['id'] != 'lama'): 'Razia', 'lama': None}, nama
     assert (stats['total_poin'], stats['total_pelanggaran'], stats['by_asal_input']) == (-10, 2, {'Razia': 1, '-': 1})
     assert stats['by_kategori'] == {'Kedisiplinan': {'count': 2, 'total_poin': -10}}
+
+
+async def test_filter_asal_input_termasuk_catatan_lama(db, data_input, monkeypatch):
+    from routers import tatib_poin as poin_api
+    monkeypatch.setattr(poin_api, 'db', db)
+    admin = {'id': 'u9', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+    pimpinan = {'id': 'k1', 'roles': ['kepala_sekolah'], 'active_role': 'kepala_sekolah'}
+    baru = await api.simpan_input_tatib(_input(asal_input='Razia'), PETUGAS)
+    await db.tatib_penanganan.insert_many([
+        {'id': 'lama1', 'siswa_id': 's1', 'tatib_id': 'j1', 'tatib_poin': -5, 'tanggal': '2026-09-01', 'created_at': '2026-09-01T00:00:00'},
+        {'id': 'lama2', 'siswa_id': 's1', 'tatib_id': 'j1', 'tatib_poin': -5, 'tanggal': '2026-09-02', 'asal_input': None, 'created_at': '2026-09-02T00:00:00'},
+    ])
+    ids = lambda items: sorted(i['id'] for i in items)  # noqa: E731
+    assert ids(await api.list_penanganan(asal_input='-', user=admin)) == ['lama1', 'lama2']
+    assert ids(await api.list_penanganan(asal_input='Razia', user=admin)) == [baru['id']]
+    assert ids((await api.daftar_input_terbaru(asal_input='-', user=admin))['items']) == ['lama1', 'lama2']
+    assert ids((await api.daftar_input_terbaru(asal_input='Razia', user=admin))['items']) == [baru['id']]
+    for salah in ('razia', 'SMS'):
+        with pytest.raises(HTTPException) as e:
+            await api.daftar_input_terbaru(asal_input=salah, user=admin)
+        assert e.value.status_code == 400
+    kosong = await poin_api.rekap_poin(asal_input='-', user=pimpinan)
+    assert kosong['ringkasan']['jumlah_pelanggaran'] == 2
+    with pytest.raises(HTTPException):
+        await poin_api.rekap_poin(asal_input='x', user=pimpinan)
