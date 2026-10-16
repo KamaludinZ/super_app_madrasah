@@ -350,14 +350,32 @@ def jenis_aturan_tampil(doc: Dict, nama_kategori: Optional[Dict] = None) -> Dict
     }
 
 
+async def jumlah_catatan_per_jenis(jenis_ids: Optional[List[str]] = None) -> Dict[str, int]:
+    """{jenis_id: jumlah pencatatan} — catatan lama dihitung lewat tatib_id."""
+    kunci = {'$ifNull': ['$jenis_id', '$tatib_id']}
+    pipeline: List[Dict] = []
+    if jenis_ids is not None:
+        pipeline.append({'$match': {'$or': [{'jenis_id': {'$in': jenis_ids}}, {'tatib_id': {'$in': jenis_ids}}]}})
+    pipeline.append({'$group': {'_id': kunci, 'n': {'$sum': 1}}})
+    return {d['_id']: d['n'] async for d in db.tatib_penanganan.aggregate(pipeline) if d['_id']}
+
+
+def _cocok_cari(item: Dict, kata: List[str]) -> bool:
+    teks = f"{item.get('kode_aturan') or ''} {item.get('nama') or ''}".lower()
+    return all(k in teks for k in kata)
+
+
 @router.get("/tatib/jenis-aturan")
 async def list_jenis_aturan(
     kategori_id: Optional[str] = None,
     aktif: Optional[bool] = None,
+    cari: Optional[str] = None,
     user: Dict = Depends(wajib_akses_tatib),
 ):
     """Master jenis aturan (pelanggaran/kebaikan) per kategori, urut kategori lalu kode aturan.
-    `aktif=true` untuk pilihan pencatatan; tanpa filter untuk melihat semua termasuk nonaktif."""
+    `aktif=true` untuk pilihan pencatatan; tanpa filter untuk melihat semua termasuk nonaktif.
+    `cari`: kata kunci kode/nama (tanpa beda huruf, semua kata harus cocok).
+    Tiap jenis memuat `jumlah_catatan` (riwayat pencatatan yang memakai jenis itu)."""
     query = {'kategori_id': kategori_id} if kategori_id else {}
     docs = await db.tatib_aturan.find(query, {'_id': 0}).to_list(2000)
     kategori = await db.tatib_kategori.find({}, {'_id': 0, 'id': 1, 'nama': 1, 'urutan': 1}).to_list(1000)
@@ -366,6 +384,12 @@ async def list_jenis_aturan(
     items = [jenis_aturan_tampil(d, nama_kategori) for d in docs]
     if aktif is not None:
         items = [i for i in items if i['aktif'] is aktif]
+    kata = (cari or '').lower().split()
+    if kata:
+        items = [i for i in items if _cocok_cari(i, kata)]
+    jumlah = await jumlah_catatan_per_jenis([i['id'] for i in items])
+    for i in items:
+        i['jumlah_catatan'] = jumlah.get(i['id'], 0)
     items.sort(key=lambda i: (urutan.get(i['kategori_id'], (10**6, i['kategori_nama'])), i['kode_aturan'] or ''))
     return items
 

@@ -85,7 +85,7 @@ async def test_jenis_aturan_per_kategori_bentuk_kanonis(db):
     semua = await api.list_jenis_aturan(user=PETUGAS)
     assert [j['id'] for j in semua] == ['a1', 'a2', 'a3', 'a4']  # urut kategori lalu kode
     assert semua[1] == {'id': 'a2', 'kode_aturan': 'DIS-02', 'nama': 'Bolos', 'jalur_poin': 'minus', 'besar_poin': 15, 'aktif': True,
-                        'poin': -15, 'kategori_id': k1['id'], 'kategori_nama': 'Kedisiplinan', 'deskripsi': ''}
+                        'poin': -15, 'kategori_id': k1['id'], 'kategori_nama': 'Kedisiplinan', 'deskripsi': '', 'jumlah_catatan': 0}
     assert semua[2]['poin'] == 5 and semua[2]['deskripsi'] == 'x'
 
     per_kategori = await api.list_jenis_aturan(kategori_id=k2['id'], user=PETUGAS)
@@ -345,3 +345,24 @@ async def test_rekap_bisa_difilter_asal_input(db, data_input, monkeypatch):
 
     unduh = await rekap_api.ekspor_rekap_poin(asal_input='Screening pagi', user=pimpinan)
     assert 'screening-pagi' in unduh.headers['content-disposition']
+
+
+async def test_jenis_aturan_pencarian_dan_jumlah_catatan(db):
+    k = await api.create_kategori(_req(api.KategoriTatibRequest, nama='Kedisiplinan'), PETUGAS)
+    await db.tatib_aturan.insert_many([
+        {'id': 'a1', 'kode_aturan': 'DIS-01', 'nama': 'Terlambat masuk', 'jalur_poin': 'minus', 'besar_poin': 5, 'kategori_id': k['id'], 'aktif': True},
+        {'id': 'a2', 'kode_aturan': 'DIS-02', 'nama': 'Membolos pelajaran', 'jalur_poin': 'minus', 'besar_poin': 15, 'kategori_id': k['id'], 'aktif': True},
+        {'id': 'a3', 'kode_aturan': 'AKH-01', 'nama': 'Imam salat', 'jalur_poin': 'plus', 'besar_poin': 5, 'kategori_id': k['id'], 'aktif': False},
+    ])
+    await db.tatib_penanganan.insert_many([
+        {'id': 'p1', 'jenis_id': 'a1', 'tatib_id': 'a1'}, {'id': 'p2', 'jenis_id': 'a1', 'tatib_id': 'a1'},
+        {'id': 'p3', 'tatib_id': 'a3'},  # catatan lama tanpa jenis_id
+    ])
+    cari = lambda q, **kw: api.list_jenis_aturan(cari=q, user=PETUGAS, **kw)  # noqa: E731
+    assert [j['id'] for j in await cari('dis')] == ['a1', 'a2']
+    assert [j['id'] for j in await cari('  SALAT imam ')] == ['a3']
+    assert [j['id'] for j in await cari('dis-02 bolos')] == ['a2']
+    assert await cari('tidak-ada') == []
+    assert [j['id'] for j in await cari('', aktif=True)] == ['a1', 'a2']
+    jumlah = {j['id']: j['jumlah_catatan'] for j in await api.list_jenis_aturan(user=PETUGAS)}
+    assert jumlah == {'a1': 2, 'a2': 0, 'a3': 1}

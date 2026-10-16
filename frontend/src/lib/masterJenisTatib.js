@@ -1,10 +1,13 @@
 // Master Jenis Pelanggaran: kelola jenis aturan (kode, nama, jalur poin, besar poin, kategori, deskripsi, aktif).
-// SEMENTARA memakai data tiruan di memori (frontend dibangun lebih dulu). Kontrak yang diasumsikan:
+// Daftar & kategori lewat API; simpan/status jenis SEMENTARA masih data tiruan di memori. Kontrak:
 //   GET    /tatib/jenis-aturan                  -> [{ id, kode_aturan, nama, jalur_poin, besar_poin, poin, kategori_id,
 //                                                     kategori_nama, deskripsi, aktif, jumlah_catatan }]
 //   POST   /tatib/jenis-aturan                  -> jenis ; PUT /tatib/jenis-aturan/{id} -> jenis
 //   PATCH  /tatib/jenis-aturan/{id}/aktif       -> { aktif } (nonaktif tanpa menghapus riwayat)
 //   GET    /tatib/kategori                      -> [{ id, nama }]
+
+import { api } from '@/lib/api';
+import { ambilKategoriTatib, simpanKategoriTatib } from '@/lib/inputTatib';
 
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
 
@@ -37,9 +40,13 @@ export function cariKodeGanda(jenisList, kode, kecualiId) {
   return jenisList.find((j) => j.id !== kecualiId && (j.kode_aturan || '').trim().toUpperCase() === kunci) || null;
 }
 
-export const ambilMasterJenis = () => jeda(jenisTiruan.map(tampil));
+// Semua jenis termasuk nonaktif, beserta jumlah_catatan; `cari` opsional (kode/nama, disaring server).
+export async function ambilMasterJenis({ cari } = {}) {
+  const { data } = await api.get('/tatib/jenis-aturan', { params: cari ? { cari } : {} });
+  return data || [];
+}
 
-export const ambilKategoriMaster = () => jeda(kategoriTiruan);
+export const ambilKategoriMaster = ambilKategoriTatib;
 
 // Tambah (tanpa id) atau ubah jenis aturan. Kode dirapikan huruf besar tanpa spasi tepi.
 export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, besar_poin, kategori_id, deskripsi }) {
@@ -64,15 +71,8 @@ export async function simpanMasterJenis({ id, kode_aturan, nama, jalur_poin, bes
   return jeda(tampil(baru));
 }
 
-// Tambah kategori dari form jenis (kontrak sama dengan Input Tata Tertib: POST /tatib/kategori).
-export async function simpanKategoriMaster({ nama, deskripsi }) {
-  const rapi = (nama || '').trim();
-  if (!rapi) throw new Error('Nama kategori wajib diisi');
-  if (kategoriTiruan.some((k) => k.nama.toLowerCase() === rapi.toLowerCase())) throw new Error(`Kategori "${rapi}" sudah ada`);
-  const baru = { id: `kat-${Date.now()}`, nama: rapi, deskripsi: (deskripsi || '').trim() };
-  kategoriTiruan.push(baru);
-  return jeda(baru);
-}
+// Tambah kategori dari form jenis (endpoint sama dengan Input Tata Tertib: POST /tatib/kategori).
+export const simpanKategoriMaster = ({ nama, deskripsi }) => simpanKategoriTatib({ nama, deskripsi });
 
 // Aktif/nonaktifkan jenis. Jenis nonaktif tidak bisa dipilih saat mencatat, tetapi riwayat catatannya tetap ada.
 export async function ubahStatusJenis(id, aktif) {
