@@ -83,3 +83,37 @@ async def test_rekap_hak_akses():
     for r in ('wali_kelas', 'siswa', 'guru_mapel'):
         with pytest.raises(HTTPException):
             await wajib_lihat_tatib({'id': 'x', 'roles': [r], 'active_role': r})
+
+
+async def test_usulan_sp_satu_siswa(db):
+    u = await api.usulan_sp_siswa('s1', semester_id='sem1', user=PIMPINAN)
+    assert (u['poin_negatif'], u['usulan_sp'], u['ambang_berikutnya'], u['keterangan_sp'], u['perlu_ditinjau']) == \
+        (-35, 'SP1', {'sp': 'SP2', 'ambang': 50, 'sisa': 15}, None, True)
+    assert u['jumlah_catatan'] == 4 and u['nama'] == 'Ahmad'
+    s2 = await api.usulan_sp_siswa('s2', user=PIMPINAN)  # tanpa semester: -160
+    assert (s2['usulan_sp'], s2['ambang_berikutnya']) == ('SP3', None)
+    await db.tatib_tindakan.insert_one({'id': 't', 'siswa_id': 's1', 'semester_id': 'sem1', 'keterangan_sp': 'SP2'})
+    assert (await api.usulan_sp_siswa('s1', semester_id='sem1', user=PIMPINAN))['perlu_ditinjau'] is False
+    s3 = await api.usulan_sp_siswa('s3', semester_id='sem1', user=PIMPINAN)
+    assert (s3['poin_negatif'], s3['usulan_sp'], s3['ambang_berikutnya']['sisa']) == (0, None, 25)
+    with pytest.raises(HTTPException) as e:
+        await api.usulan_sp_siswa('tidak-ada', user=PIMPINAN)
+    assert e.value.status_code == 404
+
+
+async def test_ringkasan_usulan_dan_perlu_ditinjau(db):
+    r = await api.ringkasan_usulan_sp(semester_id='sem1', user=PIMPINAN)
+    assert r['jumlah'] == {'SP1': 1, 'SP2': 1, 'SP3': 0} and r['perlu_ditinjau'] == 2
+    await db.pengaturan_ambang_sp.insert_one({'_id': 'ambang_sp', 'sp1': 10, 'sp2': 20, 'sp3': 30})
+    await db.tatib_tindakan.insert_one({'id': 't', 'siswa_id': 's2', 'semester_id': 'sem1', 'keterangan_sp': 'SP3'})
+    r = await api.ringkasan_usulan_sp(semester_id='sem1', user=PIMPINAN)
+    assert r['jumlah'] == {'SP1': 0, 'SP2': 0, 'SP3': 2} and r['siswa_perlu_ditinjau'] == ['s1']
+
+
+def test_ambang_berikutnya_dan_usulan_lebih_tinggi():
+    from tatib_poin import ambang_berikutnya, usulan_lebih_tinggi
+    assert ambang_berikutnya(-30) == {'sp': 'SP2', 'ambang': 50, 'sisa': 20}
+    assert ambang_berikutnya(0) == {'sp': 'SP1', 'ambang': 25, 'sisa': 25}
+    assert ambang_berikutnya(-75) is None
+    assert usulan_lebih_tinggi('SP2', 'SP1') and usulan_lebih_tinggi('SP1', None)
+    assert not usulan_lebih_tinggi('SP1', 'SP2') and not usulan_lebih_tinggi(None, None)

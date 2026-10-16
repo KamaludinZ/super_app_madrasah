@@ -250,6 +250,23 @@ def usulkan_sp(poin_negatif, ambang: Optional[dict] = None) -> Optional[str]:
     return None
 
 
+def ambang_berikutnya(poin_negatif, ambang: Optional[dict] = None) -> Optional[dict]:
+    """Tingkat SP berikutnya yang belum terlampaui: {sp, ambang, sisa}, atau None bila sudah SP3."""
+    ambang = ambang or AMBANG_SP_BAWAAN
+    n = abs(int(poin_negatif or 0))
+    for sp in TINGKAT_SP:
+        batas = int(ambang[sp.lower()])
+        if n < batas:
+            return {'sp': sp, 'ambang': batas, 'sisa': batas - n}
+    return None
+
+
+def usulan_lebih_tinggi(usulan: Optional[str], ditetapkan: Optional[str]) -> bool:
+    """True bila usulan otomatis lebih berat dari SP yang sudah ditetapkan (perlu ditinjau)."""
+    tingkat = {sp: i for i, sp in enumerate(TINGKAT_SP, start=1)}
+    return tingkat.get(usulan, 0) > tingkat.get(ditetapkan, 0)
+
+
 def perubahan_status(lama: dict, baru: dict) -> list:
     """Daftar perubahan field status [{field, dari, ke}] antara dua keadaan tindakan."""
     lama = {**STATUS_TINDAKAN_AWAL, **{k: v for k, v in (lama or {}).items() if k in FIELD_STATUS_TINDAKAN}}

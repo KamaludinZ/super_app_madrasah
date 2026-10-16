@@ -6,13 +6,13 @@ waka kesiswaan) — sama dengan hak input tatib.
 """
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, serialize_doc
 from routers._shared import sembunyikan_siswa_nonaktif
 from routers.tatib_poin import query_rekap, wajib_lihat_tatib
-from tatib_poin import (KOLEKSI_POIN, KOLEKSI_TINDAKAN, STATUS_TINDAKAN_AWAL, TINGKAT_SP, ambil_ambang_sp, nilai_poin,
-                        usulkan_sp)
+from tatib_poin import (KOLEKSI_POIN, KOLEKSI_TINDAKAN, STATUS_TINDAKAN_AWAL, TINGKAT_SP, ambang_berikutnya, ambil_ambang_sp,
+                        nilai_poin, usulan_lebih_tinggi, usulkan_sp)
 
 router = APIRouter()
 
@@ -106,3 +106,48 @@ async def daftar_tindakan(
         'semester_id': semester_id,
         'items': items,
     })
+
+
+async def _poin_negatif_siswa(siswa_id: str, semester_id: Optional[str]) -> Dict:
+    query = await query_rekap(None, semester_id, None, None, None)
+    query = {'$and': [query, {'siswa_id': siswa_id}]} if query else {'siswa_id': siswa_id}
+    records = await db[KOLEKSI_POIN].find(query, {'_id': 0, 'poin': 1, 'tatib_poin': 1}).to_list(5000)
+    return {'poin_negatif': sum(n for n in (nilai_poin(r) for r in records) if n < 0), 'jumlah_catatan': len(records)}
+
+
+@router.get("/tatib/tindakan/usulan")
+async def ringkasan_usulan_sp(semester_id: Optional[str] = None, user: Dict = Depends(wajib_lihat_tatib)):
+    """Ringkasan usulan SP otomatis: jumlah siswa per tingkat dan yang perlu ditinjau
+    (usulan lebih berat dari keterangan SP yang ditetapkan). -> {ambang, semester_id, jumlah, perlu_ditinjau}."""
+    data = await daftar_tindakan(semester_id=semester_id, user=user)
+    jumlah = {sp: 0 for sp in TINGKAT_SP}
+    for s in data['items']:
+        if s['usulan_sp']:
+            jumlah[s['usulan_sp']] += 1
+    ditinjau = [s['siswa_id'] for s in data['items'] if usulan_lebih_tinggi(s['usulan_sp'], s['keterangan_sp'])]
+    return {'ambang': data['ambang'], 'semester_id': semester_id, 'jumlah': jumlah, 'perlu_ditinjau': len(ditinjau),
+            'siswa_perlu_ditinjau': ditinjau}
+
+
+@router.get("/tatib/tindakan/{siswa_id}/usulan")
+async def usulan_sp_siswa(siswa_id: str, semester_id: Optional[str] = None, user: Dict = Depends(wajib_lihat_tatib)):
+    """Usulan SP otomatis satu siswa dari akumulasi pelanggaran & ambang berlaku, beserta tingkat berikutnya.
+    Usulan hanya saran: keterangan SP final tetap ditetapkan manual (PUT /tatib/tindakan/{siswa_id})."""
+    akun = await db.users.find_one({'id': siswa_id, 'roles': 'siswa'}, {'_id': 0, 'id': 1, 'full_name': 1})
+    if not akun:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    ambang = await ambil_ambang_sp(db)
+    poin = await _poin_negatif_siswa(siswa_id, semester_id)
+    tindakan = await db[KOLEKSI_TINDAKAN].find_one({'siswa_id': siswa_id, 'semester_id': semester_id}, {'_id': 0}) or {}
+    usulan = usulkan_sp(poin['poin_negatif'], ambang)
+    return {
+        'siswa_id': siswa_id,
+        'nama': akun.get('full_name'),
+        'semester_id': semester_id,
+        **poin,
+        'ambang': {k: ambang[k] for k in ('sp1', 'sp2', 'sp3')},
+        'usulan_sp': usulan,
+        'ambang_berikutnya': ambang_berikutnya(poin['poin_negatif'], ambang),
+        'keterangan_sp': tindakan.get('keterangan_sp'),
+        'perlu_ditinjau': usulan_lebih_tinggi(usulan, tindakan.get('keterangan_sp')),
+    }
