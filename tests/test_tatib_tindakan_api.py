@@ -197,13 +197,13 @@ async def test_riwayat_tindakan_per_siswa(db, tanpa_audit):
 
 def test_semua_endpoint_tindakan_berpenjaga_peran():
     """Baca (GET): peran input + lihat tatib. Ubah (selain GET): hanya peran input (admin, guru tatib, waka kesiswaan);
-    ambang SP lebih ketat: hanya admin."""
+    ubah ambang SP & riwayatnya lebih ketat: hanya admin."""
     from routers.tatib_poin import wajib_input_tatib, wajib_lihat_tatib
     assert api.router.routes, 'router tindakan kosong'
     for route in api.router.routes:
         calls = [d.call for d in route.dependant.dependencies]
         for method in route.methods:
-            if method != 'GET' and route.path == '/tatib/ambang-sp':
+            if (method != 'GET' and route.path == '/tatib/ambang-sp') or route.path == '/tatib/ambang-sp/riwayat':
                 assert any('require_role' in c.__qualname__ for c in calls), f'{method} {route.path}'
                 continue
             harus = wajib_lihat_tatib if method == 'GET' else wajib_input_tatib
@@ -296,3 +296,13 @@ def test_ambang_dari_dokumen():
     assert api.ambang_dari_dokumen(None) == {'sp1': 25, 'sp2': 50, 'sp3': 75}
     assert api.ambang_dari_dokumen({'sp1': 5, 'sp2': 6, 'sp3': 7}) == {'sp1': 5, 'sp2': 6, 'sp3': 7}
     assert api.ambang_dari_dokumen({'sp1': 9, 'sp2': 6, 'sp3': 7}) == {'sp1': 25, 'sp2': 50, 'sp3': 75}
+
+
+async def test_daftar_riwayat_ambang_terbaru_dulu(db, tanpa_audit):
+    assert await api.riwayat_ambang_sp(user=ADMIN) == []
+    for sp1 in (30, 31, 32):
+        await api.simpan_ambang_sp(api.AmbangSpRequest(sp1=sp1, sp2=60, sp3=90, alasan=f'a{sp1}'), ADMIN)
+    r = await api.riwayat_ambang_sp(user=ADMIN)
+    assert [x['ke']['sp1'] for x in r] == [32, 31, 30] and r[0]['alasan'] == 'a32' and r[0]['oleh_nama'] == 'Admin'
+    assert [x['ke']['sp1'] for x in await api.riwayat_ambang_sp(batas=2, user=ADMIN)] == [32, 31]
+    assert len(await api.riwayat_ambang_sp(batas=0, user=ADMIN)) == 1  # batas minimal 1

@@ -331,3 +331,11 @@ async def simpan_ambang_sp(req: AmbangSpRequest, user: Dict = Depends(require_ro
                     f"Ambang SP {dari['sp1']}/{dari['sp2']}/{dari['sp3']} -> {nilai['sp1']}/{nilai['sp2']}/{nilai['sp3']}"
                     + (f" · {alasan}" if alasan else ''))
     return serialize_doc(await ambil_ambang_sp(db))
+
+
+@router.get("/tatib/ambang-sp/riwayat")
+async def riwayat_ambang_sp(batas: int = 50, user: Dict = Depends(require_role('admin'))):
+    """Riwayat audit perubahan ambang SP (terbaru dulu): waktu, pengubah, nilai lama -> baru, alasan. Hanya admin."""
+    batas = max(1, min(batas, 500))
+    items = await db[KOLEKSI_RIWAYAT_AMBANG_SP].find({}, {'_id': 0}).sort('waktu', -1).to_list(batas)
+    return [serialize_doc(i) for i in items]
