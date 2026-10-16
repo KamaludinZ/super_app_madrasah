@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
 import UbahTindakanDialog from '@/components/tatib/UbahTindakanDialog';
+import RiwayatTindakanPanel from '@/components/tatib/RiwayatTindakanPanel';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import { TINGKAT_SP, ambangBerikutnya, ambilTindakan, simpanStatusTindakan, usulanLebihTinggi } from '@/lib/tindakanTatib';
@@ -72,6 +73,8 @@ export default function TatibTindakanPage() {
   const [data, setData] = useState({ ambang: null, items: [] });
   const [loading, setLoading] = useState(true);
   const [diubah, setDiubah] = useState(null); // siswa yang dialog ubah tindakannya terbuka
+  const [riwayatSiswa, setRiwayatSiswa] = useState(null); // siswa yang panel riwayatnya terbuka
+  const [versiRiwayat, setVersiRiwayat] = useState(0);
 
   const bukaUbah = (s) => {
     if (tolakUbahTatib(activeRole)) return;
@@ -82,6 +85,7 @@ export default function TatibTindakanPage() {
   const simpanTindakan = async (isian) => {
     const hasil = await simpanStatusTindakan(diubah.siswa_id, isian);
     setData((d) => ({ ...d, items: d.items.map((x) => (x.siswa_id === hasil.siswa_id ? { ...x, ...hasil } : x)) }));
+    setVersiRiwayat((v) => v + 1);
     return hasil;
   };
 
@@ -154,7 +158,20 @@ export default function TatibTindakanPage() {
                   {data.items.map((s) => (
                     <TableRow key={s.siswa_id} data-testid={`tindakan-${s.siswa_id}`}>
                       <TableCell className="font-mono text-xs">{s.nisn || '-'}</TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">{s.nama}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="text-left font-medium text-[#006837] hover:underline"
+                          onClick={() => setRiwayatSiswa(s)}
+                          title="Lihat riwayat tindakan"
+                          data-testid={`tindakan-riwayat-${s.siswa_id}`}
+                        >
+                          {s.nama}
+                        </button>
+                        {s.diubah_pada && (
+                          <div className="text-[11px] text-slate-400">diubah {String(s.diubah_pada).slice(0, 10)} · {s.diubah_oleh_nama || '-'}</div>
+                        )}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">{s.kelas || '-'}</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums text-emerald-700" data-testid={`tindakan-plus-${s.siswa_id}`}>
                         {s.poin_positif ? formatPoin(s.poin_positif) : <span className="text-slate-300">0</span>}
@@ -202,6 +219,7 @@ export default function TatibTindakanPage() {
       </Card>
 
       <UbahTindakanDialog siswa={diubah} onClose={() => setDiubah(null)} onSimpan={simpanTindakan} />
+      <RiwayatTindakanPanel siswa={riwayatSiswa} onClose={() => setRiwayatSiswa(null)} versi={versiRiwayat} />
     </div>
   );
 }

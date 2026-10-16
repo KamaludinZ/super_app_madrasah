@@ -56,6 +56,28 @@ const siswaTiruan = [
 
 const ambangTiruan = { ...AMBANG_SP_BAWAAN };
 
+// Label field status untuk riwayat perubahan.
+export const LABEL_FIELD_TINDAKAN = {
+  keterangan_sp: 'Keterangan SP',
+  status_panggilan_wali: 'Panggilan wali',
+  status_sp: 'Status SP',
+  status_rtlpd: 'RTLPD',
+};
+
+// Riwayat per siswa (terbaru dulu): [{ id, waktu, oleh_nama, perubahan: [{ field, dari, ke }], catatan, usulan_sp }].
+const riwayatTiruan = {
+  'sis-3': [
+    { id: 'r2', waktu: '2026-10-12T09:00:00', oleh_nama: 'Guru Tatib', usulan_sp: 'SP3', catatan: 'Wali hadir, SP2 diserahkan',
+      perubahan: [{ field: 'keterangan_sp', dari: 'SP1', ke: 'SP2' }, { field: 'status_sp', dari: 'Tidak perlu', ke: 'Diserahkan' },
+        { field: 'status_rtlpd', dari: 'Tidak diperlukan', ke: 'Disusun' }] },
+    { id: 'r1', waktu: '2026-10-05T10:30:00', oleh_nama: 'Waka Kesiswaan', usulan_sp: 'SP2', catatan: null,
+      perubahan: [{ field: 'keterangan_sp', dari: null, ke: 'SP1' }, { field: 'status_panggilan_wali', dari: 'Tidak diperlukan', ke: 'Terlaksana' }] },
+  ],
+};
+
+// Kontrak: GET /tatib/tindakan/{siswa_id}/riwayat -> riwayat terbaru dulu.
+export const ambilRiwayatTindakan = (siswaId) => jeda(riwayatTiruan[siswaId] || []);
+
 export async function ambilTindakan() {
   return jeda({
     ambang: ambangTiruan,
@@ -72,9 +94,17 @@ export async function simpanStatusTindakan(siswaId, { keterangan_sp, status_pang
   if (!STATUS_PANGGILAN_WALI.includes(status_panggilan_wali) || !STATUS_SP.includes(status_sp) || !STATUS_RTLPD.includes(status_rtlpd)) {
     throw new Error('Status pembinaan tidak dikenal');
   }
-  Object.assign(s, {
-    keterangan_sp: keterangan_sp || null, status_panggilan_wali, status_sp, status_rtlpd,
-    catatan: (catatan || '').trim() || null, diubah_pada: new Date().toISOString(), diubah_oleh_nama: 'Anda',
-  });
+  const baru = { keterangan_sp: keterangan_sp || null, status_panggilan_wali, status_sp, status_rtlpd };
+  const perubahan = Object.keys(LABEL_FIELD_TINDAKAN)
+    .filter((f) => (s[f] ?? null) !== baru[f])
+    .map((f) => ({ field: f, dari: s[f] ?? null, ke: baru[f] }));
+  const waktu = new Date().toISOString();
+  if (perubahan.length || (catatan || '').trim()) {
+    riwayatTiruan[siswaId] = [{
+      id: `r-${Date.now()}`, waktu, oleh_nama: 'Anda', usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan),
+      catatan: (catatan || '').trim() || null, perubahan,
+    }, ...(riwayatTiruan[siswaId] || [])];
+  }
+  Object.assign(s, { ...baru, diubah_pada: waktu, diubah_oleh_nama: 'Anda' });
   return jeda({ ...s, usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan) });
 }
