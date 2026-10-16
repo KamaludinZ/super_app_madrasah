@@ -12,6 +12,7 @@ import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import FilterRekapTatib, { FILTER_REKAP_KOSONG } from '@/components/tatib/FilterRekapTatib';
 import { ambilRekap, unduhRekap } from '@/lib/poinTatib';
 import LabelAsalInput from '@/components/tatib/LabelAsalInput';
+import TabelPerKategori from '@/components/tatib/TabelPerKategori';
 import { Button } from '@/components/ui/button';
 
 const KOLOM_KELAS = [
@@ -23,48 +24,6 @@ const KOLOM_KELAS = [
   { key: 'siswa_perlu_perhatian', label: 'Perlu Perhatian', kanan: true },
 ];
 const JUMLAHKAN = ['jumlah_siswa', 'total_plus', 'total_minus', 'saldo', 'siswa_perlu_perhatian'];
-
-// Rekap per kategori tatib (struktur baru): jumlah & total poin pelanggaran dan kebaikan.
-function TabelPerKategori({ items }) {
-  return (
-    <Card data-testid="rekap-per-kategori">
-      <CardHeader className="pb-3"><CardTitle className="text-base">Per Kategori</CardTitle></CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kategori</TableHead>
-                <TableHead className="text-right">Pelanggaran</TableHead>
-                <TableHead className="text-right">Kebaikan</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((k) => (
-                <TableRow key={k.kategori} data-testid={`rekap-kategori-${k.kategori}`}>
-                  <TableCell className="font-medium">{k.kategori}</TableCell>
-                  <TableCell className="text-right tabular-nums text-red-700">
-                    {formatPoin(k.total_minus)} <span className="text-xs text-slate-400">({k.jumlah_pelanggaran})</span>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-emerald-700">
-                    {formatPoin(k.total_plus)} <span className="text-xs text-slate-400">({k.jumlah_kebaikan})</span>
-                  </TableCell>
-                  <TableCell className={`text-right font-semibold tabular-nums ${k.total_plus + k.total_minus < 0 ? 'text-red-700' : ''}`}>
-                    {formatPoin(k.total_plus + k.total_minus)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {items.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="py-6 text-center text-sm text-slate-500">Belum ada data.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 // Jumlah catatan per asal input (catatan lama tanpa asal = 'Belum diisi').
 function DaftarAsalInput({ items }) {

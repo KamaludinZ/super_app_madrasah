@@ -90,3 +90,16 @@ export function saringData(baris, { kategori, jenis, asal, cari } = {}) {
     return true;
   });
 }
+
+// Rekap per kategori dari catatan (bentuk sama dengan per_kategori Rekap Pengawas), saldo terendah dulu.
+export function rekapPerKategori(records = []) {
+  const per = new Map();
+  records.forEach((r) => {
+    const kategori = r.kategori_nama || 'Lainnya';
+    const k = per.get(kategori) || { kategori, jumlah_pelanggaran: 0, jumlah_kebaikan: 0, total_minus: 0, total_plus: 0 };
+    const n = nilaiPoin(r);
+    if (n < 0) { k.jumlah_pelanggaran += 1; k.total_minus += n; } else if (n > 0) { k.jumlah_kebaikan += 1; k.total_plus += n; }
+    per.set(kategori, k);
+  });
+  return [...per.values()].sort((a, b) => (a.total_plus + a.total_minus) - (b.total_plus + b.total_minus) || a.kategori.localeCompare(b.kategori, 'id'));
+}

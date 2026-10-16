@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { formatPoin, nilaiPoin } from '@/components/tatib/RingkasanPoin';
 import { formatTanggalPoin } from '@/components/tatib/RiwayatPoin';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
 
 function Baris({ label, children }) {
   return (
@@ -53,10 +54,14 @@ export default function RincianPoinDialog({ catatan, onClose, tampilkanSiswa = f
                 </Baris>
               )}
               <Baris label="Kategori">{catatan.kategori_nama}</Baris>
-              <Baris label="Jenis">{catatan.jenis_nama}</Baris>
-              <Baris label="Kondisi">{catatan.kondisi}</Baris>
+              <Baris label="Jenis aturan">
+                {catatan.tatib_kode && <span className="font-mono text-xs text-slate-500 mr-1">{catatan.tatib_kode}</span>}
+                {catatan.tatib_nama || catatan.jenis_nama}
+              </Baris>
+              {catatan.kondisi && <Baris label="Kondisi">{catatan.kondisi}</Baris>}
+              <Baris label="Asal input"><LabelAsalInput asal={catatan.asal_input} /></Baris>
               <Baris label="Dicatat oleh">{catatan.petugas_nama}</Baris>
-              <Baris label="Keterangan">{catatan.catatan}</Baris>
+              <Baris label="Keterangan">{catatan.keterangan ?? catatan.catatan}</Baris>
             </dl>
 
             {!plus && (

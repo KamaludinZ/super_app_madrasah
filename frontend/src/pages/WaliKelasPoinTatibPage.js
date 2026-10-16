@@ -15,6 +15,9 @@ import RincianPoinDialog from '@/components/tatib/RincianPoinDialog';
 import { bandingTerbaru, formatTanggalPoin } from '@/components/tatib/RiwayatPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import { ambilSiswaWaliKelas, ambilCatatanKelas } from '@/lib/poinTatib';
+import TabelPerKategori from '@/components/tatib/TabelPerKategori';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
+import { rekapPerKategori } from '@/lib/dataTatib';
 
 // Pantauan Walikelas: poin tata tertib siswa di kelas yang diampu (read-only).
 // Ringkasan kelas di atas, daftar siswa di bawah; klik siswa -> saldo & riwayatnya.
@@ -94,6 +97,7 @@ export default function WaliKelasPoinTatibPage() {
     [students, records, batas],
   );
   const terbaru = useMemo(() => [...records].sort(bandingTerbaru).slice(0, 5), [records]);
+  const perKategori = useMemo(() => rekapPerKategori(records), [records]);
 
   // Guard: hanya peran wali kelas; peran lain diarahkan ke halaman poin sesuai aksesnya.
   if (!khususWali) return <Navigate to={halamanPoinTatib(activeRole)} replace />;
@@ -220,6 +224,10 @@ export default function WaliKelasPoinTatibPage() {
         </CardContent>
       </Card>
 
+      {!loading && perKategori.length > 0 && (
+        <TabelPerKategori items={perKategori} judul="Poin Kelas per Kategori" testid="walikelas-per-kategori" />
+      )}
+
       {!loading && terbaru.length > 0 && (
         <section className="space-y-2" data-testid="walikelas-catatan-terbaru">
           <h2 className="text-lg font-semibold text-slate-900">Catatan Terbaru</h2>
@@ -237,8 +245,12 @@ export default function WaliKelasPoinTatibPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-slate-900">{r.siswa_nama}</p>
-                      <p className="truncate text-xs text-slate-500">{formatTanggalPoin(r.tanggal)} · {r.tatib_nama}</p>
+                      <p className="truncate text-xs text-slate-500">
+                        {formatTanggalPoin(r.tanggal)} · {r.tatib_kode && <span className="font-mono">{r.tatib_kode} </span>}{r.tatib_nama}
+                        {r.kategori_nama ? ` · ${r.kategori_nama}` : ''}
+                      </p>
                     </div>
+                    <span className="hidden shrink-0 sm:inline"><LabelAsalInput asal={r.asal_input} /></span>
                     <span className={`shrink-0 font-bold tabular-nums ${plus ? 'text-emerald-700' : 'text-red-700'}`}>{formatPoin(r.poin)}</span>
                   </button>
                 );
