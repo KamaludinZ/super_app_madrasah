@@ -13,6 +13,7 @@ import { bolehInputTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTat
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
+import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
@@ -59,8 +60,13 @@ export default function TatibInputTerpaduPage() {
 
   const ubah = (isian) => setForm((f) => ({ ...f, ...isian }));
 
-  const pilihKategori = (v) => {
-    const kategori_id = v === 'all' ? '' : v;
+  const jumlahJenis = useMemo(() => {
+    const n = {};
+    jenisList.filter((j) => j.aktif !== false).forEach((j) => { n[j.kategori_id] = (n[j.kategori_id] || 0) + 1; });
+    return n;
+  }, [jenisList]);
+
+  const pilihKategori = (kategori_id) => {
     // Jenis yang sudah dipilih dilepas bila tidak termasuk kategori baru.
     const jenisMasihCocok = jenis && (!kategori_id || jenis.kategori_id === kategori_id);
     ubah({ kategori_id, jenis_id: jenisMasihCocok ? form.jenis_id : '' });
@@ -128,31 +134,31 @@ export default function TatibInputTerpaduPage() {
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                  <div>
-                    <Label>Kategori</Label>
-                    <Select value={form.kategori_id || 'all'} onValueChange={pilihKategori}>
-                      <SelectTrigger data-testid="input-tatib-kategori"><SelectValue placeholder="Semua Kategori" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Semua Kategori</SelectItem>
-                        {kategoriList.map((k) => <SelectItem key={k.id} value={k.id}>{k.nama}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Jenis aturan*</Label>
-                    <Select value={form.jenis_id || 'none'} onValueChange={pilihJenis}>
-                      <SelectTrigger data-testid="input-tatib-jenis"><SelectValue placeholder="Pilih Jenis" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Pilih Jenis</SelectItem>
-                        {jenisTersaring.map((j) => (
-                          <SelectItem key={j.id} value={j.id}>
-                            [{j.kode_aturan}] {j.nama} ({formatPoin(poinJenis(j))})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <Label className="mb-2 block">Kategori</Label>
+                  <PilihKategoriTatib
+                    kategoriList={kategoriList}
+                    value={form.kategori_id}
+                    onPilih={pilihKategori}
+                    jumlahJenis={jumlahJenis}
+                    disabled={!bolehInput}
+                    testid="input-tatib-kategori"
+                  />
+                </div>
+
+                <div>
+                  <Label>Jenis aturan*</Label>
+                  <Select value={form.jenis_id || 'none'} onValueChange={pilihJenis}>
+                    <SelectTrigger data-testid="input-tatib-jenis"><SelectValue placeholder="Pilih Jenis" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Pilih Jenis</SelectItem>
+                      {jenisTersaring.map((j) => (
+                        <SelectItem key={j.id} value={j.id}>
+                          [{j.kode_aturan}] {j.nama} ({formatPoin(poinJenis(j))})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div
