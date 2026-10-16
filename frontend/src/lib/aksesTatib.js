@@ -32,6 +32,9 @@ export const bolehInputTatib = (activeRole) => aksesTatib(activeRole) === 'input
 
 export const bolehHapusTatib = (activeRole) => activeRole === 'admin';
 
+// Pengaturan Ambang SP hanya untuk admin (lihat & ubah), sama dengan backend PUT /tatib/ambang-sp.
+export const bolehAturAmbangSP = (activeRole) => activeRole === 'admin';
+
 // Halaman Input Tata Tertib & Tindakan Tatib: peran input mengubah; peran lihat hanya melihat.
 // Wali kelas & siswa diarahkan ke halaman poinnya sendiri.
 export const bolehBukaInputTatib = (activeRole) => ['input', 'lihat'].includes(aksesTatib(activeRole));
@@ -88,7 +91,7 @@ export function menuTatib(role, prefix) {
     },
     { to: '/admin/tatib/tindakan', label: 'Tindakan Tatib', icon: Gavel, testid: `${prefix}-tatib-tindakan` },
     // Ambang SP diatur admin (PRD: "ambang dapat diatur admin").
-    ...(role === 'admin'
+    ...(bolehAturAmbangSP(role)
       ? [{ to: '/admin/tatib/ambang-sp', label: 'Pengaturan Ambang SP', icon: SlidersHorizontal, testid: `${prefix}-tatib-ambang-sp` }]
       : []),
     { to: '/admin/tatib/data', label: 'Data Tata Tertib', icon: Database, testid: `${prefix}-tatib-data` },

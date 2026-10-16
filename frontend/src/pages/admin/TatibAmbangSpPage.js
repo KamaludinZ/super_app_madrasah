@@ -4,7 +4,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, History, Loader2, SlidersHorizontal } from 'lucide-react';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
-import { pesanGalatTatib } from '@/lib/aksesTatib';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
+import { bolehAturAmbangSP, halamanPoinTatib, pesanGalatTatib } from '@/lib/aksesTatib';
 import { TINGKAT_SP, WARNA_SP } from '@/lib/tindakanTatib';
 import FormAmbangSp from '@/components/tatib/FormAmbangSp';
 import RiwayatAmbangSp from '@/components/tatib/RiwayatAmbangSp';
@@ -40,6 +42,8 @@ function SkalaAmbang({ ambang }) {
 // Pengaturan Ambang SP: batas akumulasi poin pelanggaran yang membuat sistem mengusulkan SP1/SP2/SP3
 // di Tindakan Tatib. Usulan hanya saran; keputusan SP tetap ditetapkan manual.
 export default function TatibAmbangSpPage() {
+  const { activeRole } = useAuth();
+  const bolehAtur = bolehAturAmbangSP(activeRole);
   const [ambang, setAmbang] = useState(null);
   const [loading, setLoading] = useState(true);
   const [galatSimpan, setGalatSimpan] = useState('');
@@ -52,12 +56,13 @@ export default function TatibAmbangSpPage() {
     .finally(() => setMemuatRiwayat(false));
 
   useEffect(() => {
+    if (!bolehAtur) return;
     ambilAmbangSP()
       .then(setAmbang)
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat ambang SP')))
       .finally(() => setLoading(false));
     muatRiwayat();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bolehAtur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Konfirmasi dulu (ringkasan lama -> baru); galat server ditampilkan di atas form tanpa menghapus isian.
   const simpan = async (nilai) => {
@@ -80,6 +85,9 @@ export default function TatibAmbangSpPage() {
       toast.error(pesan);
     }
   };
+
+  // Peran selain admin dialihkan ke halaman tatibnya (tanpa memuat data ambang).
+  if (!bolehAtur) return <Navigate to={halamanPoinTatib(activeRole)} replace />;
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-ambang-sp-page">
