@@ -36,6 +36,8 @@ const kemarinWIB = () => {
   return d.toISOString().slice(0, 10);
 };
 
+const PesanGalat = ({ teks, testid }) => (teks ? <p className="mt-1 text-xs text-red-600" role="alert" data-testid={testid}>{teks}</p> : null);
+
 const formKosong = () => ({ siswa_id: '', kategori_id: '', jenis_id: '', tanggal: hariIniWIB(), asal_input: '', keterangan: '' });
 
 const warnaPoin = (poin) => (poin < 0 ? 'text-red-700' : 'text-emerald-700');
@@ -60,6 +62,7 @@ export default function TatibInputTerpaduPage() {
   const [diperbaiki, setDiperbaiki] = useState(null); // catatan yang sedang diperbaiki di form
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cobaSimpan, setCobaSimpan] = useState(false); // galat isian wajib baru ditampilkan setelah percobaan simpan
   const [form, setForm] = useState(formKosong);
 
   useEffect(() => {
@@ -102,6 +105,13 @@ export default function TatibInputTerpaduPage() {
   const ubah = (isian) => setForm((f) => ({ ...f, ...isian }));
   // Format YYYY-MM-DD bisa dibandingkan sebagai teks.
   const galatTanggal = form.tanggal && form.tanggal > hariIniWIB() ? 'Tanggal kejadian tidak boleh melewati hari ini' : '';
+  const galatWajib = {
+    siswa_id: form.siswa_id ? '' : 'Pilih siswa terlebih dahulu',
+    jenis_id: form.jenis_id ? '' : 'Pilih jenis aturan',
+    tanggal: form.tanggal ? '' : 'Isi tanggal kejadian',
+    asal_input: ASAL_INPUT.includes(form.asal_input) ? '' : 'Pilih asal input dari daftar',
+  };
+  const galat = (field) => (cobaSimpan ? galatWajib[field] : '');
 
   const jumlahJenis = useMemo(() => {
     const n = {};
@@ -142,6 +152,7 @@ export default function TatibInputTerpaduPage() {
 
   const batalPerbaiki = () => {
     setDiperbaiki(null);
+    setCobaSimpan(false);
     setForm(formKosong());
   };
 
@@ -165,8 +176,10 @@ export default function TatibInputTerpaduPage() {
 
   const simpan = async () => {
     if (tolakUbahTatib(activeRole)) return;
-    if (!form.siswa_id || !form.jenis_id || !form.tanggal || !form.asal_input) {
-      toast.error('Siswa, jenis aturan, tanggal kejadian, dan asal input wajib diisi');
+    setCobaSimpan(true);
+    const kurang = Object.values(galatWajib).filter(Boolean);
+    if (kurang.length) {
+      toast.error(kurang.length === 1 ? kurang[0] : `Lengkapi ${kurang.length} isian wajib yang ditandai`);
       return;
     }
     if (galatTanggal) {
@@ -183,6 +196,7 @@ export default function TatibInputTerpaduPage() {
       // Asal input juga dipertahankan: satu sesi (mis. razia) biasanya mencatat banyak siswa.
       setForm((f) => ({ ...formKosong(), siswa_id: f.siswa_id, tanggal: f.tanggal, asal_input: f.asal_input }));
       setDiperbaiki(null);
+      setCobaSimpan(false);
       setIdBaru(catatan.id);
       setVersiRiwayat((v) => v + 1);
     } catch (e) {
@@ -235,6 +249,7 @@ export default function TatibInputTerpaduPage() {
                       onPilih={(siswa_id) => ubah({ siswa_id })}
                       testid="input-tatib-siswa"
                     />
+                    <PesanGalat teks={galat('siswa_id')} />
                   </div>
 
                   <div>
@@ -262,6 +277,7 @@ export default function TatibInputTerpaduPage() {
                       onPilih={pilihJenis}
                       testid="input-tatib-jenis"
                     />
+                    <PesanGalat teks={galat('jenis_id')} />
                   </div>
 
                   <div
@@ -319,11 +335,18 @@ export default function TatibInputTerpaduPage() {
                     <div>
                       <Label>Asal input*</Label>
                       <Select value={form.asal_input || undefined} onValueChange={(asal_input) => ubah({ asal_input })}>
-                        <SelectTrigger data-testid="input-tatib-asal"><SelectValue placeholder="Pilih sumber pencatatan" /></SelectTrigger>
+                        <SelectTrigger
+                          aria-invalid={Boolean(galat('asal_input'))}
+                          className={galat('asal_input') ? 'border-red-500' : ''}
+                          data-testid="input-tatib-asal"
+                        >
+                          <SelectValue placeholder="Pilih sumber pencatatan" />
+                        </SelectTrigger>
                         <SelectContent>
                           {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                      <PesanGalat teks={galat('asal_input')} testid="input-tatib-asal-galat" />
                     </div>
                     <div className="sm:col-span-2">
                       <Label htmlFor="input-tatib-keterangan">Keterangan</Label>
@@ -343,7 +366,7 @@ export default function TatibInputTerpaduPage() {
                     {diperbaiki ? (
                       <Button variant="outline" onClick={batalPerbaiki} disabled={saving} data-testid="input-tatib-batal-perbaiki">Batal perbaiki</Button>
                     ) : (
-                      <Button variant="outline" onClick={() => setForm(formKosong())} disabled={saving}>Reset</Button>
+                      <Button variant="outline" onClick={() => { setForm(formKosong()); setCobaSimpan(false); }} disabled={saving}>Reset</Button>
                     )}
                     <Button onClick={simpan} disabled={saving} data-testid="input-tatib-simpan">
                       {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
