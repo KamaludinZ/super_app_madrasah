@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RotateCcw, Search } from 'lucide-react';
+import { ASAL_INPUT } from '@/lib/inputTatib';
+import { ASAL_KOSONG } from '@/lib/dataTatib';
 
 /**
  * Filter Data Tata Tertib: kategori → jenis aturan (jenis mengikuti kategori terpilih) dan cari siswa.
@@ -12,10 +14,10 @@ import { RotateCcw, Search } from 'lucide-react';
  */
 export default function FilterDataTatib({ value, onChange, pilihan, kosong }) {
   const set = (patch) => onChange({ ...value, ...patch });
-  const aktif = Boolean(value.kategori || value.jenis || value.cari);
+  const aktif = Boolean(value.kategori || value.jenis || value.asal || value.cari);
   return (
     <Card data-testid="data-filter">
-      <CardContent className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_1.5fr_auto] lg:items-end">
+      <CardContent className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1.5fr_1fr_1.5fr_auto] lg:items-end">
         <div>
           <Label>Kategori</Label>
           <Select value={value.kategori || 'all'} onValueChange={(v) => set({ kategori: v === 'all' ? '' : v, jenis: '' })}>
@@ -37,10 +39,21 @@ export default function FilterDataTatib({ value, onChange, pilihan, kosong }) {
           </Select>
         </div>
         <div>
-          <Label>Cari siswa</Label>
+          <Label>Asal input</Label>
+          <Select value={value.asal || 'all'} onValueChange={(v) => set({ asal: v === 'all' ? '' : v })}>
+            <SelectTrigger data-testid="data-filter-asal"><SelectValue placeholder="Semua asal" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua asal</SelectItem>
+              {ASAL_INPUT.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              <SelectItem value={ASAL_KOSONG}>Belum diisi (catatan lama)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Cari</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input value={value.cari} onChange={(e) => set({ cari: e.target.value })} placeholder="Nama, NIS, NISN, atau kelas…"
+            <Input value={value.cari} onChange={(e) => set({ cari: e.target.value })} placeholder="Siswa, kelas, atau asal input…"
               className="pl-9" data-testid="data-filter-cari" />
           </div>
         </div>

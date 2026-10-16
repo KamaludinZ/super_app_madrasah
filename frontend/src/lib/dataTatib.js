@@ -60,7 +60,9 @@ export function sebaranAsalInput(baris) {
   return hasil;
 }
 
-export const FILTER_DATA_KOSONG = { kategori: '', jenis: '', cari: '' };
+export const FILTER_DATA_KOSONG = { kategori: '', jenis: '', asal: '', cari: '' };
+// Nilai filter asal untuk catatan lama yang belum punya asal input.
+export const ASAL_KOSONG = '__belum';
 
 // Pilihan filter dari data yang dimuat: kategori (nama) dan jenis ({id: kode-nama}) — jenis disaring kategori.
 export function pilihanFilterData(baris, kategori = '') {
@@ -73,14 +75,16 @@ export function pilihanFilterData(baris, kategori = '') {
   return { kategori: kategoriList, jenis: [...jenis.values()].sort((a, b) => (a.kode || '').localeCompare(b.kode || '')) };
 }
 
-// Saring baris menurut kategori (nama), jenis (id/kode), dan kata kunci siswa (nama/NIS/NISN/kelas).
-export function saringData(baris, { kategori, jenis, cari } = {}) {
+// Saring baris menurut kategori (nama), jenis (id/kode), asal input (ASAL_KOSONG = belum diisi), dan kata kunci
+// (nama/NIS/NISN/kelas siswa atau asal input).
+export function saringData(baris, { kategori, jenis, asal, cari } = {}) {
   const kata = (cari || '').toLowerCase().split(/\s+/).filter(Boolean);
   return baris.filter((b) => {
     if (kategori && b.kategori_nama !== kategori) return false;
     if (jenis && (b.jenis_id || b.kode_aturan) !== jenis) return false;
+    if (asal && (asal === ASAL_KOSONG ? Boolean(b.asal_input) : b.asal_input !== asal)) return false;
     if (kata.length) {
-      const teks = `${b.siswa_nama} ${b.siswa_nis || ''} ${b.siswa_nisn || ''} ${b.siswa_kelas || ''}`.toLowerCase();
+      const teks = `${b.siswa_nama} ${b.siswa_nis || ''} ${b.siswa_nisn || ''} ${b.siswa_kelas || ''} ${b.asal_input || ''}`.toLowerCase();
       if (!kata.every((k) => teks.includes(k))) return false;
     }
     return true;

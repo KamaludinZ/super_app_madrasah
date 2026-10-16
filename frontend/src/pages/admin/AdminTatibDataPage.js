@@ -9,7 +9,7 @@ import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import LabelAsalInput from '@/components/tatib/LabelAsalInput';
 import FilterDataTatib from '@/components/tatib/FilterDataTatib';
 import {
-  FILTER_DATA_KOSONG, ambilDataTatib, pilihanFilterData, ringkasData, saringData, sebaranAsalInput,
+  ASAL_KOSONG, FILTER_DATA_KOSONG, ambilDataTatib, pilihanFilterData, ringkasData, saringData, sebaranAsalInput,
 } from '@/lib/dataTatib';
 
 const formatTanggal = (tgl) => {
@@ -48,7 +48,9 @@ const AdminTatibDataPage = () => {
   const tersaring = useMemo(() => saringData(baris, filter), [baris, filter]);
   const pilihan = useMemo(() => pilihanFilterData(baris, filter.kategori), [baris, filter.kategori]);
   const ringkas = useMemo(() => ringkasData(tersaring), [tersaring]);
-  const sebaran = useMemo(() => sebaranAsalInput(tersaring), [tersaring]);
+  // Sebaran dihitung tanpa filter asal: chip asal lain tetap bisa dipilih saat satu asal aktif.
+  const tanpaAsal = useMemo(() => saringData(baris, { ...filter, asal: '' }), [baris, filter]);
+  const sebaran = useMemo(() => sebaranAsalInput(tanpaAsal), [tanpaAsal]);
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-data-page">
@@ -66,14 +68,27 @@ const AdminTatibDataPage = () => {
         <KartuRingkasan ikon={Users} label="Saldo poin" nilai={formatPoin(ringkas.total_plus + ringkas.total_minus)} sub="kebaikan + pelanggaran" />
       </div>
 
-      {!loading && tersaring.length > 0 && (
+      {!loading && tanpaAsal.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="data-sebaran-asal">
           <span className="text-xs font-medium text-slate-500">Asal input:</span>
-          {sebaran.map(({ asal, jumlah }) => (
-            <span key={asal || 'belum'} className={`inline-flex items-center gap-1 ${jumlah ? '' : 'opacity-40'}`}>
-              <LabelAsalInput asal={asal} /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
-            </span>
-          ))}
+          {sebaran.map(({ asal, jumlah }) => {
+            // Klik chip = saring asal itu; klik lagi = lepas.
+            const nilai = asal || ASAL_KOSONG;
+            const terpilih = filter.asal === nilai;
+            return (
+              <button
+                key={nilai}
+                type="button"
+                onClick={() => setFilter((f) => ({ ...f, asal: terpilih ? '' : nilai }))}
+                disabled={!jumlah && !terpilih}
+                aria-pressed={terpilih}
+                className={`inline-flex items-center gap-1 rounded-md p-0.5 ${terpilih ? 'ring-2 ring-slate-900' : ''} ${jumlah ? 'hover:bg-slate-100' : 'opacity-40'}`}
+                data-testid={`data-sebaran-${nilai}`}
+              >
+                <LabelAsalInput asal={asal} /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
