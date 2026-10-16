@@ -198,6 +198,62 @@ INDEX_STRUKTUR = {
 
 
 # ============================================================
+# TINDAKAN TATIB: usulan SP otomatis + status pembinaan manual (koleksi `tatib_tindakan`)
+# ============================================================
+# Satu dokumen per siswa per semester (semester_id; None = tanpa semester):
+#     id, siswa_id, semester_id,
+#     keterangan_sp            'SP1'|'SP2'|'SP3'|None   — keputusan sekolah (manual)
+#     status_panggilan_wali    STATUS_PANGGILAN_WALI
+#     status_sp                STATUS_SP
+#     status_rtlpd             STATUS_RTLPD
+#     catatan, diubah_pada, diubah_oleh_id, diubah_oleh_nama, created_at
+#     riwayat  [{id, waktu, oleh_id, oleh_nama, perubahan: [{field, dari, ke}], catatan, usulan_sp}]  (terlama dulu)
+# Usulan SP TIDAK disimpan sebagai keputusan: dihitung dari akumulasi poin pelanggaran & ambang (usulkan_sp).
+# Catatan: `tatib_penanganan` di codebase ini adalah koleksi catatan poin, bukan status pembinaan.
+KOLEKSI_TINDAKAN = 'tatib_tindakan'
+TINGKAT_SP = ('SP1', 'SP2', 'SP3')
+STATUS_PANGGILAN_WALI = ('Tidak diperlukan', 'Diajukan', 'Terlaksana')
+STATUS_SP = ('Tidak perlu', 'Diserahkan')
+STATUS_RTLPD = ('Tidak diperlukan', 'Disusun')
+FIELD_STATUS_TINDAKAN = ('keterangan_sp', 'status_panggilan_wali', 'status_sp', 'status_rtlpd')
+STATUS_TINDAKAN_AWAL = {
+    'keterangan_sp': None,
+    'status_panggilan_wali': STATUS_PANGGILAN_WALI[0],
+    'status_sp': STATUS_SP[0],
+    'status_rtlpd': STATUS_RTLPD[0],
+}
+# Ambang bawaan (akumulasi poin pelanggaran, nilai mutlak); sama dengan AMBANG_SP_BAWAAN di frontend/src/lib/tindakanTatib.js.
+AMBANG_SP_BAWAAN = {'sp1': 25, 'sp2': 50, 'sp3': 75}
+
+INDEX_TINDAKAN = [
+    ([('siswa_id', 1), ('semester_id', 1)], {'unique': True, 'name': 'siswa_semester_unik'}),
+    ([('keterangan_sp', 1)], {}),
+]
+
+
+def usulkan_sp(poin_negatif, ambang: Optional[dict] = None) -> Optional[str]:
+    """SP tertinggi yang ambangnya terlampaui oleh akumulasi pelanggaran (nilai mutlak), atau None."""
+    ambang = ambang or AMBANG_SP_BAWAAN
+    n = abs(int(poin_negatif or 0))
+    for sp in reversed(TINGKAT_SP):
+        if n >= int(ambang[sp.lower()]):
+            return sp
+    return None
+
+
+def perubahan_status(lama: dict, baru: dict) -> list:
+    """Daftar perubahan field status [{field, dari, ke}] antara dua keadaan tindakan."""
+    lama = {**STATUS_TINDAKAN_AWAL, **{k: v for k, v in (lama or {}).items() if k in FIELD_STATUS_TINDAKAN}}
+    return [{'field': f, 'dari': lama.get(f), 'ke': baru.get(f)} for f in FIELD_STATUS_TINDAKAN if lama.get(f) != baru.get(f)]
+
+
+async def pastikan_index_tindakan(db) -> None:
+    for keys, opsi in INDEX_TINDAKAN:
+        await db[KOLEKSI_TINDAKAN].create_index(keys, **opsi)
+    await db[KOLEKSI_POIN].create_index([('semester_id', 1), ('siswa_id', 1)])
+
+
+# ============================================================
 # AKSES & RANGKUMAN (dipakai routers/tatib_poin.py)
 # ============================================================
 # Sama dengan frontend/src/lib/aksesTatib.js.

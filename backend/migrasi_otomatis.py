@@ -172,6 +172,11 @@ async def _tatib_jenis_pelanggaran(db):
     return await migrate(db)
 
 
+async def _tatib_tindakan(db):
+    from migrations.migrate_tatib_tindakan import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -190,6 +195,7 @@ MIGRASI = [
     ('2026-10-14_kehadiran_jurnal', _kehadiran_jurnal),
     ('2026-10-16_tatib_struktur_baru', _tatib_struktur_baru),
     ('2026-10-16_tatib_jenis_pelanggaran', _tatib_jenis_pelanggaran),
+    ('2026-10-16_tatib_tindakan', _tatib_tindakan),
 ]
 
 
