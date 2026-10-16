@@ -12,7 +12,8 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
-from tatib_poin import JENIS_POIN, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, kunci_nama, normalisasi_kondisi
+from tatib_poin import (JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, kunci_nama,
+                        normalisasi_kondisi, poin_jenis_aturan)
 from routers.tatib_poin import batasi_query_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
@@ -285,6 +286,42 @@ async def delete_jenis(jenis_id: str, user: Dict = Depends(wajib_input_tatib)):
     await db.tatib_jenis.delete_one({'id': jenis_id})
     await log_audit(user, 'tatib_jenis_delete', f"Deleted jenis: {jenis_id}")
     return {'message': 'Jenis berhasil dihapus'}
+
+
+# ============================================================
+# MASTER JENIS ATURAN (struktur baru; dokumen di koleksi tatib_aturan)
+# ============================================================
+
+def jenis_aturan_tampil(doc: Dict, nama_kategori: Optional[Dict] = None) -> Dict:
+    """Bentuk kanonis satu jenis aturan untuk Input Tata Tertib (field lama diterjemahkan)."""
+    return {
+        'id': doc.get('id'),
+        **field_jenis_aturan(doc),
+        'poin': poin_jenis_aturan(doc),
+        'kategori_id': doc.get('kategori_id'),
+        'kategori_nama': (nama_kategori or {}).get(doc.get('kategori_id')) or doc.get('kategori_nama') or 'Lainnya',
+        'deskripsi': doc.get('deskripsi') or '',
+    }
+
+
+@router.get("/tatib/jenis-aturan")
+async def list_jenis_aturan(
+    kategori_id: Optional[str] = None,
+    aktif: Optional[bool] = None,
+    user: Dict = Depends(get_current_user),
+):
+    """Master jenis aturan (pelanggaran/kebaikan) per kategori, urut kategori lalu kode aturan.
+    `aktif=true` untuk pilihan pencatatan; tanpa filter untuk melihat semua termasuk nonaktif."""
+    query = {'kategori_id': kategori_id} if kategori_id else {}
+    docs = await db.tatib_aturan.find(query, {'_id': 0}).to_list(2000)
+    kategori = await db.tatib_kategori.find({}, {'_id': 0, 'id': 1, 'nama': 1, 'urutan': 1}).to_list(1000)
+    nama_kategori = {k['id']: k.get('nama') for k in kategori}
+    urutan = {k['id']: (k.get('urutan') or 0, k.get('nama') or '') for k in kategori}
+    items = [jenis_aturan_tampil(d, nama_kategori) for d in docs]
+    if aktif is not None:
+        items = [i for i in items if i['aktif'] is aktif]
+    items.sort(key=lambda i: (urutan.get(i['kategori_id'], (10**6, i['kategori_nama'])), i['kode_aturan'] or ''))
+    return items
 
 
 # ============================================================

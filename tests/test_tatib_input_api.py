@@ -70,3 +70,26 @@ async def test_kategori_hapus_ditolak_bila_dipakai(db):
     with pytest.raises(HTTPException) as e:
         await api.get_kategori(k['id'], PETUGAS)
     assert e.value.status_code == 404
+
+
+async def test_jenis_aturan_per_kategori_bentuk_kanonis(db):
+    k1 = await api.create_kategori(_req(api.KategoriTatibRequest, nama='Kedisiplinan', urutan=1), PETUGAS)
+    k2 = await api.create_kategori(_req(api.KategoriTatibRequest, nama='Akhlak', urutan=2), PETUGAS)
+    await db.tatib_aturan.insert_many([
+        # format lama (belum dimigrasi) tetap diterjemahkan
+        {'id': 'a2', 'kode': 'DIS-02', 'nama_aturan': 'Bolos', 'kategori_id': k1['id'], 'kategori_nama': 'lama', 'poin': -15, 'is_active': True},
+        {'id': 'a1', 'kode_aturan': 'DIS-01', 'nama': 'Terlambat', 'jalur_poin': 'minus', 'besar_poin': 5, 'kategori_id': k1['id'], 'aktif': True},
+        {'id': 'a3', 'kode_aturan': 'AKH-01', 'nama': 'Imam salat', 'jalur_poin': 'plus', 'besar_poin': 5, 'kategori_id': k2['id'], 'aktif': True, 'deskripsi': 'x'},
+        {'id': 'a4', 'kode_aturan': 'AKH-02', 'nama': 'Kasar', 'jalur_poin': 'minus', 'besar_poin': 10, 'kategori_id': k2['id'], 'aktif': False},
+    ])
+    semua = await api.list_jenis_aturan(user=PETUGAS)
+    assert [j['id'] for j in semua] == ['a1', 'a2', 'a3', 'a4']  # urut kategori lalu kode
+    assert semua[1] == {'id': 'a2', 'kode_aturan': 'DIS-02', 'nama': 'Bolos', 'jalur_poin': 'minus', 'besar_poin': 15, 'aktif': True,
+                        'poin': -15, 'kategori_id': k1['id'], 'kategori_nama': 'Kedisiplinan', 'deskripsi': ''}
+    assert semua[2]['poin'] == 5 and semua[2]['deskripsi'] == 'x'
+
+    per_kategori = await api.list_jenis_aturan(kategori_id=k2['id'], user=PETUGAS)
+    assert [j['id'] for j in per_kategori] == ['a3', 'a4']
+    aktif = await api.list_jenis_aturan(kategori_id=k2['id'], aktif=True, user=PETUGAS)
+    assert [j['id'] for j in aktif] == ['a3']
+    assert [j['id'] for j in await api.list_jenis_aturan(aktif=False, user=PETUGAS)] == ['a4']

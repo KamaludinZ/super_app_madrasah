@@ -5,7 +5,7 @@ import { hariIniWIB } from '@/lib/tanggal';
 // Fungsi yang sudah tersambung ke API memakai `api`; sisanya SEMENTARA memakai data tiruan di memori
 // (frontend dibangun lebih dulu). Kontrak:
 //   GET  /tatib/kategori            -> [{ id, nama, deskripsi }]
-//   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, kategori_id, kategori_nama, deskripsi, aktif }]
+//   GET  /tatib/jenis-aturan        -> [{ id, kode_aturan, nama, jalur_poin: 'minus'|'plus', besar_poin, poin, kategori_id, kategori_nama, deskripsi, aktif }]
 //   GET  /students                  -> [{ id, nis, nisn, full_name, class_name }]
 //   GET  /tatib/input/terbaru       -> { items: catatan terbaru (bentuk `lengkapiCatatan`), ada_lagi }
 //   POST /tatib/input               -> { siswa_id, jenis_id, tanggal, asal_input, keterangan } ; poin dihitung server dari jenis
@@ -77,7 +77,14 @@ export async function ambilKategoriTatib() {
   return (data || []).map(({ id, nama, deskripsi }) => ({ id, nama, deskripsi: deskripsi || '' }));
 }
 
-export const ambilJenisAturan = () => jeda(jenisTiruan.map((j) => ({ ...j, kategori_nama: namaKategori(j.kategori_id) })));
+// Semua jenis (termasuk nonaktif, agar catatan lama tetap bisa diperbaiki); halaman menyaring yang aktif.
+export async function ambilJenisAturan({ kategori_id, aktif } = {}) {
+  const params = {};
+  if (kategori_id) params.kategori_id = kategori_id;
+  if (aktif != null) params.aktif = aktif;
+  const { data } = await api.get('/tatib/jenis-aturan', { params });
+  return data || [];
+}
 
 export const ambilSiswaTatib = () => jeda(siswaTiruan);
 
