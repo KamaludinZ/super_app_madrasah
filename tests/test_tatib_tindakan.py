@@ -74,3 +74,29 @@ async def test_migrasi_riwayat_memindahkan_array_tertanam(db):
     assert (await migrate_riwayat(db))['riwayat_dipindah'] == 0
     nama_index = {i['name'] for i in await db.tatib_tindakan_riwayat.list_indexes().to_list(None)}
     assert 'id_unik' in nama_index and 'siswa_id_1_semester_id_1_waktu_-1' in nama_index
+
+
+# ---- Pengaturan ambang SP ----
+from tatib_poin import ambil_ambang_sp, validasi_ambang_sp  # noqa: E402
+from migrations.migrate_pengaturan_ambang_sp import migrate as migrate_ambang  # noqa: E402
+
+
+def test_validasi_ambang_sp():
+    assert validasi_ambang_sp('10', 20, 30) == {'sp1': 10, 'sp2': 20, 'sp3': 30}
+    for salah in ((0, 10, 20), (10, 10, 20), (30, 20, 10), (10, 20, 10001), (None, 1, 2), ('a', 2, 3), (True, 2, 3)):
+        with pytest.raises(ValueError):
+            validasi_ambang_sp(*salah)
+
+
+async def test_migrasi_ambang_sp_mengisi_bawaan_dan_memperbaiki_nilai_rusak(db):
+    assert (await ambil_ambang_sp(db))['bawaan'] is True
+    assert await migrate_ambang(db) == {'ambang': 'diisi bawaan'}
+    a = await ambil_ambang_sp(db)
+    assert (a['sp1'], a['sp2'], a['sp3'], a['diubah_oleh_nama'], a['bawaan']) == (25, 50, 75, 'Sistem', False)
+    assert await migrate_ambang(db) == {'ambang': 'sudah ada'}
+
+    await db.pengaturan_ambang_sp.update_one({'_id': 'ambang_sp'}, {'$set': {'sp1': 60, 'sp2': 50}})
+    assert (await ambil_ambang_sp(db))['bawaan'] is True  # nilai rusak tidak dipakai
+    assert await migrate_ambang(db) == {'ambang': 'diperbaiki ke bawaan'}
+    riwayat = await db.pengaturan_ambang_sp_riwayat.find({}, {'_id': 0}).to_list(None)
+    assert len(riwayat) == 1 and riwayat[0]['dari'] == {'sp1': 60, 'sp2': 50, 'sp3': 75} and riwayat[0]['ke'] == {'sp1': 25, 'sp2': 50, 'sp3': 75}

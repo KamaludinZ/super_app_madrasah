@@ -286,6 +286,41 @@ async def pastikan_index_riwayat_tindakan(db) -> None:
 
 
 # ============================================================
+# PENGATURAN AMBANG SP (koleksi `pengaturan_ambang_sp` + riwayat audit)
+# ============================================================
+# Satu dokumen berlaku: {_id: 'ambang_sp', sp1, sp2, sp3, diubah_oleh_id, diubah_oleh_nama, diubah_pada}.
+# Nilai = akumulasi poin pelanggaran (nilai mutlak) minimal untuk tiap tingkat; wajib 1 <= sp1 < sp2 < sp3.
+# Setiap perubahan dicatat di `pengaturan_ambang_sp_riwayat`: {id, waktu, oleh_id, oleh_nama, dari, ke, alasan}.
+KOLEKSI_AMBANG_SP = 'pengaturan_ambang_sp'
+KOLEKSI_RIWAYAT_AMBANG_SP = 'pengaturan_ambang_sp_riwayat'
+ID_AMBANG_SP = 'ambang_sp'
+MAKS_AMBANG_SP = 10000
+
+
+def validasi_ambang_sp(sp1, sp2, sp3) -> dict:
+    """{sp1, sp2, sp3} bilangan bulat dengan 1 <= sp1 < sp2 < sp3 <= MAKS_AMBANG_SP; ValueError bila tidak."""
+    try:
+        nilai = {'sp1': int(sp1), 'sp2': int(sp2), 'sp3': int(sp3)}
+    except (TypeError, ValueError):
+        raise ValueError('Ambang SP harus berupa bilangan bulat')
+    if any(isinstance(v, bool) for v in (sp1, sp2, sp3)):
+        raise ValueError('Ambang SP harus berupa bilangan bulat')
+    if not 1 <= nilai['sp1'] < nilai['sp2'] < nilai['sp3'] <= MAKS_AMBANG_SP:
+        raise ValueError(f'Ambang SP harus naik: 1 <= SP1 < SP2 < SP3 <= {MAKS_AMBANG_SP}')
+    return nilai
+
+
+async def ambil_ambang_sp(db) -> dict:
+    """Ambang SP yang berlaku ({sp1, sp2, sp3, diubah_oleh_nama, diubah_pada}); bawaan bila belum diatur."""
+    doc = await db[KOLEKSI_AMBANG_SP].find_one({'_id': ID_AMBANG_SP}, {'_id': 0}) or {}
+    try:
+        nilai = validasi_ambang_sp(doc.get('sp1'), doc.get('sp2'), doc.get('sp3'))
+    except ValueError:
+        return {**AMBANG_SP_BAWAAN, 'diubah_oleh_nama': None, 'diubah_pada': None, 'bawaan': True}
+    return {**nilai, 'diubah_oleh_nama': doc.get('diubah_oleh_nama'), 'diubah_pada': doc.get('diubah_pada'), 'bawaan': False}
+
+
+# ============================================================
 # AKSES & RANGKUMAN (dipakai routers/tatib_poin.py)
 # ============================================================
 # Sama dengan frontend/src/lib/aksesTatib.js.
