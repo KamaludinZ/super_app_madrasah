@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { nilaiPoin } from '@/components/tatib/RingkasanPoin';
+import { ASAL_INPUT } from '@/lib/inputTatib';
 
 // Data Tata Tertib (struktur baru): daftar catatan poin dengan kategori, kode & jenis aturan, jalur, poin,
 // asal input, dan keterangan. Sumber: GET /tatib/penanganan (server membatasi cakupan per peran;
@@ -48,4 +49,13 @@ export function ringkasData(baris) {
     total_minus: minus.reduce((s, b) => s + b.poin, 0),
     total_plus: plus.reduce((s, b) => s + b.poin, 0),
   };
+}
+
+// Jumlah catatan per asal input (urutan daftar baku), plus 'Belum diisi' untuk catatan lama bila ada.
+export function sebaranAsalInput(baris) {
+  const n = {};
+  baris.forEach((b) => { const k = b.asal_input || null; n[k] = (n[k] || 0) + 1; });
+  const hasil = ASAL_INPUT.map((asal) => ({ asal, jumlah: n[asal] || 0 }));
+  if (n[null]) hasil.push({ asal: null, jumlah: n[null] });
+  return hasil;
 }

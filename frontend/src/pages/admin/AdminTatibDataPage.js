@@ -6,7 +6,8 @@ import { Database, Loader2, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { pesanGalatTatib } from '@/lib/aksesTatib';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
-import { ambilDataTatib, ringkasData } from '@/lib/dataTatib';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
+import { ambilDataTatib, ringkasData, sebaranAsalInput } from '@/lib/dataTatib';
 
 const formatTanggal = (tgl) => {
   if (!tgl) return '-';
@@ -40,6 +41,7 @@ const AdminTatibDataPage = () => {
   }, []);
 
   const ringkas = useMemo(() => ringkasData(baris), [baris]);
+  const sebaran = useMemo(() => sebaranAsalInput(baris), [baris]);
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-data-page">
@@ -54,6 +56,17 @@ const AdminTatibDataPage = () => {
         <KartuRingkasan ikon={ThumbsUp} label="Kebaikan" nilai={ringkas.jumlah_kebaikan} sub={`${formatPoin(ringkas.total_plus)} poin`} warna="text-emerald-700" />
         <KartuRingkasan ikon={Users} label="Saldo poin" nilai={formatPoin(ringkas.total_plus + ringkas.total_minus)} sub="kebaikan + pelanggaran" />
       </div>
+
+      {!loading && baris.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="data-sebaran-asal">
+          <span className="text-xs font-medium text-slate-500">Asal input:</span>
+          {sebaran.map(({ asal, jumlah }) => (
+            <span key={asal || 'belum'} className={`inline-flex items-center gap-1 ${jumlah ? '' : 'opacity-40'}`}>
+              <LabelAsalInput asal={asal} /><span className="tabular-nums text-xs text-slate-600">{jumlah}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -89,7 +102,7 @@ const AdminTatibDataPage = () => {
                         <span className="font-mono text-xs text-slate-500 mr-1">{b.kode_aturan}</span>{b.jenis_nama}
                       </TableCell>
                       <TableCell className={`text-right font-semibold tabular-nums ${b.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(b.poin)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{b.asal_input || <span className="text-slate-300">-</span>}</TableCell>
+                      <TableCell data-testid={`data-asal-${b.id}`}><LabelAsalInput asal={b.asal_input} /></TableCell>
                       <TableCell className="max-w-[16rem] text-sm text-slate-600"><span className="line-clamp-2">{b.keterangan || <span className="text-slate-300">-</span>}</span></TableCell>
                       <TableCell className="whitespace-nowrap text-sm">{b.petugas_nama}</TableCell>
                     </TableRow>
