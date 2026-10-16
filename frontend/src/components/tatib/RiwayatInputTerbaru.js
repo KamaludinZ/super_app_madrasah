@@ -37,17 +37,17 @@ export default function RiwayatInputTerbaru({
             data-testid={`riwayat-${r.id}`}
           >
             <div className="min-w-0">
-              <p className="font-medium truncate">
+              <div className="font-medium truncate">
                 {r.siswa_nama} <span className="text-xs font-normal text-slate-500">{r.siswa_kelas}</span>
                 {r.id === idBaru && <Badge className="ml-2 bg-amber-500 px-1.5 py-0 text-[10px] hover:bg-amber-500">Baru</Badge>}
-              </p>
+              </div>
               <p className="text-sm text-slate-700 truncate">
                 <span className="font-mono text-xs text-slate-500 mr-1">{r.kode_aturan}</span>{r.jenis_nama}
               </p>
-              <p className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500">
                 {formatTanggal(r.tanggal)} · <Badge variant="outline" className="px-1.5 py-0 text-[11px]">{r.kategori_nama}</Badge>
                 {r.petugas_nama ? ` · oleh ${r.petugas_nama}` : ''}
-              </p>
+              </div>
               {r.keterangan && <p className="mt-0.5 text-xs italic text-slate-500 line-clamp-2">“{r.keterangan}”</p>}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">

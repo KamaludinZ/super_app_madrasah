@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ClipboardEdit, History, Loader2, Lock, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { bolehInputTatib, bolehHapusTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { Navigate } from 'react-router-dom';
+import { bolehInputTatib, bolehHapusTatib, bolehBukaInputTatib, halamanPoinTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
@@ -45,6 +46,7 @@ export default function TatibInputTerpaduPage() {
   const { activeRole } = useAuth();
   const bolehInput = bolehInputTatib(activeRole);
   const bolehHapus = bolehHapusTatib(activeRole);
+  const bolehBuka = bolehBukaInputTatib(activeRole);
   const [siswaList, setSiswaList] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
@@ -60,6 +62,11 @@ export default function TatibInputTerpaduPage() {
   const [form, setForm] = useState(formKosong);
 
   useEffect(() => {
+    // Peran lihat hanya memerlukan daftar pencatatan; master form tidak dimuat.
+    if (!bolehInput) {
+      setLoading(false);
+      return;
+    }
     Promise.all([ambilSiswaTatib(), ambilKategoriTatib(), ambilJenisAturan()])
       .then(([siswa, kategori, jenis]) => {
         setSiswaList(siswa);
@@ -68,11 +75,12 @@ export default function TatibInputTerpaduPage() {
       })
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat data tata tertib')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [bolehInput]);
 
   // Riwayat dimuat ulang saat batas, filter siswa, atau versi (setelah simpan) berubah.
   const siswaRiwayat = hanyaSiswaTerpilih ? form.siswa_id : '';
   useEffect(() => {
+    if (!bolehBuka) return undefined;
     let batal = false;
     setMemuatRiwayat(true);
     ambilRiwayatInputTerbaru({ batas: batasRiwayat, siswa_id: siswaRiwayat || undefined })
@@ -80,7 +88,7 @@ export default function TatibInputTerpaduPage() {
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat pencatatan terbaru')))
       .finally(() => { if (!batal) setMemuatRiwayat(false); });
     return () => { batal = true; };
-  }, [batasRiwayat, siswaRiwayat, versiRiwayat]);
+  }, [bolehBuka, batasRiwayat, siswaRiwayat, versiRiwayat]);
 
   const jenisTersaring = useMemo(
     // Saat memperbaiki, jenis lama tetap tampil walau sudah nonaktif.
@@ -181,6 +189,8 @@ export default function TatibInputTerpaduPage() {
     }
   };
 
+  if (!bolehBuka) return <Navigate to={halamanPoinTatib(activeRole)} replace />;
+
   return (
     <div className="p-6 space-y-6" data-testid="tatib-input-terpadu-page">
       <div>
@@ -188,137 +198,135 @@ export default function TatibInputTerpaduPage() {
           <ClipboardEdit className="h-6 w-6" /> Input Tata Tertib
         </h1>
         <p className="text-sm text-slate-600">
-          Catat poin pelanggaran atau kebaikan siswa dari satu halaman. Nilai poin mengikuti master jenis aturan.
+          {bolehInput
+            ? 'Catat poin pelanggaran atau kebaikan siswa dari satu halaman. Nilai poin mengikuti master jenis aturan.'
+            : 'Pencatatan tata tertib terbaru dari petugas tatib.'}
         </p>
       </div>
 
       {!bolehInput && <BannerModeLihat />}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{diperbaiki ? 'Perbaiki Catatan' : 'Catat Tata Tertib'}</CardTitle>
-            <CardDescription>
-              {diperbaiki
-                ? `Mengubah catatan ${diperbaiki.siswa_nama} tanggal ${diperbaiki.tanggal}. Poin dihitung ulang dari jenis yang dipilih.`
-                : 'Pilih siswa, kategori, dan jenis aturan, lalu isi tanggal dan keterangan.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-10 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data...
-              </div>
-            ) : (
-              <fieldset disabled={!bolehInput} className="space-y-4">
-                <div>
-                  <Label>Siswa*</Label>
-                  <PilihSiswaTatib
-                    siswaList={siswaList}
-                    value={form.siswa_id}
-                    onPilih={(siswa_id) => ubah({ siswa_id })}
-                    disabled={!bolehInput}
-                    testid="input-tatib-siswa"
-                  />
+      <div className={bolehInput ? 'grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}>
+        {bolehInput && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">{diperbaiki ? 'Perbaiki Catatan' : 'Catat Tata Tertib'}</CardTitle>
+              <CardDescription>
+                {diperbaiki
+                  ? `Mengubah catatan ${diperbaiki.siswa_nama} tanggal ${diperbaiki.tanggal}. Poin dihitung ulang dari jenis yang dipilih.`
+                  : 'Pilih siswa, kategori, dan jenis aturan, lalu isi tanggal dan keterangan.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-10 text-slate-500">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data...
                 </div>
-
-                <div>
-                  <Label className="mb-2 block">Kategori</Label>
-                  <PilihKategoriTatib
-                    kategoriList={kategoriList}
-                    value={form.kategori_id}
-                    onPilih={pilihKategori}
-                    jumlahJenis={jumlahJenis}
-                    disabled={!bolehInput}
-                    testid="input-tatib-kategori"
-                  />
-                  <div className="mt-2">
-                    <KelolaKategoriInline
-                      kategori={kategoriList.find((k) => k.id === form.kategori_id)}
-                      onSimpan={simpanKategori}
-                      disabled={!bolehInput}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Jenis aturan*</Label>
-                  <PilihJenisAturan
-                    jenisList={jenisTersaring}
-                    value={form.jenis_id}
-                    onPilih={pilihJenis}
-                    disabled={!bolehInput}
-                    testid="input-tatib-jenis"
-                  />
-                </div>
-
-                <div
-                  className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 ${poin == null ? 'bg-slate-50' : poin < 0 ? 'bg-red-50' : 'bg-emerald-50'}`}
-                  data-testid="input-tatib-poin"
-                >
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                      <Lock className="h-3.5 w-3.5" /> Poin otomatis
-                      {jenis && (
-                        <Badge variant="outline" className={`ml-1 px-1.5 py-0 text-[11px] ${warnaPoin(poin)}`}>
-                          {jenis.jalur_poin === 'minus' ? 'Pelanggaran' : 'Kebaikan'}
-                        </Badge>
-                      )}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {jenis ? `${jenis.kategori_nama} · ${jenis.nama}` : 'Pilih jenis aturan untuk melihat nilai poin'}
-                    </p>
-                  </div>
-                  <span className={`shrink-0 text-2xl font-bold tabular-nums ${poin == null ? 'text-slate-400' : warnaPoin(poin)}`}>
-                    {poin == null ? '—' : formatPoin(poin)}
-                  </span>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              ) : (
+                <fieldset className="space-y-4">
                   <div>
-                    <Label htmlFor="input-tatib-tanggal">Tanggal kejadian*</Label>
-                    <Input
-                      id="input-tatib-tanggal"
-                      type="date"
-                      value={form.tanggal}
-                      max={hariIniWIB()}
-                      onChange={(e) => ubah({ tanggal: e.target.value })}
-                      aria-invalid={Boolean(galatTanggal)}
-                      className={galatTanggal ? 'border-red-500' : ''}
-                      data-testid="input-tatib-tanggal"
+                    <Label>Siswa*</Label>
+                    <PilihSiswaTatib
+                      siswaList={siswaList}
+                      value={form.siswa_id}
+                      onPilih={(siswa_id) => ubah({ siswa_id })}
+                      testid="input-tatib-siswa"
                     />
-                    {galatTanggal ? (
-                      <p className="mt-1 text-xs text-red-600">{galatTanggal}</p>
-                    ) : (
-                      <div className="mt-1 flex gap-1">
-                        {[['Hari ini', hariIniWIB()], ['Kemarin', kemarinWIB()]].map(([label, tgl]) => (
-                          <button
-                            key={label}
-                            type="button"
-                            onClick={() => ubah({ tanggal: tgl })}
-                            className={`rounded px-2 py-0.5 text-xs ${form.tanggal === tgl ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                          >
-                            {label}
-                          </button>
-                        ))}
+                  </div>
+
+                  <div>
+                    <Label className="mb-2 block">Kategori</Label>
+                    <PilihKategoriTatib
+                      kategoriList={kategoriList}
+                      value={form.kategori_id}
+                      onPilih={pilihKategori}
+                      jumlahJenis={jumlahJenis}
+                      testid="input-tatib-kategori"
+                    />
+                    <div className="mt-2">
+                      <KelolaKategoriInline
+                        kategori={kategoriList.find((k) => k.id === form.kategori_id)}
+                        onSimpan={simpanKategori}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Jenis aturan*</Label>
+                    <PilihJenisAturan
+                      jenisList={jenisTersaring}
+                      value={form.jenis_id}
+                      onPilih={pilihJenis}
+                      testid="input-tatib-jenis"
+                    />
+                  </div>
+
+                  <div
+                    className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3 ${poin == null ? 'bg-slate-50' : poin < 0 ? 'bg-red-50' : 'bg-emerald-50'}`}
+                    data-testid="input-tatib-poin"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                        <Lock className="h-3.5 w-3.5" /> Poin otomatis
+                        {jenis && (
+                          <Badge variant="outline" className={`ml-1 px-1.5 py-0 text-[11px] ${warnaPoin(poin)}`}>
+                            {jenis.jalur_poin === 'minus' ? 'Pelanggaran' : 'Kebaikan'}
+                          </Badge>
+                        )}
                       </div>
-                    )}
+                      <p className="text-xs text-slate-500 truncate">
+                        {jenis ? `${jenis.kategori_nama} · ${jenis.nama}` : 'Pilih jenis aturan untuk melihat nilai poin'}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-2xl font-bold tabular-nums ${poin == null ? 'text-slate-400' : warnaPoin(poin)}`}>
+                      {poin == null ? '—' : formatPoin(poin)}
+                    </span>
                   </div>
-                  <div>
-                    <Label htmlFor="input-tatib-keterangan">Keterangan</Label>
-                    <Textarea
-                      id="input-tatib-keterangan"
-                      value={form.keterangan}
-                      onChange={(e) => ubah({ keterangan: e.target.value.slice(0, MAKS_KETERANGAN) })}
-                      placeholder="Kronologi singkat, lokasi, atau saksi (opsional)"
-                      rows={3}
-                      data-testid="input-tatib-keterangan"
-                    />
-                    <p className="mt-1 text-right text-xs text-slate-400 tabular-nums">{form.keterangan.length}/{MAKS_KETERANGAN}</p>
-                  </div>
-                </div>
 
-                {bolehInput && (
+                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                    <div>
+                      <Label htmlFor="input-tatib-tanggal">Tanggal kejadian*</Label>
+                      <Input
+                        id="input-tatib-tanggal"
+                        type="date"
+                        value={form.tanggal}
+                        max={hariIniWIB()}
+                        onChange={(e) => ubah({ tanggal: e.target.value })}
+                        aria-invalid={Boolean(galatTanggal)}
+                        className={galatTanggal ? 'border-red-500' : ''}
+                        data-testid="input-tatib-tanggal"
+                      />
+                      {galatTanggal ? (
+                        <p className="mt-1 text-xs text-red-600">{galatTanggal}</p>
+                      ) : (
+                        <div className="mt-1 flex gap-1">
+                          {[['Hari ini', hariIniWIB()], ['Kemarin', kemarinWIB()]].map(([label, tgl]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => ubah({ tanggal: tgl })}
+                              className={`rounded px-2 py-0.5 text-xs ${form.tanggal === tgl ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="input-tatib-keterangan">Keterangan</Label>
+                      <Textarea
+                        id="input-tatib-keterangan"
+                        value={form.keterangan}
+                        onChange={(e) => ubah({ keterangan: e.target.value.slice(0, MAKS_KETERANGAN) })}
+                        placeholder="Kronologi singkat, lokasi, atau saksi (opsional)"
+                        rows={3}
+                        data-testid="input-tatib-keterangan"
+                      />
+                      <p className="mt-1 text-right text-xs text-slate-400 tabular-nums">{form.keterangan.length}/{MAKS_KETERANGAN}</p>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end gap-2">
                     {diperbaiki ? (
                       <Button variant="outline" onClick={batalPerbaiki} disabled={saving} data-testid="input-tatib-batal-perbaiki">Batal perbaiki</Button>
@@ -330,11 +338,11 @@ export default function TatibInputTerpaduPage() {
                       {diperbaiki ? 'Simpan perbaikan' : 'Simpan'}
                     </Button>
                   </div>
-                )}
-              </fieldset>
-            )}
-          </CardContent>
-        </Card>
+                </fieldset>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

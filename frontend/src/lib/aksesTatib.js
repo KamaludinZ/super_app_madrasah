@@ -32,6 +32,10 @@ export const bolehInputTatib = (activeRole) => aksesTatib(activeRole) === 'input
 
 export const bolehHapusTatib = (activeRole) => activeRole === 'admin';
 
+// Halaman Input Tata Tertib: peran input mencatat; peran lihat hanya melihat pencatatan terbaru.
+// Wali kelas & siswa diarahkan ke halaman poinnya sendiri.
+export const bolehBukaInputTatib = (activeRole) => ['input', 'lihat'].includes(aksesTatib(activeRole));
+
 export const PESAN_TOLAK_TATIB = 'Peran Anda hanya dapat melihat data tata tertib. Perubahan hanya oleh admin, guru tata tertib, atau waka kesiswaan.';
 export const PESAN_TOLAK_HAPUS_TATIB = 'Hanya admin yang dapat menghapus data tata tertib.';
 
@@ -68,7 +72,7 @@ export function menuTatib(role, prefix) {
     return [{ to: '/wali-kelas/poin-tatib', label: 'Pantauan Walikelas', icon: ShieldCheck, testid: `${prefix}-poin-tatib` }];
   }
   const items = [];
-  if (akses === 'input' || PERAN_KELOLA_ATURAN.includes(role)) {
+  if (akses === 'input') {
     items.push({ to: '/admin/tatib/input', label: 'Input Tata Tertib', icon: ClipboardEdit, testid: `${prefix}-tatib-input` });
   }
   if (PERAN_KELOLA_ATURAN.includes(role)) {
