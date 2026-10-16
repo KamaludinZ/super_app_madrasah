@@ -61,6 +61,7 @@ from routers import (
     tahun_takwim,
     tatib,
     tatib_poin,
+    tatib_tindakan,
     simpan_akun,
     masterplan,
     uji_notifikasi,
@@ -120,6 +121,7 @@ api_router.include_router(absensi_gtk.router)
 api_router.include_router(indikator_materi.router)
 api_router.include_router(tatib.router)
 api_router.include_router(tatib_poin.router)
+api_router.include_router(tatib_tindakan.router)
 api_router.include_router(simpan_akun.router)
 api_router.include_router(masterplan.router)
 api_router.include_router(uji_notifikasi.router)

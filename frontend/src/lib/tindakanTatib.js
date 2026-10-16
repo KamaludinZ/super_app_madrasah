@@ -1,10 +1,13 @@
 // Tindakan Tatib: rekap siswa berpoin + usulan SP otomatis + status pembinaan yang ditetapkan manual.
-// SEMENTARA memakai data tiruan di memori (frontend dibangun lebih dulu). Kontrak yang diasumsikan:
-//   GET /tatib/tindakan -> { ambang: { sp1, sp2, sp3 }, items: [{ siswa_id, nisn, nama, kelas,
+// Daftar lewat API; simpan status & riwayat SEMENTARA masih data tiruan di memori. Kontrak:
+//   GET /tatib/tindakan?semester_id=&kelas=&cari=&usulan_sp= -> { ambang: { sp1, sp2, sp3 }, semester_id, items: [{ siswa_id, nisn, nama, kelas,
 //        poin_positif, kategori_positif: [{ nama, poin, jumlah }], poin_negatif, kategori_negatif: [{ nama, poin, jumlah }], usulan_sp,
 //        status_panggilan_wali, status_sp, status_rtlpd, keterangan_sp, diubah_pada, diubah_oleh_nama }] }
 // poin_negatif bernilai minus (akumulasi pelanggaran); kategori diurut poin terbesar (mutlak) dulu.
 // Usulan SP dihitung server dari ambang.
+
+import { api } from '@/lib/api';
+import { konteksPeriode } from '@/lib/poinTatib';
 
 // Pilihan status baku (nilai disimpan apa adanya).
 export const STATUS_PANGGILAN_WALI = ['Tidak diperlukan', 'Diajukan', 'Terlaksana'];
@@ -78,11 +81,12 @@ const riwayatTiruan = {
 // Kontrak: GET /tatib/tindakan/{siswa_id}/riwayat -> riwayat terbaru dulu.
 export const ambilRiwayatTindakan = (siswaId) => jeda(riwayatTiruan[siswaId] || []);
 
-export async function ambilTindakan() {
-  return jeda({
-    ambang: ambangTiruan,
-    items: siswaTiruan.map((s) => ({ ...s, usulan_sp: usulkanSP(s.poin_negatif, ambangTiruan) })),
-  });
+// Rekap tindakan untuk semester yang sedang dilihat pengguna (/auth/view-context), atau `semester_id` yang diberikan.
+export async function ambilTindakan({ semester_id, ...filter } = {}) {
+  const semester = semester_id ?? (await konteksPeriode()).semester_id;
+  const params = Object.fromEntries(Object.entries({ ...filter, semester_id: semester }).filter(([, v]) => v !== '' && v != null));
+  const { data } = await api.get('/tatib/tindakan', { params });
+  return { ambang: data?.ambang || AMBANG_SP_BAWAAN, semester_id: data?.semester_id ?? null, items: data?.items || [] };
 }
 
 // Simpan status pembinaan satu siswa (keputusan manual). Kontrak: PUT /tatib/tindakan/{siswa_id}
