@@ -119,6 +119,10 @@ class JenisAturanRequest(BaseModel):
         return v or None
 
 
+class StatusJenisRequest(BaseModel):
+    aktif: bool
+
+
 class TindakLanjutRequest(BaseModel):
     tanggal: str
     uraian: str
@@ -485,6 +489,22 @@ async def ubah_jenis_aturan(jenis_id: str, req: JenisAturanRequest, user: Dict =
         raise HTTPException(409, f'Kode {req.kode_aturan} sudah dipakai')
     await log_audit(user, 'tatib_jenis_aturan_update',
                     f"Ubah jenis aturan {f_lama['kode_aturan']} -> {req.kode_aturan} ({field['poin']})")
+    return await _jenis_tampil_lengkap(jenis_id)
+
+
+@router.patch("/tatib/jenis-aturan/{jenis_id}/aktif")
+async def ubah_status_jenis_aturan(jenis_id: str, req: StatusJenisRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Aktif/nonaktifkan jenis aturan. Jenis nonaktif tidak bisa dipilih saat mencatat, tetapi tidak dihapus:
+    riwayat pencatatan yang memakainya tetap utuh dan tetap bisa diperbaiki."""
+    lama = await db.tatib_aturan.find_one({'id': jenis_id}, {'_id': 0, 'id': 1, 'kode_aturan': 1, 'kode': 1})
+    if not lama:
+        raise HTTPException(404, "Jenis aturan tidak ditemukan")
+    await db.tatib_aturan.update_one({'id': jenis_id}, {'$set': {
+        'aktif': req.aktif, 'is_active': req.aktif,
+        'updated_at': datetime.utcnow().isoformat(), 'diubah_oleh_id': user['id'],
+    }})
+    await log_audit(user, 'tatib_jenis_aturan_status',
+                    f"{'Aktifkan' if req.aktif else 'Nonaktifkan'} jenis aturan {lama.get('kode_aturan') or lama.get('kode')}")
     return await _jenis_tampil_lengkap(jenis_id)
 
 

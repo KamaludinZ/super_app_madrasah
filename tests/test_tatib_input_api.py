@@ -412,3 +412,25 @@ async def test_ubah_jenis_aturan(db, data_input):
     with pytest.raises(HTTPException) as e:
         await api.ubah_jenis_aturan('tidak-ada', _jenis_req(kategori_id=k2['id']), PETUGAS)
     assert e.value.status_code == 404
+
+
+async def test_toggle_status_jenis_tanpa_menghapus_riwayat(db, data_input):
+    c = await api.simpan_input_tatib(_input(), PETUGAS)
+    j = await api.ubah_status_jenis_aturan('j1', api.StatusJenisRequest(aktif=False), PETUGAS)
+    assert (j['aktif'], j['jumlah_catatan']) == (False, 1)
+    doc = await db.tatib_aturan.find_one({'id': 'j1'}, {'_id': 0})
+    assert doc['aktif'] is False and doc['is_active'] is False
+    assert await db.tatib_penanganan.count_documents({'id': c['id']}) == 1  # riwayat tetap
+    assert [x['id'] for x in await api.list_jenis_aturan(aktif=True, user=PETUGAS)] == ['j2']
+    with pytest.raises(HTTPException) as e:  # tidak bisa dicatat lagi
+        await api.simpan_input_tatib(_input(), PETUGAS)
+    assert e.value.status_code == 400
+    u = await api.ubah_input_tatib(c['id'], _input(asal_input='BAP'), PETUGAS)  # catatan lamanya tetap bisa diperbaiki
+    assert u['asal_input'] == 'BAP'
+
+    j = await api.ubah_status_jenis_aturan('j1', api.StatusJenisRequest(aktif=True), PETUGAS)
+    assert j['aktif'] is True
+    assert (await api.simpan_input_tatib(_input(), PETUGAS))['poin'] == -5
+    with pytest.raises(HTTPException) as e:
+        await api.ubah_status_jenis_aturan('tidak-ada', api.StatusJenisRequest(aktif=True), PETUGAS)
+    assert e.value.status_code == 404
