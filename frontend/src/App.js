@@ -104,6 +104,7 @@ import GuruMateriPage from '@/pages/guru/GuruMateriPage';
 import GuruTugasPage from '@/pages/guru/GuruTugasPage';
 import AdminTatibKategoriPage from '@/pages/admin/AdminTatibKategoriPage';
 import AdminTatibInputPage from '@/pages/admin/AdminTatibInputPage';
+import TatibInputTerpaduPage from '@/pages/admin/TatibInputTerpaduPage';
 import AdminTatibPenangananPage from '@/pages/admin/AdminTatibPenangananPage';
 import AdminTatibDataPage from '@/pages/admin/AdminTatibDataPage';
 import AdminBKKunjunganPage from '@/pages/admin/bk/AdminBKKunjunganPage';
@@ -374,7 +375,8 @@ function App() {
             <Route path="/admin/pip/penerima" element={<AdminPIPReceiverPage />} />
             <Route path="/admin/pip/ajuan" element={<AdminPIPProposalPage />} />
             <Route path="/admin/tatib/kategori" element={<AdminTatibKategoriPage />} />
-            <Route path="/admin/tatib/input" element={<AdminTatibInputPage />} />
+            <Route path="/admin/tatib/input" element={<TatibInputTerpaduPage />} />
+            <Route path="/admin/tatib/aturan" element={<AdminTatibInputPage />} />
             <Route path="/admin/tatib/penanganan" element={<AdminTatibPenangananPage />} />
             <Route path="/admin/tatib/data" element={<AdminTatibDataPage />} />
             <Route path="/tatib/rekap" element={<TatibRekapPage />} />

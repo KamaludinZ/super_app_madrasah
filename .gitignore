@@ -141,3 +141,7 @@ backend/nul
 # Berkas unggahan pengguna (data pribadi) - disimpan di volume, bukan di repo/image
 /uploads/
 backend/uploads/
+
+# NgodingPakeAI: file kerja sync lokal (config.json tetap di-commit)
+.ngodingpakeai/pending.json
+.ngodingpakeai/summaries.json
