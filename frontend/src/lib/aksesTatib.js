@@ -32,7 +32,7 @@ export const bolehInputTatib = (activeRole) => aksesTatib(activeRole) === 'input
 
 export const bolehHapusTatib = (activeRole) => activeRole === 'admin';
 
-// Halaman Input Tata Tertib: peran input mencatat; peran lihat hanya melihat pencatatan terbaru.
+// Halaman Input Tata Tertib & Tindakan Tatib: peran input mengubah; peran lihat hanya melihat.
 // Wali kelas & siswa diarahkan ke halaman poinnya sendiri.
 export const bolehBukaInputTatib = (activeRole) => ['input', 'lihat'].includes(aksesTatib(activeRole));
 

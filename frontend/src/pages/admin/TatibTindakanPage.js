@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, Gavel, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
+import { Navigate } from 'react-router-dom';
+import { bolehBukaInputTatib, bolehInputTatib, halamanPoinTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
 import UbahTindakanDialog from '@/components/tatib/UbahTindakanDialog';
 import RiwayatTindakanPanel from '@/components/tatib/RiwayatTindakanPanel';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
@@ -69,7 +70,9 @@ const UsulanSP = ({ siswa, ambang }) => {
 // dan status pembinaan (panggilan wali, SP, RTLPD) yang ditetapkan manual oleh peran input tatib.
 export default function TatibTindakanPage() {
   const { activeRole } = useAuth();
+  // Ubah: admin, guru tata tertib, waka kesiswaan. Lihat: peran pimpinan/BK. Lainnya dialihkan.
   const bolehUbah = bolehInputTatib(activeRole);
+  const bolehLihat = bolehBukaInputTatib(activeRole);
   const [data, setData] = useState({ ambang: null, items: [] });
   const [loading, setLoading] = useState(true);
   const [diubah, setDiubah] = useState(null); // siswa yang dialog ubah tindakannya terbuka
@@ -83,6 +86,7 @@ export default function TatibTindakanPage() {
 
   // Simpan lalu perbarui baris itu saja di state (tanpa memuat ulang seluruh daftar).
   const simpanTindakan = async (isian) => {
+    if (!bolehUbah) throw new Error('Peran Anda hanya dapat melihat tindakan tatib');
     const hasil = await simpanStatusTindakan(diubah.siswa_id, isian);
     setData((d) => ({ ...d, items: d.items.map((x) => (x.siswa_id === hasil.siswa_id ? { ...x, ...hasil } : x)) }));
     setVersiRiwayat((v) => v + 1);
@@ -90,17 +94,20 @@ export default function TatibTindakanPage() {
   };
 
   useEffect(() => {
+    if (!bolehLihat) return;
     ambilTindakan()
       .then(setData)
       .catch((e) => toast.error(pesanGalatTatib(e, 'Gagal memuat data tindakan tatib')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [bolehLihat]);
 
   const jumlahUsulan = useMemo(() => {
     const n = { SP1: 0, SP2: 0, SP3: 0 };
     data.items.forEach((s) => { if (s.usulan_sp) n[s.usulan_sp] += 1; });
     return n;
   }, [data.items]);
+
+  if (!bolehLihat) return <Navigate to={halamanPoinTatib(activeRole)} replace />;
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-tindakan-page">
@@ -111,7 +118,9 @@ export default function TatibTindakanPage() {
         </p>
       </div>
 
-      {!bolehUbah && <BannerModeLihat />}
+      {!bolehUbah && (
+        <BannerModeLihat>Mode lihat saja — status pembinaan hanya dapat diubah oleh admin, guru tata tertib, dan waka kesiswaan.</BannerModeLihat>
+      )}
 
       {data.ambang && (
         <div className="flex flex-wrap gap-2 text-sm" data-testid="tindakan-ringkasan">
