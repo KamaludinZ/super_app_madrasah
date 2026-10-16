@@ -97,7 +97,34 @@ const AdminTatibDataPage = () => {
           {loading ? (
             <div className="flex items-center justify-center p-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data...</div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Layar kecil: kartu per catatan (asal input & poin tetap terlihat tanpa menggeser tabel). */}
+            <ul className="divide-y md:hidden" data-testid="data-kartu">
+              {tersaring.map((b) => (
+                <li key={b.id} className="space-y-1.5 p-4" data-testid={`data-kartu-${b.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{b.siswa_nama}</p>
+                      <p className="text-xs text-slate-500">{[b.siswa_kelas, b.siswa_nisn || b.siswa_nis].filter(Boolean).join(' · ') || '-'}</p>
+                    </div>
+                    <span className={`shrink-0 text-lg font-bold tabular-nums ${b.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(b.poin)}</span>
+                  </div>
+                  <p className="text-sm"><span className="font-mono text-xs text-slate-500 mr-1">{b.kode_aturan}</span>{b.jenis_nama}</p>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    <span>{formatTanggal(b.tanggal)}</span>
+                    <Badge variant="outline" className="px-1.5 py-0 font-normal text-[11px]">{b.kategori_nama}</Badge>
+                    <span className="inline-flex items-center gap-1">Asal: <LabelAsalInput asal={b.asal_input} /></span>
+                  </div>
+                  {b.keterangan && <p className="text-xs italic text-slate-600">“{b.keterangan}”</p>}
+                </li>
+              ))}
+              {tersaring.length === 0 && (
+                <li className="py-8 text-center text-sm text-slate-500">
+                  {baris.length ? 'Tidak ada pencatatan yang cocok dengan filter.' : 'Belum ada pencatatan tata tertib.'}
+                </li>
+              )}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -141,6 +168,7 @@ const AdminTatibDataPage = () => {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
