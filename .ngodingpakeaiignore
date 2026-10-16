@@ -6,3 +6,8 @@
 # docs/internal/
 # *.snap
 # fixtures/
+
+# Artefak hasil generate (bukan kode sumber)
+.pytest_cache/
+test_reports/
+.emergent/
