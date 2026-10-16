@@ -108,3 +108,22 @@ export async function simpanKategoriTatib({ id, nama, deskripsi }) {
   kategoriTiruan.push(baru);
   return jeda(baru);
 }
+
+// Perbaiki catatan yang salah input; poin dihitung ulang dari jenis yang dipilih.
+// Kontrak: PUT /tatib/input/{id} -> catatan; DELETE /tatib/input/{id} (hanya admin).
+export async function ubahInputTatib(id, { siswa_id, jenis_id, tanggal, keterangan }) {
+  const i = catatanTiruan.findIndex((c) => c.id === id);
+  if (i < 0) throw new Error('Catatan tidak ditemukan');
+  const jenis = jenisTiruan.find((j) => j.id === jenis_id);
+  if (!jenis) throw new Error('Jenis aturan tidak ditemukan');
+  const lama = catatanTiruan[i];
+  // Kategori lama dipertahankan bila jenis tidak berganti, agar riwayat tetap konsisten.
+  const baru = lengkapiCatatan({ ...lama, siswa_id, jenis_id, tanggal, keterangan: keterangan || '' });
+  catatanTiruan[i] = lama.jenis_id === jenis_id ? { ...baru, kategori_nama: lama.kategori_nama } : baru;
+  return jeda(catatanTiruan[i]);
+}
+
+export async function hapusInputTatib(id) {
+  catatanTiruan = catatanTiruan.filter((c) => c.id !== id);
+  return jeda({ ok: true });
+}

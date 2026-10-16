@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 
 const formatTanggal = (tgl) => {
@@ -13,9 +13,12 @@ const formatTanggal = (tgl) => {
 /**
  * Daftar pencatatan tatib terbaru di samping form input.
  * `items`: catatan [{ id, siswa_nama, siswa_kelas, kode_aturan, jenis_nama, kategori_nama, poin, tanggal, keterangan, petugas_nama }].
- * `idBaru`: id catatan yang baru disimpan (diberi penanda).
+ * `idBaru`: id catatan yang baru disimpan (diberi penanda); `idDiperbaiki`: catatan yang sedang dibuka di form.
+ * `onPerbaiki` / `onHapus`: tombol aksi hanya muncul bila handler diberikan (sesuai hak peran).
  */
-export default function RiwayatInputTerbaru({ items = [], loading, memuatLagi, adaLagi, onMuatLagi, idBaru, kosong = 'Belum ada pencatatan.' }) {
+export default function RiwayatInputTerbaru({
+  items = [], loading, memuatLagi, adaLagi, onMuatLagi, idBaru, idDiperbaiki, onPerbaiki, onHapus, kosong = 'Belum ada pencatatan.',
+}) {
   if (loading) {
     return <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>;
   }
@@ -28,7 +31,9 @@ export default function RiwayatInputTerbaru({ items = [], loading, memuatLagi, a
         {items.map((r) => (
           <li
             key={r.id}
-            className={`flex items-start justify-between gap-3 py-3 ${r.id === idBaru ? '-mx-2 rounded-md bg-amber-50 px-2' : ''}`}
+            className={`flex items-start justify-between gap-3 py-3 ${
+              r.id === idDiperbaiki ? '-mx-2 rounded-md bg-sky-50 px-2 ring-1 ring-sky-300' : r.id === idBaru ? '-mx-2 rounded-md bg-amber-50 px-2' : ''
+            }`}
             data-testid={`riwayat-${r.id}`}
           >
             <div className="min-w-0">
@@ -45,7 +50,23 @@ export default function RiwayatInputTerbaru({ items = [], loading, memuatLagi, a
               </p>
               {r.keterangan && <p className="mt-0.5 text-xs italic text-slate-500 line-clamp-2">“{r.keterangan}”</p>}
             </div>
-            <span className={`shrink-0 font-semibold tabular-nums ${r.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(r.poin)}</span>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className={`font-semibold tabular-nums ${r.poin < 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatPoin(r.poin)}</span>
+              {(onPerbaiki || onHapus) && (
+                <div className="flex">
+                  {onPerbaiki && (
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onPerbaiki(r)} aria-label={`Perbaiki catatan ${r.siswa_nama}`} data-testid={`riwayat-perbaiki-${r.id}`}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {onHapus && (
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onHapus(r)} aria-label={`Hapus catatan ${r.siswa_nama}`} data-testid={`riwayat-hapus-${r.id}`}>
+                      <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>

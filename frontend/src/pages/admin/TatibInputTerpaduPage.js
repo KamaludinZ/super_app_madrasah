@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ClipboardEdit, History, Loader2, Lock, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { bolehInputTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { bolehInputTatib, bolehHapusTatib, tolakUbahTatib, pesanGalatTatib } from '@/lib/aksesTatib';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { formatPoin } from '@/components/tatib/RingkasanPoin';
 import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
@@ -20,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
-  simpanKategoriTatib,
+  simpanKategoriTatib, ubahInputTatib, hapusInputTatib,
 } from '@/lib/inputTatib';
 
 const MAKS_KETERANGAN = 500;
@@ -43,6 +44,7 @@ const warnaPoin = (poin) => (poin < 0 ? 'text-red-700' : 'text-emerald-700');
 export default function TatibInputTerpaduPage() {
   const { activeRole } = useAuth();
   const bolehInput = bolehInputTatib(activeRole);
+  const bolehHapus = bolehHapusTatib(activeRole);
   const [siswaList, setSiswaList] = useState([]);
   const [kategoriList, setKategoriList] = useState([]);
   const [jenisList, setJenisList] = useState([]);
@@ -52,6 +54,7 @@ export default function TatibInputTerpaduPage() {
   const [hanyaSiswaTerpilih, setHanyaSiswaTerpilih] = useState(false);
   const [versiRiwayat, setVersiRiwayat] = useState(0);
   const [idBaru, setIdBaru] = useState(null);
+  const [diperbaiki, setDiperbaiki] = useState(null); // catatan yang sedang diperbaiki di form
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(formKosong);
@@ -80,8 +83,9 @@ export default function TatibInputTerpaduPage() {
   }, [batasRiwayat, siswaRiwayat, versiRiwayat]);
 
   const jenisTersaring = useMemo(
-    () => jenisList.filter((j) => j.aktif !== false && (!form.kategori_id || j.kategori_id === form.kategori_id)),
-    [jenisList, form.kategori_id],
+    // Saat memperbaiki, jenis lama tetap tampil walau sudah nonaktif.
+    () => jenisList.filter((j) => (j.aktif !== false || j.id === diperbaiki?.jenis_id) && (!form.kategori_id || j.kategori_id === form.kategori_id)),
+    [jenisList, form.kategori_id, diperbaiki],
   );
   const jenis = jenisList.find((j) => j.id === form.jenis_id);
   const poin = poinJenis(jenis);
@@ -113,6 +117,37 @@ export default function TatibInputTerpaduPage() {
     return kategori;
   };
 
+  const perbaiki = (catatan) => {
+    if (tolakUbahTatib(activeRole)) return;
+    setDiperbaiki(catatan);
+    setForm({
+      siswa_id: catatan.siswa_id,
+      kategori_id: catatan.kategori_id || '',
+      jenis_id: catatan.jenis_id,
+      tanggal: (catatan.tanggal || '').slice(0, 10),
+      keterangan: catatan.keterangan || '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const batalPerbaiki = () => {
+    setDiperbaiki(null);
+    setForm(formKosong());
+  };
+
+  const hapus = async (catatan) => {
+    if (tolakUbahTatib(activeRole, { hapus: true })) return;
+    if (!(await confirmDialog(`Hapus catatan "${catatan.jenis_nama}" untuk ${catatan.siswa_nama}?`))) return;
+    try {
+      await hapusInputTatib(catatan.id);
+      toast.success('Catatan tata tertib dihapus');
+      if (diperbaiki?.id === catatan.id) batalPerbaiki();
+      setVersiRiwayat((v) => v + 1);
+    } catch (e) {
+      toast.error(pesanGalatTatib(e, e?.message || 'Gagal menghapus catatan'));
+    }
+  };
+
   const pilihJenis = (v) => {
     const j = jenisList.find((x) => x.id === v);
     ubah({ jenis_id: j ? v : '', kategori_id: j?.kategori_id || form.kategori_id });
@@ -130,10 +165,13 @@ export default function TatibInputTerpaduPage() {
     }
     setSaving(true);
     try {
-      const catatan = await simpanInputTatib(form);
-      toast.success(`${catatan.jenis_nama} (${formatPoin(catatan.poin)}) dicatat untuk ${catatan.siswa_nama}`);
+      const catatan = diperbaiki ? await ubahInputTatib(diperbaiki.id, form) : await simpanInputTatib(form);
+      toast.success(diperbaiki
+        ? `Catatan ${catatan.siswa_nama} diperbaiki (${formatPoin(catatan.poin)})`
+        : `${catatan.jenis_nama} (${formatPoin(catatan.poin)}) dicatat untuk ${catatan.siswa_nama}`);
       // Siswa & tanggal dipertahankan agar pencatatan beruntun lebih cepat.
       setForm((f) => ({ ...formKosong(), siswa_id: f.siswa_id, tanggal: f.tanggal }));
+      setDiperbaiki(null);
       setIdBaru(catatan.id);
       setVersiRiwayat((v) => v + 1);
     } catch (e) {
@@ -159,8 +197,12 @@ export default function TatibInputTerpaduPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Catat Tata Tertib</CardTitle>
-            <CardDescription>Pilih siswa, kategori, dan jenis aturan, lalu isi tanggal dan keterangan.</CardDescription>
+            <CardTitle className="text-lg">{diperbaiki ? 'Perbaiki Catatan' : 'Catat Tata Tertib'}</CardTitle>
+            <CardDescription>
+              {diperbaiki
+                ? `Mengubah catatan ${diperbaiki.siswa_nama} tanggal ${diperbaiki.tanggal}. Poin dihitung ulang dari jenis yang dipilih.`
+                : 'Pilih siswa, kategori, dan jenis aturan, lalu isi tanggal dan keterangan.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -278,10 +320,14 @@ export default function TatibInputTerpaduPage() {
 
                 {bolehInput && (
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setForm(formKosong())} disabled={saving}>Reset</Button>
+                    {diperbaiki ? (
+                      <Button variant="outline" onClick={batalPerbaiki} disabled={saving} data-testid="input-tatib-batal-perbaiki">Batal perbaiki</Button>
+                    ) : (
+                      <Button variant="outline" onClick={() => setForm(formKosong())} disabled={saving}>Reset</Button>
+                    )}
                     <Button onClick={simpan} disabled={saving} data-testid="input-tatib-simpan">
                       {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                      Simpan
+                      {diperbaiki ? 'Simpan perbaikan' : 'Simpan'}
                     </Button>
                   </div>
                 )}
@@ -313,6 +359,9 @@ export default function TatibInputTerpaduPage() {
               adaLagi={riwayat.ada_lagi}
               onMuatLagi={() => setBatasRiwayat((n) => n + BATAS_RIWAYAT)}
               idBaru={idBaru}
+              idDiperbaiki={diperbaiki?.id}
+              onPerbaiki={bolehInput ? perbaiki : undefined}
+              onHapus={bolehHapus ? hapus : undefined}
               kosong={siswaRiwayat ? 'Siswa ini belum punya pencatatan.' : 'Belum ada pencatatan.'}
             />
           </CardContent>
