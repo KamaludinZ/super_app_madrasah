@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ThumbsUp, ThumbsDown, ChevronRight } from 'lucide-react';
 import { formatPoin, nilaiPoin } from '@/components/tatib/RingkasanPoin';
+import LabelAsalInput from '@/components/tatib/LabelAsalInput';
 
 // Terbaru di atas: tanggal kejadian, lalu waktu pencatatan sebagai penentu bila tanggalnya sama.
 export const bandingTerbaru = (a, b) =>
@@ -80,8 +81,14 @@ export default function RiwayatPoin({ records = [], onPilih }) {
                     <Ikon className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900 truncate">{r.tatib_nama}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{formatTanggalPoin(r.tanggal)} · {r.kategori_nama || 'Lainnya'}</p>
+                    <p className="font-medium text-slate-900 truncate">
+                      {r.tatib_kode && <span className="mr-1 font-mono text-xs font-normal text-slate-500">{r.tatib_kode}</span>}
+                      {r.tatib_nama}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
+                      <span>{formatTanggalPoin(r.tanggal)} · {r.kategori_nama || 'Lainnya'}</span>
+                      {r.asal_input && <LabelAsalInput asal={r.asal_input} />}
+                    </p>
                   </div>
                   <span className={`shrink-0 font-bold tabular-nums ${plus ? 'text-emerald-700' : 'text-red-700'}`}>{formatPoin(poin)}</span>
                   {onPilih && <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />}

@@ -3,6 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import RingkasanPoin, { rangkumPoin } from '@/components/tatib/RingkasanPoin';
 import RiwayatPoin from '@/components/tatib/RiwayatPoin';
 import RincianPoinDialog from '@/components/tatib/RincianPoinDialog';
+import TabelPerKategori from '@/components/tatib/TabelPerKategori';
+import { rekapPerKategori } from '@/lib/dataTatib';
 
 // Panel samping saldo & riwayat poin satu siswa, dihitung dari daftar catatan
 // yang sudah dimuat halaman (kebaikan + pelanggaran).
@@ -22,6 +24,9 @@ export default function PanelPoinSiswa({ siswa, records = [], onClose }) {
                 <SheetDescription>{[siswa.nis && `NIS ${siswa.nis}`, siswa.kelas].filter(Boolean).join(' · ') || 'Poin tata tertib'}</SheetDescription>
               </SheetHeader>
               <RingkasanPoin {...ringkasan} />
+              {milikSiswa.length > 0 && (
+                <TabelPerKategori items={rekapPerKategori(milikSiswa)} judul="Poin per Kategori" testid="panel-per-kategori" />
+              )}
               <RiwayatPoin records={milikSiswa} onPilih={setDipilih} />
             </div>
           )}
