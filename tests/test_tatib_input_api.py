@@ -507,3 +507,21 @@ async def test_setiap_jalur_pencatatan_menulis_asal_input(db, data_input):
     await api.ubah_input_tatib(a['id'], _input(asal_input='Screening pagi'), PETUGAS)
     assert (await db.tatib_penanganan.find_one({'id': a['id']}))['asal_input'] == 'Screening pagi'
     assert all('asal_input' in d for d in docs.values())
+
+
+async def test_semua_endpoint_daftar_mengirim_asal_input(db, data_input, monkeypatch):
+    from routers import tatib_poin as poin_api
+    monkeypatch.setattr(poin_api, 'db', db)
+    admin = {'id': 'u9', 'full_name': 'Admin', 'roles': ['admin'], 'active_role': 'admin'}
+    await api.simpan_input_tatib(_input(asal_input='Razia'), PETUGAS)
+    await db.tatib_penanganan.insert_one({'id': 'lama', 'siswa_id': 's1', 'tatib_id': 'j1', 'tatib_poin': -5, 'kategori_nama': 'Kedisiplinan',
+                                          'tanggal': '2026-09-01', 'catatan': 'c'})
+    daftar = await api.list_penanganan(user=admin)
+    terbaru = (await api.daftar_input_terbaru(batas=10, user=admin))['items']
+    stats = await api.get_siswa_stats('s1', user=admin)
+    poin_siswa = await poin_api.paket_poin_siswa('s1')
+    for nama, items in (('penanganan', daftar), ('input terbaru', terbaru), ('stats siswa', stats['records']), ('poin siswa', poin_siswa['records'])):
+        asal = {i['id']: i['asal_input'] for i in items}
+        assert asal == {next(i['id'] for i in items if i['id'] != 'lama'): 'Razia', 'lama': None}, nama
+    assert (stats['total_poin'], stats['total_pelanggaran'], stats['by_asal_input']) == (-10, 2, {'Razia': 1, '-': 1})
+    assert stats['by_kategori'] == {'Kedisiplinan': {'count': 2, 'total_poin': -10}}

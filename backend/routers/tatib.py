@@ -1194,18 +1194,23 @@ async def get_siswa_stats(
 
     records = await db.tatib_penanganan.find(query, {'_id': 0}).to_list(1000)
 
-    total_poin = sum(r.get('tatib_poin', 0) for r in records)
-    total_pelanggaran = sum(1 for r in records if r.get('tatib_poin', 0) < 0)
-    total_prestasi = sum(1 for r in records if r.get('tatib_poin', 0) > 0)
+    # Nilai bertanda per catatan (catatan lama: tatib_poin); records memuat asal_input & keterangan.
+    total_poin = sum(nilai_poin(r) for r in records)
+    total_pelanggaran = sum(1 for r in records if nilai_poin(r) < 0)
+    total_prestasi = sum(1 for r in records if nilai_poin(r) > 0)
 
-    # Group by kategori
     by_kategori = {}
     for r in records:
-        kat = r.get('kategori_nama', 'Lainnya')
+        kat = r.get('kategori_nama') or 'Lainnya'
         if kat not in by_kategori:
             by_kategori[kat] = {'count': 0, 'total_poin': 0}
         by_kategori[kat]['count'] += 1
-        by_kategori[kat]['total_poin'] += r.get('tatib_poin', 0)
+        by_kategori[kat]['total_poin'] += nilai_poin(r)
+
+    by_asal_input = {}
+    for r in records:
+        asal = r.get('asal_input') or '-'
+        by_asal_input[asal] = by_asal_input.get(asal, 0) + 1
 
     return {
         'siswa_id': siswa_id,
@@ -1214,7 +1219,8 @@ async def get_siswa_stats(
         'total_pelanggaran': total_pelanggaran,
         'total_prestasi': total_prestasi,
         'by_kategori': by_kategori,
-        'records': [serialize_doc(r) for r in records]
+        'by_asal_input': by_asal_input,
+        'records': [rapikan_catatan(r) for r in records]
     }
 
 
