@@ -652,3 +652,31 @@ async def test_daftar_tatib_dapat_diakses_semua_peran_sesuai_cakupan(db, monkeyp
                 await panggil()
             assert e.value.status_code == 403
     assert (await api.get_siswa_stats('s1', user=user))['total_records'] == 2
+
+
+async def test_rekap_walikelas_per_kategori_dan_asal(db, monkeypatch):
+    from routers import tatib_poin as poin_api
+    import rombel
+    monkeypatch.setattr(poin_api, 'db', db)
+
+    async def _perwalian(user, *_a, **_k):
+        return {'id': 'c7a', 'name': 'VII A'}
+    monkeypatch.setattr(rombel, 'kelas_perwalian', _perwalian)
+    await db.users.insert_many([
+        {'id': 's1', 'roles': ['siswa'], 'full_name': 'Ahmad', 'student_class_id': 'c7a', 'is_active': True},
+        {'id': 's2', 'roles': ['siswa'], 'full_name': 'Budi', 'student_class_id': 'c8b', 'is_active': True},
+    ])
+    await db.tatib_penanganan.insert_many([
+        {'id': 'a1', 'siswa_id': 's1', 'poin': -5, 'kategori_nama': 'Kedisiplinan', 'asal_input': 'Razia'},
+        {'id': 'a2', 'siswa_id': 's1', 'poin': 4, 'kategori_nama': 'Akhlak', 'asal_input': None},
+        {'id': 'b1', 'siswa_id': 's2', 'poin': -9, 'kategori_nama': 'Kedisiplinan', 'asal_input': 'Razia'},  # kelas lain
+    ])
+    wali = {'id': 'w1', 'roles': ['wali_kelas'], 'active_role': 'wali_kelas'}
+    data = await poin_api.daftar_siswa_walikelas(wali)
+    assert [s['id'] for s in data['siswa']] == ['s1']
+    assert data['per_kategori'] == [
+        {'kategori': 'Kedisiplinan', 'jumlah_pelanggaran': 1, 'jumlah_kebaikan': 0, 'total_minus': -5, 'total_plus': 0},
+        {'kategori': 'Akhlak', 'jumlah_pelanggaran': 0, 'jumlah_kebaikan': 1, 'total_minus': 0, 'total_plus': 4},
+    ]
+    assert data['per_asal_input'] == [{'asal_input': 'Razia', 'jumlah': 1, 'total_minus': -5, 'total_plus': 0},
+                                      {'asal_input': None, 'jumlah': 1, 'total_minus': 0, 'total_plus': 4}]

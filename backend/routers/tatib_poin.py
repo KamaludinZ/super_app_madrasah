@@ -18,7 +18,7 @@ from core import db, get_current_user, serialize_doc
 from routers._shared import FILTER_SISWA_AKTIF, sembunyikan_siswa_nonaktif
 from tatib_poin import (
     ASAL_INPUT, BATAS_MINUS_PERHATIAN, FIELD_BATAS_PERHATIAN, KOLEKSI_POIN, akses_tatib, jenis_dari_poin, nilai_poin,
-    rangkum_poin, susun_rekap,
+    rangkum_poin, rekap_kategori_asal, susun_rekap,
 )
 
 router = APIRouter()
@@ -141,11 +141,12 @@ async def batasi_query_tatib(user: Dict, query: Dict, field: str = 'siswa_id') -
 @router.get("/tatib/walikelas/siswa")
 async def daftar_siswa_walikelas(user: Dict = Depends(wajib_wali_kelas)):
     """Daftar siswa kelas yang diampu wali kelas login + rangkuman poin masing-masing.
-    -> {kelas: {id, name} | null, siswa: [{id, full_name, nis, nisn, class_name, total_plus, total_minus,
-        saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian}]}"""
+    -> {kelas: {id, name} | null, batas_minus_perhatian, siswa: [{id, full_name, nis, nisn, class_name, total_plus,
+        total_minus, saldo, jumlah_kebaikan, jumlah_pelanggaran, perlu_perhatian}],
+        per_kategori, per_asal_input} — rekap kelas per kategori & asal input (bentuk sama dengan Rekap Pengawas)."""
     kelas = await kelas_diampu(user)
     if not kelas:
-        return {'kelas': None, 'siswa': []}
+        return {'kelas': None, 'siswa': [], 'per_kategori': [], 'per_asal_input': []}
     siswa = await siswa_kelas(kelas['id'])
     records = await catatan_siswa([s['id'] for s in siswa])
     per_siswa: Dict[str, List[Dict]] = {}
@@ -153,10 +154,13 @@ async def daftar_siswa_walikelas(user: Dict = Depends(wajib_wali_kelas)):
         per_siswa.setdefault(r.get('siswa_id'), []).append(r)
     batas = await ambang_perhatian()
     hasil = [{**s, 'class_name': kelas.get('name'), **rangkum_poin(per_siswa.get(s['id'], []), batas)} for s in siswa]
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
     return {
         'kelas': {'id': kelas['id'], 'name': kelas.get('name')},
         'batas_minus_perhatian': batas,
         'siswa': [serialize_doc(h) for h in hasil],
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
     }
 
 

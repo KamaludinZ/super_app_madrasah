@@ -424,6 +424,32 @@ def rangkum_poin(records, batas: int = BATAS_MINUS_PERHATIAN) -> dict:
     }
 
 
+def rekap_kategori_asal(records) -> tuple:
+    """(per_kategori, per_asal_input) dari catatan poin — dipakai Rekap Pengawas & Pantauan Walikelas.
+    per_kategori: [{kategori, jumlah_pelanggaran, jumlah_kebaikan, total_minus, total_plus}] saldo terendah dulu;
+    per_asal_input: [{asal_input (None = catatan lama), jumlah, total_minus, total_plus}] urut daftar ASAL_INPUT."""
+    per_kategori: dict = {}
+    per_asal: dict = {}
+    for r in records:
+        n = nilai_poin(r)
+        k = per_kategori.setdefault(r.get('kategori_nama') or 'Lainnya', {
+            'kategori': r.get('kategori_nama') or 'Lainnya', 'jumlah_pelanggaran': 0, 'jumlah_kebaikan': 0, 'total_minus': 0, 'total_plus': 0})
+        asal = (r.get('asal_input') or '').strip() or None
+        a = per_asal.setdefault(asal, {'asal_input': asal, 'jumlah': 0, 'total_minus': 0, 'total_plus': 0})
+        a['jumlah'] += 1
+        if n < 0:
+            k['jumlah_pelanggaran'] += 1
+            k['total_minus'] += n
+            a['total_minus'] += n
+        elif n > 0:
+            k['jumlah_kebaikan'] += 1
+            k['total_plus'] += n
+            a['total_plus'] += n
+    urut_asal = {nama: i for i, nama in enumerate(ASAL_INPUT)}
+    return (sorted(per_kategori.values(), key=lambda k: (k['total_plus'] + k['total_minus'], k['kategori'])),
+            sorted(per_asal.values(), key=lambda a: urut_asal.get(a['asal_input'], len(ASAL_INPUT))))
+
+
 def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, teratas: int = 5) -> dict:
     """Rekap lintas kelas dari catatan poin.
     kelas_siswa: {nama_kelas: [siswa_id, ...]} — kelas yang ditampilkan (termasuk yang belum punya catatan).
@@ -468,24 +494,7 @@ def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, 
             h['jumlah'] += 1
         return sorted(hit.values(), key=lambda x: (-x['jumlah'], x['nama']))[:teratas]
 
-    per_kategori: dict = {}
-    per_asal: dict = {}
-    for r in records:
-        n = nilai_poin(r)
-        k = per_kategori.setdefault(r.get('kategori_nama') or 'Lainnya', {
-            'kategori': r.get('kategori_nama') or 'Lainnya', 'jumlah_pelanggaran': 0, 'jumlah_kebaikan': 0, 'total_minus': 0, 'total_plus': 0})
-        asal = (r.get('asal_input') or '').strip() or None
-        a = per_asal.setdefault(asal, {'asal_input': asal, 'jumlah': 0, 'total_minus': 0, 'total_plus': 0})
-        a['jumlah'] += 1
-        if n < 0:
-            k['jumlah_pelanggaran'] += 1
-            k['total_minus'] += n
-            a['total_minus'] += n
-        elif n > 0:
-            k['jumlah_kebaikan'] += 1
-            k['total_plus'] += n
-            a['total_plus'] += n
-    urut_asal = {nama: i for i, nama in enumerate(ASAL_INPUT)}
+    per_kategori, per_asal_input = rekap_kategori_asal(records)
 
     total = rangkum_poin(records, batas)
     return {
@@ -499,6 +508,6 @@ def susun_rekap(records, kelas_siswa: dict, batas: int = BATAS_MINUS_PERHATIAN, 
         'per_kelas': per_kelas,
         'teratas_pelanggaran': _teratas(False),
         'teratas_kebaikan': _teratas(True),
-        'per_kategori': sorted(per_kategori.values(), key=lambda k: (k['total_plus'] + k['total_minus'], k['kategori'])),
-        'per_asal_input': sorted(per_asal.values(), key=lambda a: urut_asal.get(a['asal_input'], len(ASAL_INPUT))),
+        'per_kategori': per_kategori,
+        'per_asal_input': per_asal_input,
     }

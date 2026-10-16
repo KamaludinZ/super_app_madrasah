@@ -55,6 +55,7 @@ export default function WaliKelasPoinTatibPage() {
   const [records, setRecords] = useState([]);
   const [batas, setBatas] = useState(BATAS_MINUS_PERHATIAN);
   const [kelas, setKelas] = useState(null);
+  const [perKategoriServer, setPerKategoriServer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cari, setCari] = useState('');
   const [urut, setUrut] = useState('nama');
@@ -70,6 +71,7 @@ export default function WaliKelasPoinTatibPage() {
         setStudents(data.siswa || []);
         setKelas(data.kelas);
         setBatas(data.batas_minus_perhatian ?? BATAS_MINUS_PERHATIAN);
+        setPerKategoriServer(data.per_kategori ?? null);
         setRecords(catatan);
       } catch (e) {
         toast.error(e?.response?.data?.detail || 'Gagal memuat siswa kelas');
@@ -97,7 +99,8 @@ export default function WaliKelasPoinTatibPage() {
     [students, records, batas],
   );
   const terbaru = useMemo(() => [...records].sort(bandingTerbaru).slice(0, 5), [records]);
-  const perKategori = useMemo(() => rekapPerKategori(records), [records]);
+  // Rekap per kategori dari server (GET /tatib/walikelas/siswa); cadangan: hitung dari catatan yang dimuat.
+  const perKategori = useMemo(() => perKategoriServer ?? rekapPerKategori(records), [perKategoriServer, records]);
 
   // Guard: hanya peran wali kelas; peran lain diarahkan ke halaman poin sesuai aksesnya.
   if (!khususWali) return <Navigate to={halamanPoinTatib(activeRole)} replace />;
