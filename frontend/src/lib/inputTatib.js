@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { konteksPeriode } from '@/lib/poinTatib';
 import { hariIniWIB } from '@/lib/tanggal';
 
 // Input Tata Tertib terpadu: siswa → kategori → jenis aturan (poin otomatis) → tanggal & keterangan.
@@ -95,15 +96,15 @@ export function ambilRiwayatInputTerbaru({ batas = 10, siswa_id } = {}) {
   return jeda({ items: cocok.slice(0, batas), ada_lagi: cocok.length > batas });
 }
 
+// Simpan pencatatan; poin dihitung server dari master jenis (tidak dikirim). Semester & tahun takwim
+// yang sedang dilihat pengguna ikut disimpan (sama seperti Catat Poin Tatib).
 export async function simpanInputTatib({ siswa_id, jenis_id, tanggal, asal_input, keterangan }) {
-  const jenis = jenisTiruan.find((j) => j.id === jenis_id);
-  if (!jenis || jenis.aktif === false) throw new Error('Jenis aturan tidak ditemukan atau sudah nonaktif');
   if (!ASAL_INPUT.includes(asal_input)) throw new Error('Asal input wajib dipilih dari daftar');
-  const catatan = lengkapiCatatan({
-    id: `cat-${Date.now()}`, siswa_id, jenis_id, tanggal, asal_input, keterangan: keterangan || '', petugas_nama: 'Anda',
+  const periode = await konteksPeriode();
+  const { data } = await api.post('/tatib/input', {
+    siswa_id, jenis_id, tanggal, asal_input, keterangan: (keterangan || '').trim() || null, ...periode,
   });
-  catatanTiruan = [catatan, ...catatanTiruan];
-  return jeda(catatan);
+  return data;
 }
 
 // Tambah (tanpa id) atau ubah kategori langsung dari halaman input.

@@ -1,6 +1,6 @@
 """API endpoints for Tata Tertib (Discipline & Code of Conduct) Management."""
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
@@ -12,8 +12,9 @@ from core import db, get_current_user, require_role, serialize_doc, log_audit
 from notify import homeroom_teacher_of, notify_roles, notify_users, spawn
 
 from routers._shared import sembunyikan_siswa_nonaktif
-from tatib_poin import (JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, kondisi_aturan, kunci_nama,
-                        normalisasi_kondisi, poin_jenis_aturan)
+from journal_core import tanggal_wib
+from tatib_poin import (ASAL_INPUT, JENIS_POIN, field_jenis_aturan, hitung_poin_aturan, jenis_dari_poin, jenis_poin_dari_jalur,
+                        kondisi_aturan, kunci_nama, nilai_poin, normalisasi_kondisi, poin_jenis_aturan)
 from routers.tatib_poin import batasi_query_tatib, wajib_input_tatib, wajib_lihat_tatib
 
 router = APIRouter()
@@ -700,6 +701,116 @@ async def catat_poin_jalur(jenis: str, req: PenangananRequest, user: Dict = Depe
     if jenis not in JENIS_POIN:
         raise HTTPException(404, "Jalur poin tidak dikenal")
     return await catat_poin(req, user, jenis_wajib=jenis)
+
+
+# ============================================================
+# INPUT TATA TERTIB TERPADU (struktur baru: poin dari master jenis aturan)
+# ============================================================
+
+MAKS_KETERANGAN = 500
+
+
+class InputTatibRequest(BaseModel):
+    """Satu pencatatan dari halaman Input Tata Tertib; poin TIDAK dikirim — dihitung dari jenis."""
+    siswa_id: str
+    jenis_id: str
+    tanggal: str  # YYYY-MM-DD (tanggal kejadian)
+    asal_input: str
+    keterangan: Optional[str] = None
+    semester_id: Optional[str] = None
+    tahun_takwim_id: Optional[str] = None
+
+
+def catatan_input_tampil(doc: Dict) -> Dict:
+    """Catatan poin dalam bentuk daftar Input Tata Tertib (catatan lama ikut diterjemahkan)."""
+    return serialize_doc({
+        **doc,
+        'jenis_id': doc.get('jenis_id') or doc.get('tatib_id'),
+        'kode_aturan': doc.get('tatib_kode'),
+        'jenis_nama': doc.get('tatib_nama'),
+        'keterangan': doc.get('keterangan') if doc.get('keterangan') is not None else doc.get('catatan'),
+        'asal_input': doc.get('asal_input'),
+        'poin': nilai_poin(doc),
+    })
+
+
+async def _isian_input_tatib(req: InputTatibRequest, jenis_lama_id: Optional[str] = None) -> Dict:
+    """Validasi isian & susun field catatan. Jenis nonaktif ditolak, kecuali tetap jenis lama saat memperbaiki."""
+    try:
+        tanggal = date.fromisoformat((req.tanggal or '')[:10]).isoformat()
+    except ValueError:
+        raise HTTPException(400, "Tanggal kejadian tidak valid (format YYYY-MM-DD)")
+    if tanggal > tanggal_wib():
+        raise HTTPException(400, "Tanggal kejadian tidak boleh melewati hari ini")
+    if req.asal_input not in ASAL_INPUT:
+        raise HTTPException(400, f"Asal input harus salah satu dari: {', '.join(ASAL_INPUT)}")
+    keterangan = (req.keterangan or '').strip()
+    if len(keterangan) > MAKS_KETERANGAN:
+        raise HTTPException(400, f"Keterangan maksimal {MAKS_KETERANGAN} karakter")
+
+    siswa = await _cari_siswa(req.siswa_id)
+    if not siswa:
+        raise HTTPException(404, "Siswa tidak ditemukan")
+    jenis = await db.tatib_aturan.find_one({'id': req.jenis_id}, {'_id': 0})
+    if not jenis:
+        raise HTTPException(404, "Jenis aturan tidak ditemukan")
+    f = field_jenis_aturan(jenis)
+    if not f['aktif'] and req.jenis_id != jenis_lama_id:
+        raise HTTPException(400, "Jenis aturan ini sudah tidak aktif")
+    kategori = await db.tatib_kategori.find_one({'id': jenis.get('kategori_id')}, {'_id': 0, 'nama': 1}) or {}
+    poin = poin_jenis_aturan(jenis)
+
+    return {
+        'siswa': siswa,
+        'isian': {
+            'siswa_id': req.siswa_id,
+            'siswa_nama': siswa.get('full_name'),
+            'siswa_nis': siswa.get('nis'),
+            'siswa_nisn': siswa.get('nisn'),
+            'siswa_kelas': siswa.get('class_name'),
+            'jenis_id': req.jenis_id,
+            'tatib_id': req.jenis_id,  # kompatibilitas endpoint & rekap lama
+            'tatib_kode': f['kode_aturan'],
+            'tatib_nama': f['nama'],
+            'jenis_nama': f['nama'],
+            'tatib_poin': poin,
+            'jenis_poin': jenis_poin_dari_jalur(f['jalur_poin']),
+            'poin': poin,
+            'kondisi_id': None,
+            'kondisi': None,
+            'kategori_id': jenis.get('kategori_id'),
+            'kategori_nama': kategori.get('nama') or jenis.get('kategori_nama'),
+            'tanggal': tanggal,
+            'asal_input': req.asal_input,
+            'keterangan': keterangan or None,
+            'catatan': keterangan or None,
+            'semester_id': req.semester_id,
+            'tahun_takwim_id': req.tahun_takwim_id,
+        },
+    }
+
+
+@router.post("/tatib/input")
+async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Simpan satu pencatatan dari Input Tata Tertib. Poin selalu mengikuti master jenis (server)."""
+    hasil = await _isian_input_tatib(req)
+    sekarang = datetime.utcnow().isoformat()
+    doc = {
+        'id': str(uuid.uuid4()),
+        **hasil['isian'],
+        'tindak_lanjut': [],
+        'bukti_url': None,
+        'petugas_id': user['id'],
+        'petugas_nama': user.get('full_name', user.get('username')),
+        'created_at': sekarang,
+        'updated_at': sekarang,
+    }
+    await db.tatib_penanganan.insert_one(doc)
+    spawn(_notify_tatib(dict(doc), hasil['siswa'], doc['poin']))
+    await log_audit(user, 'tatib_input_create',
+                    f"Input tatib {doc['tatib_kode']} ({doc['poin']}) untuk {doc['siswa_nama']} · {doc['asal_input']}")
+    doc.pop('_id', None)
+    return catatan_input_tampil(doc)
 
 
 @router.post("/tatib/penanganan/{penanganan_id}/tindak-lanjut")
