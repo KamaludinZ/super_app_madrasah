@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ListChecks, Loader2, Pencil, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ListChecks, Loader2, Pencil, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import { bolehInputTatib, pesanGalatTatib, tolakUbahTatib } from '@/lib/aksesTatib';
@@ -21,6 +22,17 @@ export default function TatibMasterJenisPage() {
   const [kategoriList, setKategoriList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ open: false, jenis: null });
+  const [cari, setCari] = useState('');
+
+  // Pencarian tanpa beda huruf pada kode aturan dan nama jenis (semua kata harus cocok).
+  const tersaring = useMemo(() => {
+    const kata = cari.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!kata.length) return jenisList;
+    return jenisList.filter((j) => {
+      const teks = `${j.kode_aturan} ${j.nama}`.toLowerCase();
+      return kata.every((k) => teks.includes(k));
+    });
+  }, [jenisList, cari]);
 
   useEffect(() => {
     Promise.all([ambilMasterJenis(), ambilKategoriMaster()])
@@ -63,6 +75,30 @@ export default function TatibMasterJenisPage() {
 
       {!bolehUbah && <BannerModeLihat />}
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari kode atau nama jenis…"
+            className="pl-9 pr-9"
+            aria-label="Cari kode atau nama jenis"
+            data-testid="master-jenis-cari"
+          />
+          {cari && (
+            <button type="button" onClick={() => setCari('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Kosongkan pencarian">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {!loading && (
+          <span className="text-sm text-slate-500" data-testid="master-jenis-jumlah">
+            {cari ? `${tersaring.length} dari ${jenisList.length} jenis` : `${jenisList.length} jenis`}
+          </span>
+        )}
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -84,7 +120,7 @@ export default function TatibMasterJenisPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jenisList.map((j) => (
+                  {tersaring.map((j) => (
                     <TableRow key={j.id} className={j.aktif ? '' : 'text-slate-400'} data-testid={`master-jenis-${j.id}`}>
                       <TableCell className="font-mono text-xs font-semibold">{j.kode_aturan}</TableCell>
                       <TableCell>
@@ -112,9 +148,11 @@ export default function TatibMasterJenisPage() {
                       )}
                     </TableRow>
                   ))}
-                  {jenisList.length === 0 && (
+                  {tersaring.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={bolehUbah ? 7 : 6} className="py-8 text-center text-slate-500">Belum ada jenis aturan.</TableCell>
+                      <TableCell colSpan={bolehUbah ? 7 : 6} className="py-8 text-center text-slate-500">
+                        {jenisList.length === 0 ? 'Belum ada jenis aturan.' : `Tidak ada jenis yang cocok dengan "${cari}".`}
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
