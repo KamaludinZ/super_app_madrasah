@@ -272,3 +272,14 @@ async def riwayat_tindakan_siswa(siswa_id: str, semester_id: Optional[str] = Non
         query['semester_id'] = semester_id
     items = await db[KOLEKSI_RIWAYAT_TINDAKAN].find(query, {'_id': 0}).sort('waktu', -1).to_list(500)
     return [serialize_doc(i) for i in items]
+
+
+# ============================================================
+# PENGATURAN AMBANG SP
+# ============================================================
+
+@router.get("/tatib/ambang-sp")
+async def lihat_ambang_sp(user: Dict = Depends(wajib_lihat_tatib)):
+    """Ambang SP yang berlaku: {sp1, sp2, sp3, alasan, diubah_oleh_nama, diubah_pada, bawaan}.
+    bawaan=true bila belum pernah diatur (atau nilai tersimpan rusak) sehingga AMBANG_SP_BAWAAN dipakai."""
+    return serialize_doc(await ambil_ambang_sp(db))

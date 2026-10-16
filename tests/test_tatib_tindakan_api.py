@@ -221,3 +221,12 @@ async def test_penjaga_peran_tindakan():
             await wajib_lihat_tatib(peran(r))
     # admin tetap boleh mengubah walau peran aktifnya lain
     assert await wajib_input_tatib({'id': 'x', 'roles': ['admin', 'guru_mapel'], 'active_role': 'guru_mapel'})
+
+
+async def test_lihat_ambang_sp_aktif(db):
+    a = await api.lihat_ambang_sp(PIMPINAN)
+    assert (a['sp1'], a['sp2'], a['sp3'], a['bawaan']) == (25, 50, 75, True)
+    await db.pengaturan_ambang_sp.insert_one({'_id': 'ambang_sp', 'sp1': 10, 'sp2': 20, 'sp3': 30, 'alasan': 'rapat',
+                                              'diubah_oleh_nama': 'Admin', 'diubah_pada': '2026-10-16T01:00:00'})
+    a = await api.lihat_ambang_sp(PIMPINAN)
+    assert (a['sp1'], a['sp2'], a['sp3'], a['alasan'], a['diubah_oleh_nama'], a['bawaan']) == (10, 20, 30, 'rapat', 'Admin', False)

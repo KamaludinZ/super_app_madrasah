@@ -1,8 +1,9 @@
 // Pengaturan Ambang SP: batas akumulasi poin pelanggaran (nilai mutlak) untuk usulan SP1/SP2/SP3.
-// SEMENTARA memakai data tiruan di memori (frontend dibangun lebih dulu). Kontrak yang diasumsikan:
+// Ambang berlaku lewat API; simpan & riwayat SEMENTARA masih data tiruan di memori. Kontrak:
 //   GET /tatib/ambang-sp          -> { sp1, sp2, sp3, diubah_oleh_nama, diubah_pada, bawaan }
 //   PUT /tatib/ambang-sp          { sp1, sp2, sp3, alasan } -> sama dengan GET (hanya admin)
 //   GET /tatib/ambang-sp/riwayat  -> [{ id, waktu, oleh_nama, dari: {sp1,sp2,sp3}, ke: {sp1,sp2,sp3}, alasan }]
+import { api } from '@/lib/api';
 import { AMBANG_SP_BAWAAN } from '@/lib/tindakanTatib';
 
 const jeda = (data) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(data)), 150));
@@ -18,7 +19,10 @@ export { AMBANG_SP_BAWAAN };
 // Riwayat perubahan ambang (terbaru dulu) untuk audit.
 export const ambilRiwayatAmbangSP = () => jeda(riwayatTiruan);
 
-export const ambilAmbangSP = () => jeda(ambangTiruan);
+export async function ambilAmbangSP() {
+  const { data } = await api.get('/tatib/ambang-sp');
+  return data;
+}
 
 export const MAKS_AMBANG_SP = 10000;
 
