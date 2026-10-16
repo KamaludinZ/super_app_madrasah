@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClipboardEdit, History, Loader2, Lock, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
@@ -15,6 +14,7 @@ import BannerModeLihat from '@/components/tatib/BannerModeLihat';
 import PilihSiswaTatib from '@/components/tatib/PilihSiswaTatib';
 import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
 import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
+import PilihJenisAturan from '@/components/tatib/PilihJenisAturan';
 import { hariIniWIB } from '@/lib/tanggal';
 import {
   ambilKategoriTatib, ambilJenisAturan, ambilSiswaTatib, ambilRiwayatInputTerbaru, simpanInputTatib, poinJenis,
@@ -168,17 +168,13 @@ export default function TatibInputTerpaduPage() {
 
                 <div>
                   <Label>Jenis aturan*</Label>
-                  <Select value={form.jenis_id || 'none'} onValueChange={pilihJenis}>
-                    <SelectTrigger data-testid="input-tatib-jenis"><SelectValue placeholder="Pilih Jenis" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Pilih Jenis</SelectItem>
-                      {jenisTersaring.map((j) => (
-                        <SelectItem key={j.id} value={j.id}>
-                          [{j.kode_aturan}] {j.nama} ({formatPoin(poinJenis(j))})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <PilihJenisAturan
+                    jenisList={jenisTersaring}
+                    value={form.jenis_id}
+                    onPilih={pilihJenis}
+                    disabled={!bolehInput}
+                    testid="input-tatib-jenis"
+                  />
                 </div>
 
                 <div
@@ -188,6 +184,11 @@ export default function TatibInputTerpaduPage() {
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                       <Lock className="h-3.5 w-3.5" /> Poin otomatis
+                      {jenis && (
+                        <Badge variant="outline" className={`ml-1 px-1.5 py-0 text-[11px] ${warnaPoin(poin)}`}>
+                          {jenis.jalur_poin === 'minus' ? 'Pelanggaran' : 'Kebaikan'}
+                        </Badge>
+                      )}
                     </p>
                     <p className="text-xs text-slate-500 truncate">
                       {jenis ? `${jenis.kategori_nama} · ${jenis.nama}` : 'Pilih jenis aturan untuk melihat nilai poin'}
