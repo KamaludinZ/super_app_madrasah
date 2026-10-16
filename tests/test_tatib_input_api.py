@@ -603,3 +603,52 @@ def test_ekspor_rekap_memuat_sheet_kategori_dan_asal():
     nilai = [c.value for row in wb['Per Asal Input'].iter_rows() for c in row]
     assert 'Razia' in nilai and '- (belum diisi)' in nilai
     assert 'Kedisiplinan' in [c.value for row in wb['Per Kategori'].iter_rows() for c in row]
+
+
+@pytest.mark.parametrize('peran,harapan', [
+    *[(p, {'a1', 'a2', 'b1'}) for p in ('admin', 'guru_tata_tertib', 'waka_kesiswaan', 'guru_bk', 'kepala_sekolah',
+                                         'penjamin_mutu', 'kepala_tata_usaha', 'waka_kurikulum')],
+    ('wali_kelas', {'a1', 'a2'}),   # hanya siswa kelas yang diampu (VII A: s1)
+    ('siswa', {'a1', 'a2'}),        # hanya miliknya (user id s1)
+    ('guru_mapel', None),           # tanpa akses tatib: 403
+])
+async def test_daftar_tatib_dapat_diakses_semua_peran_sesuai_cakupan(db, monkeypatch, peran, harapan):
+    from routers import tatib_poin as poin_api
+    import rombel
+    monkeypatch.setattr(poin_api, 'db', db)
+
+    async def _perwalian(user, *_a, **_k):
+        return {'id': 'c7a', 'name': 'VII A'} if user.get('id') == 'wali1' else None
+    monkeypatch.setattr(rombel, 'kelas_perwalian', _perwalian)
+    await db.classes.insert_many([{'id': 'c7a', 'name': 'VII A'}, {'id': 'c8b', 'name': 'VIII B'}])
+    await db.users.insert_many([
+        {'id': 's1', 'roles': ['siswa'], 'full_name': 'Ahmad', 'student_class_id': 'c7a'},
+        {'id': 's2', 'roles': ['siswa'], 'full_name': 'Budi', 'student_class_id': 'c8b'},
+    ])
+    await db.tatib_penanganan.insert_many([
+        {'id': 'a1', 'siswa_id': 's1', 'tatib_poin': -5, 'asal_input': 'Razia', 'tanggal': '2026-10-01'},
+        {'id': 'a2', 'siswa_id': 's1', 'tatib_poin': 3, 'tanggal': '2026-10-02'},
+        {'id': 'b1', 'siswa_id': 's2', 'tatib_poin': -2, 'asal_input': 'Razia', 'tanggal': '2026-10-03'},
+    ])
+    uid = {'wali_kelas': 'wali1', 'siswa': 's1'}.get(peran, 'u-' + peran)
+    user = {'id': uid, 'full_name': peran, 'roles': [peran], 'active_role': peran}
+    if harapan is None:
+        with pytest.raises(HTTPException) as e:
+            await api.list_penanganan(user=user)
+        assert e.value.status_code == 403
+        return
+    semua = {c['id'] for c in await api.list_penanganan(user=user)}
+    assert semua == harapan
+    assert all('asal_input' in c for c in await api.list_penanganan(user=user))
+    razia = {c['id'] for c in await api.list_penanganan(asal_input='Razia', user=user)}
+    assert razia == harapan & {'a1', 'b1'}
+    # detail & statistik siswa ikut cakupan: siswa s2 hanya untuk peran input/lihat
+    if 'b1' in harapan:
+        assert (await api.get_penanganan('b1', user))['id'] == 'b1'
+        assert (await api.get_siswa_stats('s2', user=user))['total_records'] == 1
+    else:
+        for panggil in (lambda: api.get_penanganan('b1', user), lambda: api.get_siswa_stats('s2', user=user)):
+            with pytest.raises(HTTPException) as e:
+                await panggil()
+            assert e.value.status_code == 403
+    assert (await api.get_siswa_stats('s1', user=user))['total_records'] == 2
