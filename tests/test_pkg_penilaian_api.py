@@ -197,6 +197,8 @@ def test_kirim_dan_kunci(db):
     assert hasil['hasil']['level_capaian'] == 'Level 3' and hasil['hasil']['predikat'].endswith('Ahli Muda')
     dok = next(d for d in db['pkg_penilaian'].docs if d['guru_dinilai_id'] == 'g3')
     assert dok['terkunci_oleh'] == 'pen' and dok['skor_per_indikator'] == {'1.1': 4, '2.1': 3}
+    rekap = db['pkg_rekap'].docs
+    assert len(rekap) == 1 and rekap[0]['id'] == dok['id'] and rekap[0]['nilai_akhir'] == 7 and rekap[0]['per_kompetensi'] == {'1': 4, '2': 3}
     kirim = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'penilaian_kirim']
     assert len(kirim) == 1 and kirim[0]['metadata']['nilai_akhir'] == 7 and kirim[0]['penilaian_id'] == dok['id']
 

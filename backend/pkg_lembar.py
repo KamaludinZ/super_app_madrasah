@@ -173,7 +173,11 @@ async def kirim_dan_kunci(db, ktx: Dict[str, Any], data: KirimPenilaianRequest, 
     if getattr(hasil, 'matched_count', 1) == 0:
         raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
     lembar.pop('_baru', None)
-    return {**lembar, **kunci}
+    terkunci = {**lembar, **kunci}
+    # Hasil akhir langsung dimaterialisasi untuk rekap (dapat dibangun ulang lewat migrasi bila gagal).
+    from pkg_rekap import simpan_rekap_lembar
+    await simpan_rekap_lembar(db, terkunci, ktx['instrumen'], ktx['sk'])
+    return terkunci
 
 
 async def riwayat_lembar(db, penilaian_id: Optional[str]) -> list:

@@ -25,6 +25,11 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
     pkg_unduhan    {id, jenis, format, periode_id, nama_berkas, aktor_id, aktor_nama, timestamp}
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
+    pkg_rekap      {id (= penilaian_id), periode_id, sk_id, guru_id, penilai_id, nama, nip, mapel, penilai_nama,
+                    instrumen_id, versi_template, revisi, nilai_akhir, nilai_maks, capaian_persen, level_capaian,
+                    predikat, per_kompetensi {kode: subtotal}, catatan_umum, terkunci_pada, dihitung_pada}
+                   Hasil akhir per lembar terkunci (materialisasi untuk rekap, statistik, & cetak); dibangun ulang
+                   dari pkg_penilaian bila perlu (migrasi/pkg_rekap.bangun_ulang_rekap).
 
 Integritas dijaga index: hanya satu periode 'berjalan', satu SK aktif per periode, nomor SK unik,
 satu penugasan per penilai per periode, satu lembar penilaian per guru per SK.
@@ -47,6 +52,7 @@ KOLEKSI_AUDIT = 'pkg_audit_log'
 KOLEKSI_UNDUHAN = 'pkg_unduhan'
 KOLEKSI_TEMPLATE = 'pkg_template'
 KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
+KOLEKSI_REKAP = 'pkg_rekap'
 
 STATUS_PERIODE = ('draf', 'berjalan', 'ditutup')
 STATUS_PENILAIAN = ('draf', 'terkunci')
@@ -75,6 +81,10 @@ INDEX_PKG = [
     (KOLEKSI_UNDUHAN, [('timestamp', -1)], {'name': 'waktu'}),
     (KOLEKSI_UNDUHAN, [('aktor_id', 1), ('timestamp', -1)], {'name': 'aktor_waktu'}),
     (KOLEKSI_TEMPLATE, [('jenis', 1)], {'unique': True, 'name': 'jenis_unik'}),
+    (KOLEKSI_REKAP, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
+    (KOLEKSI_REKAP, [('periode_id', 1), ('capaian_persen', -1)], {'name': 'periode_capaian'}),
+    (KOLEKSI_REKAP, [('guru_id', 1), ('periode_id', 1)], {'name': 'guru_periode'}),
+    (KOLEKSI_REKAP, [('periode_id', 1), ('penilai_id', 1)], {'name': 'periode_penilai'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('expire_at', 1)], {'expireAfterSeconds': 0, 'name': 'ttl_expire_at'}),
 ]

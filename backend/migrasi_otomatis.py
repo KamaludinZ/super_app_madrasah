@@ -192,6 +192,11 @@ async def _pengaturan_ambang_sp(db):
     return await migrate(db)
 
 
+async def _pkg_rekap(db):
+    from migrations.migrate_pkg_rekap import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -214,6 +219,7 @@ MIGRASI = [
     ('2026-10-16_tatib_tindakan_riwayat', _tatib_tindakan_riwayat),
     ('2026-10-16_pengaturan_ambang_sp_riwayat', _pengaturan_ambang_sp_riwayat),
     ('2026-10-16_pengaturan_ambang_sp', _pengaturan_ambang_sp),
+    ('2026-10-19_pkg_rekap', _pkg_rekap),
 ]
 
 
