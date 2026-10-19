@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, Circle, AlertTriangle, ShieldX } from 'lucide-react';
 import { MESIN_LABEL, TAHAP_CETAK } from '@/lib/pkgCetak';
 
-// Dialog umpan balik cetak. `proses` = { format, tahap, selesai, namaBerkas, mesin, penolakan, galat } | null.
+// Dialog umpan balik cetak. `proses` = { format, tahap, selesai, namaBerkas, mesin, alasanCadangan, penolakan, galat } | null.
 // Tampil saat berkas disiapkan; setelah selesai dengan PDF cadangan (ReportLab) dialog tetap terbuka dengan penanda
 // bahwa hasilnya bukan salinan identik Excel. Penolakan akses 403 ditampilkan dengan alasannya.
 export default function DialogProsesCetak({ proses, onTutup }) {
@@ -48,7 +48,7 @@ export default function DialogProsesCetak({ proses, onTutup }) {
               <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert" data-testid="pkg-cetak-cadangan">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>
-                  PDF dibuat dengan <strong>mesin cadangan (ReportLab)</strong> karena LibreOffice tidak tersedia di server.
+                  PDF dibuat dengan <strong>mesin cadangan (ReportLab)</strong> karena {proses.alasanCadangan === 'konversi_gagal' ? 'konversi LibreOffice di server gagal' : 'LibreOffice tidak tersedia di server'}.
                   Tata letaknya <strong>bukan salinan identik</strong> berkas Excel resmi dan diberi penanda pada setiap halaman.
                   Untuk dokumen resmi, unduh Excel atau hubungi admin sistem.
                 </span>

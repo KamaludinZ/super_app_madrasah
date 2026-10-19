@@ -51,13 +51,13 @@ function IsiHalamanCetak() {
     setSedang(kunci);
     setProses({ format, tahap: 'template', selesai: false });
     try {
-      const { blob, namaBerkas, mesin } = await unduhDokumen({
+      const { blob, namaBerkas, mesin, alasanCadangan } = await unduhDokumen({
         jenis, format, periode: rekap.periode, guru, onTahap: (tahap) => setProses((p) => p && { ...p, tahap }),
       });
       simpanBerkas(blob, namaBerkas);
       setJumlahUnduh((n) => n + 1);
       // PDF cadangan: dialog tetap terbuka dengan penanda; selain itu cukup notifikasi singkat.
-      if (mesin === 'reportlab') setProses((p) => ({ ...p, selesai: true, namaBerkas, mesin }));
+      if (mesin === 'reportlab') setProses((p) => ({ ...p, selesai: true, namaBerkas, mesin, alasanCadangan }));
       else {
         setProses(null);
         toast.success(`${namaBerkas} diunduh`);
