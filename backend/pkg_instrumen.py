@@ -119,3 +119,47 @@ async def terapkan_pratinjau(db, token: str, kepala: Dict[str, Any]) -> Dict[str
         'instrumen_sebelumnya': {k: sebelumnya.get(k) for k in ('id', 'versi_template', 'revisi')} if sebelumnya else None,
     }
     return {'instrumen': baru, 'hasil': hasil}
+
+
+async def ambil_instrumen(db, instrumen_id: str) -> Dict[str, Any]:
+    """Instrumen menurut id (versi mana pun); 'aktif' = instrumen aktif. HTTP 404 bila tidak ada."""
+    doc = await instrumen_aktif(db) if instrumen_id == 'aktif' else \
+        await db[KOLEKSI_INSTRUMEN].find_one({'id': instrumen_id}, {'_id': 0})
+    if not doc:
+        raise HTTPException(404, 'Instrumen tidak ditemukan.' if instrumen_id != 'aktif' else 'Belum ada instrumen aktif.')
+    return doc
+
+
+def _cocok(teks: Optional[str], kata: str) -> bool:
+    return kata in (teks or '').lower()
+
+
+def daftar_kompetensi(instrumen: Dict[str, Any], kode_kompetensi: Optional[str] = None,
+                      cari: Optional[str] = None) -> Dict[str, Any]:
+    """Hierarki kompetensi -> sub -> indikator dengan bobot & porsi persen (dua desimal, terhadap total bobot
+    seluruh sub). Filter opsional: kode kompetensi dan kata kunci (nama kompetensi/sub atau teks indikator)."""
+    semua_sub = daftar_sub(instrumen)
+    total = sum(float(s.get('bobot') or 0) for s in semua_sub)
+    porsi = (lambda b: round(float(b or 0) / total * 100, 2) if total else None)
+    kata = (cari or '').strip().lower()
+    hasil = []
+    for k in instrumen.get('kompetensi') or []:
+        if kode_kompetensi and k.get('kode') != kode_kompetensi:
+            continue
+        sub = []
+        for s in k.get('sub') or []:
+            indikator = s.get('indikator') or []
+            if kata and not (_cocok(k.get('nama'), kata) or _cocok(s.get('nama'), kata) or _cocok(s.get('kode'), kata)):
+                indikator = [i for i in indikator if _cocok(i.get('teks'), kata)]
+                if not indikator:
+                    continue
+            sub.append({**s, 'indikator': indikator, 'porsi_persen': porsi(s.get('bobot'))})
+        if sub:
+            bobot_k = sum(float(x.get('bobot') or 0) for x in k.get('sub') or [])
+            hasil.append({'kode': k.get('kode'), 'nama': k.get('nama'), 'bobot': bobot_k, 'porsi_persen': porsi(bobot_k), 'sub': sub})
+    return {
+        'instrumen': {k: instrumen.get(k) for k in ('id', 'versi_template', 'revisi', 'is_active')},
+        'ringkasan': ringkas_instrumen(instrumen),
+        'total_bobot': round(total, 2),
+        'kompetensi': hasil,
+    }

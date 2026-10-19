@@ -99,3 +99,24 @@ def test_hanya_kepala_mengimpor(db):
     with pytest.raises(HTTPException) as e:
         _api(api.pratinjau_impor_api, sumber='template', berkas=None, user=GURU)
     assert e.value.detail['alasan'] == 'bukan_kepala'
+
+
+def test_daftar_kompetensi_dan_versi_tertentu(db):
+    p = _api(api.pratinjau_impor_api, sumber='template', berkas=None)
+    i1 = _api(api.terapkan_impor_api, TerapkanImporRequest(token=p['token']), Request())['instrumen']
+
+    semua = _api(api.daftar_kompetensi_api, 'aktif', None, None, user=GURU, syarat='anggota')
+    assert semua['ringkasan'] == {'kompetensi': 4, 'sub': 12, 'indikator': 60, 'skor_maks': 60}
+    assert semua['total_bobot'] == 12 and semua['kompetensi'][0]['porsi_persen'] == 25.0
+    assert semua['kompetensi'][0]['sub'][0]['porsi_persen'] == 8.33
+
+    satu = _api(api.daftar_kompetensi_api, i1['id'], '2', None, user=GURU, syarat='anggota')
+    assert [k['kode'] for k in satu['kompetensi']] == ['2']
+    cari = _api(api.daftar_kompetensi_api, 'aktif', None, 'membimbing rekan', user=GURU, syarat='anggota')
+    assert all(len(s['indikator']) == 1 and s['indikator'][0]['level'] == 5 for k in cari['kompetensi'] for s in k['sub'])
+    assert _api(api.daftar_kompetensi_api, 'aktif', None, 'tidak-ada-kata-ini', user=GURU, syarat='anggota')['kompetensi'] == []
+
+    assert _api(api.rincian_instrumen_api, i1['id'], user=GURU, syarat='anggota')['id'] == i1['id']
+    with pytest.raises(HTTPException) as e:
+        _api(api.rincian_instrumen_api, 'tidak-ada', user=GURU, syarat='anggota')
+    assert e.value.status_code == 404

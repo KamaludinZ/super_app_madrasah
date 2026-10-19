@@ -1,14 +1,17 @@
 """API instrumen PKG: baca instrumen aktif & daftar versi (anggota SK), impor dari template/unggahan (kepala)."""
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
 
 from core import db
 from pkg_audit import catat_audit_pkg
-from pkg_instrumen import daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau, terapkan_pratinjau
+from pkg_instrumen import (
+    ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
+    terapkan_pratinjau,
+)
 from pkg_instrumen_impor import BATAS_UKURAN_BERKAS, GalatImporInstrumen, pratinjau_dari_bytes, pratinjau_dari_template
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import TerapkanImporRequest
+from pkg_skema import POLA_ID, TerapkanImporRequest
 from pkg_template import TemplateTidakTersedia
 
 router = APIRouter()
@@ -65,3 +68,22 @@ async def terapkan_impor_api(data: TerapkanImporRequest, request: Request, akses
         'cocok_resmi': baru['cocok_resmi'], 'instrumen_sebelumnya': hasil['hasil']['instrumen_sebelumnya'],
     }, request=request)
     return {'instrumen': instrumen_tampil(baru), 'hasil': hasil['hasil']}
+
+
+# Rute literal (/aktif, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap parameter {instrumen_id}.
+@router.get("/pkg/instrumen/{instrumen_id}")
+async def rincian_instrumen_api(instrumen_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(anggota_sk)):
+    """Instrumen versi tertentu (mis. yang dirujuk lembar penilaian lama)."""
+    return instrumen_tampil(await ambil_instrumen(db, instrumen_id))
+
+
+@router.get("/pkg/instrumen/{instrumen_id}/kompetensi")
+async def daftar_kompetensi_api(
+    instrumen_id: str = Path(..., pattern=POLA_ID),
+    kompetensi: Optional[str] = Query(None, pattern=r'^\d{1,2}$'),
+    cari: Optional[str] = Query(None, max_length=100),
+    akses: Dict = Depends(anggota_sk),
+):
+    """Daftar kompetensi & indikator dengan bobot dan porsi persen; `instrumen_id` boleh 'aktif'.
+    Filter: `kompetensi` (kode) dan `cari` (nama kompetensi/sub atau teks indikator)."""
+    return daftar_kompetensi(await ambil_instrumen(db, instrumen_id), kompetensi, cari)
