@@ -11,6 +11,9 @@ Aturan:
     - SK aktif atau SK yang sudah punya lembar penilaian tidak dapat dihapus.
     - Anggota hanya akun guru aktif (PERAN_GURU_PKG); tenaga kependidikan & akun nonaktif ditolak.
     - Penilai yang sudah memiliki lembar penilaian atau masih memegang guru dalam pembagian tidak dapat dilepas.
+    - Snapshot identitas (nama, NIP/Peg ID, mapel dari jadwal semester periode) disalin ke `snapshot_anggota`
+      setiap kali anggota ditetapkan selama periode belum ditutup, agar cetak periode lalu tetap utuh walau
+      akun berubah atau dinonaktifkan.
 """
 import uuid
 from datetime import datetime, timezone
@@ -31,12 +34,38 @@ def _sekarang() -> str:
 
 
 async def identitas_akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
-    """{user_id: {nama, nip, mapel}} dari akun pengguna (mapel diisi saat snapshot periode)."""
+    """{user_id: {nama, nip, mapel}} dari akun pengguna saat ini (NIP, atau Peg ID bila NIP kosong; tanpa mapel)."""
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
-    akun = await db.users.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1}).to_list(len(ids))
-    return {u['id']: {'nama': u.get('full_name'), 'nip': u.get('nip_nuptk'), 'mapel': None} for u in akun}
+    akun = await db.users.find({'id': {'$in': ids}},
+                               {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, 'peg_id': 1}).to_list(len(ids))
+    return {u['id']: {'nama': u.get('full_name'), 'nip': u.get('nip_nuptk') or u.get('peg_id'), 'mapel': None} for u in akun}
+
+
+async def mapel_diampu(db, ids: List[str], semester_id: Optional[str]) -> Dict[str, str]:
+    """{guru_id: 'Mapel A, Mapel B'} dari jadwal mengajar terbit pada semester periode."""
+    if not ids or not semester_id:
+        return {}
+    jadwal = await db.schedules.find(
+        {'teacher_id': {'$in': ids}, 'semester_id': semester_id, 'is_published': {'$ne': False}},
+        {'_id': 0, 'teacher_id': 1, 'subject_id': 1},
+    ).to_list(10000)
+    subject_ids = list({j.get('subject_id') for j in jadwal if j.get('subject_id')})
+    nama = {m['id']: m.get('name') for m in await db.subjects.find(
+        {'id': {'$in': subject_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(subject_ids) or 1)}
+    per_guru: Dict[str, set] = {}
+    for j in jadwal:
+        if nama.get(j.get('subject_id')):
+            per_guru.setdefault(j['teacher_id'], set()).add(nama[j['subject_id']])
+    return {g: ', '.join(sorted(m)) for g, m in per_guru.items()}
+
+
+async def ambil_snapshot(db, ids: List[str], periode: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Snapshot identitas periode untuk `ids`: {id: {nama, nip, mapel}}."""
+    akun = await identitas_akun(db, ids)
+    mapel = await mapel_diampu(db, list(akun), (periode or {}).get('semester_id'))
+    return {i: {**ident, 'mapel': mapel.get(i)} for i, ident in akun.items()}
 
 
 async def sk_tampil_banyak(db, daftar: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -96,7 +125,7 @@ async def _nomor_unik(db, nomor: str, kecuali_id: Optional[str] = None) -> str:
 
 
 async def buat_sk(db, data: SkRequest, kepala: Dict[str, Any]) -> Dict[str, Any]:
-    await _periode_terbuka(db, data.periode_id)
+    periode = await _periode_terbuka(db, data.periode_id)
     kunci = await _nomor_unik(db, data.nomor_sk)
     ada_aktif = await db[KOLEKSI_SK].find_one({'periode_id': data.periode_id, 'is_active': True}, {'_id': 0, 'id': 1})
     sekarang = _sekarang()
@@ -105,7 +134,7 @@ async def buat_sk(db, data: SkRequest, kepala: Dict[str, Any]) -> Dict[str, Any]
         'nomor_sk': data.nomor_sk, 'nomor_sk_kunci': kunci, 'tanggal_sk': data.tanggal_sk, 'tentang': data.tentang,
         'periode_id': data.periode_id, 'ditetapkan_oleh': kepala.get('id'),
         'penilai_ids': [kepala['id']] if kepala.get('id') else [], 'dinilai_ids': [],
-        'snapshot_anggota': {},
+        'snapshot_anggota': await ambil_snapshot(db, [kepala['id']] if kepala.get('id') else [], periode),
         'is_active': not ada_aktif,  # SK pertama pada periode langsung aktif
         'created_at': sekarang, 'updated_at': sekarang,
     }
@@ -186,10 +215,19 @@ async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
     return akun
 
 
+async def _snapshot_anggota(db, sk: Dict[str, Any], penilai_ids: List[str], dinilai_ids: List[str],
+                            periode: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Snapshot terbaru seluruh anggota SK; anggota yang akunnya sudah tidak ada memakai snapshot lama."""
+    ids = list(dict.fromkeys([*penilai_ids, *dinilai_ids]))
+    baru = await ambil_snapshot(db, ids, periode)
+    lama = sk.get('snapshot_anggota') or {}
+    return {i: baru.get(i) or lama[i] for i in ids if baru.get(i) or lama.get(i)}
+
+
 async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str, Any]) -> Dict[str, Any]:
     """Tetapkan tim penilai SK. Kepala madrasah (pengubah & kepala yang sudah tercatat) selalu disertakan."""
     sk = await ambil_sk(db, sk_id)
-    await _periode_terbuka(db, sk['periode_id'])
+    periode = await _periode_terbuka(db, sk['periode_id'])
     lama = list(sk.get('penilai_ids') or [])
     akun_lama = await db.users.find({'id': {'$in': lama}}, {'_id': 0, 'id': 1, 'roles': 1}).to_list(len(lama) or 1)
     kepala_ids = [kepala['id']] + [u['id'] for u in akun_lama if 'kepala_sekolah' in (u.get('roles') or [])]
@@ -204,7 +242,8 @@ async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str,
             {'periode_id': sk['periode_id'], 'penilai_id': {'$in': dilepas}}, {'_id': 0, 'guru_dinilai_ids': 1}).to_list(len(dilepas))
         if any(t.get('guru_dinilai_ids') for t in tugas):
             raise HTTPException(409, 'Pindahkan dahulu guru yang dibagikan kepada penilai yang akan dilepas.')
-    perubahan = {'penilai_ids': baru, 'updated_at': _sekarang()}
+    perubahan = {'penilai_ids': baru, 'updated_at': _sekarang(),
+                 'snapshot_anggota': await _snapshot_anggota(db, sk, baru, sk.get('dinilai_ids') or [], periode)}
     await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
     return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}
 
@@ -213,7 +252,7 @@ async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str]) -> Dict[str, Any]
     """Tetapkan guru yang dinilai pada SK. Kepala madrasah ditolak (bukan objek penilaian); guru yang dilepas
     dikeluarkan dari pembagian penilai, kecuali sudah memiliki lembar penilaian."""
     sk = await ambil_sk(db, sk_id)
-    await _periode_terbuka(db, sk['periode_id'])
+    periode = await _periode_terbuka(db, sk['periode_id'])
     baru = list(dict.fromkeys(dinilai_ids))
     akun = await validasi_akun_guru(db, baru)
     kepala = [akun[i].get('full_name') or i for i in baru if 'kepala_sekolah' in (akun[i].get('roles') or [])]
@@ -230,6 +269,7 @@ async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str]) -> Dict[str, Any]
             sisa = [g for g in t.get('guru_dinilai_ids') or [] if g not in dilepas]
             if len(sisa) != len(t.get('guru_dinilai_ids') or []):
                 await db[KOLEKSI_PENUGASAN].update_one({'id': t['id']}, {'$set': {'guru_dinilai_ids': sisa, 'updated_at': _sekarang()}})
-    perubahan = {'dinilai_ids': baru, 'updated_at': _sekarang()}
+    perubahan = {'dinilai_ids': baru, 'updated_at': _sekarang(),
+                 'snapshot_anggota': await _snapshot_anggota(db, sk, sk.get('penilai_ids') or [], baru, periode)}
     await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
     return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}

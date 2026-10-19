@@ -185,3 +185,37 @@ def test_atur_guru_dinilai(db):
     with pytest.raises(HTTPException) as e:
         _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=[]), Request())
     assert e.value.status_code == 409
+
+
+def test_snapshot_identitas_periode(db):
+    _users_guru(db)
+    db['users'].docs[2]['peg_id'] = 'PEG-9'  # Ani tanpa NIP -> Peg ID
+    db['pkg_periode'].docs[0]['semester_id'] = 'sem1'
+    db['subjects'] = Koleksi([{'id': 'm1', 'name': 'Matematika'}, {'id': 'm2', 'name': 'IPA'}])
+    db['schedules'] = Koleksi([
+        {'teacher_id': 'g1', 'subject_id': 'm1', 'semester_id': 'sem1'},
+        {'teacher_id': 'g1', 'subject_id': 'm2', 'semester_id': 'sem1'},
+        {'teacher_id': 'g1', 'subject_id': 'm2', 'semester_id': 'sem-lain'},
+        {'teacher_id': 'g2', 'subject_id': 'm2', 'semester_id': 'sem1', 'is_published': False},
+    ])
+    sk = _api(api.buat_sk_api, _sk(), Request())
+    assert sk['penilai'][0]['nama'] == 'Kepala'
+    _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=['g1']), Request())
+    _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1', 'g2']), Request())
+    snap = next(d for d in db['pkg_sk'].docs if d['id'] == sk['id'])['snapshot_anggota']
+    assert snap['g1'] == {'nama': 'Budi', 'nip': '222', 'mapel': 'IPA, Matematika'}
+    assert snap['g2'] == {'nama': 'Ani', 'nip': 'PEG-9', 'mapel': None}  # jadwal belum terbit tidak dihitung
+    assert set(snap) == {'kep', 'g1', 'g2'}
+
+    # Akun berubah/dihapus setelahnya: tampilan SK tetap memakai identitas periode.
+    db['users'].docs = [u for u in db['users'].docs if u['id'] != 'g2']
+    db['users'].docs[1]['full_name'] = 'Budi Baru'
+    tampil = _api(api.rincian_sk_api, sk['id'])
+    assert [a['nama'] for a in tampil['dinilai']] == ['Budi', 'Ani'] and tampil['dinilai'][0]['mapel'] == 'IPA, Matematika'
+
+    # Pembagian menyalin snapshot guru ke dokumen penilai.
+    from pkg_skema import PenugasanRequest
+    db['pkg_sk'].docs[0]['is_active'] = True
+    _api(api.simpan_pembagian_api, PenugasanRequest(penugasan={'g1': 'kep', 'g2': 'g1'}), Request())
+    tugas_g1 = next(d for d in db['pkg_penugasan'].docs if d['penilai_id'] == 'g1')
+    assert tugas_g1['snapshot_guru'] == {'g2': {'nama': 'Ani', 'nip': 'PEG-9', 'mapel': None}}

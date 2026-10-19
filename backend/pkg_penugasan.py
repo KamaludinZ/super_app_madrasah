@@ -1,6 +1,6 @@
 """Service pembagian jatah penilaian (kepala madrasah): petakan tiap guru yang dinilai ke satu penilai pada SK aktif
 periode berjalan. Disimpan per penilai di pkg_penugasan {periode_id, sk_id, penilai_id, guru_dinilai_ids,
-jumlah_jatah, ...supervisi}; field supervisi tidak disentuh di sini.
+jumlah_jatah, snapshot_guru, ...supervisi}; field supervisi tidak disentuh di sini.
 
 Bentuk untuk API (GET /pkg/penugasan):
     {periode, sk: {id, nomor_sk}, penilai: [anggota], dinilai: [anggota], penugasan: {guru_id: penilai_id},
@@ -76,6 +76,8 @@ async def simpan_pembagian(db, data: PenugasanRequest) -> Dict[str, Any]:
 
     lama = {d['penilai_id']: d for d in await db[KOLEKSI_PENUGASAN].find({'periode_id': periode['id']}, {'_id': 0}).to_list(500)}
     sekarang = _sekarang()
+    # Identitas guru disalin dari snapshot periode di SK (dipakai daftar tugas & cetak periode ini).
+    snapshot = sk.get('snapshot_anggota') or {}
     perubahan = []
     penilai_ids = list(dict.fromkeys([*(sk.get('penilai_ids') or []), *lama.keys()]))
     for pid in penilai_ids:
@@ -87,7 +89,8 @@ async def simpan_pembagian(db, data: PenugasanRequest) -> Dict[str, Any]:
             continue
         await db[KOLEKSI_PENUGASAN].update_one(
             {'periode_id': periode['id'], 'penilai_id': pid},
-            {'$set': {'sk_id': sk['id'], 'guru_dinilai_ids': guru, 'jumlah_jatah': jatah, 'updated_at': sekarang},
+            {'$set': {'sk_id': sk['id'], 'guru_dinilai_ids': guru, 'jumlah_jatah': jatah, 'updated_at': sekarang,
+                      'snapshot_guru': {g: snapshot[g] for g in guru if g in snapshot}},
              '$setOnInsert': {'id': str(uuid.uuid4()), 'supervisi_selesai': False}},
             upsert=True,
         )
