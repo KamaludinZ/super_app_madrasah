@@ -5,9 +5,12 @@ Bentuk untuk API (sama dengan kontrak frontend lib/pkgInstrumen):
                  kompetensi: [{kode, nama, sub: [{kode, nama, bobot, indikator: [{level, teks}]}]}]}
     versi     = {id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, dipakai_penilaian}
 """
+import logging
 from typing import Any, Dict, List, Optional
 
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN
+
+logger = logging.getLogger('matsandatama')
 
 KUNCI_TAMPIL = ('id', 'versi_template', 'revisi', 'checksum', 'cocok_resmi', 'sumber', 'nama_berkas', 'is_active',
                 'diimpor_pada', 'revisi_dari')
@@ -47,4 +50,21 @@ async def daftar_versi(db) -> List[Dict[str, Any]]:
         dipakai = await db[KOLEKSI_PENILAIAN].count_documents({'instrumen_id': d['id']})
         hasil.append({k: d.get(k) for k in ('id', 'versi_template', 'revisi', 'checksum', 'cocok_resmi', 'is_active',
                                              'diimpor_pada')} | {'dipakai_penilaian': dipakai})
+    return hasil
+
+
+async def periksa_instrumen_startup(db, hasil_template: Dict[str, Any]) -> Dict[str, Any]:
+    """Saat startup: peringatkan bila belum ada instrumen aktif padahal template instrumen tersedia, atau instrumen
+    aktif berasal dari versi template lain. Hasil: {'aktif': bool, 'versi_aktif', 'versi_template', 'sejalan'}."""
+    aktif = await db[KOLEKSI_INSTRUMEN].find_one({'is_active': True}, {'_id': 0, 'versi_template': 1, 'revisi': 1})
+    berkas = next((b for b in hasil_template.get('berkas') or [] if b.get('jenis') == 'instrumen'), {})
+    versi_template = berkas.get('versi') or hasil_template.get('versi_template')
+    hasil = {'aktif': bool(aktif), 'versi_aktif': (aktif or {}).get('versi_template'), 'versi_template': versi_template,
+             'sejalan': bool(aktif) and str(aktif.get('versi_template')) == str(versi_template)}
+    if not aktif and berkas.get('ada'):
+        logger.warning('[pkg] Belum ada instrumen PKG aktif; kepala madrasah perlu mengimpor dari template resmi '
+                       'sebelum lembar penilaian dapat dibuka.')
+    elif aktif and not hasil['sejalan']:
+        logger.warning(f"[pkg] Instrumen aktif memakai template {hasil['versi_aktif']} (rev {aktif.get('revisi')}), "
+                       f"sedangkan template resmi di server versi {versi_template}.")
     return hasil

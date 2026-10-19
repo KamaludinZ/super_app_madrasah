@@ -81,3 +81,21 @@ def test_ringkasan_dan_daftar_versi():
     versi = asyncio.run(pkg_instrumen.daftar_versi(db))
     assert [(v['id'], v['dipakai_penilaian']) for v in versi] == [('i1', 1), ('i0', 2)]
     assert 'kompetensi' not in versi[0]
+
+
+def test_periksa_instrumen_startup(caplog):
+    import logging
+    template = {'versi_template': '2026', 'berkas': [{'jenis': 'instrumen', 'versi': '2026', 'ada': True}]}
+    with caplog.at_level(logging.WARNING, logger='matsandatama'):
+        kosong = asyncio.run(pkg_instrumen.periksa_instrumen_startup(Db(), template))
+    assert kosong == {'aktif': False, 'versi_aktif': None, 'versi_template': '2026', 'sejalan': False}
+    assert 'Belum ada instrumen PKG aktif' in caplog.text
+
+    caplog.clear()
+    db = Db({'pkg_instrumen': Koleksi([{'id': 'i0', 'versi_template': '2025', 'revisi': 2, 'is_active': True}])})
+    with caplog.at_level(logging.WARNING, logger='matsandatama'):
+        lama = asyncio.run(pkg_instrumen.periksa_instrumen_startup(db, template))
+    assert lama['sejalan'] is False and 'template 2025 (rev 2)' in caplog.text
+
+    db['pkg_instrumen'].docs[0]['versi_template'] = '2026'
+    assert asyncio.run(pkg_instrumen.periksa_instrumen_startup(db, template))['sejalan'] is True
