@@ -120,3 +120,42 @@ def test_daftar_kompetensi_dan_versi_tertentu(db):
     with pytest.raises(HTTPException) as e:
         _api(api.rincian_instrumen_api, 'tidak-ada', user=GURU, syarat='anggota')
     assert e.value.status_code == 404
+
+
+def _ubah(nama='Nama baru', bobot=2.5, alasan='penyesuaian juknis'):
+    from pkg_skema import UbahSubInstrumenRequest
+    return UbahSubInstrumenRequest(nama=nama, bobot=bobot, alasan=alasan,
+                                   indikator=[{'level': i, 'teks': f'Indikator baru {i}'} for i in range(1, 6)])
+
+
+def test_ubah_sub_instrumen(db):
+    p = _api(api.pratinjau_impor_api, sumber='template', berkas=None)
+    i1 = _api(api.terapkan_impor_api, TerapkanImporRequest(token=p['token']), Request())['instrumen']
+
+    # Belum dipakai penilaian: diubah langsung, revisi tetap.
+    hasil = _api(api.ubah_sub_api, _ubah(), Request(), kode='1.2')
+    sub = hasil['kompetensi'][0]['sub'][1]
+    assert (hasil['id'], hasil['revisi'], hasil['cocok_resmi']) == (i1['id'], 1, False)
+    assert (sub['nama'], sub['bobot'], sub['indikator'][4]['teks']) == ('Nama baru', 2.5, 'Indikator baru 5')
+    log = db['pkg_audit_log'].docs[-1]
+    assert log['aksi'] == 'instrumen_ubah' and log['metadata']['sebelum']['nama'] != 'Nama baru'
+    assert log['metadata']['sesudah']['bobot'] == 2.5 and log['metadata']['revisi_baru'] is False
+
+    with pytest.raises(HTTPException) as e:  # tanpa perubahan
+        _api(api.ubah_sub_api, _ubah(), Request(), kode='1.2')
+    assert e.value.status_code == 400
+    with pytest.raises(HTTPException) as e:
+        _api(api.ubah_sub_api, _ubah(), Request(), kode='9.9')
+    assert e.value.status_code == 404
+
+    # Sudah dipakai lembar: revisi baru, instrumen lama utuh.
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'instrumen_id': i1['id']}])
+    baru = _api(api.ubah_sub_api, _ubah(nama='Nama revisi 2'), Request(), kode='1.2')
+    assert baru['id'] != i1['id'] and baru['revisi'] == 2 and baru['revisi_dari'] == i1['id']
+    lama = next(d for d in db['pkg_instrumen'].docs if d['id'] == i1['id'])
+    assert lama['is_active'] is False and lama['kompetensi'][0]['sub'][1]['nama'] == 'Nama baru'
+    assert db['pkg_audit_log'].docs[-1]['metadata']['revisi_baru'] is True
+
+    with pytest.raises(HTTPException) as e:
+        _api(api.ubah_sub_api, _ubah(), Request(), kode='1.1', user=GURU)
+    assert e.value.detail['alasan'] == 'bukan_kepala'

@@ -7,11 +7,11 @@ from core import db
 from pkg_audit import catat_audit_pkg
 from pkg_instrumen import (
     ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
-    terapkan_pratinjau,
+    terapkan_pratinjau, ubah_sub_instrumen,
 )
 from pkg_instrumen_impor import BATAS_UKURAN_BERKAS, GalatImporInstrumen, pratinjau_dari_bytes, pratinjau_dari_template
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import POLA_ID, TerapkanImporRequest
+from pkg_skema import POLA_ID, POLA_KODE_SUB, TerapkanImporRequest, UbahSubInstrumenRequest
 from pkg_template import TemplateTidakTersedia
 
 router = APIRouter()
@@ -68,6 +68,20 @@ async def terapkan_impor_api(data: TerapkanImporRequest, request: Request, akses
         'cocok_resmi': baru['cocok_resmi'], 'instrumen_sebelumnya': hasil['hasil']['instrumen_sebelumnya'],
     }, request=request)
     return {'instrumen': instrumen_tampil(baru), 'hasil': hasil['hasil']}
+
+
+@router.put("/pkg/instrumen/aktif/sub/{kode}")
+async def ubah_sub_api(data: UbahSubInstrumenRequest, request: Request, kode: str = Path(..., pattern=POLA_KODE_SUB),
+                       akses: Dict = Depends(kepala)):
+    """Ubah nama, bobot, dan teks indikator satu sub-kompetensi instrumen aktif (alasan wajib). Instrumen yang sudah
+    dipakai lembar penilaian disimpan sebagai revisi baru agar penilaian lama tetap utuh."""
+    hasil = await ubah_sub_instrumen(db, kode, data, akses['user'])
+    baru = hasil['instrumen']
+    await catat_audit_pkg(db, 'instrumen_ubah', akses['user'], {
+        'instrumen_id': baru['id'], 'revisi': baru['revisi'], 'revisi_baru': hasil['revisi_baru'], 'kode_sub': kode,
+        'alasan': data.alasan, 'sebelum': hasil['sebelum'], 'sesudah': hasil['sesudah'],
+    }, request=request)
+    return instrumen_tampil(baru)
 
 
 # Rute literal (/aktif, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap parameter {instrumen_id}.

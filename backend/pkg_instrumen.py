@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PRATINJAU_IMPOR
+from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PRATINJAU_IMPOR, UbahSubInstrumenRequest
 
 logger = logging.getLogger('matsandatama')
 
@@ -163,3 +163,36 @@ def daftar_kompetensi(instrumen: Dict[str, Any], kode_kompetensi: Optional[str] 
         'total_bobot': round(total, 2),
         'kompetensi': hasil,
     }
+
+
+async def ubah_sub_instrumen(db, kode: str, data: UbahSubInstrumenRequest, kepala: Dict[str, Any]) -> Dict[str, Any]:
+    """Ubah satu sub-kompetensi instrumen aktif. Bila instrumen sudah dipakai lembar penilaian, perubahan disimpan
+    sebagai revisi baru (instrumen lama tetap utuh untuk lembar lama); selain itu diubah langsung.
+    Hasil: {'instrumen': dok, 'sebelum': sub lama, 'sesudah': sub baru, 'revisi_baru': bool}."""
+    lama = await instrumen_aktif(db)
+    if not lama:
+        raise HTTPException(409, 'Belum ada instrumen aktif.')
+    sub_lama = next((s for s in daftar_sub(lama) if s.get('kode') == kode), None)
+    if not sub_lama:
+        raise HTTPException(404, f'Sub-kompetensi {kode} tidak ditemukan pada instrumen aktif.')
+    sub_baru = {**sub_lama, 'nama': data.nama, 'bobot': data.bobot,
+                'indikator': [{'level': i.level, 'teks': i.teks} for i in data.indikator]}
+    if sub_baru == sub_lama:
+        raise HTTPException(400, 'Tidak ada perubahan pada sub-kompetensi.')
+    kompetensi = [{**k, 'sub': [sub_baru if s.get('kode') == kode else s for s in k.get('sub') or []]}
+                  for k in lama.get('kompetensi') or []]
+    sekarang = datetime.now(timezone.utc).isoformat()
+    dipakai = await db[KOLEKSI_PENILAIAN].count_documents({'instrumen_id': lama['id']})
+    if dipakai:
+        revisi = await db[KOLEKSI_INSTRUMEN].find({'versi_template': lama['versi_template']}, {'_id': 0, 'revisi': 1}).to_list(1000)
+        baru = {**lama, 'id': str(uuid.uuid4()), 'revisi': max([r.get('revisi') or 0 for r in revisi], default=0) + 1,
+                'revisi_dari': lama['id'], 'cocok_resmi': False, 'alasan_perubahan': data.alasan, 'kompetensi': kompetensi,
+                'diimpor_oleh': kepala.get('id'), 'diimpor_pada': sekarang, 'created_at': sekarang, 'updated_at': sekarang,
+                'is_active': True}
+        await db[KOLEKSI_INSTRUMEN].update_one({'id': lama['id']}, {'$set': {'is_active': False, 'updated_at': sekarang}})
+        await db[KOLEKSI_INSTRUMEN].insert_one(dict(baru))
+    else:
+        perubahan = {'kompetensi': kompetensi, 'cocok_resmi': False, 'alasan_perubahan': data.alasan, 'updated_at': sekarang}
+        await db[KOLEKSI_INSTRUMEN].update_one({'id': lama['id']}, {'$set': perubahan})
+        baru = {**lama, **perubahan}
+    return {'instrumen': baru, 'sebelum': sub_lama, 'sesudah': sub_baru, 'revisi_baru': bool(dipakai)}
