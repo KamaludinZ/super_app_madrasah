@@ -1,5 +1,5 @@
 """API endpoints for Tata Tertib (Discipline & Code of Conduct) Management."""
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
@@ -1019,10 +1019,8 @@ async def _isian_input_tatib(req: InputTatibRequest, jenis_lama_id: Optional[str
     }
 
 
-@router.post("/tatib/input")
-async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_input_tatib)):
-    """Simpan satu pencatatan dari Input Tata Tertib. Poin selalu mengikuti master jenis (server)."""
-    hasil = await _isian_input_tatib(req)
+async def _simpan_catatan_input(hasil: Dict, user: Dict) -> Dict:
+    """Simpan catatan hasil `_isian_input_tatib` dan kirim notifikasinya (tanpa log audit)."""
     sekarang = datetime.utcnow().isoformat()
     doc = {
         'id': str(uuid.uuid4()),
@@ -1036,10 +1034,162 @@ async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_
     }
     await db.tatib_penanganan.insert_one(doc)
     spawn(_notify_tatib(dict(doc), hasil['siswa'], doc['poin']))
+    doc.pop('_id', None)
+    return doc
+
+
+@router.post("/tatib/input")
+async def simpan_input_tatib(req: InputTatibRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Simpan satu pencatatan dari Input Tata Tertib. Poin selalu mengikuti master jenis (server)."""
+    doc = await _simpan_catatan_input(await _isian_input_tatib(req), user)
     await log_audit(user, 'tatib_input_create',
                     f"Input tatib {doc['tatib_kode']} ({doc['poin']}) untuk {doc['siswa_nama']} · {doc['asal_input']}")
-    doc.pop('_id', None)
     return catatan_input_tampil(doc)
+
+
+# ------------------------------------------------------------
+# IMPOR INPUT TATA TERTIB DARI BERKAS
+# Browser membaca berkas (Nama, Kode Aturan, Tanggal Kejadian, Asal Input, Keterangan), mencocokkan nama ke
+# siswa, lalu mengirim baris per batch agar progres terlihat. Server memvalidasi ulang tiap baris dan
+# mengembalikan hasil per baris: berhasil | tanpa_perubahan (catatan sama sudah ada) | gagal + keterangan.
+# ------------------------------------------------------------
+
+MAKS_BARIS_IMPOR = 100
+BULAN_IMPOR = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'mei': 5, 'may': 5, 'jun': 6, 'jul': 7, 'agu': 8, 'agt': 8,
+               'aug': 8, 'sep': 9, 'okt': 10, 'oct': 10, 'nov': 11, 'des': 12, 'dec': 12}
+
+
+class BarisImporTatib(BaseModel):
+    baris: int  # nomor baris di berkas (untuk laporan)
+    data: Dict[str, Any] = {}  # nama, siswa_id (hasil pencocokan), kode_aturan, tanggal, asal_input, keterangan
+
+
+class ImporInputTatibRequest(BaseModel):
+    baris: List[BarisImporTatib]
+    semester_id: Optional[str] = None
+    tahun_takwim_id: Optional[str] = None
+
+
+def tanggal_impor(teks: Optional[str]) -> Optional[str]:
+    """Tanggal dari berkas -> YYYY-MM-DD. Menerima YYYY-MM-DD, DD/MM/YYYY (juga - atau .), dan '5 Okt 2026'."""
+    t = ' '.join((teks or '').split()).lower()
+    t = re.sub(r'^[a-z]+,\s*', '', t)  # nama hari di depan ("Senin, 5 Oktober 2026")
+    m = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})', t)
+    if m:
+        y, b, d = int(m[1]), int(m[2]), int(m[3])
+    elif (m := re.match(r'^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$', t)):
+        d, b, y = int(m[1]), int(m[2]), int(m[3])
+        y += 2000 if y < 100 else 0
+    elif (m := re.match(r'^(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(\d{4})$', t)) and m[2] in BULAN_IMPOR:
+        d, b, y = int(m[1]), BULAN_IMPOR[m[2]], int(m[3])
+    else:
+        return None
+    try:
+        return date(y, b, d).isoformat()
+    except ValueError:
+        return None
+
+
+def asal_input_impor(teks: Optional[str]) -> str:
+    """Asal input dari berkas disamakan ke daftar baku tanpa beda huruf/spasi; selain itu dikembalikan apa adanya."""
+    kunci = kunci_nama(teks)
+    return next((a for a in ASAL_INPUT if kunci_nama(a) == kunci), (teks or '').strip())
+
+
+async def _siswa_bernama(nama: str) -> List[Dict]:
+    """Siswa aktif yang namanya sama persis (tanpa beda huruf/spasi) — dipakai bila browser tidak mengirim siswa_id."""
+    pola = r'^\s*' + r'\s+'.join(re.escape(k) for k in nama.split()) + r'\s*$'
+    return await db.users.find(
+        {'roles': 'siswa', 'full_name': {'$regex': pola, '$options': 'i'},
+         'mutation_type': {'$ne': 'keluar'}, 'is_active': {'$ne': False}},
+        {'_id': 0, 'id': 1, 'full_name': 1},
+    ).to_list(10)
+
+
+def _kolom_galat(pesan: str) -> str:
+    """Kolom berkas yang bermasalah menurut pesan validasi server."""
+    p = pesan.lower()
+    for kata, kolom in (('tanggal', 'Tanggal Kejadian'), ('asal input', 'Asal Input'), ('keterangan', 'Keterangan'),
+                        ('siswa', 'Nama'), ('jenis', 'Kode Aturan')):
+        if kata in p:
+            return kolom
+    return '-'
+
+
+async def _impor_satu_baris(b: BarisImporTatib, req: ImporInputTatibRequest, user: Dict) -> Dict:
+    d = {k: ('' if v is None else str(v)).strip() for k, v in (b.data or {}).items()}
+    nama = ' '.join(d.get('nama', '').split())
+    hasil = {'baris': b.baris, 'identitas': nama or '-'}
+
+    def gagal(kolom: str, pesan: str) -> Dict:
+        return {**hasil, 'status': 'gagal', 'kolom': kolom, 'pesan': pesan}
+
+    siswa_id = d.get('siswa_id')
+    if not siswa_id:
+        if not nama:
+            return gagal('Nama', 'Nama siswa kosong')
+        cocok = await _siswa_bernama(nama)
+        if not cocok:
+            return gagal('Nama', f"Siswa bernama '{nama}' tidak ditemukan")
+        if len(cocok) > 1:
+            return gagal('Nama', f"Nama '{nama}' dimiliki {len(cocok)} siswa; pilih siswanya di pratinjau impor")
+        siswa_id = cocok[0]['id']
+
+    kode = normalisasi_kode(d.get('kode_aturan'))
+    if not kode:
+        return gagal('Kode Aturan', 'Kode aturan kosong')
+    jenis = await db.tatib_aturan.find_one(
+        {'$or': [{'kode_aturan': kode},
+                 {'kode_aturan': {'$exists': False}, 'kode': {'$regex': f'^{re.escape(kode)}$', '$options': 'i'}}]},
+        {'_id': 0, 'id': 1})
+    if not jenis:
+        return gagal('Kode Aturan', f"Kode aturan '{kode}' tidak terdaftar di Master Jenis Pelanggaran")
+
+    if not d.get('tanggal'):
+        return gagal('Tanggal Kejadian', 'Tanggal kejadian kosong')
+    tanggal = tanggal_impor(d['tanggal'])
+    if not tanggal:
+        return gagal('Tanggal Kejadian', f"Tanggal '{d['tanggal']}' tidak dikenali (gunakan DD/MM/YYYY)")
+
+    try:
+        isian = await _isian_input_tatib(InputTatibRequest(
+            siswa_id=siswa_id, jenis_id=jenis['id'], tanggal=tanggal, asal_input=asal_input_impor(d.get('asal_input')),
+            keterangan=d.get('keterangan') or None, semester_id=req.semester_id, tahun_takwim_id=req.tahun_takwim_id,
+        ))
+    except HTTPException as e:
+        return gagal(_kolom_galat(str(e.detail)), str(e.detail))
+
+    c = isian['isian']
+    hasil['identitas'] = c['siswa_nama'] + (f" ({c['siswa_kelas']})" if c.get('siswa_kelas') else '')
+    ringkas = f"{c['tatib_kode']} · {c['tatib_nama']} ({c['poin']:+d})"
+    # Impor ulang berkas yang sama tidak menggandakan catatan.
+    sama = await db.tatib_penanganan.find_one({
+        'siswa_id': siswa_id, 'tanggal': c['tanggal'], 'asal_input': c['asal_input'], 'keterangan': c['keterangan'],
+        '$or': [{'jenis_id': c['jenis_id']}, {'tatib_id': c['jenis_id']}],
+    }, {'_id': 0, 'id': 1})
+    if sama:
+        return {**hasil, 'status': 'tanpa_perubahan', 'kolom': '-', 'pesan': f'Sudah tercatat sebelumnya, dilewati: {ringkas}'}
+    doc = await _simpan_catatan_input(isian, user)
+    return {**hasil, 'status': 'berhasil', 'kolom': '-', 'pesan': f'Tercatat {ringkas}', 'catatan_id': doc['id']}
+
+
+@router.post("/tatib/input/impor")
+async def impor_input_tatib(req: ImporInputTatibRequest, user: Dict = Depends(wajib_input_tatib)):
+    """Impor satu batch baris pencatatan dari berkas -> {hasil: [{baris, identitas, status, kolom, pesan}]}.
+    Tiap baris diproses terpisah: baris gagal tidak menghentikan baris lain."""
+    if len(req.baris) > MAKS_BARIS_IMPOR:
+        raise HTTPException(413, f"Maksimal {MAKS_BARIS_IMPOR} baris per kiriman")
+    hasil = []
+    for b in req.baris:
+        try:
+            hasil.append(await _impor_satu_baris(b, req, user))
+        except Exception:  # noqa: BLE001 — satu baris rusak tidak boleh menggagalkan seluruh batch
+            hasil.append({'baris': b.baris, 'identitas': (b.data or {}).get('nama') or '-', 'status': 'gagal', 'kolom': '-',
+                          'pesan': 'Kesalahan server saat menyimpan baris ini'})
+    jumlah = {st: sum(1 for h in hasil if h['status'] == st) for st in ('berhasil', 'tanpa_perubahan', 'gagal')}
+    await log_audit(user, 'tatib_input_impor',
+                    f"Impor input tatib: {jumlah['berhasil']} berhasil, {jumlah['tanpa_perubahan']} sudah ada, {jumlah['gagal']} gagal")
+    return {'hasil': hasil}
 
 
 @router.get("/tatib/input/terbaru")

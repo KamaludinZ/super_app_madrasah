@@ -703,3 +703,94 @@ async def test_saldo_dan_riwayat_poin_siswa_struktur_baru(db, data_input, monkey
     # pimpinan melihat poin siswa yang sama lewat /tatib/poin/siswa/{id}
     lihat = await poin_api.poin_siswa('s1', user={'id': 'k', 'roles': ['kepala_sekolah'], 'active_role': 'kepala_sekolah'})
     assert lihat['saldo'] == 2 and len(lihat['records']) == 3
+
+
+# ------------------------------------------------------------
+# Impor input tata tertib dari berkas (POST /tatib/input/impor)
+# ------------------------------------------------------------
+
+def _impor(*baris, **isian):
+    return api.ImporInputTatibRequest(baris=[api.BarisImporTatib(baris=i + 2, data=d) for i, d in enumerate(baris)], **isian)
+
+
+def _baris(**isian):
+    return {'nama': 'Ahmad', 'siswa_id': 's1', 'kode_aturan': 'DIS-01', 'tanggal': '2026-10-01', 'asal_input': 'Razia', **isian}
+
+
+@pytest.mark.parametrize('teks,hasil', [
+    ('2026-10-05', '2026-10-05'), ('05/10/2026', '2026-10-05'), ('5-10-2026', '2026-10-05'), ('05.10.26', '2026-10-05'),
+    ('5 Oktober 2026', '2026-10-05'), ('Senin, 5 Okt 2026', '2026-10-05'), ('5 Agustus 2026', '2026-08-05'),
+    ('31/02/2026', None), ('10/2026', None), ('kemarin', None), ('', None),
+])
+def test_tanggal_impor(teks, hasil):
+    assert api.tanggal_impor(teks) == hasil
+
+
+async def test_impor_baris_dirapikan_dan_tersimpan(db, data_input):
+    r = await api.impor_input_tatib(_impor(
+        _baris(kode_aturan=' dis-01 ', tanggal='01/10/2026', asal_input='  razia ', keterangan=' telat apel '),
+        _baris(kode_aturan='AKH-01', asal_input='IBADAH', semester='x'),
+    ), PETUGAS)
+    a, b = r['hasil']
+    assert (a['baris'], a['status'], a['identitas'], a['kolom']) == (2, 'berhasil', 'Ahmad (VII A)', '-')
+    assert 'DIS-01' in a['pesan'] and '(-5)' in a['pesan'] and a['catatan_id']
+    assert b['status'] == 'berhasil' and '(+10)' in b['pesan']
+    c = await db.tatib_penanganan.find_one({'id': a['catatan_id']}, {'_id': 0})
+    assert (c['tanggal'], c['asal_input'], c['keterangan'], c['poin'], c['petugas_nama']) == ('2026-10-01', 'Razia', 'telat apel', -5, 'Guru Tatib')
+
+
+async def test_impor_cari_siswa_dari_nama_bila_tanpa_siswa_id(db, data_input):
+    await db.users.insert_many([
+        {'id': 's2', 'roles': ['siswa'], 'full_name': 'Budi Santoso'},
+        {'id': 's3', 'roles': ['siswa'], 'full_name': 'Citra Dewi'},
+        {'id': 's4', 'roles': ['siswa'], 'full_name': 'citra  dewi'},
+        {'id': 's5', 'roles': ['siswa'], 'full_name': 'Dodi Keluar', 'mutation_type': 'keluar'},
+    ])
+    r = await api.impor_input_tatib(_impor(
+        _baris(siswa_id=None, nama='  budi   SANTOSO '),
+        _baris(siswa_id='', nama='Citra Dewi'),
+        _baris(siswa_id=None, nama='Dodi Keluar'),
+        _baris(siswa_id=None, nama='Eka'),
+        _baris(siswa_id=None, nama=' '),
+    ), PETUGAS)
+    st = [(h['status'], h['kolom']) for h in r['hasil']]
+    assert st == [('berhasil', '-'), ('gagal', 'Nama'), ('gagal', 'Nama'), ('gagal', 'Nama'), ('gagal', 'Nama')]
+    assert r['hasil'][0]['identitas'] == 'Budi Santoso'
+    assert '2 siswa' in r['hasil'][1]['pesan'] and 'tidak ditemukan' in r['hasil'][3]['pesan'] and 'kosong' in r['hasil'][4]['pesan']
+    assert await db.tatib_penanganan.count_documents({}) == 1
+
+
+@pytest.mark.parametrize('isian,kolom,pesan', [
+    ({'kode_aturan': ''}, 'Kode Aturan', 'kosong'),
+    ({'kode_aturan': 'XYZ-99'}, 'Kode Aturan', 'tidak terdaftar'),
+    ({'kode_aturan': 'dis-09'}, 'Kode Aturan', 'tidak aktif'),
+    ({'tanggal': ''}, 'Tanggal Kejadian', 'kosong'),
+    ({'tanggal': '31/02/2026'}, 'Tanggal Kejadian', 'tidak dikenali'),
+    ({'tanggal': '01/01/2999'}, 'Tanggal Kejadian', 'melewati hari ini'),
+    ({'asal_input': 'Lainnya'}, 'Asal Input', 'Asal input'),
+    ({'asal_input': None}, 'Asal Input', 'Asal input'),
+    ({'keterangan': 'x' * 501}, 'Keterangan', 'maksimal'),
+    ({'siswa_id': 'tidak-ada'}, 'Nama', 'Siswa tidak ditemukan'),
+])
+async def test_impor_baris_gagal_dengan_keterangan_tanpa_menghentikan_baris_lain(db, data_input, isian, kolom, pesan):
+    r = await api.impor_input_tatib(_impor(_baris(**isian), _baris()), PETUGAS)
+    gagal, lain = r['hasil']
+    assert (gagal['status'], gagal['kolom']) == ('gagal', kolom) and pesan in gagal['pesan']
+    assert lain['status'] == 'berhasil'
+    assert await db.tatib_penanganan.count_documents({}) == 1
+
+
+async def test_impor_ulang_tidak_menggandakan_catatan(db, data_input):
+    pertama = await api.impor_input_tatib(_impor(_baris(keterangan='x'), _baris()), PETUGAS)
+    assert [h['status'] for h in pertama['hasil']] == ['berhasil', 'berhasil']
+    ulang = await api.impor_input_tatib(_impor(_baris(keterangan='x'), _baris(), _baris(tanggal='2026-10-02')), PETUGAS)
+    assert [h['status'] for h in ulang['hasil']] == ['tanpa_perubahan', 'tanpa_perubahan', 'berhasil']
+    assert 'Sudah tercatat' in ulang['hasil'][0]['pesan']
+    assert await db.tatib_penanganan.count_documents({}) == 3
+
+
+async def test_impor_batas_baris_per_kiriman(db, data_input):
+    with pytest.raises(HTTPException) as e:
+        await api.impor_input_tatib(_impor(*[_baris()] * (api.MAKS_BARIS_IMPOR + 1)), PETUGAS)
+    assert e.value.status_code == 413
+    assert await db.tatib_penanganan.count_documents({}) == 0

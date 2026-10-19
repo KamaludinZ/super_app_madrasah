@@ -18,6 +18,7 @@ import PilihKategoriTatib from '@/components/tatib/PilihKategoriTatib';
 import KelolaKategoriInline from '@/components/tatib/KelolaKategoriInline';
 import PilihJenisAturan from '@/components/tatib/PilihJenisAturan';
 import RiwayatInputTerbaru from '@/components/tatib/RiwayatInputTerbaru';
+import ImporInputTatib from '@/components/tatib/ImporInputTatib';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { hariIniWIB } from '@/lib/tanggal';
@@ -210,15 +211,25 @@ export default function TatibInputTerpaduPage() {
 
   return (
     <div className="p-6 space-y-6" data-testid="tatib-input-terpadu-page">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ClipboardEdit className="h-6 w-6" /> Input Tata Tertib
-        </h1>
-        <p className="text-sm text-slate-600">
-          {bolehInput
-            ? 'Catat poin pelanggaran atau kebaikan siswa dari satu halaman. Nilai poin mengikuti master jenis aturan.'
-            : 'Pencatatan tata tertib terbaru dari petugas tatib.'}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ClipboardEdit className="h-6 w-6" /> Input Tata Tertib
+          </h1>
+          <p className="text-sm text-slate-600">
+            {bolehInput
+              ? 'Catat poin pelanggaran atau kebaikan siswa dari satu halaman. Nilai poin mengikuti master jenis aturan.'
+              : 'Pencatatan tata tertib terbaru dari petugas tatib.'}
+          </p>
+        </div>
+        {bolehInput && (
+          <ImporInputTatib
+            siswaList={siswaList}
+            jenisList={jenisList}
+            disabled={loading}
+            onSelesai={(h) => { if (h.ringkasan.berhasil) setVersiRiwayat((v) => v + 1); }}
+          />
+        )}
       </div>
 
       {!bolehInput && <BannerModeLihat />}

@@ -11,12 +11,22 @@ export function barisLaporanKesalahan(hasil) {
   ];
 }
 
-async function unduhLaporan(hasil, namaBerkas) {
+export const LABEL_STATUS_IMPOR = { berhasil: 'Berhasil', tanpa_perubahan: 'Tanpa perubahan', gagal: 'Gagal' };
+
+/** Baris laporan lengkap (semua baris beserta statusnya) dari hasil impor. */
+export function barisLaporanLengkap(hasil, labelStatus = LABEL_STATUS_IMPOR) {
+  return [
+    ['Baris Excel', 'Identitas', 'Kolom', 'Status', 'Keterangan'],
+    ...hasil.map((h) => [h.baris, h.identitas || '-', h.kolom || '-', labelStatus[h.status] || h.status, h.pesan || '']),
+  ];
+}
+
+async function unduhLaporan(hasil, namaBerkas, lengkap, labelStatus) {
   const XLSX = await import('xlsx');
-  const ws = XLSX.utils.aoa_to_sheet(barisLaporanKesalahan(hasil));
+  const ws = XLSX.utils.aoa_to_sheet(lengkap ? barisLaporanLengkap(hasil, labelStatus) : barisLaporanKesalahan(hasil));
   ws['!cols'] = [{ wch: 11 }, { wch: 22 }, { wch: 28 }, { wch: 8 }, { wch: 70 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Kesalahan Impor');
+  XLSX.utils.book_append_sheet(wb, ws, lengkap ? 'Laporan Impor' : 'Kesalahan Impor');
   XLSX.writeFile(wb, namaBerkas);
 }
 
@@ -33,9 +43,13 @@ function Kotak({ icon: Icon, label, nilai, warna }) {
  * Ringkasan hasil impor + daftar kesalahan per baris (lokasi baris Excel, identitas,
  * kolom bermasalah, keterangan) dan unduhan laporan kesalahan.
  * `hasil` = { mode, tiruan, dibatalkan, ringkasan: {total, diproses, berhasil, tanpa_perubahan, gagal}, hasil: [...] }
+ * `laporanLengkap`: tampilkan semua baris (dengan kolom Status) sejak awal dan unduh laporan semua baris.
+ * `labelStatus`: label status per kode (mis. tanpa_perubahan -> 'Sudah ada').
  */
-export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', keteranganMode, labelDilewati = 'kosong/keterangan' }) {
-  const [semua, setSemua] = useState(false);
+export default function RingkasanImpor({
+  hasil, dilewati, namaData = 'data', keteranganMode, labelDilewati = 'kosong/keterangan', laporanLengkap = false, labelStatus = LABEL_STATUS_IMPOR,
+}) {
+  const [semua, setSemua] = useState(laporanLengkap);
   const r = hasil.ringkasan;
   const gagal = hasil.hasil.filter((h) => h.status === 'gagal');
   const tampil = semua ? hasil.hasil : gagal;
@@ -61,7 +75,7 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', ket
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Kotak icon={CheckCircle2} label="Berhasil" nilai={r.berhasil} warna="border-emerald-200 bg-emerald-50 text-emerald-800" />
-        <Kotak icon={MinusCircle} label="Tanpa perubahan" nilai={r.tanpa_perubahan || 0} warna="border-slate-200 bg-slate-50 text-slate-700" />
+        <Kotak icon={MinusCircle} label={labelStatus.tanpa_perubahan} nilai={r.tanpa_perubahan || 0} warna="border-slate-200 bg-slate-50 text-slate-700" />
         <Kotak icon={XCircle} label="Gagal" nilai={r.gagal} warna="border-rose-200 bg-rose-50 text-rose-800" />
         <Kotak icon={AlertTriangle} label="Tidak diproses" nilai={r.total - r.diproses} warna="border-amber-200 bg-amber-50 text-amber-800" />
       </div>
@@ -89,8 +103,14 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', ket
               <Button size="sm" variant="ghost" onClick={() => setSemua((v) => !v)} className="h-7 text-xs">
                 {semua ? 'Hanya kesalahan' : 'Tampilkan semua baris'}
               </Button>
-              {gagal.length > 0 && (
-                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => unduhLaporan(hasil.hasil, `Laporan_Kesalahan_Impor_${namaData}.xlsx`)} data-testid="btn-unduh-laporan-kesalahan">
+              {(gagal.length > 0 || laporanLengkap) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => unduhLaporan(hasil.hasil, `Laporan_${laporanLengkap ? '' : 'Kesalahan_'}Impor_${namaData.replace(/\s+/g, '_')}.xlsx`, laporanLengkap, labelStatus)}
+                  data-testid="btn-unduh-laporan-kesalahan"
+                >
                   <Download className="h-3.5 w-3.5" /> Unduh laporan
                 </Button>
               )}
@@ -104,6 +124,7 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', ket
                     <th className="px-2 py-1.5 text-left">Baris</th>
                     <th className="px-2 py-1.5 text-left">Identitas</th>
                     <th className="px-2 py-1.5 text-left">Kolom</th>
+                    {laporanLengkap && <th className="px-2 py-1.5 text-left">Status</th>}
                     <th className="px-2 py-1.5 text-left">Keterangan</th>
                   </tr>
                 </thead>
@@ -113,6 +134,11 @@ export default function RingkasanImpor({ hasil, dilewati, namaData = 'data', ket
                       <td className="px-2 py-1 font-mono">{h.baris}</td>
                       <td className="px-2 py-1 font-mono">{h.identitas || '-'}</td>
                       <td className="px-2 py-1">{h.kolom || '-'}</td>
+                      {laporanLengkap && (
+                        <td className={`whitespace-nowrap px-2 py-1 font-medium ${h.status === 'berhasil' ? 'text-emerald-700' : h.status === 'gagal' ? 'text-rose-700' : 'text-slate-500'}`}>
+                          {labelStatus[h.status] || h.status}
+                        </td>
+                      )}
                       <td className="px-2 py-1">{h.pesan}</td>
                     </tr>
                   ))}
