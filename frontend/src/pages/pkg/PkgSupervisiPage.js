@@ -150,7 +150,7 @@ function IsiHalamanSupervisi() {
 }
 
 // Penandaan supervisi penilai (khusus kepala madrasah) sebagai gerbang pembukaan lembar penilaian.
-// Data sementara dari lib/pkgKelola (tiruan).
+// Data dari lib/pkgKelola (/pkg/supervisi).
 export default function PkgSupervisiPage() {
   return (
     <PenjagaMenuPkg menuKey="supervisi">

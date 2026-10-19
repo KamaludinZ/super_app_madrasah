@@ -3,24 +3,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Search, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Ceklist akun guru untuk anggota SK (tim penilai / guru yang dinilai).
-// `guru` = [{ id, full_name, nip, mapel }]; `terkunci` = { [id]: keterangan } selalu tercentang & tidak bisa
-// dilepas (mis. kepala madrasah sebagai penilai); `onSimpan(ids)` mengembalikan Promise.
+// `guru` = [{ id, full_name, nip, mapel? }]; `terkunci` = { [id]: keterangan } selalu tercentang & tidak bisa
+// dilepas (mis. kepala madrasah sebagai penilai); `perluAlasan` = penilaian sudah berjalan sehingga perubahan
+// wajib disertai alasan; `onSimpan(ids, alasan)` mengembalikan Promise.
 export default function CeklistGuruDialog({
-  open, judul, deskripsi, icon: Icon, guru = [], terpilih = [], terkunci = {}, onClose, onSimpan, testid,
+  open, judul, deskripsi, icon: Icon, guru = [], terpilih = [], terkunci = {}, perluAlasan = false, onClose, onSimpan, testid,
 }) {
   const [pilih, setPilih] = useState(new Set());
   const [cari, setCari] = useState('');
+  const [alasan, setAlasan] = useState('');
   const [menyimpan, setMenyimpan] = useState(false);
 
   useEffect(() => {
     if (open) {
       setPilih(new Set([...terpilih, ...Object.keys(terkunci)]));
       setCari('');
+      setAlasan('');
     }
   }, [open, terpilih, terkunci]);
 
@@ -52,9 +56,13 @@ export default function CeklistGuruDialog({
   };
 
   const simpan = async () => {
+    if (perluAlasan && !alasan.trim()) {
+      toast.error('Penilaian sudah berjalan: isi alasan perubahan.');
+      return;
+    }
     setMenyimpan(true);
     try {
-      await onSimpan([...pilih]);
+      await onSimpan([...pilih], alasan.trim());
     } catch (e) {
       toast.error(e.message || 'Gagal menyimpan');
     } finally {
@@ -97,7 +105,7 @@ export default function CeklistGuruDialog({
               <Checkbox checked={pilih.has(g.id)} onCheckedChange={() => alih(g.id)} disabled={!!terkunci[g.id]} />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-slate-900 truncate">{g.full_name}</div>
-                <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
+                <div className="text-xs text-slate-500">{g.mapel ? `${g.mapel} · ` : ''}NIP {g.nip || '-'}</div>
               </div>
               {terkunci[g.id] && (
                 <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-slate-500"><Lock className="h-3 w-3" /> {terkunci[g.id]}</span>
@@ -105,6 +113,15 @@ export default function CeklistGuruDialog({
             </label>
           ))}
         </div>
+
+        {perluAlasan && (
+          <div className="space-y-1">
+            <label htmlFor={`${testid}-alasan`} className="text-xs font-medium text-amber-800">
+              Penilaian sudah berjalan — alasan perubahan (tercatat di jejak audit)
+            </label>
+            <Textarea id={`${testid}-alasan`} value={alasan} onChange={(e) => setAlasan(e.target.value)} rows={2} maxLength={300} />
+          </div>
+        )}
 
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Batal</Button>

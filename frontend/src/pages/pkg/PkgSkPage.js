@@ -83,15 +83,15 @@ function IsiHalamanSk() {
   const idDinilai = useMemo(() => (sk ? sk.dinilai.map((a) => a.id) : []), [sk]);
   const tanpaKunci = useMemo(() => ({}), []);
 
-  const simpanPenilai = async (ids) => {
-    await simpanPenilaiSk(sk.id, ids);
+  const simpanPenilai = async (ids, alasan) => {
+    await simpanPenilaiSk(sk.id, ids, alasan);
     toast.success('Tim penilai disimpan');
     setCeklist(null);
     await muat();
   };
 
-  const simpanDinilai = async (ids) => {
-    await simpanDinilaiSk(sk.id, ids);
+  const simpanDinilai = async (ids, alasan) => {
+    await simpanDinilaiSk(sk.id, ids, alasan);
     toast.success('Guru yang dinilai disimpan');
     setCeklist(null);
     await muat();
@@ -211,6 +211,7 @@ function IsiHalamanSk() {
         guru={guru}
         terpilih={idPenilai}
         terkunci={kepalaTerkunci}
+        perluAlasan={!!sk?.penilaian_berjalan}
         onClose={() => setCeklist(null)}
         onSimpan={simpanPenilai}
         testid="pkg-ceklist-penilai"
@@ -224,6 +225,7 @@ function IsiHalamanSk() {
         guru={guruBukanKepala}
         terpilih={idDinilai}
         terkunci={tanpaKunci}
+        perluAlasan={!!sk?.penilaian_berjalan}
         onClose={() => setCeklist(null)}
         onSimpan={simpanDinilai}
         testid="pkg-ceklist-dinilai"
@@ -232,7 +234,7 @@ function IsiHalamanSk() {
       <FormSkDialog
         open={form.open}
         sk={form.sk}
-        periode={periode}
+        periode={periode.filter((p) => p.status !== 'ditutup' || p.id === form.sk?.periode_id)}
         onClose={() => setForm({ open: false, sk: null })}
         onTersimpan={async (hasil) => { setForm({ open: false, sk: null }); await muat(); setPilihId(hasil.id); }}
       />
@@ -241,7 +243,7 @@ function IsiHalamanSk() {
 }
 
 // Pengelolaan SK PKG & anggotanya (khusus kepala madrasah): daftar SK per periode, identitas SK,
-// penetapan SK aktif, serta tim penilai & guru yang dinilai. Data sementara dari lib/pkgKelola (tiruan).
+// penetapan SK aktif, serta tim penilai & guru yang dinilai (lib/pkgKelola → /pkg/sk, /pkg/guru).
 export default function PkgSkPage() {
   return (
     <PenjagaMenuPkg menuKey="sk">

@@ -125,7 +125,7 @@ function IsiHalamanPeriode() {
 }
 
 // Penetapan periode PKG (khusus kepala madrasah): tetapkan/ubah periode, mulai, dan tutup.
-// Data sementara dari lib/pkgKelola (tiruan).
+// Data dari lib/pkgKelola (/pkg/periode).
 export default function PkgPeriodePage() {
   return (
     <PenjagaMenuPkg menuKey="periode">

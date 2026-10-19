@@ -1,193 +1,78 @@
-// Pengelolaan PKG oleh kepala madrasah: periode, SK, dan anggota (tim penilai & guru yang dinilai).
-//
-// TIRUAN SEMENTARA: fungsi di bawah meniru kontrak API yang direncanakan dan menyimpan data di memori
-// (hilang saat halaman dimuat ulang). Saat endpoint backend tersedia, isi tiap fungsi diganti panggilan
-// `api` dengan bentuk data yang sama:
-//   GET  /pkg/periode                    -> [periode]
-//   POST /pkg/periode | PUT /pkg/periode/{id} -> periode   body: { nama_periode, semester_id, tahun_pelajaran,
-//                                                            semester, tanggal_buka, tanggal_tutup }
-//   POST /pkg/periode/{id}/status        -> periode        body: { status: 'berjalan' | 'ditutup' }
-//   GET  /pkg/sk                         -> [sk]           (urut periode terbaru)
-//   POST /pkg/sk  | PUT /pkg/sk/{id}     -> sk             body: { nomor_sk, tanggal_sk, tentang, periode_id }
-//   POST /pkg/sk/{id}/aktifkan           -> sk             (SK lain di periode yang sama dinonaktifkan)
-//   GET  /users/teachers                 -> [{ id, full_name, username, roles }]   (akun GTK aktif)
-//   PUT  /pkg/sk/{id}/penilai            -> sk             body: { penilai_ids }  (kepala selalu disertakan)
-//   PUT  /pkg/sk/{id}/dinilai            -> sk             body: { dinilai_ids }  (kepala ditolak)
-//   GET  /pkg/penugasan                  -> pembagian      (SK aktif pada periode berjalan)
-//   PUT  /pkg/penugasan                  -> pembagian      body: { penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n} }
-//   GET  /pkg/supervisi                  -> [supervisi]    (penilai SK aktif selain kepala)
-//   POST /pkg/supervisi/{penilai_id}     -> supervisi      body: { tanggal_supervisi, catatan }
-//   DELETE /pkg/supervisi/{penilai_id}   -> supervisi      (batalkan; lembar penilai terkunci lagi)
-// supervisi = { penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru }
-// pembagian = { periode, sk, penilai: [anggota], dinilai: [anggota], penugasan: {guru_id: penilai_id},
-//               jatah: {penilai_id: n}, penilaian_dimulai: bool }
-// periode = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
-//             status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
-// sk = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilai: [anggota], dinilai: [anggota] }
-// anggota = { id, nama, nip, mapel }   (snapshot identitas periode)
+import { api } from '@/lib/api';
 
-const tunda = (hasil) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), 150); });
+// Pengelolaan PKG oleh kepala madrasah (backend/routers/pkg_kelola.py): periode, SK & anggota (tim penilai &
+// guru yang dinilai), pembagian jatah penilaian, dan supervisi penilai. Semua endpoint khusus kepala madrasah.
+//   periode   = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
+//                 status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
+//   sk        = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilaian_berjalan,
+//                 penilai: [anggota], dinilai: [anggota] }
+//   anggota   = { id, nama, nip, mapel }   (snapshot identitas periode)
+//   pembagian = { periode, sk, penilai, dinilai, penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n},
+//                 penilaian_dimulai, peringatan: [teks] }
+//   supervisi = { penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru }
+// Setelah penilaian berjalan, perubahan susunan (penilai, guru dinilai, pembagian) wajib menyertakan alasan.
 
-const GURU = [
-  { id: 'u-kepala', nama: 'Drs. H. Mahmud, M.Pd.', nip: '196805121994031003', mapel: '-', kepala: true },
-  { id: 'u-1', nama: 'Ahmad Fauzi, S.Pd.', nip: '198703122019031004', mapel: 'Matematika' },
-  { id: 'u-2', nama: 'Siti Rahmawati, S.Ag.', nip: '199001252020122012', mapel: 'Akidah Akhlak' },
-  { id: 'u-3', nama: 'Dedi Kurniawan, M.Pd.', nip: '198511082014031002', mapel: 'Bahasa Inggris' },
-  { id: 'u-4', nama: 'Nur Aini, S.Si.', nip: null, mapel: 'IPA' },
-  { id: 'u-5', nama: 'Rina Kartika, S.Pd.', nip: '199204172022212008', mapel: 'Bahasa Indonesia' },
-  { id: 'u-6', nama: 'Hasan Basri, S.Pd.I.', nip: '198309202009011007', mapel: 'Fikih' },
-  { id: 'u-7', nama: 'Lilis Suryani, S.Pd.', nip: null, mapel: 'IPS' },
-];
+// Pesan galat dari detail backend: teks (400/404/409) atau daftar validasi (422).
+function pesanGalat(e, cadangan) {
+  const d = e?.response?.data?.detail;
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && d.pesan) return d.pesan;
+  if (Array.isArray(d) && d[0]?.msg) return `Isian tidak valid: ${d[0].msg}`;
+  return cadangan;
+}
 
-const anggota = (id) => {
-  const g = GURU.find((x) => x.id === id);
-  return { id: g.id, nama: g.nama, nip: g.nip, mapel: g.mapel };
-};
+async function panggil(fn, cadangan) {
+  try {
+    return (await fn()).data;
+  } catch (e) {
+    throw new Error(pesanGalat(e, cadangan));
+  }
+}
 
-const store = {
-  periode: [
-    { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', tahun_pelajaran: '2026/2027', semester: 'Ganjil', tanggal_buka: '2026-10-01', tanggal_tutup: '2026-11-30', status: 'berjalan' },
-    { id: 'p-2025-genap', nama_periode: 'PKG Semester Genap 2025/2026', tahun_pelajaran: '2025/2026', semester: 'Genap', tanggal_buka: '2026-03-01', tanggal_tutup: '2026-04-30', status: 'ditutup' },
-  ],
-  sk: [
-    {
-      id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026', tanggal_sk: '2026-09-28',
-      tentang: 'Tim Penilai Kinerja Guru Semester Ganjil 2026/2027', periode_id: 'p-2026-ganjil', is_active: true,
-      penilai: ['u-kepala', 'u-1', 'u-3'].map(anggota), dinilai: ['u-1', 'u-2', 'u-4', 'u-5', 'u-6'].map(anggota),
-      penugasan: { 'u-1': 'u-3', 'u-2': 'u-1', 'u-4': 'u-1', 'u-5': 'u-3' },
-      jatah: { 'u-kepala': 1, 'u-1': 2, 'u-3': 2 },
-      penilaian_dimulai: true,
-      supervisi: { 'u-1': { tanggal_supervisi: '2026-10-08', catatan: 'Supervisi akademik kelas 8B', disupervisi_oleh: 'Drs. H. Mahmud, M.Pd.' } },
-    },
-    {
-      id: 'sk-0', nomor_sk: 'B-045/Mts.10.05/KP.07.6/02/2026', tanggal_sk: '2026-02-20',
-      tentang: 'Tim Penilai Kinerja Guru Semester Genap 2025/2026', periode_id: 'p-2025-genap', is_active: true,
-      penilai: ['u-kepala', 'u-3'].map(anggota), dinilai: ['u-1', 'u-2', 'u-5'].map(anggota),
-    },
-  ],
-};
+// Transisi status periode yang diizinkan: draf -> berjalan -> ditutup (sama dengan backend).
+export const TRANSISI_PERIODE = { draf: 'berjalan', berjalan: 'ditutup' };
 
-class GalatValidasi extends Error {}
+export const daftarPeriode = () => panggil(() => api.get('/pkg/periode'), 'Gagal memuat periode PKG.');
 
-export const daftarPeriode = () => tunda(store.periode);
+export function simpanPeriode(data, id = null) {
+  const isi = { ...data, semester_id: data.semester_id || null };
+  return panggil(
+    () => (id ? api.put(`/pkg/periode/${id}`, isi) : api.post('/pkg/periode', isi)),
+    'Gagal menyimpan periode.',
+  );
+}
 
-export const daftarSk = () => tunda([...store.sk].sort((a, b) => (b.tanggal_sk || '').localeCompare(a.tanggal_sk || '')));
+export const ubahStatusPeriode = (id, status) => panggil(
+  () => api.post(`/pkg/periode/${id}/status`, { status }), 'Gagal mengubah status periode.',
+);
 
-// Akun guru aktif untuk ceklist (bentuk mengikuti GET /users/teachers + nip/mapel bila tersedia).
-export const daftarGuru = () => tunda(GURU.map((g) => ({
-  id: g.id, full_name: g.nama, nip: g.nip, mapel: g.mapel, roles: g.kepala ? ['kepala_sekolah', 'guru'] : ['guru'],
-})));
+export const daftarSk = () => panggil(() => api.get('/pkg/sk'), 'Gagal memuat SK.');
+
+export const simpanSk = (data, id = null) => panggil(
+  () => (id ? api.put(`/pkg/sk/${id}`, data) : api.post('/pkg/sk', data)), 'Gagal menyimpan SK.',
+);
+
+export const aktifkanSk = (id) => panggil(() => api.post(`/pkg/sk/${id}/aktifkan`), 'Gagal mengaktifkan SK.');
+
+// Akun guru aktif untuk ceklist anggota SK: [{ id, full_name, nip, roles }].
+export const daftarGuru = () => panggil(() => api.get('/pkg/guru'), 'Gagal memuat daftar guru.');
 
 export const adalahKepala = (guru) => (guru?.roles || []).includes('kepala_sekolah');
 
-export async function simpanSk(data, id = null) {
-  const nomor = (data.nomor_sk || '').trim();
-  if (!nomor) throw new GalatValidasi('Nomor SK wajib diisi.');
-  if (!data.periode_id) throw new GalatValidasi('Periode PKG wajib dipilih.');
-  if (!data.tanggal_sk) throw new GalatValidasi('Tanggal SK wajib diisi.');
-  if (store.sk.some((s) => s.id !== id && s.nomor_sk.toLowerCase() === nomor.toLowerCase())) {
-    throw new GalatValidasi('Nomor SK sudah dipakai SK lain.');
-  }
-  const isi = { nomor_sk: nomor, tanggal_sk: data.tanggal_sk, tentang: (data.tentang || '').trim(), periode_id: data.periode_id };
-  if (id) {
-    const sk = store.sk.find((s) => s.id === id);
-    if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
-    Object.assign(sk, isi);
-    return tunda(sk);
-  }
-  const adaAktif = store.sk.some((s) => s.periode_id === data.periode_id && s.is_active);
-  const baru = { id: `sk-${Date.now()}`, ...isi, is_active: !adaAktif, penilai: [anggota('u-kepala')], dinilai: [] };
-  store.sk.push(baru);
-  return tunda(baru);
-}
+export const simpanPenilaiSk = (skId, penilaiIds = [], alasan = '') => panggil(
+  () => api.put(`/pkg/sk/${skId}/penilai`, { penilai_ids: penilaiIds, alasan_perubahan: alasan }),
+  'Gagal menyimpan tim penilai.',
+);
 
-export async function aktifkanSk(id) {
-  const sk = store.sk.find((s) => s.id === id);
-  if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
-  store.sk.forEach((s) => { if (s.periode_id === sk.periode_id) s.is_active = s.id === id; });
-  return tunda(sk);
-}
+export const simpanDinilaiSk = (skId, dinilaiIds = [], alasan = '') => panggil(
+  () => api.put(`/pkg/sk/${skId}/dinilai`, { dinilai_ids: dinilaiIds, alasan_perubahan: alasan }),
+  'Gagal menyimpan guru yang dinilai.',
+);
 
-// Transisi status periode yang diizinkan: draf -> berjalan -> ditutup.
-export const TRANSISI_PERIODE = { draf: 'berjalan', berjalan: 'ditutup' };
+export const ambilPenugasan = () => panggil(() => api.get('/pkg/penugasan'), 'Gagal memuat pembagian penilaian.');
 
-export async function simpanPeriode(data, id = null) {
-  const nama = (data.nama_periode || '').trim();
-  if (!nama) throw new GalatValidasi('Nama periode wajib diisi.');
-  if (!data.tahun_pelajaran || !data.semester) throw new GalatValidasi('Tahun pelajaran dan semester wajib diisi.');
-  if (!data.tanggal_buka || !data.tanggal_tutup) throw new GalatValidasi('Tanggal buka dan tutup wajib diisi.');
-  if (data.tanggal_tutup < data.tanggal_buka) throw new GalatValidasi('Tanggal tutup tidak boleh sebelum tanggal buka.');
-  const isi = {
-    nama_periode: nama, semester_id: data.semester_id || null, tahun_pelajaran: data.tahun_pelajaran,
-    semester: data.semester, tanggal_buka: data.tanggal_buka, tanggal_tutup: data.tanggal_tutup,
-  };
-  if (id) {
-    const p = store.periode.find((x) => x.id === id);
-    if (!p) throw new GalatValidasi('Periode tidak ditemukan.');
-    if (p.status === 'ditutup') throw new GalatValidasi('Periode yang sudah ditutup tidak dapat diubah.');
-    Object.assign(p, isi);
-    return tunda(p);
-  }
-  const baru = { id: `p-${Date.now()}`, ...isi, status: 'draf' };
-  store.periode.unshift(baru);
-  return tunda(baru);
-}
-
-export async function ubahStatusPeriode(id, status) {
-  const p = store.periode.find((x) => x.id === id);
-  if (!p) throw new GalatValidasi('Periode tidak ditemukan.');
-  if (TRANSISI_PERIODE[p.status] !== status) throw new GalatValidasi('Perubahan status periode tidak diizinkan.');
-  if (status === 'berjalan' && store.periode.some((x) => x.id !== id && x.status === 'berjalan')) {
-    throw new GalatValidasi('Masih ada periode lain yang berjalan. Tutup periode tersebut lebih dahulu.');
-  }
-  p.status = status;
-  return tunda(p);
-}
-
-export async function simpanPenilaiSk(skId, penilaiIds = []) {
-  const sk = store.sk.find((s) => s.id === skId);
-  if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
-  const kepala = GURU.filter((g) => g.kepala).map((g) => g.id);
-  const ids = [...new Set([...kepala, ...penilaiIds])];
-  const asing = ids.filter((id) => !GURU.some((g) => g.id === id));
-  if (asing.length) throw new GalatValidasi('Sebagian penilai bukan akun guru aktif.');
-  sk.penilai = ids.map(anggota);
-  return tunda(sk);
-}
-
-export async function simpanDinilaiSk(skId, dinilaiIds = []) {
-  const sk = store.sk.find((s) => s.id === skId);
-  if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
-  const ids = [...new Set(dinilaiIds)];
-  if (ids.some((id) => GURU.find((g) => g.id === id)?.kepala)) {
-    throw new GalatValidasi('Kepala madrasah tidak dapat menjadi guru yang dinilai.');
-  }
-  if (ids.some((id) => !GURU.some((g) => g.id === id))) throw new GalatValidasi('Sebagian guru bukan akun guru aktif.');
-  sk.dinilai = ids.map(anggota);
-  return tunda(sk);
-}
-
-function skBerjalan() {
-  const periode = store.periode.find((p) => p.status === 'berjalan');
-  const sk = periode && store.sk.find((s) => s.periode_id === periode.id && s.is_active);
-  return { periode, sk };
-}
-
-export async function ambilPenugasan() {
-  const { periode, sk } = skBerjalan();
-  if (!sk) return tunda({ periode: periode || null, sk: null, penilai: [], dinilai: [], penugasan: {}, jatah: {}, penilaian_dimulai: false });
-  return tunda({
-    periode,
-    sk: { id: sk.id, nomor_sk: sk.nomor_sk },
-    penilai: sk.penilai,
-    dinilai: sk.dinilai,
-    penugasan: sk.penugasan || {},
-    jatah: sk.jatah || {},
-    penilaian_dimulai: !!sk.penilaian_dimulai,
-  });
-}
-
-// Validasi sama dengan backend: tiap guru dinilai punya tepat satu penilai anggota SK, bukan dirinya sendiri.
+// Pemeriksaan di sisi tampilan (aturan sama dengan backend): tiap guru dinilai punya tepat satu penilai
+// anggota SK, bukan dirinya sendiri.
 export function cekPenugasan(dinilai, penilai, penugasan) {
   const idPenilai = new Set(penilai.map((p) => p.id));
   const tanpaPenilai = dinilai.filter((g) => !penugasan[g.id]).map((g) => g.id);
@@ -196,53 +81,22 @@ export function cekPenugasan(dinilai, penilai, penugasan) {
   return { tanpaPenilai, diriSendiri, bukanPenilai, sah: !tanpaPenilai.length && !diriSendiri.length && !bukanPenilai.length };
 }
 
-export async function simpanPenugasan({ penugasan, jatah }) {
-  const { sk } = skBerjalan();
-  if (!sk) throw new GalatValidasi('Belum ada SK aktif pada periode berjalan.');
-  const cek = cekPenugasan(sk.dinilai, sk.penilai, penugasan);
-  if (cek.diriSendiri.length) throw new GalatValidasi('Penilai tidak boleh menilai dirinya sendiri.');
-  if (cek.bukanPenilai.length) throw new GalatValidasi('Sebagian penilai tidak tercantum di SK.');
-  if (cek.tanpaPenilai.length) throw new GalatValidasi(`${cek.tanpaPenilai.length} guru belum memiliki penilai.`);
-  sk.penugasan = { ...penugasan };
-  sk.jatah = { ...jatah };
-  return ambilPenugasan();
-}
+export const simpanPenugasan = ({ penugasan, jatah, alasan = '' }) => panggil(
+  () => api.put('/pkg/penugasan', {
+    penugasan,
+    jatah: Object.fromEntries(Object.entries(jatah || {}).map(([k, v]) => [k, Number(v) || 0])),
+    alasan_perubahan: alasan,
+  }),
+  'Gagal menyimpan pembagian.',
+);
 
-const KEPALA_ID = () => GURU.find((g) => g.kepala)?.id;
+export const daftarSupervisi = () => panggil(() => api.get('/pkg/supervisi'), 'Gagal memuat data supervisi.');
 
-function barisSupervisi(sk, p) {
-  const sv = (sk.supervisi || {})[p.id];
-  return {
-    penilai: p,
-    supervisi_selesai: !!sv,
-    tanggal_supervisi: sv?.tanggal_supervisi || null,
-    catatan: sv?.catatan || '',
-    disupervisi_oleh: sv?.disupervisi_oleh || null,
-    jumlah_guru: Object.values(sk.penugasan || {}).filter((pid) => pid === p.id).length,
-  };
-}
+export const tandaiSupervisi = (penilaiId, { tanggal_supervisi: tanggal, catatan }) => panggil(
+  () => api.post(`/pkg/supervisi/${penilaiId}`, { tanggal_supervisi: tanggal, catatan: catatan || '' }),
+  'Gagal menandai supervisi.',
+);
 
-export async function daftarSupervisi() {
-  const { sk } = skBerjalan();
-  if (!sk) return tunda([]);
-  return tunda(sk.penilai.filter((p) => p.id !== KEPALA_ID()).map((p) => barisSupervisi(sk, p)));
-}
-
-export async function tandaiSupervisi(penilaiId, { tanggal_supervisi: tanggal, catatan }) {
-  const { sk } = skBerjalan();
-  if (!sk) throw new GalatValidasi('Belum ada SK aktif pada periode berjalan.');
-  const p = sk.penilai.find((x) => x.id === penilaiId && x.id !== KEPALA_ID());
-  if (!p) throw new GalatValidasi('Penilai tidak tercantum di SK aktif.');
-  if (!tanggal) throw new GalatValidasi('Tanggal supervisi wajib diisi.');
-  sk.supervisi = { ...(sk.supervisi || {}), [p.id]: { tanggal_supervisi: tanggal, catatan: (catatan || '').trim(), disupervisi_oleh: anggota(KEPALA_ID()).nama } };
-  return tunda(barisSupervisi(sk, p));
-}
-
-export async function batalkanSupervisi(penilaiId) {
-  const { sk } = skBerjalan();
-  const p = sk?.penilai.find((x) => x.id === penilaiId);
-  if (!p) throw new GalatValidasi('Penilai tidak tercantum di SK aktif.');
-  const { [p.id]: _, ...sisa } = sk.supervisi || {};
-  sk.supervisi = sisa;
-  return tunda(barisSupervisi(sk, p));
-}
+export const batalkanSupervisi = (penilaiId) => panggil(
+  () => api.delete(`/pkg/supervisi/${penilaiId}`), 'Gagal membatalkan supervisi.',
+);

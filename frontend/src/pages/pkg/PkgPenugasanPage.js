@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Split, Loader2, Wand2, Save, AlertTriangle, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +38,7 @@ function IsiHalamanPenugasan() {
   const [data, setData] = useState(null);
   const [penugasan, setPenugasan] = useState({});
   const [jatah, setJatah] = useState({});
+  const [alasan, setAlasan] = useState('');
   const [menyimpan, setMenyimpan] = useState(false);
 
   const muat = useCallback(async () => {
@@ -71,12 +73,17 @@ function IsiHalamanPenugasan() {
   const berubah = JSON.stringify(penugasan) !== JSON.stringify(data.penugasan) || JSON.stringify(jatah) !== JSON.stringify(data.jatah);
 
   const simpan = async () => {
+    if (data.penilaian_dimulai && !alasan.trim()) {
+      toast.error('Penilaian sudah berjalan: isi alasan perubahan.');
+      return;
+    }
     setMenyimpan(true);
     try {
-      const d = await simpanPenugasan({ penugasan, jatah });
+      const d = await simpanPenugasan({ penugasan, jatah, alasan: alasan.trim() });
       setData(d);
       setPenugasan(d.penugasan);
       setJatah(d.jatah);
+      setAlasan('');
       toast.success('Pembagian penilaian disimpan');
     } catch (e) {
       toast.error(e.message || 'Gagal menyimpan pembagian');
@@ -90,7 +97,17 @@ function IsiHalamanPenugasan() {
       {data.penilaian_dimulai && (
         <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" data-testid="pkg-penugasan-berjalan">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>Penilaian periode ini sudah berjalan. Perubahan pembagian tetap dapat disimpan oleh kepala madrasah dan tercatat di jejak audit.</span>
+          <div className="flex-1 space-y-2">
+            <span>Penilaian periode ini sudah berjalan. Perubahan pembagian tetap dapat disimpan oleh kepala madrasah dengan alasan, dan tercatat di jejak audit. Guru yang lembarnya sudah dibuat tidak dapat dipindah ke penilai lain.</span>
+            <Textarea value={alasan} onChange={(e) => setAlasan(e.target.value)} rows={2} maxLength={300} placeholder="Alasan perubahan pembagian" className="bg-white" data-testid="pkg-penugasan-alasan" />
+          </div>
+        </div>
+      )}
+
+      {data.peringatan?.length > 0 && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" data-testid="pkg-penugasan-peringatan">
+          <p className="font-semibold">Periksa data pembagian:</p>
+          <ul className="mt-1 list-disc list-inside">{data.peringatan.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
       )}
 
@@ -192,7 +209,7 @@ function IsiHalamanPenugasan() {
 }
 
 // Pembagian jatah penilaian (khusus kepala madrasah): petakan tiap guru yang dinilai ke satu penilai sesuai
-// jatah SK pada periode berjalan. Data sementara dari lib/pkgKelola (tiruan).
+// jatah SK pada periode berjalan (lib/pkgKelola → /pkg/penugasan).
 export default function PkgPenugasanPage() {
   return (
     <PenjagaMenuPkg menuKey="penugasan">

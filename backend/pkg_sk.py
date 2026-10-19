@@ -1,8 +1,8 @@
 """Service SK PKG & anggotanya (dikelola kepala madrasah). Skema koleksi: lihat pkg_skema.
 
 Bentuk SK untuk API:
-    {id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilai: [anggota], dinilai: [anggota],
-     created_at, updated_at}
+    {id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilaian_berjalan, penilai: [anggota],
+     dinilai: [anggota], created_at, updated_at}
     anggota = {id, nama, nip, mapel} — dari snapshot_anggota SK (identitas periode) bila ada, selain itu dari akun.
 Aturan:
     - Nomor SK unik (tanpa membedakan huruf besar/kecil); hanya satu SK aktif per periode.
@@ -73,6 +73,9 @@ async def ambil_snapshot(db, ids: List[str], periode: Optional[Dict[str, Any]]) 
 async def sk_tampil_banyak(db, daftar: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     semua_id = [i for sk in daftar for i in (sk.get('penilai_ids') or []) + (sk.get('dinilai_ids') or [])]
     akun = await identitas_akun(db, semua_id)
+    sk_ids = [sk['id'] for sk in daftar]
+    berjalan = {p['sk_id'] for p in await db[KOLEKSI_PENILAIAN].find(
+        {'sk_id': {'$in': sk_ids}}, {'_id': 0, 'sk_id': 1}).to_list(5000)} if sk_ids else set()
 
     def anggota(sk, uid):
         ident = (sk.get('snapshot_anggota') or {}).get(uid) or akun.get(uid) or {}
@@ -85,6 +88,7 @@ async def sk_tampil_banyak(db, daftar: List[Dict[str, Any]]) -> List[Dict[str, A
         'tentang': sk.get('tentang') or '',
         'periode_id': sk.get('periode_id'),
         'is_active': bool(sk.get('is_active')),
+        'penilaian_berjalan': sk['id'] in berjalan,
         'penilai': [anggota(sk, u) for u in sk.get('penilai_ids') or []],
         'dinilai': [anggota(sk, u) for u in sk.get('dinilai_ids') or []],
         'created_at': sk.get('created_at'),
