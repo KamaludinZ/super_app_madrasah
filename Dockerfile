@@ -47,6 +47,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend source
 COPY backend/ .
 
+# Pastikan berkas template resmi PKG ikut ke image dan isinya sesuai checksum resmi (build gagal bila tidak).
+RUN python -c "import sys, pkg_template as t; h = t.periksa_template(); [print(b['nama_berkas'], b['status']) for b in h['berkas']]; sys.exit(0 if h['utuh'] else 1)"
+
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build /app/static
 

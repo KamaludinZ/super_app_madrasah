@@ -78,3 +78,8 @@ dmypy.json
 
 # Berkas unggahan lokal - jangan ikut ke image (di server memakai volume /app/uploads)
 uploads/
+
+# Berkas template resmi PKG wajib ikut ke image (dibaca saat impor instrumen & cetak). Pengecualian eksplisit
+# agar aturan di atas (sekarang atau nanti) tidak pernah membuangnya; keutuhannya diverifikasi saat build.
+!templates/
+!templates/*.xlsx

@@ -154,3 +154,14 @@ def test_endpoint_info_template(monkeypatch):
     assert panggil({'id': 'kep', 'roles': ['kepala_sekolah']}, ulang=True)['diperiksa_pada'] >= pertama
     with pytest.raises(Exception):
         panggil({'id': 'asing', 'roles': ['guru']})
+
+
+def test_konfigurasi_docker_menyertakan_template():
+    akar = os.path.join(os.path.dirname(__file__), '..')
+    for berkas, pola in (('backend/.dockerignore', '!templates/*.xlsx'), ('.dockerignore', '!backend/templates/*.xlsx')):
+        with open(os.path.join(akar, berkas), encoding='utf-8') as f:
+            assert pola in f.read().splitlines(), berkas
+    for berkas in ('backend/Dockerfile', 'Dockerfile'):
+        with open(os.path.join(akar, berkas), encoding='utf-8') as f:
+            isi = f.read()
+        assert 'pkg_template as t' in isi and "sys.exit(0 if h['utuh'] else 1)" in isi, berkas

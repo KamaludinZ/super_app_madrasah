@@ -24,6 +24,9 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
 
 COPY . .
 
+# Pastikan berkas template resmi PKG ikut ke image dan isinya sesuai checksum resmi (build gagal bila tidak).
+RUN python -c "import sys, pkg_template as t; h = t.periksa_template(); [print(b['nama_berkas'], b['status']) for b in h['berkas']]; sys.exit(0 if h['utuh'] else 1)"
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

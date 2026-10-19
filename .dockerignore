@@ -75,3 +75,7 @@ VERSION
 # Berkas unggahan lokal - jangan ikut ke image (di server memakai volume /app/uploads)
 uploads/
 backend/uploads/
+
+# Berkas template resmi PKG wajib ikut ke image backend (lihat backend/pkg_template.py).
+!backend/templates/
+!backend/templates/*.xlsx
