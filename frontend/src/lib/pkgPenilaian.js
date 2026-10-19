@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 //        gagal 403 -> detail { alasan: 'bukan_penugasan' | 'belum_disupervisi' | ..., pesan }
 //   POST /pkg/penilaian/draft  { guru_id, isian, catatan_umum } -> { id, status: 'draf', progres, updated_at }
 //        (lembar dibuat saat draf pertama; terkunci 409; di luar masa 403 di_luar_masa)
+//   GET  /pkg/penilaian/lembar/{guru_id}/riwayat -> jejak aksi lembar (mulai, buka, draf, kirim)
 //   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci (dengan `hasil`)
 //        belum lengkap 400 -> detail { pesan, galat: { kode_sub: pesan } }
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel, akun_aktif, juga_penilai },
@@ -59,6 +60,9 @@ export const simpanDraf = (guruId, { isian, catatanUmum }) => panggil(
   () => api.post('/pkg/penilaian/draft', { guru_id: guruId, isian: isianBersih(isian), catatan_umum: (catatanUmum || '').slice(0, BATAS_TEKS) }),
   'Gagal menyimpan draf.',
 );
+
+// Riwayat aksi lembar ini (penilainya): [{ aksi, label, aktor_nama, timestamp, terakhir, jumlah, progres, nilai_akhir }].
+export const riwayatLembar = (guruId) => panggil(() => api.get(`/pkg/penilaian/lembar/${guruId}/riwayat`), 'Gagal memuat riwayat lembar.');
 
 export const kirimLembar = (guruId, { isian, catatanUmum }) => panggil(
   () => api.post('/pkg/penilaian/submit', { guru_id: guruId, isian: isianBersih(isian), catatan_umum: (catatanUmum || '').slice(0, BATAS_TEKS) }),

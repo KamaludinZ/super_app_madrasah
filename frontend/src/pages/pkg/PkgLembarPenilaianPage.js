@@ -12,12 +12,15 @@ import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
+import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import useAutosaveDraf from '@/hooks/useAutosaveDraf';
 import { labelVersi } from '@/lib/pkgInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { toast } from 'sonner';
-import { BATAS_TEKS, ambilLembar, hitungHasilAkhir, hitungNilai, kirimLembar, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
+import {
+  BATAS_TEKS, ambilLembar, hitungHasilAkhir, hitungNilai, kirimLembar, riwayatLembar, simpanDraf, validasiLembar,
+} from '@/lib/pkgPenilaian';
 
 const FORMAT_PERSEN = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -50,6 +53,7 @@ function IsiLembar() {
   const validasi = useMemo(() => validasiLembar(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
 
   const kompetensi = lembar?.instrumen?.kompetensi;
+  const muatRiwayat = useCallback(() => riwayatLembar(guruId), [guruId]);
   const simpan = useCallback(
     (data) => simpanDraf(guruId, { isian: data.isian, catatanUmum: data.catatanUmum, kompetensi }),
     [guruId, kompetensi],
@@ -196,6 +200,13 @@ function IsiLembar() {
           </div>
         </section>
       ))}
+
+      {lembar.id && (
+        <details className="rounded-xl border border-slate-200 bg-white p-4" data-testid="pkg-lembar-riwayat">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-900">Riwayat aksi lembar</summary>
+          <div className="mt-3"><RiwayatAksiPenilaian muat={muatRiwayat} kunci={`${lembar.status}:${draf.tersimpanPada}`} /></div>
+        </details>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-1" aria-labelledby="catatan-umum">
         <div className="flex items-baseline justify-between">

@@ -5,6 +5,9 @@
 //       -> { item: [entri], total, halaman, per_halaman }   (terbaru dulu)
 // entri = { id, aksi, label, kategori, aktor_nama, aktor_peran, timestamp, terakhir, jumlah, penilaian_id,
 //           ip_address, metadata, ringkasan }
+//   GET /pkg/audit/guru/{guru_id}?periode_id= -> [aksiLembar]  (riwayat aksi lembar penilaian satu guru)
+// aksiLembar = { aksi, label, aktor_nama, timestamp, terakhir, jumlah, progres, nilai_akhir }
+//   (bentuk sama dengan GET /pkg/penilaian/lembar/{guru_id}/riwayat milik penilai)
 // Aksi berulang (buka beranda, draf, lihat rekap, penolakan) dicatat harian dengan `jumlah` & `terakhir`.
 
 // Kategori aksi (sama dengan backend pkg_audit.LABEL_AKSI, dikelompokkan untuk saringan & warna penanda).
@@ -43,4 +46,15 @@ export async function daftarAudit({ halaman = 1, perHalaman = 10 } = {}) {
   const urut = [...TIRUAN].sort((a, b) => (b.terakhir || b.timestamp).localeCompare(a.terakhir || a.timestamp));
   const mulai = (halaman - 1) * perHalaman;
   return tunda({ item: urut.slice(mulai, mulai + perHalaman), total: urut.length, halaman, per_halaman: perHalaman });
+}
+
+export async function riwayatAksiGuru(guruId) {
+  if (!guruId) return [];
+  return tunda([
+    { aksi: 'penilaian_kirim', label: 'Mengirim & mengunci penilaian', aktor_nama: 'Ahmad Fauzi, S.Pd.', timestamp: '2026-10-19T09:12:00+07:00', nilai_akhir: 36 },
+    { aksi: 'penilaian_draf', label: 'Menyimpan draf penilaian', aktor_nama: 'Ahmad Fauzi, S.Pd.', timestamp: '2026-10-19T08:05:00+07:00', terakhir: '2026-10-19T09:10:00+07:00', jumlah: 14, progres: 100 },
+    { aksi: 'penilaian_buka', label: 'Membuka lembar penilaian', aktor_nama: 'Ahmad Fauzi, S.Pd.', timestamp: '2026-10-19T08:00:00+07:00', jumlah: 3 },
+    { aksi: 'penilaian_draf', label: 'Menyimpan draf penilaian', aktor_nama: 'Ahmad Fauzi, S.Pd.', timestamp: '2026-10-17T13:00:00+07:00', terakhir: '2026-10-17T13:40:00+07:00', jumlah: 6, progres: 58 },
+    { aksi: 'penilaian_mulai', label: 'Memulai lembar penilaian', aktor_nama: 'Ahmad Fauzi, S.Pd.', timestamp: '2026-10-17T13:00:00+07:00' },
+  ]);
 }

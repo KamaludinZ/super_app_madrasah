@@ -5,10 +5,42 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { History, Loader2, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { KATEGORI_AUDIT, daftarAudit } from '@/lib/pkgAudit';
+import { KATEGORI_AUDIT, daftarAudit, riwayatAksiGuru } from '@/lib/pkgAudit';
+import { ambilRekap } from '@/lib/pkgRekap';
 
 const PER_HALAMAN = 10;
+
+// Riwayat aksi lembar penilaian per guru (kepala): pilih guru dari rekap periode berjalan.
+function PanelPerGuru() {
+  const [guru, setGuru] = useState([]);
+  const [pilih, setPilih] = useState('');
+
+  useEffect(() => {
+    ambilRekap().then((r) => setGuru(r.guru || [])).catch(() => setGuru([]));
+  }, []);
+  const muat = useCallback(() => riwayatAksiGuru(pilih), [pilih]);
+
+  return (
+    <Card data-testid="pkg-audit-per-guru">
+      <CardHeader className="pb-3 space-y-2">
+        <CardTitle className="text-base">Riwayat Aksi Penilaian per Guru</CardTitle>
+        <Select value={pilih} onValueChange={setPilih}>
+          <SelectTrigger className="h-9 sm:w-80" data-testid="pkg-audit-pilih-guru"><SelectValue placeholder="Pilih guru yang dinilai" /></SelectTrigger>
+          <SelectContent>
+            {guru.map((g) => <SelectItem key={g.guru_id} value={g.guru_id}>{g.nama}{g.penilai_nama ? ` — ${g.penilai_nama}` : ''}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent>
+        {pilih ? <RiwayatAksiPenilaian muat={muat} kunci={pilih} /> : <p className="py-4 text-center text-sm text-slate-500">Pilih guru untuk melihat riwayat aksi lembarnya.</p>}
+      </CardContent>
+    </Card>
+  );
+}
 
 function IsiHalamanAudit() {
   const [halaman, setHalaman] = useState(1);
@@ -102,7 +134,14 @@ function IsiHalamanAudit() {
 export default function PkgAuditPage() {
   return (
     <PenjagaMenuPkg menuKey="audit">
-      <IsiHalamanAudit />
+      <Tabs defaultValue="semua">
+        <TabsList>
+          <TabsTrigger value="semua" data-testid="pkg-audit-tab-semua">Semua Aksi</TabsTrigger>
+          <TabsTrigger value="guru" data-testid="pkg-audit-tab-guru">Per Guru</TabsTrigger>
+        </TabsList>
+        <TabsContent value="semua"><IsiHalamanAudit /></TabsContent>
+        <TabsContent value="guru"><PanelPerGuru /></TabsContent>
+      </Tabs>
     </PenjagaMenuPkg>
   );
 }
