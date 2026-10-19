@@ -103,10 +103,20 @@ def test_cetak_pdf_libreoffice(klien):
     assert d['pkg_unduhan'].docs[-1]['mesin'] == 'libreoffice' and d['pkg_unduhan'].docs[-1]['format'] == 'pdf'
 
 
-def test_cetak_pdf_tanpa_libreoffice_503(klien, monkeypatch):
+def test_cetak_pdf_cadangan_reportlab(klien, monkeypatch, tmp_path):
+    import shutil
+    import subprocess
     import pkg_pdf
     k, d, _ = klien
     monkeypatch.setattr(pkg_pdf, 'cari_soffice', lambda: None)
-    r = k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'pdf'})
-    assert r.status_code == 503 and 'PDF tidak dapat dibuat' in r.json()['detail']
-    assert d['pkg_unduhan'].docs == []
+    for isian, cari in (({'jenis': 'rekap', 'format': 'pdf'}, ['Guru g1', 'Rata-rata', '90.00', 'Sangat Baik']),
+                        ({'jenis': 'guru', 'format': 'pdf', 'guru_id': 'g3'}, ['Guru g3', 'Level 5', '100.00%', 'Ahli Utama'])):
+        r = k.post('/api/pkg/cetak', json=isian)
+        assert r.status_code == 200 and r.content.startswith(b'%PDF') and r.headers['x-pkg-mesin'] == 'reportlab'
+        if shutil.which('pdftotext'):
+            f = tmp_path / 'c.pdf'
+            f.write_bytes(r.content)
+            teks = subprocess.run(['pdftotext', str(f), '-'], capture_output=True, text=True).stdout
+            assert 'VERSI CADANGAN' in teks and 'bukan salinan identik' in teks
+            assert all(x in teks for x in cari), (cari, teks[:500])
+    assert [u['mesin'] for u in d['pkg_unduhan'].docs] == ['reportlab', 'reportlab']
