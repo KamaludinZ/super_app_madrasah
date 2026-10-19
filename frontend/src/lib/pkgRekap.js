@@ -1,0 +1,52 @@
+import { levelCapaian, predikatJenjang } from '@/lib/pkgPenilaian';
+
+// Rekap hasil penilaian kinerja per periode.
+//
+// TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
+//   GET /pkg/rekap?periode_id= -> rekap   (periode bawaan: periode berjalan)
+// rekap = { periode, cakupan: 'semua' | 'penilai' | 'pribadi', ringkasan: { total, terkunci, draf, belum, rata_capaian },
+//           guru: [baris] }
+// baris = { guru_id, nama, nip, mapel, penilai_nama, status: 'belum'|'draf'|'terkunci', nilai_akhir, nilai_maks,
+//           capaian_persen, level_capaian, predikat, terkunci_pada, per_kompetensi: { kode: subtotal } }
+// Cakupan: kepala madrasah melihat semua guru; penilai melihat guru yang dinilainya; guru yang dinilai hanya
+// melihat hasilnya sendiri setelah lembar dikunci. Nilai hanya dihitung untuk lembar terkunci.
+
+const tunda = (hasil, ms = 200) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), ms); });
+
+function baris(guru_id, nama, nip, mapel, penilai_nama, status, perKompetensi = null, terkunci_pada = null) {
+  const nilai = perKompetensi ? Object.values(perKompetensi).reduce((a, b) => a + b, 0) : null;
+  const persen = nilai == null ? null : Math.round((nilai / 60) * 10000) / 100;
+  return {
+    guru_id, nama, nip, mapel, penilai_nama, status,
+    nilai_akhir: nilai, nilai_maks: 60, capaian_persen: persen,
+    level_capaian: persen == null ? null : levelCapaian(persen),
+    predikat: persen == null ? null : predikatJenjang(persen),
+    terkunci_pada, per_kompetensi: perKompetensi || {},
+  };
+}
+
+const GURU = [
+  baris('g1', 'Ahmad Fauzi, S.Pd.', '198703122019031004', 'Matematika', 'Drs. H. Mahmud, M.Pd.', 'terkunci', { 1: 12, 2: 11, 3: 10, 4: 13 }, '2026-10-15T09:00:00+07:00'),
+  baris('g2', 'Siti Rahmawati, S.Ag.', '199001252020122012', 'Akidah Akhlak', 'Ahmad Fauzi, S.Pd.', 'terkunci', { 1: 9, 2: 10, 3: 8, 4: 9 }, '2026-10-16T10:30:00+07:00'),
+  baris('g3', 'Dedi Kurniawan, M.Pd.', '198511082014031002', 'Bahasa Inggris', 'Drs. H. Mahmud, M.Pd.', 'terkunci', { 1: 14, 2: 14, 3: 13, 4: 15 }, '2026-10-17T08:15:00+07:00'),
+  baris('g4', 'Nur Aini, S.Si.', null, 'IPA', 'Ahmad Fauzi, S.Pd.', 'draf'),
+  baris('g5', 'Rina Kartika, S.Pd.', '199204172022212008', 'Bahasa Indonesia', 'Dedi Kurniawan, M.Pd.', 'terkunci', { 1: 7, 2: 8, 3: 7, 4: 8 }, '2026-10-18T13:00:00+07:00'),
+  baris('g6', 'Hasan Basri, S.Pd.I.', '198309202009011007', 'Fikih', 'Dedi Kurniawan, M.Pd.', 'belum'),
+];
+
+export async function ambilRekap({ periodeId } = {}) {
+  const guru = GURU;
+  const terkunci = guru.filter((g) => g.status === 'terkunci');
+  return tunda({
+    periode: { id: periodeId || 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', status: 'berjalan' },
+    cakupan: 'semua',
+    ringkasan: {
+      total: guru.length,
+      terkunci: terkunci.length,
+      draf: guru.filter((g) => g.status === 'draf').length,
+      belum: guru.filter((g) => g.status === 'belum').length,
+      rata_capaian: terkunci.length ? Math.round((terkunci.reduce((n, g) => n + g.capaian_persen, 0) / terkunci.length) * 100) / 100 : null,
+    },
+    guru,
+  });
+}
