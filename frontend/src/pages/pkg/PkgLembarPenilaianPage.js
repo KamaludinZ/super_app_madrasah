@@ -217,7 +217,7 @@ function IsiLembar() {
 }
 
 // Lembar penilaian kompetensi satu guru (penilai tersupervisi/kepala): ceklist indikator per sub-kompetensi dengan
-// tingkat & nilai dihitung otomatis. Data sementara dari lib/pkgPenilaian (tiruan).
+// tingkat & nilai dihitung otomatis (lib/pkgPenilaian -> /pkg/penilaian/*).
 export default function PkgLembarPenilaianPage() {
   return (
     <PenjagaMenuPkg menuKey="penilaian">

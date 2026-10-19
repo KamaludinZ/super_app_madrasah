@@ -1,75 +1,69 @@
-import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
+import { api } from '@/lib/api';
 
-// Lembar penilaian kinerja satu guru oleh penilai yang ditugaskan.
-//
-// TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
-//   GET /pkg/penilaian/lembar/{guru_id} -> lembar
-//   POST /pkg/penilaian/draft { guru_id, isian, catatan_umum } -> { id, status: 'draf', progres, updated_at }
-//        (lembar dibuat saat draf pertama disimpan; lembar terkunci ditolak 409)
-//   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci + hasil
-//        hasil = { nilai_akhir, nilai_maks, capaian_persen, level_capaian, predikat, terkunci_pada }
-//        (backend memvalidasi ulang kelengkapan; lembar terkunci permanen dan tercatat di jejak audit)
-//   gagal 403 -> detail { alasan: 'bukan_penugasan' | 'belum_disupervisi' | ..., pesan }
+// Lembar penilaian kinerja satu guru oleh penilai yang ditugaskan (backend/routers/pkg_penilaian_api.py).
+//   GET  /pkg/penilaian/lembar/{guru_id} -> lembar
+//        gagal 403 -> detail { alasan: 'bukan_penugasan' | 'belum_disupervisi' | ..., pesan }
+//   POST /pkg/penilaian/draft  { guru_id, isian, catatan_umum } -> { id, status: 'draf', progres, updated_at }
+//        (lembar dibuat saat draf pertama; terkunci 409; di luar masa 403 di_luar_masa)
+//   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci (dengan `hasil`)
+//        belum lengkap 400 -> detail { pesan, galat: { kode_sub: pesan } }
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel, akun_aktif, juga_penilai },
 //            periode: { id, nama_periode, tanggal_buka, tanggal_tutup }, dapat_diisi, alasan_tidak_dapat_diisi,
-//            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, updated_at }
+//            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, catatan_umum,
+//            hasil: { nilai_akhir, nilai_maks, capaian_persen, level_capaian, predikat, terkunci_pada } | null, updated_at }
 // isianSub = { centang: [level...], catatan_bukti, tanggapan }   (catatan & tanggapan maks BATAS_TEKS karakter)
-// lembar juga memuat catatan_umum (rekomendasi penilai untuk rekap per guru).
 //
-// Aturan nilai mengikuti rumus template resmi pkg_template_v2026.xlsx:
-//   - skor sub-kompetensi = jumlah indikator perilaku yang dicentang (KOMP-n!K6 = COUNTA(centang)/5*5), 0–5,
-//     ditampilkan sebagai "Level <skor>" (04-RKAP-PKG kolom G);
-//   - jumlah = total skor 12 sub (maks 60); capaian % = jumlah/60*100 (04-RKAP-PKG!H45);
-//   - level capaian & predikat jenjang jabatan dari capaian % (04-RKAP-PKG!G45 & F45), lihat levelCapaian/predikatJenjang.
+// Aturan nilai mengikuti rumus template resmi pkg_template_v2026.xlsx (sama dengan backend pkg_nilai.py):
+//   - skor sub-kompetensi = jumlah indikator perilaku yang dicentang (KOMP-n!K6 = COUNTA(centang)/5*5), 0–5;
+//   - jumlah = total skor (maks 60); capaian % = jumlah/60*100 (04-RKAP-PKG!H45);
+//   - level capaian & predikat jenjang jabatan dari capaian % (04-RKAP-PKG!G45 & F45).
 // Centang yang tidak berurutan dari Level 1 tetap dihitung, namun diberi peringatan agar penilai memeriksanya.
 
 export const BATAS_TEKS = 500;
 
-const GURU_TIRUAN = {
-  g1: { id: 'g1', nama: 'Ahmad Fauzi, S.Pd.', nip: '198703122019031004', mapel: 'Matematika', akun_aktif: true, juga_penilai: true },
-  g2: { id: 'g2', nama: 'Siti Rahmawati, S.Ag.', nip: '199001252020122012', mapel: 'Akidah Akhlak', akun_aktif: false, juga_penilai: false },
-};
-
-// Galat akses lembar (bentuk sama dengan lib/pkg GalatPkg): `penolakan` = { alasan, pesan } dari detail 403.
+// Galat akses/isian lembar: `penolakan` = { alasan, pesan } dari 403; `galat` = { kode_sub: pesan } dari 400.
 export class GalatLembar extends Error {
-  constructor(pesan, penolakan = null) {
+  constructor(pesan, penolakan = null, galat = null) {
     super(pesan);
     this.penolakan = penolakan;
+    this.galat = galat;
   }
 }
 
-const ISIAN_TIRUAN = {
-  g1: { '1.1': { centang: [1, 2, 3, 4], catatan_bukti: 'RPP & foto kelas', tanggapan: '' }, '1.2': { centang: [1, 2, 3], catatan_bukti: '', tanggapan: '' } },
-};
-const DRAF_TIRUAN = {}; // guru_id -> { catatan_umum, updated_at }
-const TERKUNCI_TIRUAN = {}; // guru_id -> hasil
-
-const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), ms); });
-
-export async function ambilLembar(guruId) {
-  // Tiruan: ?lembar=tolak (development) mensimulasikan guru yang tidak dibagikan kepada penilai.
-  if (process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).get('lembar') === 'tolak') {
-    throw new GalatLembar('Guru ini tidak dibagikan kepada Anda.', { alasan: 'bukan_penugasan', pesan: 'Guru ini tidak dibagikan kepada Anda pada periode berjalan.' });
+async function panggil(fn, cadangan) {
+  try {
+    return (await fn()).data;
+  } catch (e) {
+    const status = e?.response?.status;
+    const d = e?.response?.data?.detail;
+    if (status === 403 && d?.alasan) throw new GalatLembar(d.pesan || cadangan, d);
+    if (d && typeof d === 'object' && !Array.isArray(d)) throw new GalatLembar(d.pesan || cadangan, null, d.galat || null);
+    if (typeof d === 'string') throw new GalatLembar(d);
+    if (Array.isArray(d) && d[0]?.msg) throw new GalatLembar(`Isian tidak valid: ${d[0].msg}`);
+    throw new GalatLembar(cadangan);
   }
-  const instrumen = await ambilInstrumenAktif();
-  if (!instrumen) throw new Error('Instrumen PKG belum dimuat. Hubungi kepala madrasah.');
-  const isian = ISIAN_TIRUAN[guruId] || {};
-  const hasil = TERKUNCI_TIRUAN[guruId] || null;
-  return tunda({
-    id: Object.keys(isian).length ? `lembar-${guruId}` : null,
-    status: hasil ? 'terkunci' : Object.keys(isian).length ? 'draf' : 'belum',
-    hasil,
-    guru: GURU_TIRUAN[guruId] || { id: guruId, nama: 'Guru yang dinilai', nip: null, mapel: null, akun_aktif: true, juga_penilai: false },
-    periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', tanggal_buka: '2026-10-01', tanggal_tutup: '2026-11-30' },
-    // Server menentukan apakah lembar boleh diisi (masa penilaian, supervisi, status kunci).
-    dapat_diisi: !hasil,
-    alasan_tidak_dapat_diisi: hasil ? 'terkunci' : null,
-    instrumen: { id: instrumen.id, versi_template: instrumen.versi_template, revisi: instrumen.revisi, kompetensi: instrumen.kompetensi },
-    isian,
-    catatan_umum: DRAF_TIRUAN[guruId]?.catatan_umum || '',
-    updated_at: DRAF_TIRUAN[guruId]?.updated_at || null,
-  });
 }
+
+// Hanya field yang diterima server yang dikirim.
+function isianBersih(isian = {}) {
+  return Object.fromEntries(Object.entries(isian).map(([kode, x]) => [kode, {
+    centang: [...new Set((x?.centang || []).filter((l) => Number.isInteger(l) && l >= 1 && l <= 5))],
+    catatan_bukti: (x?.catatan_bukti || '').slice(0, BATAS_TEKS),
+    tanggapan: (x?.tanggapan || '').slice(0, BATAS_TEKS),
+  }]));
+}
+
+export const ambilLembar = (guruId) => panggil(() => api.get(`/pkg/penilaian/lembar/${guruId}`), 'Gagal memuat lembar penilaian.');
+
+export const simpanDraf = (guruId, { isian, catatanUmum }) => panggil(
+  () => api.post('/pkg/penilaian/draft', { guru_id: guruId, isian: isianBersih(isian), catatan_umum: (catatanUmum || '').slice(0, BATAS_TEKS) }),
+  'Gagal menyimpan draf.',
+);
+
+export const kirimLembar = (guruId, { isian, catatanUmum }) => panggil(
+  () => api.post('/pkg/penilaian/submit', { guru_id: guruId, isian: isianBersih(isian), catatan_umum: (catatanUmum || '').slice(0, BATAS_TEKS) }),
+  'Gagal mengirim penilaian.',
+);
 
 // Skor sub-kompetensi = jumlah indikator (Level 1–5) yang dicentang.
 export function hitungTingkat(centang = []) {
@@ -143,18 +137,7 @@ export function validasiLembar(kompetensi = [], isian = {}) {
   return { sah: Object.keys(galat).length === 0, kosong, galat, peringatan };
 }
 
-export async function simpanDraf(guruId, { isian, catatanUmum, kompetensi }) {
-  const terlalu = Object.values(isian || {}).some((x) => (x.catatan_bukti || '').length > BATAS_TEKS || (x.tanggapan || '').length > BATAS_TEKS)
-    || (catatanUmum || '').length > BATAS_TEKS;
-  if (terlalu) throw new Error(`Teks melebihi ${BATAS_TEKS} karakter.`);
-  ISIAN_TIRUAN[guruId] = JSON.parse(JSON.stringify(isian || {}));
-  const updated = new Date().toISOString();
-  DRAF_TIRUAN[guruId] = { catatan_umum: catatanUmum || '', updated_at: updated };
-  const n = hitungNilai(kompetensi, isian);
-  return tunda({ id: `lembar-${guruId}`, status: 'draf', progres: n.jumlahSub ? Math.round((n.terisi / n.jumlahSub) * 100) : 0, updated_at: updated }, 300);
-}
-
-// Hasil akhir lembar dari isian (dipakai pratinjau konfirmasi & tiruan submit).
+// Hasil akhir lembar dari isian (pratinjau di dialog konfirmasi kirim; server menghitung ulang saat mengunci).
 export function hitungHasilAkhir(kompetensi, isian) {
   const n = hitungNilai(kompetensi, isian);
   const persen = Math.round(n.persen * 100) / 100;
@@ -167,11 +150,3 @@ export function hitungHasilAkhir(kompetensi, isian) {
   };
 }
 
-export async function kirimLembar(guruId, { isian, catatanUmum, kompetensi }) {
-  if (TERKUNCI_TIRUAN[guruId]) throw new Error('Lembar penilaian ini sudah dikunci.');
-  const v = validasiLembar(kompetensi, isian);
-  if (!v.sah) throw new Error(`${Object.keys(v.galat).length} sub-kompetensi belum lengkap.`);
-  await simpanDraf(guruId, { isian, catatanUmum, kompetensi });
-  TERKUNCI_TIRUAN[guruId] = { ...hitungHasilAkhir(kompetensi, isian), terkunci_pada: new Date().toISOString() };
-  return ambilLembar(guruId);
-}
