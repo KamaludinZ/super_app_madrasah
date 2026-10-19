@@ -51,3 +51,45 @@ def test_bangun_ulang_rekap_dan_migrasi():
     import migrasi_otomatis
     assert ('2026-10-19_pkg_rekap', migrasi_otomatis._pkg_rekap) in migrasi_otomatis.MIGRASI
 
+
+
+def _db_agregasi():
+    db = _db()
+    db['pkg_sk'].docs[0].update({'dinilai_ids': ['g-n1', 'g-n2', 'g-baru'],
+                                 'snapshot_anggota': {'pen': {'nama': 'Penilai Satu'}, 'g-baru': {'nama': 'Zaki Baru', 'nip': '9'},
+                                                      'g-n2': {'nama': 'Guru n2'}}})
+    db['pkg_penugasan'] = Koleksi([{'periode_id': 'p1', 'penilai_id': 'pen', 'guru_dinilai_ids': ['g-n1', 'g-n2', 'g-baru']}])
+    asyncio.run(pkg_rekap.bangun_ulang_rekap(db))
+    # Data historis: rekap guru yang sudah tidak tercantum di SK tetap tampil.
+    db['pkg_rekap'].docs.append({'id': 'lama', 'periode_id': 'p1', 'guru_id': 'g-lama', 'nama': 'Agus Lama', 'penilai_nama': 'X',
+                                 'nilai_akhir': 18, 'nilai_maks': 20, 'capaian_persen': 90.0, 'level_capaian': 'Level 4',
+                                 'predikat': 'Terpenuhi pada Jenjang Jabatan Guru Ahli Madya', 'per_kompetensi': {'1': 9, '2': 9}})
+    return db
+
+
+def test_agregasi_rekap():
+    db = _db_agregasi()
+    r = asyncio.run(pkg_rekap.agregasi_rekap(db, {'id': 'p1'}, db['pkg_sk'].docs[0]))
+    assert [(b['nama'], b['status']) for b in r['guru']] == [
+        ('Agus Lama', 'terkunci'), ('Guru n1', 'terkunci'), ('Guru n2', 'draf'), ('Zaki Baru', 'belum')]
+    assert r['ringkasan'] == {'total': 4, 'terkunci': 2, 'draf': 1, 'belum': 1, 'rata_capaian': 72.5}
+    n1 = r['guru'][1]
+    assert (n1['nilai_akhir'], n1['capaian_persen'], n1['penilai_nama'], n1['per_kompetensi']) == (11, 55.0, 'Penilai Satu', {'1': 5, '2': 6})
+    assert r['guru'][3]['penilai_nama'] == 'Penilai Satu' and r['guru'][3]['nilai_akhir'] is None
+
+    st = r['statistik']
+    assert (st['jumlah'], st['rata'], st['median']) == (2, 72.5, 72.5)
+    assert st['tertinggi']['nama'] == 'Agus Lama' and st['terendah']['nama'] == 'Guru n1'
+    assert [x['jumlah'] for x in st['sebaran_predikat']] == [1, 0, 1, 0]
+    assert [x['jumlah'] for x in st['sebaran_level']] == [0, 1, 0, 1, 0]
+
+
+def test_agregasi_cakupan():
+    db = _db_agregasi()
+    sk = db['pkg_sk'].docs[0]
+    satu = asyncio.run(pkg_rekap.agregasi_rekap(db, {'id': 'p1'}, sk, saring_guru={'g-n2', 'g-baru'}))
+    assert [b['guru_id'] for b in satu['guru']] == ['g-n2', 'g-baru'] and satu['statistik']['jumlah'] == 0
+    pribadi = asyncio.run(pkg_rekap.agregasi_rekap(db, {'id': 'p1'}, sk, saring_guru={'g-n2'}, hanya_terkunci=True))
+    assert pribadi['guru'] == [] and pribadi['ringkasan']['total'] == 0
+    tanpa_sk = asyncio.run(pkg_rekap.agregasi_rekap(db, {'id': 'p1'}, None))
+    assert {b['guru_id'] for b in tanpa_sk['guru']} == {'g-n1', 'g-lama'}
