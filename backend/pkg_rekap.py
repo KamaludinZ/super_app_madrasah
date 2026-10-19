@@ -238,3 +238,61 @@ async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]]
         'instrumen': {k: instrumen.get(k) for k in ('id', 'versi_template', 'revisi', 'kompetensi')} if instrumen else None,
         'isian': (lembar or {}).get('isian') or {},
     }
+
+
+async def rekap_periode(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode_id: Optional[str]) -> Dict[str, Any]:
+    """Rekap utama (kontrak frontend GET /pkg/rekap): periode, SK, cakupan, ringkasan, statistik, dan guru dalam
+    cakupan pengguna (hasil pribadi hanya bila terkunci)."""
+    periode, sk = await periode_dan_sk(db, periode_id)
+    cakupan = await cakupan_rekap(db, user, keanggotaan, periode)
+    agregat = await agregasi_rekap(db, periode, sk, saring_guru=cakupan['guru'], hanya_terkunci=cakupan['cakupan'] == 'pribadi')
+    if cakupan['cakupan'] == 'penilai':
+        # Hasil penilai sendiri (bila juga dinilai) hanya tampil setelah dikunci.
+        diri = [b for b in agregat['guru'] if b['guru_id'] == cakupan['diri'] and b['status'] != 'terkunci']
+        if diri:
+            agregat = await agregasi_rekap(db, periode, sk, saring_guru=cakupan['guru'] - {cakupan['diri']})
+    return {
+        'periode': {k: periode.get(k) for k in ('id', 'nama_periode', 'tahun_pelajaran', 'semester', 'status')},
+        'sk': {'id': sk['id'], 'nomor_sk': sk.get('nomor_sk')} if sk else None,
+        'cakupan': cakupan['cakupan'],
+        **agregat,
+    }
+
+
+URUT_STATUS = {'terkunci': 0, 'draf': 1, 'belum': 2}
+
+
+async def rekap_tim(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], penilai_id: Optional[str] = None) -> list:
+    """Rekap per tim penilai dalam SK periode: identitas & status supervisi penilai, jatah, jumlah guru per status,
+    rata-rata capaian, dan anggota terurut (terkunci berperingkat capaian, lalu draf, belum)."""
+    from pkg_skema import KOLEKSI_PENUGASAN
+    agregat = await agregasi_rekap(db, periode, sk)
+    tugas = {t['penilai_id']: t for t in await db[KOLEKSI_PENUGASAN].find({'periode_id': periode['id']}, {'_id': 0}).to_list(1000)}
+    snap = (sk or {}).get('snapshot_anggota') or {}
+    per_penilai: Dict[str, list] = {}
+    for b in agregat['guru']:
+        per_penilai.setdefault(b.get('penilai_id') or '', []).append(b)
+    for pid in (sk or {}).get('penilai_ids') or []:
+        per_penilai.setdefault(pid, [])
+    hasil = []
+    for pid, guru in per_penilai.items():
+        if penilai_id and pid != penilai_id:
+            continue
+        guru = sorted(guru, key=lambda b: (URUT_STATUS.get(b['status'], 3), -(b.get('capaian_persen') or 0), (b['nama'] or '').lower()))
+        peringkat = 0
+        for b in guru:
+            b['peringkat'] = (peringkat := peringkat + 1) if b['status'] == 'terkunci' else None
+        nilai = [b['capaian_persen'] for b in guru if b['status'] == 'terkunci' and b.get('capaian_persen') is not None]
+        t = tugas.get(pid) or {}
+        hasil.append({
+            'penilai_id': pid or None,
+            'penilai_nama': (snap.get(pid) or {}).get('nama') or next((b['penilai_nama'] for b in guru if b.get('penilai_nama')), None)
+            or ('Belum dibagikan' if not pid else None),
+            'supervisi_selesai': bool(t.get('supervisi_selesai')), 'jumlah_jatah': int(t.get('jumlah_jatah') or 0),
+            'jumlah': len(guru), 'terkunci': sum(1 for b in guru if b['status'] == 'terkunci'),
+            'draf': sum(1 for b in guru if b['status'] == 'draf'), 'belum': sum(1 for b in guru if b['status'] == 'belum'),
+            'rata_capaian': _bulat2(sum(nilai) / len(nilai)) if nilai else None,
+            'guru': guru,
+        })
+    hasil.sort(key=lambda t: (t['penilai_id'] is None, (t['penilai_nama'] or '').lower()))
+    return hasil

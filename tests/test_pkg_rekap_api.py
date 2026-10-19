@@ -80,3 +80,38 @@ def test_hasil_sendiri_belum_dikunci_ditolak(db):
     with pytest.raises(HTTPException) as e:
         _rincian('kep', 'g1', periode='tidak-ada')
     assert e.value.status_code == 404
+
+
+def _api_get(fn, user, periode=None):
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru(user))
+        return await fn(periode, akses=akses)
+    return asyncio.run(jalan())
+
+
+def test_rekap_periode_per_cakupan(db):
+    kep = _api_get(api.rekap_api, 'kep')
+    assert kep['cakupan'] == 'semua' and kep['sk']['id'] == 's1' and kep['periode']['id'] == 'p1'
+    assert {b['guru_id']: b['status'] for b in kep['guru']} == {'g1': 'terkunci', 'g2': 'draf', 'rangkap': 'terkunci', 'g3': 'draf'}
+    assert kep['ringkasan']['terkunci'] == 2 and kep['statistik']['jumlah'] == 2
+
+    pen = _api_get(api.rekap_api, 'pen')
+    assert pen['cakupan'] == 'penilai' and {b['guru_id'] for b in pen['guru']} == {'g1', 'rangkap'}
+    rangkap = _api_get(api.rekap_api, 'rangkap')
+    assert {b['guru_id'] for b in rangkap['guru']} == {'g2', 'rangkap'}  # hasil sendiri sudah terkunci -> tampil
+    g1 = _api_get(api.rekap_api, 'g1')
+    assert g1['cakupan'] == 'pribadi' and [b['guru_id'] for b in g1['guru']] == ['g1']
+    g3 = _api_get(api.rekap_api, 'g3')
+    assert g3['guru'] == [] and g3['ringkasan']['total'] == 0  # belum dikunci -> tersembunyi
+
+
+def test_rekap_tim(db):
+    tim = {t['penilai_id']: t for t in _api_get(api.rekap_tim_api, 'kep')['tim']}
+    assert set(tim) == {'pen', 'rangkap', 'kep'}
+    assert (tim['pen']['jumlah'], tim['pen']['terkunci'], tim['pen']['rata_capaian'], tim['pen']['supervisi_selesai']) == (2, 2, 80.0, True)
+    assert [g['peringkat'] for g in tim['pen']['guru']] == [1, 2]
+    assert (tim['rangkap']['draf'], tim['rangkap']['guru'][0]['peringkat']) == (1, None)
+    assert [t['penilai_id'] for t in _api_get(api.rekap_tim_api, 'pen')['tim']] == ['pen']
+    with pytest.raises(HTTPException) as e:
+        _api_get(api.rekap_tim_api, 'g1')
+    assert e.value.detail['alasan'] == 'bukan_penilai'
