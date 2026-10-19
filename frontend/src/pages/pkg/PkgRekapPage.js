@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -7,6 +7,7 @@ import { BarChart3, Users, Lock, PencilLine, CircleDashed, Percent, Loader2, Ale
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import RekapPerTim from '@/components/pkg/RekapPerTim';
+import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ambilRekap } from '@/lib/pkgRekap';
 
@@ -32,17 +33,22 @@ function KartuAngka({ icon: Icon, label, value, color }) {
 }
 
 function IsiHalamanRekap() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodeId = searchParams.get('periode') || undefined;
   const [rekap, setRekap] = useState(null);
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
     setGalat(null);
     try {
-      setRekap(await ambilRekap());
+      setRekap(await ambilRekap({ periodeId }));
     } catch (e) {
       setGalat(e);
     }
-  }, []);
+  }, [periodeId]);
+
+  // Periode terpilih disimpan di URL (?periode=) agar tampilan rekap dapat dibagikan.
+  const gantiPeriode = (id) => setSearchParams((sp) => { const baru = new URLSearchParams(sp); baru.set('periode', id); return baru; });
 
   useEffect(() => { muat(); }, [muat]);
 
@@ -65,6 +71,8 @@ function IsiHalamanRekap() {
         <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><BarChart3 className="h-5 w-5 text-[#006837]" /> Rekap Hasil Penilaian</h2>
         <p className="text-xs text-slate-500">{rekap.periode?.nama_periode} · {CAKUPAN[rekap.cakupan] || ''}</p>
       </div>
+
+      <SaringanPeriodeRekap nilai={rekap.periode?.id} onUbah={gantiPeriode} />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3" data-testid="pkg-rekap-ringkasan">
         <KartuAngka icon={Users} label="Guru" value={r.total} color="bg-slate-50 border-slate-200 text-slate-700" />

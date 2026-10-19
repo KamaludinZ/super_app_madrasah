@@ -5,6 +5,7 @@ import { levelCapaian, predikatJenjang } from '@/lib/pkgPenilaian';
 // TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
 //   GET /pkg/rekap?periode_id= -> rekap   (periode bawaan: periode berjalan)
 //   GET /pkg/rekap/guru/{guru_id}?periode_id= -> rincian  (hanya lembar dalam cakupan pengguna)
+//   GET /pkg/rekap/periode -> [{ id, nama_periode, tahun_pelajaran, semester, status }]  (terbaru dulu)
 // rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
 //             instrumen: { id, versi_template, revisi, kompetensi }, isian: { kode_sub: { centang, catatan_bukti, tanggapan } } }
 // rekap = { periode, sk: { id, nomor_sk } | null, cakupan: 'semua' | 'penilai' | 'pribadi', ringkasan: { total, terkunci, draf, belum, rata_capaian },
@@ -37,11 +38,29 @@ const GURU = [
   baris('g6', 'Hasan Basri, S.Pd.I.', '198309202009011007', 'Fikih', 'Dedi Kurniawan, M.Pd.', 'belum'),
 ];
 
+const PERIODE_TIRUAN = [
+  { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', tahun_pelajaran: '2026/2027', semester: 'Ganjil', status: 'berjalan' },
+  { id: 'p-2025-genap', nama_periode: 'PKG Semester Genap 2025/2026', tahun_pelajaran: '2025/2026', semester: 'Genap', status: 'ditutup' },
+  { id: 'p-2025-ganjil', nama_periode: 'PKG Semester Ganjil 2025/2026', tahun_pelajaran: '2025/2026', semester: 'Ganjil', status: 'ditutup' },
+];
+
+export const daftarPeriodeRekap = () => tunda(PERIODE_TIRUAN);
+
+// Periode lama (tiruan): semua lembar sudah terkunci dengan nilai sedikit berbeda.
+function guruPeriode(periodeId) {
+  if (!periodeId || periodeId === PERIODE_TIRUAN[0].id) return GURU;
+  const geser = periodeId === 'p-2025-genap' ? -1 : -2;
+  return GURU.map((g, i) => baris(g.guru_id, g.nama, g.nip, g.mapel, g.penilai_nama, 'terkunci',
+    Object.fromEntries(['1', '2', '3', '4'].map((k) => [k, Math.max(3, Math.min(15, (g.per_kompetensi[k] || 9 + (i % 3)) + geser))])),
+    '2026-04-25T09:00:00+07:00'));
+}
+
 export async function ambilRekap({ periodeId } = {}) {
-  const guru = GURU;
+  const periode = PERIODE_TIRUAN.find((p) => p.id === periodeId) || PERIODE_TIRUAN[0];
+  const guru = guruPeriode(periode.id);
   const terkunci = guru.filter((g) => g.status === 'terkunci');
   return tunda({
-    periode: { id: periodeId || 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', status: 'berjalan' },
+    periode,
     sk: { id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026' },
     cakupan: 'semua',
     ringkasan: {
