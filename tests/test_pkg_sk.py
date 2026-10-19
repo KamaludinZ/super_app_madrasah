@@ -207,15 +207,14 @@ def test_snapshot_identitas_periode(db):
     assert snap['g2'] == {'nama': 'Ani', 'nip': 'PEG-9', 'mapel': None}  # jadwal belum terbit tidak dihitung
     assert set(snap) == {'kep', 'g1', 'g2'}
 
+    # Pembagian menyalin snapshot guru ke dokumen penilai.
+    from pkg_skema import PenugasanRequest
+    _api(api.simpan_pembagian_api, PenugasanRequest(penugasan={'g1': 'kep', 'g2': 'g1'}), Request())
+    tugas_g1 = next(d for d in db['pkg_penugasan'].docs if d['penilai_id'] == 'g1')
+    assert tugas_g1['snapshot_guru'] == {'g2': {'nama': 'Ani', 'nip': 'PEG-9', 'mapel': None}}
+
     # Akun berubah/dihapus setelahnya: tampilan SK tetap memakai identitas periode.
     db['users'].docs = [u for u in db['users'].docs if u['id'] != 'g2']
     db['users'].docs[1]['full_name'] = 'Budi Baru'
     tampil = _api(api.rincian_sk_api, sk['id'])
     assert [a['nama'] for a in tampil['dinilai']] == ['Budi', 'Ani'] and tampil['dinilai'][0]['mapel'] == 'IPA, Matematika'
-
-    # Pembagian menyalin snapshot guru ke dokumen penilai.
-    from pkg_skema import PenugasanRequest
-    db['pkg_sk'].docs[0]['is_active'] = True
-    _api(api.simpan_pembagian_api, PenugasanRequest(penugasan={'g1': 'kep', 'g2': 'g1'}), Request())
-    tugas_g1 = next(d for d in db['pkg_penugasan'].docs if d['penilai_id'] == 'g1')
-    assert tugas_g1['snapshot_guru'] == {'g2': {'nama': 'Ani', 'nip': 'PEG-9', 'mapel': None}}

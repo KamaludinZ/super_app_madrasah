@@ -193,10 +193,10 @@ async def guru_aktif(db) -> List[Dict[str, Any]]:
     return hasil
 
 
-async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
-    """Akun untuk `ids`; HTTP 400 bila ada yang tidak ditemukan, nonaktif, atau bukan guru."""
+async def masalah_akun_guru(db, ids: List[str]) -> tuple:
+    """(akun {id: dok}, daftar pesan masalah) untuk akun yang tidak ditemukan, nonaktif, atau bukan guru."""
     if not ids:
-        return {}
+        return {}, []
     akun = {u['id']: u for u in await db.users.find(
         {'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'roles': 1, 'is_active': 1}).to_list(len(ids))}
     tidak_ada = [i for i in ids if i not in akun]
@@ -210,6 +210,12 @@ async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
         pesan.append('akun nonaktif: ' + ', '.join(nonaktif))
     if bukan_guru:
         pesan.append('bukan akun guru: ' + ', '.join(bukan_guru))
+    return akun, pesan
+
+
+async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Akun untuk `ids`; HTTP 400 bila ada yang tidak ditemukan, nonaktif, atau bukan guru."""
+    akun, pesan = await masalah_akun_guru(db, ids)
     if pesan:
         raise HTTPException(400, 'Anggota SK tidak valid — ' + '; '.join(pesan) + '.')
     return akun

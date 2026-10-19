@@ -25,7 +25,8 @@ def db(monkeypatch):
                             'penilai_ids': ['kep', 'g1'], 'dinilai_ids': ['g1', 'g2', 'g3']}]),
         'pkg_penugasan': Koleksi([{'id': 't1', 'periode_id': 'p1', 'penilai_id': 'g1', 'guru_dinilai_ids': [],
                                    'supervisi_selesai': True, 'tanggal_supervisi': '2026-10-08'}]),
-        'users': Koleksi([{'id': u, 'full_name': u.upper()} for u in ('kep', 'g1', 'g2', 'g3')]),
+        'users': Koleksi([{'id': u, 'full_name': u.upper(), 'roles': ['kepala_sekolah' if u == 'kep' else 'guru']}
+                          for u in ('kep', 'g1', 'g2', 'g3')]),
     })
     monkeypatch.setattr(api, 'db', d)
     monkeypatch.setattr(pkg_penjaga, 'db', d)
@@ -85,3 +86,26 @@ def test_tanpa_sk_aktif(db):
 def test_penilaian_dimulai(db):
     db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': 's1'}])
     assert _api(api.pembagian_api)['penilaian_dimulai'] is True
+
+
+def test_validasi_akun_jatah_dan_ganda(db):
+    db['users'] = Koleksi([
+        {'id': 'kep', 'full_name': 'KEP', 'roles': ['kepala_sekolah']},
+        {'id': 'g1', 'full_name': 'G1', 'roles': ['guru']},
+        {'id': 'g2', 'full_name': 'G2', 'roles': ['guru'], 'is_active': False},  # dinonaktifkan setelah SK
+        {'id': 'g3', 'full_name': 'G3', 'roles': ['guru']},
+    ])
+    with pytest.raises(HTTPException) as e:
+        _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'g1'}, {'g1': 1})
+    pesan = e.value.detail
+    assert e.value.status_code == 400 and 'akun nonaktif: G2' in pesan and 'melebihi jatah' in pesan and '(2/1)' in pesan
+
+    db['users'].docs[2]['is_active'] = True
+    assert _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'g1'}, {'g1': 2})['peringatan'] == []
+    assert _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'g1'}, {'g1': 0})['penugasan']['g3'] == 'g1'  # jatah 0 = tanpa batas
+
+    # Data tersimpan tidak konsisten (guru pada dua penilai) dan akun dinonaktifkan -> peringatan di GET.
+    next(d for d in db['pkg_penugasan'].docs if d['penilai_id'] == 'kep')['guru_dinilai_ids'] = ['g1', 'g2']
+    db['users'].docs[3]['is_active'] = False
+    peringatan = _api(api.pembagian_api)['peringatan']
+    assert any('lebih dari satu penilai' in p for p in peringatan) and any('G3' in p for p in peringatan)
