@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 import pkg_akses  # noqa: E402
 import pkg_audit  # noqa: E402
 import pkg_beranda  # noqa: E402
+import pkg_penjaga  # noqa: E402
 from routers import pkg as api  # noqa: E402
 
 
@@ -89,7 +90,22 @@ def db(monkeypatch):
         ]),
     })
     monkeypatch.setattr(api, 'db', d)
+    monkeypatch.setattr(pkg_penjaga, 'db', d)
     return d
+
+
+class _Request:
+    def __init__(self, jalur):
+        self.url = type('U', (), {'path': jalur})()
+        self.client = type('C', (), {'host': '10.0.0.1'})()
+
+
+def _panggil(fn, user, *awal, syarat='anggota', jalur='/pkg/uji'):
+    """Jalankan endpoint seperti FastAPI: penjaga_pkg(syarat) lebih dahulu, lalu endpoint dengan hasilnya."""
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg(syarat)(_Request(jalur), user)
+        return await fn(*awal, akses)
+    return asyncio.run(jalan())
 
 
 def _k(db, user):
@@ -130,11 +146,11 @@ def test_tanpa_periode_berjalan(db):
 
 def test_endpoint_beranda_403_terstruktur(db):
     with pytest.raises(HTTPException) as e:
-        asyncio.run(api.beranda_pkg(None, GURU('asing')))
+        _panggil(api.beranda_pkg, GURU('asing'), None)
     assert e.value.status_code == 403
     assert e.value.detail['alasan'] == 'bukan_anggota_sk' and e.value.detail['pesan']
 
-    hasil = asyncio.run(api.beranda_pkg(None, GURU('pen')))
+    hasil = _panggil(api.beranda_pkg, GURU('pen'), None)
     assert hasil['periode']['id'] == 'p1' and hasil['keanggotaan']['peran'] == 'penilai'
     assert 'penolakan' not in hasil['keanggotaan']
 
@@ -154,11 +170,11 @@ def test_ringkasan_kinerja(db):
         {'sk_id': 'sk-lama', 'guru_dinilai_id': 'g4', 'status': 'terkunci'},  # SK lain diabaikan
     ])
     hasil = {'total': 4, 'selesai': 2, 'sedang': 1, 'belum': 1}
-    assert asyncio.run(api.ringkasan_beranda(None, GURU('pen'))) == hasil
-    assert asyncio.run(api.beranda_pkg(None, GURU('gur')))['ringkasan'] == hasil
+    assert _panggil(api.ringkasan_beranda, GURU('pen')) == hasil
+    assert _panggil(api.beranda_pkg, GURU('gur'), None)['ringkasan'] == hasil
     assert asyncio.run(pkg_beranda.ringkasan_kinerja(db, None)) == {'total': 0, 'selesai': 0, 'sedang': 0, 'belum': 0}
     with pytest.raises(HTTPException) as e:
-        asyncio.run(api.ringkasan_beranda(None, GURU('asing')))
+        _panggil(api.ringkasan_beranda, GURU('asing'))
     assert e.value.status_code == 403
 
 
@@ -177,21 +193,21 @@ def test_tugas_penilaian_saya(db):
         {'id': 'n2', 'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g2', 'status': 'draf', 'progres': 250},
         {'id': 'n3', 'sk_id': 'sk1', 'penilai_id': 'lain', 'guru_dinilai_id': 'g3', 'status': 'draf', 'progres': 50},
     ])
-    tugas = asyncio.run(api.tugas_saya(None, GURU('pen')))
+    tugas = _panggil(api.tugas_saya, GURU('pen'))
     assert [(t['id'], t['status'], t['progres']) for t in tugas] == [('g2', 'draf', 100), ('g3', 'belum', 0), ('g1', 'terkunci', 100)]
     ani = tugas[0]
     assert (ani['nama'], ani['nip'], ani['mapel'], ani['penilaian_id']) == ('Ani, S.Pd.', '222-snap', 'IPA', 'n2')
     assert (tugas[1]['nama'], tugas[1]['nip'], tugas[1]['penilaian_id']) == ('Citra', '333', None)
 
-    assert asyncio.run(api.tugas_saya(None, GURU('gur'))) == []  # hanya dinilai → tanpa tugas
-    assert asyncio.run(api.beranda_pkg(None, GURU('pen')))['tugas'] == tugas
+    assert _panggil(api.tugas_saya, GURU('gur')) == []  # hanya dinilai → tanpa tugas
+    assert _panggil(api.beranda_pkg, GURU('pen'), None)['tugas'] == tugas
     with pytest.raises(HTTPException):
-        asyncio.run(api.tugas_saya(None, GURU('asing')))
+        _panggil(api.tugas_saya, GURU('asing'))
 
 
 def test_menu_sesuai_akses(db):
     def akses(user):
-        return {m['key']: m['alasan'] for m in asyncio.run(api.menu_beranda(None, user))}
+        return {m['key']: m['alasan'] for m in _panggil(api.menu_beranda, user)}
 
     kepala = akses(KEPALA)
     assert len(kepala) == 9 and all(a is None for a in kepala.values())
@@ -207,10 +223,10 @@ def test_menu_sesuai_akses(db):
     assert gur['penilaian'] == 'bukan_penilai' and gur['cetak'] == 'bukan_penilai'
     assert gur['instrumen'] is None and gur['rekap'] is None
 
-    menu = asyncio.run(api.beranda_pkg(None, GURU('pen')))['menu']
+    menu = _panggil(api.beranda_pkg, GURU('pen'), None)['menu']
     assert [m['key'] for m in menu][:2] == ['periode', 'sk'] and menu[0]['khusus'] == 'kepala' and menu[0]['akses'] is False
     with pytest.raises(HTTPException):
-        asyncio.run(api.menu_beranda(None, GURU('asing')))
+        _panggil(api.menu_beranda, GURU('asing'))
 
 
 def test_pengingat_dan_notifikasi(db):
@@ -220,12 +236,12 @@ def test_pengingat_dan_notifikasi(db):
     db['pkg_penugasan'].docs[1]['guru_dinilai_ids'] = ['g3']
     db['pkg_penilaian'] = _Koleksi([{'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g1', 'status': 'terkunci'}])
 
-    pen = asyncio.run(api.pengingat_beranda(None, GURU('pen')))
+    pen = _panggil(api.pengingat_beranda, GURU('pen'))
     assert [(p['jenis'], p['tanggal']) for p in pen] == [('tenggat', '2026-11-30')] and pen[0]['keterangan'].startswith('1 guru')
-    rangkap = asyncio.run(api.pengingat_beranda(None, GURU('rangkap')))
+    rangkap = _panggil(api.pengingat_beranda, GURU('rangkap'))
     assert [p['jenis'] for p in rangkap] == ['supervisi', 'tenggat']
-    assert asyncio.run(api.pengingat_beranda(None, GURU('gur'))) == []  # hanya dinilai
-    kep = asyncio.run(api.pengingat_beranda(None, KEPALA))
+    assert _panggil(api.pengingat_beranda, GURU('gur')) == []  # hanya dinilai
+    kep = _panggil(api.pengingat_beranda, KEPALA)
     assert [p['jenis'] for p in kep] == ['tenggat']
 
     ubah = pkg_beranda.pengingat_ke_notifikasi
@@ -238,22 +254,34 @@ def test_pengingat_dan_notifikasi(db):
     assert [(n['source_id'], n['severity']) for n in supervisi] == [('supervisi_p1', 'warning')]
 
     assert asyncio.run(pkg_beranda.notifikasi_pkg(db, GURU('asing'))) == []
-    assert 'pengingat' in asyncio.run(api.beranda_pkg(None, GURU('pen')))
+    assert 'pengingat' in _panggil(api.beranda_pkg, GURU('pen'), None)
 
 
 def test_audit_beranda_harian(db):
     for _ in range(3):
-        asyncio.run(api.beranda_pkg(None, GURU('pen')))
+        _panggil(api.beranda_pkg, GURU('pen'), None)
     for _ in range(2):
         with pytest.raises(HTTPException):
-            asyncio.run(api.menu_beranda(None, GURU('asing')))
+            _panggil(api.menu_beranda, GURU('asing'), jalur='/pkg/beranda/menu')
     log = db['pkg_audit_log'].docs
     buka = [d for d in log if d['aksi'] == 'buka_beranda']
     assert len(buka) == 1 and buka[0]['jumlah'] == 3 and buka[0]['aktor_id'] == 'pen'
     assert buka[0]['metadata'] == {'periode_id': 'p1'} and buka[0]['tanggal'] and buka[0]['terakhir']
     tolak = [d for d in log if d['aksi'] == 'tolak_akses']
     assert len(tolak) == 1 and tolak[0]['jumlah'] == 2
-    assert tolak[0]['metadata'] == {'endpoint': '/pkg/beranda/menu', 'alasan': 'bukan_anggota_sk'}
+    assert tolak[0]['metadata'] == {'endpoint': '/pkg/beranda/menu', 'alasan': 'bukan_anggota_sk', 'syarat': 'anggota'}
+    assert tolak[0]['ip_address'] == '10.0.0.1'
+
+
+def test_penjaga_syarat_kepala(db):
+    with pytest.raises(HTTPException) as e:
+        _panggil(api.menu_beranda, GURU('pen'), syarat='kepala', jalur='/pkg/periode')
+    assert e.value.detail['alasan'] == 'bukan_kepala'
+    log = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
+    assert log[0]['metadata']['endpoint'] == '/pkg/periode' and log[0]['kunci'] == '/pkg/periode:bukan_kepala'
+    assert len(_panggil(api.menu_beranda, KEPALA, syarat='kepala')) == 9
+    with pytest.raises(ValueError):
+        pkg_penjaga.penjaga_pkg('salah')
 
 
 async def test_audit_harian_mongodb(mongo_db):
@@ -295,3 +323,26 @@ def test_dalam_masa_penilaian():
     assert pkg_akses.dalam_masa_penilaian(p, '2026-10-01') and pkg_akses.dalam_masa_penilaian(p, '2026-11-30')
     assert not pkg_akses.dalam_masa_penilaian(p, '2026-09-30') and not pkg_akses.dalam_masa_penilaian(p, '2026-12-01')
     assert not pkg_akses.dalam_masa_penilaian(None) and not pkg_akses.dalam_masa_penilaian({'tanggal_buka': '2026-10-01'})
+
+
+def test_dependency_lewat_fastapi(db):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from core import get_current_user
+
+    app = FastAPI()
+    app.include_router(api.router, prefix='/api')
+    pengguna = {'user': GURU('asing')}
+    app.dependency_overrides[get_current_user] = lambda: pengguna['user']
+    klien = TestClient(app)
+
+    r = klien.get('/api/pkg/beranda/menu')
+    assert r.status_code == 403
+    assert r.json()['detail'] == {'alasan': 'bukan_anggota_sk', 'pesan': pkg_akses.PESAN_TOLAK['bukan_anggota_sk']}
+    log = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
+    assert log[0]['metadata']['endpoint'] == '/api/pkg/beranda/menu'
+
+    pengguna['user'] = GURU('pen')
+    r = klien.get('/api/pkg/beranda/menu')
+    assert r.status_code == 200 and len(r.json()) == 9
+    assert klien.get('/api/pkg/sk/my-membership').json()['peran'] == 'penilai'
