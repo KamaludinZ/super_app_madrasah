@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ShieldX, UserX, ShieldAlert, Lock, Home } from 'lucide-react';
+import { ShieldX, UserX, ShieldAlert, Lock, Home, Award, IdCard } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 
 // Pesan per alasan penolakan (detail HTTP 403 terstruktur dari endpoint /pkg/*).
 const ALASAN = {
@@ -28,9 +29,14 @@ const ALASAN = {
 };
 
 // Pesan tolak akses modul PKG di dalam AppShell. `penolakan` = { alasan, pesan } dari backend.
+// Non-anggota SK diarahkan ke dashboard; anggota yang ditolak sub-menu tertentu (bukan kepala/penilai/
+// belum disupervisi) diarahkan kembali ke Beranda PKG atau Status Saya.
 export default function PesanTolakPkg({ penolakan }) {
+  const { settings } = useAuth();
   const cfg = ALASAN[penolakan?.alasan] || ALASAN.bukan_anggota_sk;
   const { Icon } = cfg;
+  const nonAnggota = !penolakan?.alasan || penolakan.alasan === 'bukan_anggota_sk';
+  const kepala = settings?.headmaster_name;
 
   return (
     <div className="flex justify-center px-4 py-12" role="alert" data-testid={`pkg-tolak-${penolakan?.alasan || 'bukan_anggota_sk'}`}>
@@ -43,10 +49,24 @@ export default function PesanTolakPkg({ penolakan }) {
           <h1 className="text-xl font-bold text-slate-900">{cfg.judul}</h1>
           {penolakan?.pesan && <p className="text-sm text-slate-700">{penolakan.pesan}</p>}
           <p className="text-sm text-slate-500">{cfg.saran}</p>
+          {nonAnggota && kepala && (
+            <p className="text-xs text-slate-500" data-testid="pkg-tolak-kontak">Kepala madrasah: <span className="font-semibold text-slate-700">{kepala}</span></p>
+          )}
         </div>
-        <Button asChild className="bg-[#006837] hover:bg-[#005a30] gap-2">
-          <Link to="/dashboard"><Home className="h-4 w-4" /> Ke Dashboard</Link>
-        </Button>
+        {nonAnggota ? (
+          <Button asChild className="bg-[#006837] hover:bg-[#005a30] gap-2">
+            <Link to="/dashboard"><Home className="h-4 w-4" /> Ke Dashboard</Link>
+          </Button>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <Button asChild variant="outline" className="gap-2">
+              <Link to="/pkg/keanggotaan"><IdCard className="h-4 w-4" /> Status Saya</Link>
+            </Button>
+            <Button asChild className="bg-[#006837] hover:bg-[#005a30] gap-2">
+              <Link to="/pkg"><Award className="h-4 w-4" /> Beranda PKG</Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
