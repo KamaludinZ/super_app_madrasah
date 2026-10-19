@@ -19,7 +19,9 @@ from pkg_instrumen import instrumen_aktif
 from pymongo.errors import DuplicateKeyError
 
 from pkg_nilai import hitung_nilai, kode_sub
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest, KirimPenilaianRequest
+from pkg_skema import (
+    KOLEKSI_AUDIT, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest, KirimPenilaianRequest,
+)
 
 KUNCI_HASIL = ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat', 'terkunci_pada')
 
@@ -169,3 +171,17 @@ async def kirim_dan_kunci(db, ktx: Dict[str, Any], data: KirimPenilaianRequest, 
         raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
     lembar.pop('_baru', None)
     return {**lembar, **kunci}
+
+
+async def riwayat_lembar(db, penilaian_id: Optional[str]) -> list:
+    """Jejak aksi satu lembar (mulai, draf, buka, kirim) dari pkg_audit_log, terbaru dulu."""
+    if not penilaian_id:
+        return []
+    from pkg_audit import LABEL_AKSI
+    docs = await db[KOLEKSI_AUDIT].find({'penilaian_id': penilaian_id}, {'_id': 0}).to_list(500)
+    docs.sort(key=lambda d: d.get('terakhir') or d.get('timestamp') or '', reverse=True)
+    return [{
+        'aksi': d.get('aksi'), 'label': LABEL_AKSI.get(d.get('aksi'), d.get('aksi')), 'aktor_nama': d.get('aktor_nama'),
+        'timestamp': d.get('timestamp'), 'terakhir': d.get('terakhir'), 'jumlah': d.get('jumlah'),
+        'progres': (d.get('metadata') or {}).get('progres'), 'nilai_akhir': (d.get('metadata') or {}).get('nilai_akhir'),
+    } for d in docs]

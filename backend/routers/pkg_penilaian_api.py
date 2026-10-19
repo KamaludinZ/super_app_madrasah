@@ -11,7 +11,7 @@ from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
 from pkg_audit import catat_audit_pkg, catat_audit_pkg_harian
-from pkg_lembar import kirim_dan_kunci, konteks_lembar, lembar_tampil, simpan_draf
+from pkg_lembar import kirim_dan_kunci, konteks_lembar, lembar_tampil, riwayat_lembar, simpan_draf
 from pkg_penjaga import penjaga_pkg
 from pkg_skema import POLA_ID, DrafPenilaianRequest, KirimPenilaianRequest
 
@@ -45,12 +45,24 @@ async def daftar_tugas_api(akses: Dict = Depends(penilai)):
 
 
 @router.get("/pkg/penilaian/lembar/{guru_id}")
-async def buka_lembar_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(penilai)):
+async def buka_lembar_api(request: Request, guru_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(penilai)):
     """Buka lembar penilaian guru yang dibagikan kepada penilai: isian tersimpan (bila ada), instrumen yang berlaku
     (versi saat lembar dibuat, atau instrumen aktif untuk lembar baru), identitas guru, dan status dapat diisi.
-    Lembar baru belum disimpan sampai draf pertama. 403 'bukan_penugasan' bila guru tidak dibagikan."""
+    Lembar baru belum disimpan sampai draf pertama. 403 'bukan_penugasan' bila guru tidak dibagikan.
+    Pembukaan lembar tercatat harian per lembar."""
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], guru_id)
+    lembar_id = (ktx['lembar'] or {}).get('id')
+    await catat_audit_pkg_harian(db, 'penilaian_buka', akses['user'], kunci=lembar_id or f'guru:{guru_id}',
+                                 metadata={'guru_id': guru_id, 'status': (ktx['lembar'] or {}).get('status') or 'belum'},
+                                 request=request, penilaian_id=lembar_id)
     return await lembar_tampil(db, ktx, guru_id)
+
+
+@router.get("/pkg/penilaian/lembar/{guru_id}/riwayat")
+async def riwayat_lembar_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(penilai)):
+    """Jejak aksi lembar penilaian guru ini (mulai, draf, buka, kirim & kunci), terbaru dulu; hanya penilainya."""
+    ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], guru_id)
+    return await riwayat_lembar(db, (ktx['lembar'] or {}).get('id'))
 
 
 @router.post("/pkg/penilaian/draft")

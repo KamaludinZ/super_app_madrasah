@@ -80,7 +80,10 @@ INSTRUMEN_KOMP = [{'kode': '1', 'nama': 'Kompetensi Pedagogik', 'sub': [
 
 
 def _lembar(guru, user='pen'):
-    return _api(api.buka_lembar_api, guru, user=GURU(user))
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU(user))
+        return await api.buka_lembar_api(Request(), guru, akses=akses)
+    return asyncio.run(jalan())
 
 
 def test_buka_lembar(db):
@@ -203,3 +206,40 @@ def test_kirim_dan_kunci(db):
     with pytest.raises(HTTPException) as e:
         _draf('g3', {'1.1': {'centang': [1]}})
     assert e.value.status_code == 409
+
+
+def test_audit_dan_riwayat_lembar(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    _lembar('g3')
+    _draf('g3', {'1.1': {'centang': [1]}})
+    _draf('g3', {'1.1': {'centang': [1, 2]}})
+    _lembar('g3')
+    _kirim('g3', {'1.1': {'centang': [1, 2, 3]}})
+
+    async def riwayat():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU('pen'))
+        return await api.riwayat_lembar_api('g3', akses=akses)
+    r = asyncio.run(riwayat())
+    aksi = {x['aksi']: x for x in r}
+    assert set(aksi) == {'penilaian_mulai', 'penilaian_draf', 'penilaian_buka', 'penilaian_kirim'}
+    assert aksi['penilaian_draf']['jumlah'] == 2 and aksi['penilaian_kirim']['nilai_akhir'] == 3  # kirim tidak dihitung draf
+    assert aksi['penilaian_buka']['label'] == 'Membuka lembar penilaian'
+    # Pembukaan sebelum lembar ada dicatat per guru (tanpa penilaian_id) dan tidak masuk riwayat lembar.
+    assert any(d['aksi'] == 'penilaian_buka' and d['penilaian_id'] is None for d in db['pkg_audit_log'].docs)
+
+
+def test_isian_berbahaya_ditolak_lewat_api(db):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from core import get_current_user
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    app = FastAPI()
+    app.include_router(api.router, prefix='/api')
+    app.dependency_overrides[get_current_user] = lambda: GURU('pen')
+    k = TestClient(app)
+    for isian in ({'1.1': {'centang': [7]}}, {'1.1': {'centang': {'$gt': 0}}}, {'$where': {'centang': [1]}},
+                  {'1.1': {'centang': [1], 'nilai_akhir': 60}}):
+        assert k.post('/api/pkg/penilaian/draft', json={'guru_id': 'g3', 'isian': isian}).status_code == 422, isian
+    assert k.post('/api/pkg/penilaian/draft', json={'guru_id': 'g3', 'isian': {}, 'status': 'terkunci'}).status_code == 422
+    assert k.get('/api/pkg/penilaian/lembar/g3%24ne').status_code == 422
+    assert k.post('/api/pkg/penilaian/draft', json={'guru_id': 'g3', 'isian': {'1.1': {'centang': [1]}}}).status_code == 200
