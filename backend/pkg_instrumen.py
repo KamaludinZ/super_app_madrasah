@@ -12,7 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PRATINJAU_IMPOR, UbahSubInstrumenRequest
+from pkg_skema import (
+    KOLEKSI_AUDIT, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PRATINJAU_IMPOR, UbahSubInstrumenRequest,
+)
 
 logger = logging.getLogger('matsandatama')
 
@@ -213,3 +215,39 @@ async def aktifkan_instrumen(db, instrumen_id: str) -> Dict[str, Any]:
     await db[KOLEKSI_INSTRUMEN].update_many({'is_active': True}, {'$set': {'is_active': False, 'updated_at': sekarang}})
     await db[KOLEKSI_INSTRUMEN].update_one({'id': instrumen_id}, {'$set': {'is_active': True, 'updated_at': sekarang}})
     return {'instrumen': {**target, 'is_active': True, 'updated_at': sekarang}, 'sebelumnya': sebelumnya}
+
+
+def ringkas_perubahan_sub(sebelum: Dict[str, Any], sesudah: Dict[str, Any]) -> List[str]:
+    """Ringkasan perubahan sub-kompetensi yang mudah dibaca untuk jejak audit."""
+    hasil = []
+    if sebelum.get('nama') != sesudah.get('nama'):
+        hasil.append(f"Nama: \"{sebelum.get('nama')}\" -> \"{sesudah.get('nama')}\"")
+    if float(sebelum.get('bobot') or 0) != float(sesudah.get('bobot') or 0):
+        hasil.append(f"Bobot: {sebelum.get('bobot')} -> {sesudah.get('bobot')}")
+    lama = {i['level']: i['teks'] for i in sebelum.get('indikator') or []}
+    baru = {i['level']: i['teks'] for i in sesudah.get('indikator') or []}
+    berubah = sorted(lv for lv in set(lama) | set(baru) if lama.get(lv) != baru.get(lv))
+    if berubah:
+        hasil.append('Teks indikator diubah: ' + ', '.join(f'Level {lv}' for lv in berubah))
+    return hasil
+
+
+AKSI_INSTRUMEN = ('instrumen_impor', 'instrumen_ubah', 'instrumen_aktifkan')
+
+
+async def riwayat_instrumen(db, batas: int = 100) -> List[Dict[str, Any]]:
+    """Riwayat perubahan instrumen dari jejak audit PKG (terbaru dulu)."""
+    from pkg_audit import LABEL_AKSI
+    docs = await db[KOLEKSI_AUDIT].find({'aksi': {'$in': list(AKSI_INSTRUMEN)}}, {'_id': 0}).to_list(1000)
+    docs.sort(key=lambda d: d.get('timestamp') or '', reverse=True)
+    hasil = []
+    for d in docs[:batas]:
+        m = d.get('metadata') or {}
+        hasil.append({
+            'id': d.get('id'), 'aksi': d.get('aksi'), 'label': LABEL_AKSI.get(d.get('aksi'), d.get('aksi')),
+            'aktor_nama': d.get('aktor_nama'), 'timestamp': d.get('timestamp'),
+            'instrumen_id': m.get('instrumen_id'), 'versi_template': m.get('versi_template'), 'revisi': m.get('revisi'),
+            'kode_sub': m.get('kode_sub'), 'alasan': m.get('alasan'), 'perubahan': m.get('perubahan') or [],
+            'sumber': m.get('sumber'), 'nama_berkas': m.get('nama_berkas'),
+        })
+    return hasil

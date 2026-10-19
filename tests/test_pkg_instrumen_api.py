@@ -179,3 +179,20 @@ def test_aktifkan_instrumen_acuan(db):
         assert e.value.status_code == kode
     with pytest.raises(Exception):
         AktifkanInstrumenRequest(alasan='  ')
+
+
+def test_riwayat_perubahan_instrumen(db):
+    import pkg_instrumen as svc
+    p = _api(api.pratinjau_impor_api, sumber='template', berkas=None)
+    _api(api.terapkan_impor_api, TerapkanImporRequest(token=p['token']), Request())
+    _api(api.ubah_sub_api, _ubah(nama='Nama riwayat', bobot=3), Request(), kode='2.1')
+    riwayat = _api(api.riwayat_instrumen_api)
+    assert [r['aksi'] for r in riwayat] == ['instrumen_ubah', 'instrumen_impor']
+    ubah = riwayat[0]
+    assert ubah['label'] == 'Mengubah instrumen' and ubah['kode_sub'] == '2.1' and ubah['alasan'] == 'penyesuaian juknis'
+    assert ubah['perubahan'][0].startswith('Nama: "Kematangan moral') and 'Bobot: 1.0 -> 3.0' in ubah['perubahan']
+    assert ubah['perubahan'][-1] == 'Teks indikator diubah: Level 1, Level 2, Level 3, Level 4, Level 5'
+    assert riwayat[1]['nama_berkas'] == 'pkg_template_v2026.xlsx'
+    assert svc.ringkas_perubahan_sub({'nama': 'a', 'bobot': 1, 'indikator': []}, {'nama': 'a', 'bobot': 1, 'indikator': []}) == []
+    with pytest.raises(HTTPException):
+        _api(api.riwayat_instrumen_api, user=GURU)

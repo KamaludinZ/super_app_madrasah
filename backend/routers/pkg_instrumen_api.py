@@ -7,7 +7,7 @@ from core import db
 from pkg_audit import catat_audit_pkg
 from pkg_instrumen import (
     ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
-    aktifkan_instrumen, terapkan_pratinjau, ubah_sub_instrumen,
+    aktifkan_instrumen, ringkas_perubahan_sub, riwayat_instrumen, terapkan_pratinjau, ubah_sub_instrumen,
 )
 from pkg_instrumen_impor import BATAS_UKURAN_BERKAS, GalatImporInstrumen, pratinjau_dari_bytes, pratinjau_dari_template
 from pkg_penjaga import penjaga_pkg
@@ -81,12 +81,19 @@ async def ubah_sub_api(data: UbahSubInstrumenRequest, request: Request, kode: st
     baru = hasil['instrumen']
     await catat_audit_pkg(db, 'instrumen_ubah', akses['user'], {
         'instrumen_id': baru['id'], 'revisi': baru['revisi'], 'revisi_baru': hasil['revisi_baru'], 'kode_sub': kode,
-        'alasan': data.alasan, 'sebelum': hasil['sebelum'], 'sesudah': hasil['sesudah'],
+        'alasan': data.alasan, 'perubahan': ringkas_perubahan_sub(hasil['sebelum'], hasil['sesudah']),
+        'sebelum': hasil['sebelum'], 'sesudah': hasil['sesudah'],
     }, request=request)
     return instrumen_tampil(baru)
 
 
-# Rute literal (/aktif, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap parameter {instrumen_id}.
+@router.get("/pkg/instrumen/riwayat")
+async def riwayat_instrumen_api(akses: Dict = Depends(kepala)):
+    """Riwayat perubahan instrumen (impor, ubah sub, penetapan acuan) dari jejak audit PKG, terbaru dulu."""
+    return await riwayat_instrumen(db)
+
+
+# Rute literal (/aktif, /riwayat, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap parameter {instrumen_id}.
 @router.get("/pkg/instrumen/{instrumen_id}")
 async def rincian_instrumen_api(instrumen_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(anggota_sk)):
     """Instrumen versi tertentu (mis. yang dirujuk lembar penilaian lama)."""
