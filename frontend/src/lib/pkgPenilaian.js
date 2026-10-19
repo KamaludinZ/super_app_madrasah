@@ -6,10 +6,13 @@ import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
 //   GET /pkg/penilaian/lembar/{guru_id} -> lembar
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel }, periode,
 //            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, updated_at }
-// isianSub = { centang: [level...], catatan_bukti, tanggapan }
+// isianSub = { centang: [level...], catatan_bukti, tanggapan }   (catatan & tanggapan maks BATAS_TEKS karakter)
+// lembar juga memuat catatan_umum (rekomendasi penilai untuk rekap per guru).
 //
 // Aturan nilai (template resmi PKG): indikator perilaku tiap sub-kompetensi dicentang per level; tingkat kompetensi
 // = level tertinggi L yang Level 1..L seluruhnya tercentang (0 bila Level 1 belum). Nilai rating = tingkat (1–5).
+
+export const BATAS_TEKS = 500;
 
 const GURU_TIRUAN = {
   g1: { id: 'g1', nama: 'Ahmad Fauzi, S.Pd.', nip: '198703122019031004', mapel: 'Matematika' },
@@ -33,6 +36,7 @@ export async function ambilLembar(guruId) {
     periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027' },
     instrumen: { id: instrumen.id, versi_template: instrumen.versi_template, revisi: instrumen.revisi, kompetensi: instrumen.kompetensi },
     isian,
+    catatan_umum: '',
     updated_at: null,
   });
 }

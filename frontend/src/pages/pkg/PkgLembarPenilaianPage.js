@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import { labelVersi } from '@/lib/pkgInstrumen';
-import { ambilLembar, hitungNilai } from '@/lib/pkgPenilaian';
+import { BATAS_TEKS, ambilLembar, hitungNilai } from '@/lib/pkgPenilaian';
 
 const STATUS = {
   belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
@@ -21,6 +23,7 @@ function IsiLembar() {
   const { guruId } = useParams();
   const [lembar, setLembar] = useState(null);
   const [isian, setIsian] = useState({});
+  const [catatanUmum, setCatatanUmum] = useState('');
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
@@ -29,6 +32,7 @@ function IsiLembar() {
       const l = await ambilLembar(guruId);
       setLembar(l);
       setIsian(l.isian || {});
+      setCatatanUmum(l.catatan_umum || '');
     } catch (e) {
       setGalat(e);
     }
@@ -90,6 +94,16 @@ function IsiLembar() {
           </div>
         </section>
       ))}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-1" aria-labelledby="catatan-umum">
+        <div className="flex items-baseline justify-between">
+          <Label id="catatan-umum" htmlFor="catatan-umum-isian" className="text-sm font-semibold text-slate-900">Catatan umum &amp; rekomendasi</Label>
+          <span className="text-[10px] tabular-nums text-slate-400">{catatanUmum.length}/{BATAS_TEKS}</span>
+        </div>
+        <Textarea id="catatan-umum-isian" value={catatanUmum} onChange={(e) => setCatatanUmum(e.target.value.slice(0, BATAS_TEKS))}
+          rows={3} maxLength={BATAS_TEKS} disabled={terkunci} placeholder="Kekuatan, area pengembangan, dan rekomendasi untuk guru"
+          data-testid="pkg-lembar-catatan-umum" />
+      </section>
     </div>
   );
 }
