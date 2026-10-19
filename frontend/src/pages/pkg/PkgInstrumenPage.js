@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { ListTree, Layers, ListChecks, Target, Loader2, Tag, AlertTriangle, RotateCw } from 'lucide-react';
+import { ListTree, Layers, ListChecks, Target, Loader2, Tag, AlertTriangle, RotateCw, FileSpreadsheet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
+import ImporInstrumenDialog from '@/components/pkg/ImporInstrumenDialog';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -24,7 +25,7 @@ function KartuAngka({ icon: Icon, label, value }) {
 }
 
 // Keadaan kosong: belum ada instrumen aktif. Kepala diarahkan mengimpor dari template resmi.
-function InstrumenKosong({ kepala }) {
+function InstrumenKosong({ kepala, onImpor }) {
   return (
     <Card data-testid="pkg-instrumen-kosong">
       <CardContent className="p-0">
@@ -35,6 +36,7 @@ function InstrumenKosong({ kepala }) {
           description={kepala
             ? 'Muat kompetensi, indikator, dan bobot dari berkas template resmi PKG agar penilai dapat mulai mengisi lembar penilaian.'
             : 'Kepala madrasah belum memuat instrumen dari template resmi. Lembar penilaian dapat dibuka setelah instrumen tersedia.'}
+          {...(kepala ? { actionLabel: 'Impor Instrumen', onAction: onImpor } : {})}
         />
       </CardContent>
     </Card>
@@ -45,6 +47,8 @@ function IsiHalamanInstrumen() {
   const { keanggotaan } = useOutletContext() || {};
   const [instrumen, setInstrumen] = useState(undefined); // undefined = memuat, null = belum ada instrumen
   const [galat, setGalat] = useState(false);
+  const [impor, setImpor] = useState(false);
+  const kepala = keanggotaan?.peran === 'kepala';
 
   const muat = useCallback(async () => {
     setGalat(false);
@@ -69,7 +73,12 @@ function IsiHalamanInstrumen() {
     );
   }
   if (instrumen === undefined) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
-  if (!instrumen || !instrumen.kompetensi?.length) return <InstrumenKosong kepala={keanggotaan?.peran === 'kepala'} />;
+  const dialogImpor = (
+    <ImporInstrumenDialog open={impor} onClose={() => setImpor(false)} onTerapkan={(baru) => { setImpor(false); setInstrumen(baru); }} />
+  );
+  if (!instrumen || !instrumen.kompetensi?.length) {
+    return <><InstrumenKosong kepala={kepala} onImpor={() => setImpor(true)} />{dialogImpor}</>;
+  }
 
   const r = ringkasInstrumen(instrumen);
 
@@ -85,6 +94,11 @@ function IsiHalamanInstrumen() {
             <Tag className="h-3 w-3" /> Template {instrumen.versi_template}
           </Badge>
           {instrumen.diimpor_pada && <span className="text-slate-500">Diimpor {formatWIBPanjang(instrumen.diimpor_pada)}</span>}
+          {kepala && (
+            <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setImpor(true)} data-testid="pkg-instrumen-impor">
+              <FileSpreadsheet className="h-3.5 w-3.5" /> Impor Instrumen
+            </Button>
+          )}
         </div>
       </div>
 
@@ -96,6 +110,7 @@ function IsiHalamanInstrumen() {
       </div>
 
       <HierarkiInstrumen kompetensi={instrumen.kompetensi} />
+      {dialogImpor}
     </div>
   );
 }

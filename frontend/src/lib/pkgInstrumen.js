@@ -143,13 +143,63 @@ const TIRUAN = {
   kompetensi: KOMPETENSI,
 };
 
+const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(hasil == null ? null : JSON.parse(JSON.stringify(hasil))), ms); });
+
+// Instrumen aktif tiruan (di memori). Mode development menerima ?instrumen=kosong untuk memulai tanpa instrumen.
+let aktif;
+function instrumenTiruanAktif() {
+  if (aktif === undefined) {
+    const kosong = process.env.NODE_ENV !== 'production'
+      && new URLSearchParams(window.location.search).get('instrumen') === 'kosong';
+    aktif = kosong ? null : TIRUAN;
+  }
+  return aktif;
+}
+
 // Mengembalikan null bila belum ada instrumen aktif (belum diimpor dari template).
-// Selama masih tiruan, mode development menerima ?instrumen=kosong untuk mencoba keadaan kosong.
-export const ambilInstrumenAktif = () => new Promise((r) => {
-  const kosong = process.env.NODE_ENV !== 'production'
-    && new URLSearchParams(window.location.search).get('instrumen') === 'kosong';
-  setTimeout(() => r(kosong ? null : JSON.parse(JSON.stringify(TIRUAN))), 150);
-});
+export const ambilInstrumenAktif = () => tunda(instrumenTiruanAktif());
+
+// Impor instrumen (khusus kepala madrasah), dua langkah:
+//   POST /pkg/instrumen/impor/pratinjau  multipart { sumber: 'template' | 'unggah', berkas? }
+//        -> pratinjau = { token, sumber, nama_berkas, versi_template, checksum, cocok_resmi, kompetensi, peringatan }
+//   POST /pkg/instrumen/impor  { token } -> instrumen aktif baru (instrumen lama tetap tersimpan untuk penilaian lama)
+export const BATAS_UKURAN_UNGGAH = 10 * 1024 * 1024;
+const CHECKSUM_RESMI = TIRUAN.checksum;
+let pratinjauTerakhir = null;
+
+export async function pratinjauImpor({ sumber, berkas = null }) {
+  if (sumber === 'unggah') {
+    if (!berkas) throw new Error('Pilih berkas Excel (.xlsx) terlebih dahulu.');
+    if (!/\.xlsx$/i.test(berkas.name)) throw new Error('Berkas harus berformat .xlsx.');
+    if (berkas.size > BATAS_UKURAN_UNGGAH) throw new Error('Ukuran berkas melebihi 10 MB.');
+  }
+  // Tiruan: berkas unggahan dianggap berstruktur sama dengan template resmi namun checksum-nya berbeda.
+  const dariTemplate = sumber !== 'unggah';
+  pratinjauTerakhir = {
+    token: `pratinjau-${Date.now()}`,
+    sumber: dariTemplate ? 'template' : 'unggah',
+    nama_berkas: dariTemplate ? 'pkg_template_v2026.xlsx' : berkas.name,
+    versi_template: TIRUAN.versi_template,
+    checksum: dariTemplate ? CHECKSUM_RESMI : 'tiruan-berkas-unggahan',
+    cocok_resmi: dariTemplate,
+    kompetensi: TIRUAN.kompetensi,
+    peringatan: dariTemplate ? [] : ['Berkas bukan salinan identik template resmi; pastikan isinya sudah disahkan.'],
+  };
+  return tunda(pratinjauTerakhir, 400);
+}
+
+export async function terapkanImpor(token) {
+  if (!pratinjauTerakhir || pratinjauTerakhir.token !== token) throw new Error('Pratinjau kedaluwarsa. Ulangi impor.');
+  aktif = {
+    ...TIRUAN,
+    id: `instrumen-${Date.now()}`,
+    checksum: pratinjauTerakhir.checksum,
+    diimpor_pada: new Date().toISOString(),
+    kompetensi: pratinjauTerakhir.kompetensi,
+  };
+  pratinjauTerakhir = null;
+  return tunda(aktif);
+}
 
 // Ringkasan jumlah kompetensi, sub-kompetensi, indikator, dan skor maksimal (level tertinggi x jumlah sub).
 export function ringkasInstrumen(instrumen) {
