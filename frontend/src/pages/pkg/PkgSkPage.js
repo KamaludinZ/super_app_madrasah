@@ -3,19 +3,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileBadge, Plus, Pencil, Loader2, CheckCircle2, Users, ClipboardCheck } from 'lucide-react';
+import { FileBadge, Plus, Pencil, Loader2, CheckCircle2, Users, ClipboardCheck, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 import FormSkDialog from '@/components/pkg/FormSkDialog';
+import CeklistGuruDialog from '@/components/pkg/CeklistGuruDialog';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { aktifkanSk, daftarPeriode, daftarSk } from '@/lib/pkgKelola';
+import { adalahKepala, aktifkanSk, daftarGuru, daftarPeriode, daftarSk, simpanPenilaiSk } from '@/lib/pkgKelola';
 
-function TabelAnggota({ judul, icon: Icon, anggota, testid, kosong }) {
+function TabelAnggota({ judul, icon: Icon, anggota, testid, kosong, aksi }) {
   return (
     <div data-testid={testid}>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Icon className="h-4 w-4 text-[#006837]" /> {judul}</h3>
-        <Badge variant="outline">{anggota.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{anggota.length}</Badge>
+          {aksi}
+        </div>
       </div>
       {anggota.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-sm text-slate-500">{kosong}</p>
@@ -51,6 +55,8 @@ function IsiHalamanSk() {
   const [pilihId, setPilihId] = useState(null);
   const [form, setForm] = useState({ open: false, sk: null });
   const [mengaktifkan, setMengaktifkan] = useState(false);
+  const [guru, setGuru] = useState([]);
+  const [ceklist, setCeklist] = useState(null); // 'penilai'
 
   const muat = useCallback(async () => {
     const [p, s] = await Promise.all([daftarPeriode(), daftarSk()]);
@@ -60,9 +66,23 @@ function IsiHalamanSk() {
   }, []);
 
   useEffect(() => { muat().catch(() => toast.error('Gagal memuat data SK')); }, [muat]);
+  useEffect(() => { daftarGuru().then(setGuru).catch(() => toast.error('Gagal memuat daftar guru')); }, []);
 
   const namaPeriode = useMemo(() => Object.fromEntries(periode.map((p) => [p.id, p])), [periode]);
   const sk = daftar?.find((x) => x.id === pilihId);
+
+  // Kepala madrasah otomatis menjadi penilai (tercentang & terkunci).
+  const kepalaTerkunci = useMemo(
+    () => Object.fromEntries(guru.filter(adalahKepala).map((g) => [g.id, 'Kepala madrasah'])), [guru],
+  );
+  const idPenilai = useMemo(() => (sk ? sk.penilai.map((a) => a.id) : []), [sk]);
+
+  const simpanPenilai = async (ids) => {
+    await simpanPenilaiSk(sk.id, ids);
+    toast.success('Tim penilai disimpan');
+    setCeklist(null);
+    await muat();
+  };
 
   const aktifkan = async () => {
     setMengaktifkan(true);
@@ -141,12 +161,36 @@ function IsiHalamanSk() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              <TabelAnggota judul="Tim Penilai" icon={ClipboardCheck} anggota={sk.penilai} testid="pkg-sk-penilai" kosong="Belum ada penilai." />
+              <TabelAnggota
+                judul="Tim Penilai"
+                icon={ClipboardCheck}
+                anggota={sk.penilai}
+                testid="pkg-sk-penilai"
+                kosong="Belum ada penilai."
+                aksi={(
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setCeklist('penilai')} data-testid="pkg-sk-atur-penilai">
+                    <ListChecks className="h-3.5 w-3.5" /> Atur
+                  </Button>
+                )}
+              />
               <TabelAnggota judul="Guru yang Dinilai" icon={Users} anggota={sk.dinilai} testid="pkg-sk-dinilai" kosong="Belum ada guru yang dinilai." />
             </CardContent>
           </>
         )}
       </Card>
+
+      <CeklistGuruDialog
+        open={ceklist === 'penilai' && !!sk}
+        judul="Pilih Tim Penilai"
+        deskripsi="Centang guru aktif yang menjadi penilai pada SK ini. Kepala madrasah otomatis berperan sebagai penilai. Penilai boleh juga menjadi guru yang dinilai."
+        icon={ClipboardCheck}
+        guru={guru}
+        terpilih={idPenilai}
+        terkunci={kepalaTerkunci}
+        onClose={() => setCeklist(null)}
+        onSimpan={simpanPenilai}
+        testid="pkg-ceklist-penilai"
+      />
 
       <FormSkDialog
         open={form.open}

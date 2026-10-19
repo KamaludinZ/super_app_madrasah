@@ -10,7 +10,8 @@
 //   GET  /pkg/sk                         -> [sk]           (urut periode terbaru)
 //   POST /pkg/sk  | PUT /pkg/sk/{id}     -> sk             body: { nomor_sk, tanggal_sk, tentang, periode_id }
 //   POST /pkg/sk/{id}/aktifkan           -> sk             (SK lain di periode yang sama dinonaktifkan)
-//   GET  /users/teachers                 -> [{ id, full_name, username, roles }]
+//   GET  /users/teachers                 -> [{ id, full_name, username, roles }]   (akun GTK aktif)
+//   PUT  /pkg/sk/{id}/penilai            -> sk             body: { penilai_ids }  (kepala selalu disertakan)
 // periode = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
 //             status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
 // sk = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilai: [anggota], dinilai: [anggota] }
@@ -59,7 +60,12 @@ export const daftarPeriode = () => tunda(store.periode);
 
 export const daftarSk = () => tunda([...store.sk].sort((a, b) => (b.tanggal_sk || '').localeCompare(a.tanggal_sk || '')));
 
-export const daftarGuruTiruan = () => tunda(GURU);
+// Akun guru aktif untuk ceklist (bentuk mengikuti GET /users/teachers + nip/mapel bila tersedia).
+export const daftarGuru = () => tunda(GURU.map((g) => ({
+  id: g.id, full_name: g.nama, nip: g.nip, mapel: g.mapel, roles: g.kepala ? ['kepala_sekolah', 'guru'] : ['guru'],
+})));
+
+export const adalahKepala = (guru) => (guru?.roles || []).includes('kepala_sekolah');
 
 export async function simpanSk(data, id = null) {
   const nomor = (data.nomor_sk || '').trim();
@@ -123,4 +129,15 @@ export async function ubahStatusPeriode(id, status) {
   }
   p.status = status;
   return tunda(p);
+}
+
+export async function simpanPenilaiSk(skId, penilaiIds = []) {
+  const sk = store.sk.find((s) => s.id === skId);
+  if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
+  const kepala = GURU.filter((g) => g.kepala).map((g) => g.id);
+  const ids = [...new Set([...kepala, ...penilaiIds])];
+  const asing = ids.filter((id) => !GURU.some((g) => g.id === id));
+  if (asing.length) throw new GalatValidasi('Sebagian penilai bukan akun guru aktif.');
+  sk.penilai = ids.map(anggota);
+  return tunda(sk);
 }
