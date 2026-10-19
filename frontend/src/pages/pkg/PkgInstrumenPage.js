@@ -121,7 +121,7 @@ function IsiHalamanInstrumen() {
       </div>
 
       <HierarkiInstrumen kompetensi={instrumen.kompetensi} onUbah={kepala ? setUbahSub : undefined} />
-      <DaftarVersiInstrumen muatUlangKunci={`${instrumen.id}:${instrumen.revisi}`} />
+      <DaftarVersiInstrumen muatUlangKunci={`${instrumen.id}:${instrumen.revisi}`} onAktifkan={kepala ? setInstrumen : undefined} />
       {dialogImpor}
       <UbahSubKompetensiDialog sub={ubahSub} onClose={() => setUbahSub(null)} onTersimpan={(baru) => { setUbahSub(null); setInstrumen(baru); }} />
     </div>
@@ -129,7 +129,7 @@ function IsiHalamanInstrumen() {
 }
 
 // Master Instrumen PKG (semua anggota SK dapat membaca): struktur kompetensi dari template resmi yang dipakai
-// sebagai acuan lembar penilaian. Data sementara dari lib/pkgInstrumen (tiruan).
+// sebagai acuan lembar penilaian (lib/pkgInstrumen -> /pkg/instrumen/*).
 export default function PkgInstrumenPage() {
   return (
     <PenjagaMenuPkg menuKey="instrumen">

@@ -1,198 +1,18 @@
-// Master instrumen PKG (kompetensi -> sub-kompetensi -> indikator perilaku Level 1–5).
-//
-// TIRUAN SEMENTARA: struktur & teks diambil dari berkas resmi pkg_template_v2026.xlsx (sheet KOMP-1..KOMP (4)),
-// meniru kontrak yang direncanakan. Saat endpoint backend tersedia, ganti isi fungsi dengan panggilan `api`:
-//   GET /pkg/instrumen/aktif -> instrumen | null (belum ada instrumen aktif)
-// instrumen = { id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, kompetensi: [kompetensi] }
-//   GET /pkg/instrumen -> [versi]  (semua versi, terbaru dulu)
-//   versi = { id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, dipakai_penilaian }
-// kompetensi = { kode, nama, sub: [{ kode, nama, bobot, indikator: [{ level, teks }] }] }
-// Penilaian: tingkat kompetensi tiap sub = level 1–5 (nilai rating), jumlah maksimal 12 x 5 = 60.
+import { api } from '@/lib/api';
 
-const KOMPETENSI = [
-  {
-    kode: '1', nama: 'Kompetensi Pedagogik', sub: [
-      {
-        kode: '1.1', nama: 'Lingkungan pembelajaran yang aman dan nyaman bagi peserta didik', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami manfaat dan pentingnya lingkungan pembelajaran yang aman dan nyaman bagi peserta didik' },
-          { level: 2, teks: 'Menerapkan strategi lingkungan pembelajaran yang aman dan nyaman bagi peserta didik' },
-          { level: 3, teks: 'Mengevaluasi strategi implementasi lingkungan pembelajaran yang aman dan nyaman bagi peserta didik dan merancang perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait strategi implementasi ingkungan pembelajaran yang aman dan nyaman bagi peserta didik' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam melakukan strategi implementasi lingkungan pembelajaran yang aman dan nyaman bagi peserta didik' },
-        ],
-      },
-      {
-        kode: '1.2', nama: 'Pembelajaran efektif yang berpusat pada peserta didik', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat pembelajaran efektif yang berpusat pada peserta didik' },
-          { level: 2, teks: 'Menerapkan pembelajaran efektif yang berpusat pada peserta didik' },
-          { level: 3, teks: 'Mengevaluasi pembelajaran efektif yang berpusat pada peserta didik dan merancang perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pemilihan strategi implementasi pembelajaran efektif yang berpusat pada peserta didik' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam melakukan strategi implementasi pembelajaran efektif yang berpusat pada peserta didik.' },
-        ],
-      },
-      {
-        kode: '1.3', nama: 'Asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik' },
-          { level: 2, teks: 'Melakukan asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik' },
-          { level: 3, teks: 'Mengevaluasi asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik dan merancang perbaikannya.' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pelaksanaan asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik.' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam melakukan asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik.' },
-        ],
-      },
-    ],
-  },
-  {
-    kode: '2', nama: 'Kompetensi Kepribadian', sub: [
-      {
-        kode: '2.1', nama: 'Kematangan moral, emosi, dan spiritual untuk berperilaku sesuai dengan kode etik guru', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami manfaat dan pentingnya perilaku yang mencerminkan kematangan moral, emosi dan spiritual untuk berperilaku sesuai dengan kode etik guru' },
-          { level: 2, teks: 'Menerapkan perilaku yang mencerminkan kematangan moral, emosi dan spiritual untuk berperilaku sesuai dengan kode etik guru' },
-          { level: 3, teks: 'Mengevaluasi perilaku yang mencerminkan kematangan moral, emosi dan spiritual untuk berperilaku sesuai dengan kode etik guru dan merencanakan perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait penerapan perilaku yang mencerminkan kematangan moral, emosi dan spiritual untuk berperilaku sesuai dengan kode etik guru' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam penerapan perilaku yang mencerminkan kematangan moral, emosi, dan spiritual untuk berperilaku sesuai dengan kode etik guru' },
-        ],
-      },
-      {
-        kode: '2.2', nama: 'Pengembangan diri melalui kebiasaan refleksi', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat pengembangan diri melalui kebiasaan refleksi' },
-          { level: 2, teks: 'Menerapkan pengembangan diri melalui kebiasaan refleksi' },
-          { level: 3, teks: 'Mengevaluasi penerapan pengembangan diri melalui kebiasaan refleksi serta merancang perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait penerapan pengembangan diri melalui kebiasaan refleksi' },
-          { level: 5, teks: 'Membimbing rekam sejawat dalam berkolaborasi dengan rekan sejawat terkait penerapan pengembangan diri melalui kebiasaan refleksi' },
-        ],
-      },
-      {
-        kode: '2.3', nama: 'Orientasi berpusat pada peserta didik', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik' },
-          { level: 2, teks: 'Membiasakan pentingnya menempatkan peserta didik sebagai pusat dari pembelajaran' },
-          { level: 3, teks: 'Mengevaluasi kebiasaan dalam menempatkan peserta didik sebagai pusat dari pembelajaran dan merancang perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait kebiasaan dalam menempatkan peserta didik sebagai pusat dari pembelajaran' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam kebiasaan dalam menempatkan peserta didik sebagai pusat dari pembelajaran' },
-        ],
-      },
-    ],
-  },
-  {
-    kode: '3', nama: 'Kompetensi Sosial', sub: [
-      {
-        kode: '3.1', nama: 'Kolaborasi untuk peningkatan pembelajaran', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami manfaat dan pentingnya kolaborasi untuk peningkatan kualitas pembelajaran' },
-          { level: 2, teks: 'Melakukan kolaborasi untuk peningkatan kualitas pembelajaran' },
-          { level: 3, teks: 'Mengevaluasi strategi kolaborasi untuk peningkatan kualitas pembelajaran dan merancang perbaikannya' },
-          { level: 4, teks: 'Berbagi praktik baik dengan rekan sejawat terkait strategi kolaborasi untuk peningkatan kualitas pembelajaran' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam berbagi praktik baik terkait strategi kolaborasi untuk peningkatan kualitas pembelajaran' },
-        ],
-      },
-      {
-        kode: '3.2', nama: 'Keterlibatan orangtua/wali dan masyarakat dalam pembelajaran', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat Melibatkan orangtua/wali dan masyarakat dalam pembelajaran' },
-          { level: 2, teks: 'Melibatkan orangtua/wali dan masyarakat dalam pembelajaran' },
-          { level: 3, teks: 'Mengevaluasi pelibatan orangtua/wali dan masyarakat dalam pembelajaran dan merancang strategi pelibatan yang lebih efektif' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pelibatan orangtua/wali dan masyarakat yang efektif dalam pembelajaran' },
-          { level: 5, teks: 'Membimbing rekam sejawat dalam berkolaborasi dengan rekan sejawat terkait pelibatan orangtua/wali dan masyarakat yang efektif dalam pembelajaran' },
-        ],
-      },
-      {
-        kode: '3.3', nama: 'Keterlibatan dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan pembelajaran', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat peran dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan kualitas pembelajaran peserta didik.' },
-          { level: 2, teks: 'Berperan dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan kualitas pembelajaran peserta didik.' },
-          { level: 3, teks: 'Mengevaluasi peran dalam organisasi profesi dan jejaring yang lebih luas untuk mengoptimalkan keterlibatan dalam peningkatan kualitas pembelajaran peserta didik' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait peran yang optimal dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan kualitas pembelajaran peserta didik' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam berkolaborasi terkait peran yang optimal dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan kualitas pembelajaran peserta didik' },
-        ],
-      },
-    ],
-  },
-  {
-    kode: '4', nama: 'Kompetensi Profesional', sub: [
-      {
-        kode: '4.1', nama: 'Pengetahuan konten pembelajaran dan cara mengajarkannya', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami manfaat dan pentingnya penggunaan konten pembelajaran dan cara mengajarkannya' },
-          { level: 2, teks: 'Menggunakan konten pembelajaran dan cara mengajarkannya' },
-          { level: 3, teks: 'Mengevaluasi konten pembelajaran dan merancang cara perbaikannya' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pengetahuan konten pembelajaran dan cara mengajarkannya' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam berkolaborasi dengan rekan sejawat terkait pengetahuan konten pembelajaran dan cara mengajarkannya' },
-        ],
-      },
-      {
-        kode: '4.2', nama: 'Karakteristik dan cara belajar peserta didik', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat pengetahuan dalam menentukan karakteristik yang akan mempengaruhi cara belajar peserta didik' },
-          { level: 2, teks: 'Menggunakan pengetahuan dalam menentukan karakteristik yang akan mempengaruhi cara belajar peserta didik' },
-          { level: 3, teks: 'Mengevaluasi pengetahuan dalam menentukan karakteristik yang akan mempengaruhi cara belajar peserta didik dan merencanakan perbaikannya.' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pengetahuan dalam menentukan karakteristik yang akan mempengaruhi cara belajar peserta didik' },
-          { level: 5, teks: 'Membimbing rekam sejawat dalam pengetahuan dalam menentukan karakteristik yang akan mempengaruhi cara belajar peserta didik dan merencanakan perbaikannya.' },
-        ],
-      },
-      {
-        kode: '4.3', nama: 'Kurikulum dan cara menggunakannya', bobot: 1, indikator: [
-          { level: 1, teks: 'Memahami penting dan manfaat pengetahuan tentang komponen kurikulum dan cara menggunakannya untuk merancang desain pembelajaran' },
-          { level: 2, teks: 'Menggunakan pengetahuan tentang komponen kurikulum dan cara menggunakannya untuk merancang desain pembelajaran' },
-          { level: 3, teks: 'Mengevaluasi pengetahuan tentang komponen kurikulum dan cara menggunakannya untuk merancang desain pembelajaran dan merencanakan perbaikannya.' },
-          { level: 4, teks: 'Berkolaborasi dengan rekan sejawat terkait pengetahuan tentang komponen kurikulum dan cara menggunakannya untuk merancang desain pembelajaran' },
-          { level: 5, teks: 'Membimbing rekan sejawat dalam berkolaborasi terkait pengetahuan tentang komponen kurikulum dan cara menggunakannya untuk merancang desain pembelajaran' },
-        ],
-      },
-    ],
-  },
-];
-
-const TIRUAN = {
-  id: 'instrumen-2026',
-  versi_template: '2026',
-  revisi: 1,
-  checksum: 'e4e768b7b5dfbdbc1a32a1b88d9a731bcceac2c1ffd2af9801aa8a994f637da5',
-  cocok_resmi: true,
-  is_active: true,
-  diimpor_pada: '2026-10-01T08:00:00+07:00',
-  kompetensi: KOMPETENSI,
-};
-
-const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(hasil == null ? null : JSON.parse(JSON.stringify(hasil))), ms); });
-
-// Instrumen aktif tiruan (di memori) + riwayat versi lama. Mode development menerima ?instrumen=kosong untuk
-// memulai tanpa instrumen, atau ?instrumen=lama untuk instrumen dari template versi lama.
-let aktif;
-const riwayat = [];
-// Jumlah penilaian (tiruan) yang memakai tiap versi; versi yang dipakai tidak diubah di tempat.
-const DIPAKAI_TIRUAN = { 'instrumen-2026': 9 };
-
-// Simpan versi aktif ke riwayat lalu jadikan `baru` aktif dengan nomor revisi berikutnya.
-function gantiAktif(baru) {
-  const lama = instrumenTiruanAktif();
-  if (lama) riwayat.unshift({ ...lama, is_active: false });
-  const revisi = Math.max(0, ...[lama, ...riwayat].filter(Boolean).map((x) => x.revisi || 0)) + 1;
-  aktif = { ...baru, revisi, is_active: true };
-  return lama;
-}
-
-export const labelVersi = (v) => (v ? `Template ${v.versi_template}${v.revisi ? ` · Rev ${v.revisi}` : ''}` : '-');
-
-export const daftarVersiInstrumen = () => tunda([instrumenTiruanAktif(), ...riwayat].filter(Boolean).map((v) => ({
-  id: v.id, versi_template: v.versi_template, revisi: v.revisi, checksum: v.checksum, cocok_resmi: v.cocok_resmi,
-  is_active: v.is_active, diimpor_pada: v.diimpor_pada, dipakai_penilaian: DIPAKAI_TIRUAN[v.id] || 0,
-})));
-function instrumenTiruanAktif() {
-  if (aktif === undefined) {
-    const skenario = process.env.NODE_ENV !== 'production'
-      ? new URLSearchParams(window.location.search).get('instrumen') : null;
-    // ?instrumen=lama: instrumen aktif masih dari template versi lama (mencoba peringatan versi berbeda).
-    aktif = skenario === 'kosong' ? null
-      : skenario === 'lama' ? { ...TIRUAN, versi_template: '2025', checksum: 'tiruan-template-2025', cocok_resmi: true }
-        : TIRUAN;
-  }
-  return aktif;
-}
-
-// Mengembalikan null bila belum ada instrumen aktif (belum diimpor dari template).
-export const ambilInstrumenAktif = () => tunda(instrumenTiruanAktif());
-
-// Impor instrumen (khusus kepala madrasah), dua langkah:
-//   POST /pkg/instrumen/impor/pratinjau  multipart { sumber: 'template' | 'unggah', berkas? }
+// Master instrumen PKG (backend/routers/pkg_instrumen_api.py): kompetensi -> sub-kompetensi -> indikator Level 1–5.
+//   GET  /pkg/instrumen/aktif                 -> instrumen | null (belum diimpor)
+//   GET  /pkg/instrumen                       -> [versi]  (terbaru dulu)
+//   POST /pkg/instrumen/impor/pratinjau       multipart { sumber: 'template' | 'unggah', berkas? }  (kepala)
 //        -> pratinjau = { token, sumber, nama_berkas, versi_template, checksum, cocok_resmi, kompetensi, peringatan }
-//        gagal 422 -> detail { pesan, galat: [{ lokasi, pesan }] }   (lokasi = sheet!sel)
-//   POST /pkg/instrumen/impor  { token } -> { instrumen, hasil }   (instrumen lama tetap tersimpan untuk penilaian lama)
-//        hasil = { sumber, nama_berkas, cocok_resmi, kompetensi, sub, indikator, instrumen_sebelumnya: {id, versi_template} | null }
-export const BATAS_UKURAN_UNGGAH = 10 * 1024 * 1024;
+//        gagal 422 -> detail { pesan, galat: [{ lokasi, pesan }] }
+//   POST /pkg/instrumen/impor { token }       -> { instrumen, hasil }  (kepala)
+//   PUT  /pkg/instrumen/aktif/sub/{kode}      { nama, bobot, indikator, alasan } -> instrumen  (kepala)
+//   POST /pkg/instrumen/{id}/aktifkan         { alasan } -> instrumen  (kepala)
+// instrumen = { id, versi_template, revisi, checksum, cocok_resmi, sumber, nama_berkas, is_active, diimpor_pada,
+//               kompetensi: [{ kode, nama, sub: [{ kode, nama, bobot, indikator: [{ level, teks }] }] }] }
+// versi = { id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, dipakai_penilaian }
+// Skor (rumus template resmi): jumlah indikator dicentang per sub (0–5), maksimal 12 x 5 = 60.
 
 // Galat pembacaan instrumen dengan rincian per lokasi sel.
 export class GalatImpor extends Error {
@@ -201,61 +21,52 @@ export class GalatImpor extends Error {
     this.galat = galat;
   }
 }
-const CHECKSUM_RESMI = TIRUAN.checksum;
-let pratinjauTerakhir = null;
 
-export async function pratinjauImpor({ sumber, berkas = null }) {
+function galatDari(e, cadangan) {
+  const d = e?.response?.data?.detail;
+  if (d && typeof d === 'object' && !Array.isArray(d)) return new GalatImpor(d.pesan || cadangan, d.galat || []);
+  if (typeof d === 'string') return new GalatImpor(d);
+  if (Array.isArray(d) && d[0]?.msg) return new GalatImpor(`Isian tidak valid: ${d[0].msg}`);
+  return new GalatImpor(cadangan);
+}
+
+async function panggil(fn, cadangan) {
+  try {
+    return (await fn()).data;
+  } catch (e) {
+    throw galatDari(e, cadangan);
+  }
+}
+
+export const BATAS_UKURAN_UNGGAH = 10 * 1024 * 1024;
+
+export const labelVersi = (v) => (v ? `Template ${v.versi_template}${v.revisi ? ` · Rev ${v.revisi}` : ''}` : '-');
+
+export const ambilInstrumenAktif = () => panggil(() => api.get('/pkg/instrumen/aktif'), 'Gagal memuat instrumen PKG.');
+
+export const daftarVersiInstrumen = () => panggil(() => api.get('/pkg/instrumen'), 'Gagal memuat daftar versi instrumen.');
+
+export function pratinjauImpor({ sumber, berkas = null }) {
   if (sumber === 'unggah') {
-    if (!berkas) throw new Error('Pilih berkas Excel (.xlsx) terlebih dahulu.');
-    if (!/\.xlsx$/i.test(berkas.name)) throw new Error('Berkas harus berformat .xlsx.');
-    if (berkas.size > BATAS_UKURAN_UNGGAH) throw new Error('Ukuran berkas melebihi 10 MB.');
+    if (!berkas) return Promise.reject(new GalatImpor('Pilih berkas Excel (.xlsx) terlebih dahulu.'));
+    if (!/\.xlsx$/i.test(berkas.name)) return Promise.reject(new GalatImpor('Berkas harus berformat .xlsx.'));
+    if (berkas.size > BATAS_UKURAN_UNGGAH) return Promise.reject(new GalatImpor('Ukuran berkas melebihi 10 MB.'));
   }
-  // Tiruan: nama berkas memuat "rusak" mensimulasikan berkas yang strukturnya tidak sesuai.
-  if (sumber === 'unggah' && /rusak/i.test(berkas.name)) {
-    await tunda(null, 400);
-    throw new GalatImpor('Berkas tidak sesuai struktur instrumen PKG.', [
-      { lokasi: 'KOMP (2)!C9', pesan: 'Teks indikator Level 3 untuk sub-kompetensi 2.1 kosong.' },
-      { lokasi: 'KOMP (4)', pesan: 'Sub-kompetensi 4.3 tidak ditemukan.' },
-    ]);
-  }
-  // Tiruan: berkas unggahan lain dianggap berstruktur sama dengan template resmi namun checksum-nya berbeda.
-  const dariTemplate = sumber !== 'unggah';
-  pratinjauTerakhir = {
-    token: `pratinjau-${Date.now()}`,
-    sumber: dariTemplate ? 'template' : 'unggah',
-    nama_berkas: dariTemplate ? 'pkg_template_v2026.xlsx' : berkas.name,
-    versi_template: TIRUAN.versi_template,
-    checksum: dariTemplate ? CHECKSUM_RESMI : 'tiruan-berkas-unggahan',
-    cocok_resmi: dariTemplate,
-    kompetensi: TIRUAN.kompetensi,
-    peringatan: dariTemplate ? [] : ['Berkas bukan salinan identik template resmi; pastikan isinya sudah disahkan.'],
-  };
-  return tunda(pratinjauTerakhir, 400);
+  const form = new FormData();
+  form.append('sumber', sumber === 'unggah' ? 'unggah' : 'template');
+  if (sumber === 'unggah') form.append('berkas', berkas);
+  return panggil(
+    () => api.post('/pkg/instrumen/impor/pratinjau', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    'Gagal membaca instrumen.',
+  );
 }
 
-export async function terapkanImpor(token) {
-  if (!pratinjauTerakhir || pratinjauTerakhir.token !== token) throw new Error('Pratinjau kedaluwarsa. Ulangi impor.');
-  const sebelumnya = gantiAktif({
-    ...TIRUAN,
-    id: `instrumen-${Date.now()}`,
-    checksum: pratinjauTerakhir.checksum,
-    cocok_resmi: pratinjauTerakhir.cocok_resmi,
-    diimpor_pada: new Date().toISOString(),
-    kompetensi: pratinjauTerakhir.kompetensi,
-  });
-  const r = ringkasInstrumen(aktif);
-  const hasil = {
-    sumber: pratinjauTerakhir.sumber,
-    nama_berkas: pratinjauTerakhir.nama_berkas,
-    cocok_resmi: pratinjauTerakhir.cocok_resmi,
-    kompetensi: r.kompetensi,
-    sub: r.sub,
-    indikator: r.indikator,
-    instrumen_sebelumnya: sebelumnya ? { id: sebelumnya.id, versi_template: sebelumnya.versi_template, revisi: sebelumnya.revisi } : null,
-  };
-  pratinjauTerakhir = null;
-  return tunda({ instrumen: aktif, hasil });
-}
+// Jadikan versi instrumen acuan aktif (kepala; alasan wajib): POST /pkg/instrumen/{id}/aktifkan -> instrumen.
+export const aktifkanInstrumen = (id, alasan) => panggil(
+  () => api.post(`/pkg/instrumen/${id}/aktifkan`, { alasan }), 'Gagal menetapkan instrumen acuan.',
+);
+
+export const terapkanImpor = (token) => panggil(() => api.post('/pkg/instrumen/impor', { token }), 'Gagal menerapkan instrumen.');
 
 // Ringkasan jumlah kompetensi, sub-kompetensi, indikator, dan skor maksimal (level tertinggi x jumlah sub).
 export function ringkasInstrumen(instrumen) {
@@ -280,9 +91,6 @@ export function porsiBobot(bobot, totalBobot) {
   return total > 0 ? ((Number(bobot) || 0) / total) * 100 : null;
 }
 
-// Ubah satu sub-kompetensi instrumen aktif (khusus kepala madrasah):
-//   PUT /pkg/instrumen/aktif/sub/{kode}  { nama, bobot, indikator: [{ level, teks }], alasan } -> instrumen
-// Bila instrumen sudah dipakai penilaian, backend menyimpan revisi baru agar penilaian lama tetap utuh.
 export const BATAS_INSTRUMEN = { nama: 200, teks: 500, alasan: 300, bobotMin: 0.01, bobotMaks: 100 };
 
 // Validasi isian ubah sub-kompetensi; mengembalikan { field: pesan } (kosong bila sah).
@@ -307,23 +115,15 @@ export function validasiUbahSub(isian) {
   return galat;
 }
 
-export async function ubahSubKompetensi(kode, isian) {
+export function ubahSubKompetensi(kode, isian) {
   const galat = validasiUbahSub(isian);
-  if (Object.keys(galat).length) throw new Error(Object.values(galat)[0]);
-  const lama = instrumenTiruanAktif();
-  if (!lama?.kompetensi.some((k) => k.sub.some((x) => x.kode === kode))) throw new Error('Sub-kompetensi tidak ditemukan.');
-  const kompetensi = JSON.parse(JSON.stringify(lama.kompetensi));
-  const sub = kompetensi.flatMap((k) => k.sub).find((x) => x.kode === kode);
-  sub.nama = isian.nama.trim();
-  sub.bobot = Number(String(isian.bobot).replace(',', '.'));
-  sub.indikator = isian.indikator.map((i) => ({ level: i.level, teks: i.teks.trim() }));
-  if (DIPAKAI_TIRUAN[lama.id]) {
-    // Sudah dipakai penilaian: simpan sebagai revisi baru (checksum tidak lagi sama dengan template resmi).
-    gantiAktif({ ...lama, id: `instrumen-${Date.now()}`, kompetensi, cocok_resmi: false, diimpor_pada: new Date().toISOString() });
-  } else {
-    aktif = { ...lama, kompetensi, cocok_resmi: false };
-  }
-  return tunda(aktif);
+  if (Object.keys(galat).length) return Promise.reject(new GalatImpor(Object.values(galat)[0]));
+  return panggil(() => api.put(`/pkg/instrumen/aktif/sub/${kode}`, {
+    nama: isian.nama.trim(),
+    bobot: Number(String(isian.bobot).replace(',', '.')),
+    indikator: isian.indikator.map((i) => ({ level: i.level, teks: i.teks.trim() })),
+    alasan: isian.alasan.trim(),
+  }), 'Gagal menyimpan perubahan.');
 }
 
 // Bandingkan instrumen aktif dengan template instrumen resmi di server (GET /pkg/template/info).

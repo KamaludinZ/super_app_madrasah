@@ -1,14 +1,40 @@
 import React, { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { History, ShieldCheck, ShieldAlert, Tag } from 'lucide-react';
+import { History, ShieldCheck, ShieldAlert, Tag, Target, Loader2 } from 'lucide-react';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { daftarVersiInstrumen, labelVersi } from '@/lib/pkgInstrumen';
+import { aktifkanInstrumen, daftarVersiInstrumen, labelVersi } from '@/lib/pkgInstrumen';
 
 // Daftar versi instrumen (aktif + revisi lama) dengan label versi template, kecocokan template resmi,
 // waktu impor, dan jumlah penilaian yang memakainya. `muatUlangKunci` berubah -> daftar dimuat ulang.
-export default function DaftarVersiInstrumen({ muatUlangKunci }) {
+// Kepala (`onAktifkan` diisi) dapat menjadikan versi lain sebagai acuan dengan alasan.
+export default function DaftarVersiInstrumen({ muatUlangKunci, onAktifkan }) {
   const [daftar, setDaftar] = useState([]);
+  const [pilih, setPilih] = useState(null);
+  const [alasan, setAlasan] = useState('');
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  const aktifkan = async () => {
+    if (!alasan.trim()) {
+      toast.error('Alasan wajib diisi.');
+      return;
+    }
+    setMenyimpan(true);
+    try {
+      const instrumen = await aktifkanInstrumen(pilih.id, alasan.trim());
+      toast.success(`${labelVersi(instrumen)} menjadi acuan penilaian`);
+      setPilih(null);
+      onAktifkan?.(instrumen);
+    } catch (e) {
+      toast.error(e.message || 'Gagal menetapkan acuan');
+    } finally {
+      setMenyimpan(false);
+    }
+  };
 
   useEffect(() => {
     daftarVersiInstrumen().then(setDaftar).catch(() => setDaftar([]));
@@ -35,9 +61,33 @@ export default function DaftarVersiInstrumen({ muatUlangKunci }) {
             <div className="text-xs text-slate-500 sm:ml-auto sm:text-right">
               {formatWIBPanjang(v.diimpor_pada)} · {v.dipakai_penilaian} penilaian
             </div>
+            {onAktifkan && !v.is_active && (
+              <Button size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs" onClick={() => { setPilih(v); setAlasan(''); }}
+                data-testid={`pkg-versi-aktifkan-${v.id}`}>
+                <Target className="h-3 w-3" /> Jadikan acuan
+              </Button>
+            )}
           </div>
         ))}
       </CardContent>
+
+      <Dialog open={!!pilih} onOpenChange={(o) => { if (!o && !menyimpan) setPilih(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Jadikan {labelVersi(pilih)} acuan</DialogTitle>
+            <DialogDescription className="text-left">
+              Lembar penilaian baru akan memakai versi ini. Lembar yang sudah dibuat tetap memakai versinya.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea value={alasan} onChange={(e) => setAlasan(e.target.value)} rows={3} maxLength={300} placeholder="Alasan (tercatat di jejak audit)" />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPilih(null)} disabled={menyimpan}>Batal</Button>
+            <Button onClick={aktifkan} disabled={menyimpan} className="bg-[#006837] hover:bg-[#005830]">
+              {menyimpan && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Jadikan acuan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
