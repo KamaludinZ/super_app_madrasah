@@ -7,7 +7,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
-import { pengingatPkgLonceng } from '@/lib/pkgPengingat';
 import { PushToggle } from '@/components/pwa/EnableNotifications';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -83,7 +82,7 @@ export function NotificationBell() {
   const fetchUnread = async () => {
     try {
       const { data } = await api.get('/notifications/unread-count');
-      setUnread((data.unread || 0) + pengingatPkgLonceng().length);
+      setUnread(data.unread || 0);
     } catch { /* ignore */ }
   };
 
@@ -91,8 +90,7 @@ export function NotificationBell() {
     setLoading(true);
     try {
       const { data } = await api.get('/notifications');
-      // Pengingat tenggat PKG (sintetis, selalu belum dibaca) ditaruh paling atas.
-      setItems([...pengingatPkgLonceng(), ...data]);
+      setItems(data);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   };

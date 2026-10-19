@@ -37,10 +37,12 @@ function PengingatTenggat({ pengingat }) {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{p.judul}</div>
-                <div className="text-xs text-slate-500">
-                  {formatWIBPanjang(p.tanggal, false)}
-                  {sisa >= 0 && <span className={sisa <= 7 ? 'text-rose-600 font-semibold' : ''}> · {sisa === 0 ? 'hari ini' : `${sisa} hari lagi`}</span>}
-                </div>
+                {p.tanggal && (
+                  <div className="text-xs text-slate-500">
+                    {formatWIBPanjang(p.tanggal, false)}
+                    {sisa >= 0 && <span className={sisa <= 7 ? 'text-rose-600 font-semibold' : ''}> · {sisa === 0 ? 'hari ini' : `${sisa} hari lagi`}</span>}
+                  </div>
+                )}
                 <p className="text-xs text-slate-600 mt-1">{p.keterangan}</p>
               </div>
             </div>

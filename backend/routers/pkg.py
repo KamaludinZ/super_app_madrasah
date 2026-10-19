@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, sk_aktif, wajib_anggota_sk
-from pkg_beranda import menu_pkg, ringkasan_kinerja, tugas_penilaian_saya
+from pkg_beranda import menu_pkg, pengingat_pkg, ringkasan_kinerja, tugas_penilaian_saya
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ async def beranda_pkg(user: Dict = Depends(get_current_user)):
         'ringkasan': await ringkasan_kinerja(db, sk),
         'tugas': await tugas_penilaian_saya(db, user, periode, sk),
         'menu': menu_pkg(k),
+        'pengingat': await pengingat_pkg(db, user, k, periode, sk),
     }
 
 
@@ -54,3 +55,11 @@ async def menu_beranda(user: Dict = Depends(get_current_user)):
     Penjaga di tiap endpoint tetap memvalidasi ulang; daftar ini hanya untuk tampilan."""
     k = await wajib_anggota_sk(db, user)
     return menu_pkg(k)
+
+
+@router.get("/pkg/beranda/pengingat")
+async def pengingat_beranda(user: Dict = Depends(get_current_user)):
+    """Pengingat tenggat PKG pengguna (tenggat periode & supervisi); juga dikirim ke lonceng via GET /notifications."""
+    k = await wajib_anggota_sk(db, user)
+    periode, sk = await sk_aktif(db)
+    return await pengingat_pkg(db, user, k, periode, sk)

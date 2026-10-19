@@ -196,3 +196,31 @@ def test_menu_sesuai_akses(db):
     assert [m['key'] for m in menu][:2] == ['periode', 'sk'] and menu[0]['khusus'] == 'kepala' and menu[0]['akses'] is False
     with pytest.raises(HTTPException):
         asyncio.run(api.menu_beranda(GURU('asing')))
+
+
+def test_pengingat_dan_notifikasi(db):
+    from datetime import date
+    db['users'] = _Koleksi([{'id': 'kep', 'roles': ['kepala_sekolah']}])
+    db['pkg_penugasan'].docs[0]['guru_dinilai_ids'] = ['g1', 'g2']
+    db['pkg_penugasan'].docs[1]['guru_dinilai_ids'] = ['g3']
+    db['pkg_penilaian'] = _Koleksi([{'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g1', 'status': 'terkunci'}])
+
+    pen = asyncio.run(api.pengingat_beranda(GURU('pen')))
+    assert [(p['jenis'], p['tanggal']) for p in pen] == [('tenggat', '2026-11-30')] and pen[0]['keterangan'].startswith('1 guru')
+    rangkap = asyncio.run(api.pengingat_beranda(GURU('rangkap')))
+    assert [p['jenis'] for p in rangkap] == ['supervisi', 'tenggat']
+    assert asyncio.run(api.pengingat_beranda(GURU('gur'))) == []  # hanya dinilai
+    kep = asyncio.run(api.pengingat_beranda(KEPALA))
+    assert [p['jenis'] for p in kep] == ['tenggat']
+
+    ubah = pkg_beranda.pengingat_ke_notifikasi
+    assert ubah(pen, date(2026, 11, 1)) == []  # di luar jendela 14 hari
+    for hari_ini, keparahan in ((date(2026, 11, 20), 'info'), (date(2026, 11, 25), 'warning'), (date(2026, 11, 30), 'critical')):
+        n = ubah(pen, hari_ini)
+        assert len(n) == 1 and n[0]['severity'] == keparahan and n[0]['source'] == 'pkg' and n[0]['link'] == '/pkg'
+    assert ubah(pen, date(2026, 12, 1)) == []  # sudah lewat
+    supervisi = ubah(rangkap, date(2026, 10, 1))  # tanpa tanggal: selalu tampil
+    assert [(n['source_id'], n['severity']) for n in supervisi] == [('supervisi_p1', 'warning')]
+
+    assert asyncio.run(pkg_beranda.notifikasi_pkg(db, GURU('asing'))) == []
+    assert 'pengingat' in asyncio.run(api.beranda_pkg(GURU('pen')))

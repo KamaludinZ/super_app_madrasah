@@ -1,4 +1,6 @@
-"""Data Beranda PKG: ringkasan kinerja periode berjalan, daftar tugas penilaian, dan pintasan menu sesuai akses."""
+"""Data Beranda PKG: ringkasan kinerja, daftar tugas penilaian, pintasan menu sesuai akses, dan pengingat tenggat
+(juga disajikan sebagai notifikasi sintetis source 'pkg' di GET /notifications)."""
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from pkg_akses import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PERAN_KEPALA
@@ -136,3 +138,79 @@ def menu_pkg(keanggotaan: Dict[str, Any]) -> List[Dict[str, Any]]:
             'akses': alasan is None, 'alasan': alasan,
         })
     return hasil
+
+
+WIB = timezone(timedelta(hours=7))
+# Pengingat bertanggal masuk lonceng notifikasi bila tenggatnya 0–14 hari lagi.
+JENDELA_LONCENG_HARI = 14
+
+
+def _sisa_hari(tanggal: Optional[str], hari_ini: date) -> Optional[int]:
+    try:
+        return (date.fromisoformat(str(tanggal)[:10]) - hari_ini).days
+    except (TypeError, ValueError):
+        return None
+
+
+async def pengingat_pkg(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode: Optional[Dict[str, Any]],
+                        sk: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Pengingat Beranda PKG: [{id, jenis ('tenggat'|'supervisi'), judul, tanggal|None, keterangan}].
+    - tenggat: tanggal tutup periode bila masih ada lembar belum terkunci (milik penilai; seluruh SK untuk kepala)
+    - supervisi: penilai yang belum disupervisi kepala madrasah"""
+    if not keanggotaan.get('anggota') or not periode or not sk:
+        return []
+    hasil = []
+    if keanggotaan.get('sebagai_penilai') and not keanggotaan.get('supervisi_selesai'):
+        hasil.append({
+            'id': f"supervisi_{periode['id']}", 'jenis': 'supervisi', 'judul': 'Menunggu supervisi penilai',
+            'tanggal': None,
+            'keterangan': 'Lembar penilaian dapat dibuka setelah kepala madrasah mencatat supervisi Anda.',
+        })
+    if keanggotaan.get('sebagai_penilai') and periode.get('tanggal_tutup'):
+        if keanggotaan.get('peran') == 'kepala':
+            r = await ringkasan_kinerja(db, sk)
+            sisa_lembar, kepada = r['belum'] + r['sedang'], 'guru pada SK ini'
+        else:
+            tugas = await tugas_penilaian_saya(db, user, periode, sk)
+            sisa_lembar, kepada = sum(1 for t in tugas if t['status'] != 'terkunci'), 'guru yang dibagikan kepada Anda'
+        if sisa_lembar:
+            hasil.append({
+                'id': f"tenggat_{periode['id']}", 'jenis': 'tenggat', 'judul': 'Penilaian ditutup',
+                'tanggal': periode['tanggal_tutup'],
+                'keterangan': f'{sisa_lembar} {kepada} belum dikirim & dikunci.',
+            })
+    return hasil
+
+
+def pengingat_ke_notifikasi(pengingat: List[Dict[str, Any]], hari_ini: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Ubah pengingat menjadi item GET /notifications (source 'pkg', sintetis: selalu belum dibaca)."""
+    hari_ini = hari_ini or datetime.now(WIB).date()
+    sekarang = datetime.now(timezone.utc).isoformat()
+    hasil = []
+    for p in pengingat:
+        sisa = _sisa_hari(p.get('tanggal'), hari_ini)
+        if p.get('tanggal'):
+            if sisa is None or sisa < 0 or sisa > JENDELA_LONCENG_HARI:
+                continue
+            keparahan = 'critical' if sisa <= 3 else 'warning' if sisa <= 7 else 'info'
+            judul = f"PKG: {p['judul']} — {'hari ini' if sisa == 0 else f'{sisa} hari lagi'}"
+            isi = f"Tenggat {date.fromisoformat(p['tanggal'][:10]).strftime('%d-%m-%Y')}. {p['keterangan']}"
+        else:
+            keparahan, judul, isi = 'warning', f"PKG: {p['judul']}", p['keterangan']
+        hasil.append({
+            'id': f"pkg_{p['id']}", 'source': 'pkg', 'source_id': p['id'],
+            'title': judul, 'body': isi, 'severity': keparahan,
+            'is_pinned': False, 'is_read': False, 'created_at': sekarang,
+            'link': '/pkg', 'icon': 'calendar-clock',
+        })
+    return hasil
+
+
+async def notifikasi_pkg(db, user: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Notifikasi pengingat PKG untuk lonceng; kosong bagi non-anggota SK aktif."""
+    from pkg_akses import keanggotaan_sk, sk_aktif
+    k = await keanggotaan_sk(db, user)
+    if not k['anggota']:
+        return []
+    periode, sk = await sk_aktif(db)
+    return pengingat_ke_notifikasi(await pengingat_pkg(db, user, k, periode, sk))

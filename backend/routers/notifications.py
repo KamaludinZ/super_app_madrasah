@@ -8,6 +8,7 @@ from core import (
     db,
     get_current_user,
     log_audit,
+    logger,
     require_role,
     serialize_doc,
 )
@@ -18,6 +19,16 @@ router = APIRouter()
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def _notifikasi_pkg_aman(user: Dict) -> List[Dict]:
+    """Pengingat PKG untuk lonceng; galat modul PKG tidak boleh menggagalkan feed notifikasi."""
+    from pkg_beranda import notifikasi_pkg  # impor lokal: modul PKG opsional bagi feed
+    try:
+        return await notifikasi_pkg(db, user)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[notifications] pengingat PKG gagal: {e}")
+        return []
 
 
 def _is_active(ann: Dict) -> bool:
@@ -272,6 +283,9 @@ async def list_notifications(user: Dict = Depends(get_current_user)):
             'icon': 'bell',
         })
 
+    # 4) Pengingat tenggat PKG (sintetis, bagi anggota SK aktif): tenggat periode & supervisi penilai.
+    out.extend(await _notifikasi_pkg_aman(user))
+
     # Urut: belum dibaca dulu, lalu disematkan, lalu terbaru.
     out.sort(key=lambda x: str(x.get('created_at') or ''), reverse=True)
     out.sort(key=lambda x: (x['is_read'], not x.get('is_pinned', False)))
@@ -297,6 +311,7 @@ async def unread_count(user: Dict = Depends(get_current_user)):
     if _password_change_status(user).get('should_prompt'):
         count += 1
     count += await db.user_notifications.count_documents({'user_id': user['id'], 'is_read': False})
+    count += len(await _notifikasi_pkg_aman(user))
     return {'unread': count}
 
 
