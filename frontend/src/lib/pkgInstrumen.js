@@ -150,7 +150,7 @@ const TIRUAN = {
 const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(hasil == null ? null : JSON.parse(JSON.stringify(hasil))), ms); });
 
 // Instrumen aktif tiruan (di memori) + riwayat versi lama. Mode development menerima ?instrumen=kosong untuk
-// memulai tanpa instrumen.
+// memulai tanpa instrumen, atau ?instrumen=lama untuk instrumen dari template versi lama.
 let aktif;
 const riwayat = [];
 // Jumlah penilaian (tiruan) yang memakai tiap versi; versi yang dipakai tidak diubah di tempat.
@@ -173,9 +173,12 @@ export const daftarVersiInstrumen = () => tunda([instrumenTiruanAktif(), ...riwa
 })));
 function instrumenTiruanAktif() {
   if (aktif === undefined) {
-    const kosong = process.env.NODE_ENV !== 'production'
-      && new URLSearchParams(window.location.search).get('instrumen') === 'kosong';
-    aktif = kosong ? null : TIRUAN;
+    const skenario = process.env.NODE_ENV !== 'production'
+      ? new URLSearchParams(window.location.search).get('instrumen') : null;
+    // ?instrumen=lama: instrumen aktif masih dari template versi lama (mencoba peringatan versi berbeda).
+    aktif = skenario === 'kosong' ? null
+      : skenario === 'lama' ? { ...TIRUAN, versi_template: '2025', checksum: 'tiruan-template-2025', cocok_resmi: true }
+        : TIRUAN;
   }
   return aktif;
 }
@@ -321,4 +324,21 @@ export async function ubahSubKompetensi(kode, isian) {
     aktif = { ...lama, kompetensi, cocok_resmi: false };
   }
   return tunda(aktif);
+}
+
+// Bandingkan instrumen aktif dengan template instrumen resmi di server (GET /pkg/template/info).
+// Hasil: null bila sejalan; { jenis: 'versi' | 'isi', versiInstrumen, versiTemplate } bila berbeda.
+//   'versi' = instrumen aktif berasal dari versi template lain (perlu impor ulang),
+//   'isi'   = versi sama namun isi instrumen tidak lagi sama dengan berkas resmi (diubah/diunggah).
+export function bandingkanVersiTemplate(instrumen, infoTemplate) {
+  const berkas = infoTemplate?.berkas?.find((b) => b.jenis === 'instrumen');
+  if (!instrumen || !infoTemplate || !berkas) return null;
+  const versiTemplate = berkas.versi || infoTemplate.versi_template;
+  if (String(instrumen.versi_template) !== String(versiTemplate)) {
+    return { jenis: 'versi', versiInstrumen: instrumen.versi_template, versiTemplate };
+  }
+  if (instrumen.cocok_resmi === false || (instrumen.checksum && berkas.checksum_resmi && instrumen.checksum !== berkas.checksum_resmi)) {
+    return { jenis: 'isi', versiInstrumen: instrumen.versi_template, versiTemplate };
+  }
+  return null;
 }
