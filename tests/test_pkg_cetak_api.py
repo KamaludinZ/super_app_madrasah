@@ -120,3 +120,35 @@ def test_cetak_pdf_cadangan_reportlab(klien, monkeypatch, tmp_path):
             assert 'VERSI CADANGAN' in teks and 'bukan salinan identik' in teks
             assert all(x in teks for x in cari), (cari, teks[:500])
     assert [u['mesin'] for u in d['pkg_unduhan'].docs] == ['reportlab', 'reportlab']
+
+
+def test_kemampuan_cetak_dan_endpoint_pdf(klien, monkeypatch):
+    import pkg_pdf
+    k, d, _ = klien
+    r = k.get('/api/pkg/cetak/kemampuan')
+    assert r.status_code == 200
+    assert r.json()['pdf'] == {'libreoffice': True, 'mesin': 'libreoffice', 'identik': True, 'tersedia': True, 'catatan': None}
+    assert r.json()['excel']['tersedia'] and set(r.json()['excel']['template']) == {'instrumen', 'rekap'}
+
+    monkeypatch.setattr(pkg_pdf, 'cari_soffice', lambda: None)
+    pdf = k.get('/api/pkg/cetak/kemampuan').json()['pdf']
+    assert pdf['mesin'] == 'reportlab' and not pdf['identik'] and 'cadangan' in pdf['catatan']
+    # Endpoint khusus PDF mengabaikan format di badan permintaan; alasan cadangan ikut di header & audit.
+    r = k.post('/api/pkg/cetak/pdf', json={'jenis': 'rekap', 'format': 'xlsx'})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF') and '.pdf' in r.headers['content-disposition']
+    assert r.headers['x-pkg-mesin'] == 'reportlab' and r.headers['x-pkg-cadangan'] == 'libreoffice_tidak_tersedia'
+    assert 'X-PKG-Cadangan' in r.headers['access-control-expose-headers']
+    assert k.post('/api/pkg/cetak/pdf', json={'jenis': 'guru', 'format': 'pdf', 'guru_id': 'zz'}).status_code == 409
+
+
+def test_cetak_pdf_konversi_gagal_pakai_cadangan(klien, monkeypatch):
+    from pkg_pdf import KonversiPdfGagal
+    k, d, _ = klien
+
+    async def gagal(*a, **kw):
+        raise KonversiPdfGagal('rusak')
+    monkeypatch.setattr(api, 'xlsx_ke_pdf', gagal)
+    r = k.post('/api/pkg/cetak', json={'jenis': 'guru', 'format': 'pdf', 'guru_id': 'g1'})
+    assert r.status_code == 200 and r.headers['x-pkg-mesin'] == 'reportlab' and r.headers['x-pkg-cadangan'] == 'konversi_gagal'
+    r = k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'xlsx'})
+    assert 'x-pkg-cadangan' not in r.headers and r.headers['x-pkg-mesin'] == 'openpyxl'

@@ -40,6 +40,13 @@ def libreoffice_tersedia() -> bool:
     return cari_soffice() is not None
 
 
+def kemampuan_pdf() -> dict:
+    """Deteksi alat cetak PDF saat ini (dibaca ulang tiap panggilan, jadi pemasangan LibreOffice langsung terdeteksi):
+    mesin yang akan dipakai dan apakah hasilnya salinan identik berkas Excel resmi."""
+    ada = libreoffice_tersedia()
+    return {'libreoffice': ada, 'mesin': 'libreoffice' if ada else 'reportlab', 'identik': ada}
+
+
 async def xlsx_ke_pdf(isi_xlsx: bytes, nama_berkas: str = 'pkg.xlsx', batas_detik: Optional[float] = None) -> bytes:
     """Konversi bytes .xlsx menjadi bytes PDF via LibreOffice. Melempar LibreOfficeTidakTersedia/KonversiPdfGagal."""
     soffice = cari_soffice()

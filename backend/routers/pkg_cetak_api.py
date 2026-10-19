@@ -6,7 +6,7 @@ Hanya lembar terkunci yang tercetak. PDF memakai LibreOffice; bila tidak tersedi
 berpenanda "bukan salinan identik" (header X-PKG-Mesin: reportlab). Setiap unduhan tercatat di riwayat unduhan & jejak audit (catat_cetak_template).
 """
 from datetime import date
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,11 +16,11 @@ from core import db, get_current_user, logger
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_audit import catat_cetak_template
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
-from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, xlsx_ke_pdf
+from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
 from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, periode_dan_sk
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, CetakRequest
-from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, nama_berkas_cetak
+from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, info_template, nama_berkas_cetak
 
 router = APIRouter()
 
@@ -81,11 +81,42 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
             'xlsx': isi, 'periode': periode, 'guru_id': data.guru_id, 'cadangan': lambda: laporan_guru_pdf_cadangan(laporan)}
 
 
-def respon_berkas(isi: bytes, nama: str, format_berkas: str, mesin: str) -> Response:
-    return Response(isi, media_type=MIME[format_berkas], headers={
+def respon_berkas(isi: bytes, nama: str, format_berkas: str, mesin: str, alasan_cadangan: Optional[str] = None) -> Response:
+    header = {
         'Content-Disposition': f"attachment; filename=\"{nama}\"; filename*=UTF-8''{quote(nama)}",
-        'X-PKG-Mesin': mesin, 'Access-Control-Expose-Headers': 'Content-Disposition, X-PKG-Mesin',
-    })
+        'X-PKG-Mesin': mesin, 'Access-Control-Expose-Headers': 'Content-Disposition, X-PKG-Mesin, X-PKG-Cadangan',
+    }
+    if alasan_cadangan:
+        header['X-PKG-Cadangan'] = alasan_cadangan
+    return Response(isi, media_type=MIME[format_berkas], headers=header)
+
+
+async def buat_pdf(siap: Dict[str, Any]) -> Tuple[bytes, str, Optional[str]]:
+    """PDF dari berkas cetak: LibreOffice bila terdeteksi, selain itu (atau bila konversi gagal) cadangan ReportLab.
+    Hasil: (isi, mesin, alasan_cadangan) dengan alasan 'libreoffice_tidak_tersedia' | 'konversi_gagal' | None."""
+    if not kemampuan_pdf()['libreoffice']:
+        return siap['cadangan'](), 'reportlab', 'libreoffice_tidak_tersedia'
+    try:
+        return await xlsx_ke_pdf(siap['xlsx'], nama_berkas_cetak(siap['dasar_nama'], 'xlsx')), 'libreoffice', None
+    except (LibreOfficeTidakTersedia, KonversiPdfGagal) as e:
+        # Cadangan: tata letak bukan salinan identik Excel; ditandai di setiap halaman & di header respons.
+        logger.warning(f'[pkg_cetak] PDF memakai cadangan ReportLab: {e}')
+        alasan = 'libreoffice_tidak_tersedia' if isinstance(e, LibreOfficeTidakTersedia) else 'konversi_gagal'
+        return siap['cadangan'](), 'reportlab', alasan
+
+
+@router.get("/pkg/cetak/kemampuan")
+async def kemampuan_cetak_api(user: Dict = Depends(get_current_user)):
+    """Ketersediaan alat cetak di server: Excel butuh template resmi utuh; PDF identik butuh LibreOffice, tanpanya
+    PDF tetap dapat diunduh sebagai versi cadangan ReportLab (bukan salinan identik)."""
+    template = {b['jenis']: b['status'] for b in info_template()['berkas']}
+    pdf = kemampuan_pdf()
+    return {
+        'excel': {'tersedia': all(s != 'hilang' for s in template.values()), 'template': template},
+        'pdf': {**pdf, 'tersedia': True,
+                'catatan': None if pdf['identik'] else 'LibreOffice tidak tersedia di server; PDF dibuat sebagai versi cadangan '
+                                                       '(ReportLab) yang bukan salinan identik berkas Excel resmi.'},
+    }
 
 
 @router.post("/pkg/cetak")
@@ -99,18 +130,20 @@ async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(g
     except TemplateTidakTersedia as e:
         raise HTTPException(503, str(e)) from e
     if data.format == 'pdf':
-        try:
-            isi, mesin = await xlsx_ke_pdf(siap['xlsx'], nama_berkas_cetak(siap['dasar_nama'], 'xlsx')), 'libreoffice'
-        except (LibreOfficeTidakTersedia, KonversiPdfGagal) as e:
-            # Cadangan: tata letak bukan salinan identik Excel; ditandai di setiap halaman & di header respons.
-            logger.warning(f'[pkg_cetak] PDF memakai cadangan ReportLab: {e}')
-            isi, mesin = siap['cadangan'](), 'reportlab'
+        isi, mesin, alasan_cadangan = await buat_pdf(siap)
     else:
-        isi, mesin = siap['xlsx'], 'openpyxl'
+        isi, mesin, alasan_cadangan = siap['xlsx'], 'openpyxl', None
     nama = nama_berkas_cetak(siap['dasar_nama'], data.format)
     info = TEMPLATE_PKG[siap['jenis_template']]
     await catat_cetak_template(db, user, siap['jenis_template'], data.format, nama, info['versi'], info['checksum_resmi'],
                                periode_id=siap['periode']['id'], request=request, jenis_dokumen=data.jenis,
                                guru_id=siap['guru_id'], mesin=mesin, isi=isi,
-                               metadata={'tanggal_cetak': date.today().isoformat()})
-    return respon_berkas(isi, nama, data.format, mesin)
+                               metadata={'tanggal_cetak': date.today().isoformat(), 'alasan_cadangan': alasan_cadangan})
+    return respon_berkas(isi, nama, data.format, mesin, alasan_cadangan)
+
+
+@router.post("/pkg/cetak/pdf")
+async def cetak_pdf_api(data: CetakRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Unduh PDF (format pada badan permintaan diabaikan). Header X-PKG-Mesin: libreoffice | reportlab; untuk cadangan
+    ditambah X-PKG-Cadangan berisi alasannya. Ketersediaan alat dapat dicek lebih dulu lewat GET /pkg/cetak/kemampuan."""
+    return await cetak_api(data.model_copy(update={'format': 'pdf'}), request, user)
