@@ -1,7 +1,7 @@
 // Jejak audit modul PKG (koleksi pkg_audit_log), khusus kepala madrasah.
 //
 // TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
-//   GET /pkg/audit?halaman=&per_halaman=&kategori=&aksi=&aktor=&dari=&sampai=&cari=
+//   GET /pkg/audit?halaman=&per_halaman=&kategori=&aksi=&dari=&sampai=&cari=
 //       -> { item: [entri], total, halaman, per_halaman }   (terbaru dulu)
 // entri = { id, aksi, label, kategori, aktor_nama, aktor_peran, timestamp, terakhir, jumlah, penilaian_id,
 //           ip_address, metadata, ringkasan }
@@ -42,8 +42,25 @@ const TIRUAN = [
   entri('buka_beranda', 'Membuka Beranda PKG', 'akses', 'Dedi Kurniawan, M.Pd.', '2026-10-19T06:45:00+07:00', 'Periode berjalan', { jumlah: 2, terakhir: '2026-10-19T09:00:00+07:00' }),
 ];
 
-export async function daftarAudit({ halaman = 1, perHalaman = 10 } = {}) {
-  const urut = [...TIRUAN].sort((a, b) => (b.terakhir || b.timestamp).localeCompare(a.terakhir || a.timestamp));
+// Jenis aksi per kategori untuk saringan (kode sama dengan backend pkg_audit.LABEL_AKSI).
+export const AKSI_PER_KATEGORI = {
+  penilaian: { penilaian_mulai: 'Memulai lembar penilaian', penilaian_buka: 'Membuka lembar penilaian', penilaian_draf: 'Menyimpan draf penilaian', penilaian_kirim: 'Mengirim & mengunci penilaian' },
+  instrumen: { instrumen_impor: 'Mengimpor instrumen', instrumen_ubah: 'Mengubah instrumen', instrumen_aktifkan: 'Menetapkan instrumen acuan' },
+  susunan: { periode_buat: 'Menetapkan periode', periode_berjalan: 'Memulai periode', periode_ditutup: 'Menutup periode', sk_buat: 'Menambah SK', sk_penilai: 'Mengubah tim penilai', sk_dinilai: 'Mengubah guru yang dinilai', penugasan_simpan: 'Menyimpan pembagian penilaian', supervisi_tandai: 'Menandai supervisi penilai', supervisi_batal: 'Membatalkan supervisi penilai' },
+  unduhan: { cetak_template: 'Mencetak dokumen dari template', lihat_template: 'Melihat info template' },
+  akses: { buka_beranda: 'Membuka Beranda PKG', tolak_akses: 'Akses ditolak', lihat_rekap: 'Melihat rekap' },
+};
+
+// Saringan: kategori, aksi, dari/sampai ('YYYY-MM-DD', inklusif, WIB), cari (pelaku/ringkasan/label).
+export async function daftarAudit({ halaman = 1, perHalaman = 10, kategori, aksi, dari, sampai, cari } = {}) {
+  const kata = (cari || '').trim().toLowerCase();
+  const tanggal = (e) => (e.terakhir || e.timestamp).slice(0, 10);
+  const urut = TIRUAN
+    .filter((e) => !kategori || e.kategori === kategori)
+    .filter((e) => !aksi || e.aksi === aksi)
+    .filter((e) => (!dari || tanggal(e) >= dari) && (!sampai || e.timestamp.slice(0, 10) <= sampai))
+    .filter((e) => !kata || [e.aktor_nama, e.ringkasan, e.label].some((v) => (v || '').toLowerCase().includes(kata)))
+    .sort((a, b) => (b.terakhir || b.timestamp).localeCompare(a.terakhir || a.timestamp));
   const mulai = (halaman - 1) * perHalaman;
   return tunda({ item: urut.slice(mulai, mulai + perHalaman), total: urut.length, halaman, per_halaman: perHalaman });
 }

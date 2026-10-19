@@ -9,6 +9,7 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
 import RiwayatPerubahanInstrumen from '@/components/pkg/RiwayatPerubahanInstrumen';
 import RiwayatUnduhan from '@/components/pkg/RiwayatUnduhan';
+import SaringanAudit, { SARINGAN_AUDIT_KOSONG } from '@/components/pkg/SaringanAudit';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatWIBPanjang } from '@/lib/datetime';
@@ -70,17 +71,22 @@ function PanelUnduhan() {
 
 function IsiHalamanAudit() {
   const [halaman, setHalaman] = useState(1);
+  const [saringan, setSaringan] = useState(SARINGAN_AUDIT_KOSONG);
   const [data, setData] = useState(null);
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
     setGalat(null);
     try {
-      setData(await daftarAudit({ halaman, perHalaman: PER_HALAMAN }));
+      const { kategori, aksi, dari, sampai, cari } = saringan;
+      setData(await daftarAudit({ halaman, perHalaman: PER_HALAMAN, kategori, aksi, dari, sampai, cari }));
     } catch (e) {
       setGalat(e);
     }
-  }, [halaman]);
+  }, [halaman, saringan]);
+
+  // Saringan berubah -> kembali ke halaman pertama.
+  const ubahSaringan = useCallback((baru) => { setSaringan(baru); setHalaman(1); }, []);
 
   useEffect(() => { muat(); }, [muat]);
 
@@ -104,8 +110,11 @@ function IsiHalamanAudit() {
         <p className="text-xs text-slate-500">Riwayat aksi penilaian, perubahan instrumen, susunan periode & SK, cetak/unduh, dan akses. Aksi yang berulang dicatat harian beserta jumlahnya.</p>
       </CardHeader>
       <CardContent className="space-y-3">
+        <SaringanAudit nilai={saringan} onUbah={ubahSaringan} />
         {data.item.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">Belum ada aktivitas tercatat.</p>
+          <p className="py-8 text-center text-sm text-slate-500">
+            {Object.values(saringan).some(Boolean) ? 'Tidak ada aktivitas yang cocok dengan saringan.' : 'Belum ada aktivitas tercatat.'}
+          </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-200">
             <Table>
