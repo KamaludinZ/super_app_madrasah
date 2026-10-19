@@ -12,6 +12,7 @@ import ImporInstrumenDialog from '@/components/pkg/ImporInstrumenDialog';
 import HasilImporInstrumen from '@/components/pkg/HasilImporInstrumen';
 import UbahSubKompetensiDialog from '@/components/pkg/UbahSubKompetensiDialog';
 import DaftarVersiInstrumen from '@/components/pkg/DaftarVersiInstrumen';
+import PenandaInstrumenAktif from '@/components/pkg/PenandaInstrumenAktif';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, labelVersi, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -108,6 +109,7 @@ function IsiHalamanInstrumen() {
       </div>
 
       <HasilImporInstrumen hasil={hasilImpor} onTutup={() => setHasilImpor(null)} />
+      <PenandaInstrumenAktif instrumen={instrumen} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KartuAngka icon={Layers} label="Kompetensi" value={r.kompetensi} />

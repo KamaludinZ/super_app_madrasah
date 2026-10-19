@@ -27,7 +27,7 @@ export default function DaftarVersiInstrumen({ muatUlangKunci }) {
           <div key={v.id} className={`flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center ${v.is_active ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'}`} data-testid={`pkg-versi-${v.id}`}>
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="gap-1 bg-white text-slate-800 border-slate-300"><Tag className="h-3 w-3" /> {labelVersi(v)}</Badge>
-              {v.is_active && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>}
+              {v.is_active && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif · acuan penilaian</Badge>}
               {v.cocok_resmi
                 ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Sesuai template resmi</span>
                 : <span className="inline-flex items-center gap-1 text-xs text-amber-700"><ShieldAlert className="h-3.5 w-3.5" /> Diubah dari template resmi</span>}
