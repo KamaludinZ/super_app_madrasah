@@ -105,7 +105,7 @@ async def buat_sk(db, data: SkRequest, kepala: Dict[str, Any]) -> Dict[str, Any]
         'nomor_sk': data.nomor_sk, 'nomor_sk_kunci': kunci, 'tanggal_sk': data.tanggal_sk, 'tentang': data.tentang,
         'periode_id': data.periode_id, 'ditetapkan_oleh': kepala.get('id'),
         'penilai_ids': [kepala['id']] if kepala.get('id') else [], 'dinilai_ids': [],
-        'snapshot_anggota': {}, 'jatah': {},
+        'snapshot_anggota': {},
         'is_active': not ada_aktif,  # SK pertama pada periode langsung aktif
         'created_at': sekarang, 'updated_at': sekarang,
     }

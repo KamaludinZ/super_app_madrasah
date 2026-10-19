@@ -1,4 +1,4 @@
-"""API pengelolaan PKG oleh kepala madrasah: periode, SK & anggotanya (pembagian & supervisi menyusul).
+"""API pengelolaan PKG oleh kepala madrasah: periode, SK & anggotanya, pembagian jatah penilaian (supervisi menyusul).
 
 Semua endpoint memakai penjaga_pkg('kepala'): selain akun kepala madrasah ditolak 403 {'alasan': 'bukan_kepala'}
 dan penolakannya tercatat. Setiap perubahan tercatat di pkg_audit_log.
@@ -12,8 +12,9 @@ from core import db
 from pkg_audit import catat_audit_pkg
 from pkg_periode import ambil_periode, buat_periode, daftar_periode, periode_tampil, ubah_periode, ubah_status_periode
 from pkg_penjaga import penjaga_pkg
+from pkg_penugasan import ambil_pembagian, simpan_pembagian
 from pkg_sk import aktifkan_sk, ambil_sk, atur_dinilai, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_sk, sk_tampil, ubah_sk
-from pkg_skema import DinilaiSkRequest, PenilaiSkRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest
+from pkg_skema import DinilaiSkRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest
 
 router = APIRouter()
 
@@ -136,3 +137,21 @@ async def atur_dinilai_api(sk_id: str, data: DinilaiSkRequest, request: Request,
     await catat_audit_pkg(db, 'sk_dinilai', akses['user'],
                           {**_ringkas_sk(sk), 'ditambah': sk.pop('_ditambah'), 'dilepas': sk.pop('_dilepas')}, request=request)
     return await sk_tampil(db, sk)
+
+
+@router.get("/pkg/penugasan")
+async def pembagian_api(akses: Dict = Depends(kepala)):
+    """Pembagian guru yang dinilai ke penilai + jatah per penilai pada SK aktif periode berjalan."""
+    return await ambil_pembagian(db)
+
+
+@router.put("/pkg/penugasan")
+async def simpan_pembagian_api(data: PenugasanRequest, request: Request, akses: Dict = Depends(kepala)):
+    """Simpan pembagian: tiap guru dinilai tepat satu penilai anggota SK (bukan dirinya sendiri) + jatah per penilai."""
+    hasil = await simpan_pembagian(db, data)
+    perubahan = hasil.pop('_perubahan')
+    if perubahan:
+        await catat_audit_pkg(db, 'penugasan_simpan', akses['user'],
+                              {'sk_id': (hasil['sk'] or {}).get('id'), 'periode_id': (hasil['periode'] or {}).get('id'),
+                               'penilaian_dimulai': hasil['penilaian_dimulai'], 'perubahan': perubahan}, request=request)
+    return hasil

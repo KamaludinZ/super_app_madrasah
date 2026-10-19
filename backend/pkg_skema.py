@@ -5,7 +5,7 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     status ('draf' | 'berjalan' | 'ditutup'), dibuat_oleh, created_at, updated_at}
     pkg_sk         {id, nomor_sk, nomor_sk_kunci (huruf kecil, unik), tanggal_sk, tentang, periode_id,
                     ditetapkan_oleh, penilai_ids, dinilai_ids, snapshot_anggota {<user_id>: {nama, nip, mapel}},
-                    jatah {<penilai_id>: n}, is_active, created_at, updated_at}
+                    is_active, created_at, updated_at}
     pkg_penugasan  {id, periode_id, sk_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
                     supervisi_selesai, tanggal_supervisi, catatan_supervisi, disupervisi_oleh,
                     snapshot_guru {<guru_id>: {nama, nip, mapel}}, updated_at}
