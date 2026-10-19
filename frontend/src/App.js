@@ -95,6 +95,7 @@ import PkgPeriodePage from '@/pages/pkg/PkgPeriodePage';
 import PkgPenugasanPage from '@/pages/pkg/PkgPenugasanPage';
 import PkgSupervisiPage from '@/pages/pkg/PkgSupervisiPage';
 import PkgTemplatePage from '@/pages/pkg/PkgTemplatePage';
+import PkgInstrumenPage from '@/pages/pkg/PkgInstrumenPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -403,6 +404,7 @@ function App() {
               <Route path="penugasan" element={<PkgPenugasanPage />} />
               <Route path="supervisi" element={<PkgSupervisiPage />} />
               <Route path="template" element={<PkgTemplatePage />} />
+              <Route path="instrumen" element={<PkgInstrumenPage />} />
             </Route>
             <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
             <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
