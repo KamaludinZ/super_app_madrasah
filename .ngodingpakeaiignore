@@ -11,3 +11,4 @@
 .pytest_cache/
 test_reports/
 .emergent/
+.gradle/

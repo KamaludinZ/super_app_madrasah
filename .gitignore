@@ -145,3 +145,6 @@ backend/uploads/
 # NgodingPakeAI: file kerja sync lokal (config.json tetap di-commit)
 .ngodingpakeai/pending.json
 .ngodingpakeai/summaries.json
+
+# Cache build Gradle (Android)
+.gradle/
