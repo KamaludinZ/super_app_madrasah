@@ -180,13 +180,35 @@ async def agregasi_rekap(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any
 
 # ---------------------------------------------------------------- periode, cakupan, rincian per guru
 
-async def periode_dan_sk(db, periode_id: Optional[str]) -> tuple:
-    """(periode, sk) untuk rekap: periode terpilih atau periode berjalan; SK aktif periode itu (bila ada).
-    HTTP 404 bila periode tidak ditemukan/tidak ada periode berjalan."""
+async def daftar_periode_rekap(db, tahun_pelajaran: Optional[str] = None, semester: Optional[str] = None) -> list:
+    """Periode untuk saringan rekap (terbaru dulu), opsional per tahun pelajaran & semester. Periode draf tidak
+    disertakan karena belum memiliki penilaian."""
+    from pkg_skema import KOLEKSI_PERIODE
+    saring: Dict[str, Any] = {'status': {'$in': ['berjalan', 'ditutup']}}
+    if tahun_pelajaran:
+        saring['tahun_pelajaran'] = tahun_pelajaran
+    if semester:
+        saring['semester'] = semester
+    daftar = await db[KOLEKSI_PERIODE].find(saring, {'_id': 0}).to_list(500)
+    daftar.sort(key=lambda p: (p.get('tanggal_buka') or '', p.get('created_at') or ''), reverse=True)
+    return [{k: p.get(k) for k in ('id', 'nama_periode', 'tahun_pelajaran', 'semester', 'status', 'tanggal_buka', 'tanggal_tutup')}
+            for p in daftar]
+
+
+async def periode_dan_sk(db, periode_id: Optional[str], tahun_pelajaran: Optional[str] = None,
+                         semester: Optional[str] = None) -> tuple:
+    """(periode, sk) untuk rekap: periode_id terpilih; atau periode terbaru yang cocok dengan tahun pelajaran/semester;
+    atau periode berjalan. SK aktif periode itu (bila ada). HTTP 404 bila tidak ada periode yang cocok."""
     from fastapi import HTTPException
     from pkg_skema import KOLEKSI_PERIODE
     if periode_id:
         periode = await db[KOLEKSI_PERIODE].find_one({'id': periode_id}, {'_id': 0})
+        if periode and ((tahun_pelajaran and periode.get('tahun_pelajaran') != tahun_pelajaran)
+                        or (semester and periode.get('semester') != semester)):
+            periode = None
+    elif tahun_pelajaran or semester:
+        cocok = await daftar_periode_rekap(db, tahun_pelajaran, semester)
+        periode = await db[KOLEKSI_PERIODE].find_one({'id': cocok[0]['id']}, {'_id': 0}) if cocok else None
     else:
         periode = await db[KOLEKSI_PERIODE].find_one({'status': 'berjalan'}, {'_id': 0})
     if not periode:
@@ -240,10 +262,11 @@ async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]]
     }
 
 
-async def rekap_periode(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode_id: Optional[str]) -> Dict[str, Any]:
+async def rekap_periode(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode_id: Optional[str],
+                        tahun_pelajaran: Optional[str] = None, semester: Optional[str] = None) -> Dict[str, Any]:
     """Rekap utama (kontrak frontend GET /pkg/rekap): periode, SK, cakupan, ringkasan, statistik, dan guru dalam
     cakupan pengguna (hasil pribadi hanya bila terkunci)."""
-    periode, sk = await periode_dan_sk(db, periode_id)
+    periode, sk = await periode_dan_sk(db, periode_id, tahun_pelajaran, semester)
     cakupan = await cakupan_rekap(db, user, keanggotaan, periode)
     agregat = await agregasi_rekap(db, periode, sk, saring_guru=cakupan['guru'], hanya_terkunci=cakupan['cakupan'] == 'pribadi')
     if cakupan['cakupan'] == 'penilai':

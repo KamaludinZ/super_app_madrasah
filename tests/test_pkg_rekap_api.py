@@ -27,8 +27,10 @@ def _lembar(lid, guru, penilai, status='terkunci'):
 @pytest.fixture
 def db(monkeypatch):
     d = Db({
-        'pkg_periode': Koleksi([{'id': 'p1', 'status': 'berjalan', 'nama_periode': 'Ganjil'},
-                                {'id': 'p0', 'status': 'ditutup', 'nama_periode': 'Genap'}]),
+        'pkg_periode': Koleksi([
+            {'id': 'p1', 'status': 'berjalan', 'nama_periode': 'Ganjil', 'tahun_pelajaran': '2026/2027', 'semester': 'Ganjil', 'tanggal_buka': '2026-10-01'},
+            {'id': 'p0', 'status': 'ditutup', 'nama_periode': 'Genap', 'tahun_pelajaran': '2025/2026', 'semester': 'Genap', 'tanggal_buka': '2026-03-01'},
+            {'id': 'pd', 'status': 'draf', 'nama_periode': 'Draf', 'tahun_pelajaran': '2026/2027', 'semester': 'Genap', 'tanggal_buka': '2027-03-01'}]),
         'pkg_sk': Koleksi([{'id': 's1', 'periode_id': 'p1', 'is_active': True, 'penilai_ids': ['pen', 'rangkap'],
                             'dinilai_ids': ['g1', 'g2', 'rangkap', 'g3']}]),
         'pkg_penugasan': Koleksi([{'periode_id': 'p1', 'penilai_id': 'pen', 'guru_dinilai_ids': ['g1', 'rangkap'], 'supervisi_selesai': True},
@@ -50,7 +52,7 @@ def _guru(uid):
 def _rincian(user, guru, periode=None):
     async def jalan():
         akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru(user))
-        return await api.rekap_guru_api(guru, periode, akses=akses)
+        return await api.rekap_guru_api(guru, periode, tahun_pelajaran=None, semester=None, akses=akses)
     return asyncio.run(jalan())
 
 
@@ -82,10 +84,10 @@ def test_hasil_sendiri_belum_dikunci_ditolak(db):
     assert e.value.status_code == 404
 
 
-def _api_get(fn, user, periode=None):
+def _api_get(fn, user, periode=None, tahun=None, semester=None):
     async def jalan():
         akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru(user))
-        return await fn(periode, akses=akses)
+        return await fn(periode, tahun_pelajaran=tahun, semester=semester, akses=akses)
     return asyncio.run(jalan())
 
 
@@ -122,3 +124,36 @@ def test_statistik_api(db):
     assert st['cakupan'] == 'semua' and st['statistik']['jumlah'] == 2 and st['statistik']['rata'] == 80.0
     assert st['statistik']['rata_per_kompetensi'] == [{'kode': '1', 'rata': 4.0}]
     assert _api_get(api.statistik_api, 'g3')['statistik']['jumlah'] == 0
+
+
+
+def test_saringan_periode_tahun(db):
+    async def daftar(tahun=None, semester=None):
+        akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru('g1'))
+        return await api.periode_rekap_api(tahun_pelajaran=tahun, semester=semester, akses=akses)
+    assert [p['id'] for p in asyncio.run(daftar())] == ['p1', 'p0']  # draf tidak ikut, terbaru dulu
+    assert [p['id'] for p in asyncio.run(daftar('2025/2026'))] == ['p0']
+    assert asyncio.run(daftar('2026/2027', 'Genap')) == []
+
+    assert _api_get(api.rekap_api, 'kep', tahun='2025/2026')['periode']['id'] == 'p0'
+    assert _api_get(api.rekap_api, 'kep', tahun='2026/2027', semester='Ganjil')['periode']['id'] == 'p1'
+    assert _api_get(api.statistik_api, 'kep', tahun='2025/2026')['statistik']['jumlah'] == 0
+    for kw in ({'tahun': '2024/2025'}, {'periode': 'p1', 'tahun': '2025/2026'}):
+        with pytest.raises(HTTPException) as e:
+            _api_get(api.rekap_api, 'kep', **kw)
+        assert e.value.status_code == 404
+
+
+def test_saringan_lewat_http(db):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from core import get_current_user
+    app = FastAPI()
+    app.include_router(api.router, prefix='/api')
+    app.dependency_overrides[get_current_user] = lambda: _guru('kep')
+    k = TestClient(app)
+    assert k.get('/api/pkg/rekap', params={'tahun_pelajaran': '2025/2026'}).json()['periode']['id'] == 'p0'
+    assert k.get('/api/pkg/rekap').json()['periode']['id'] == 'p1'
+    assert k.get('/api/pkg/rekap', params={'tahun_pelajaran': '2025-2026'}).status_code == 422
+    assert [p['id'] for p in k.get('/api/pkg/rekap/periode').json()] == ['p1', 'p0']
+    assert k.get('/api/pkg/rekap/guru/g1', params={'semester': 'Ganjil'}).json()['status'] == 'terkunci'
