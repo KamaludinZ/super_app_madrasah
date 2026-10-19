@@ -11,8 +11,9 @@ import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
 import ImporInstrumenDialog from '@/components/pkg/ImporInstrumenDialog';
 import HasilImporInstrumen from '@/components/pkg/HasilImporInstrumen';
 import UbahSubKompetensiDialog from '@/components/pkg/UbahSubKompetensiDialog';
+import DaftarVersiInstrumen from '@/components/pkg/DaftarVersiInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { ambilInstrumenAktif, ringkasInstrumen } from '@/lib/pkgInstrumen';
+import { ambilInstrumenAktif, labelVersi, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
 function KartuAngka({ icon: Icon, label, value }) {
   return (
@@ -95,7 +96,7 @@ function IsiHalamanInstrumen() {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1" data-testid="pkg-instrumen-versi">
-            <Tag className="h-3 w-3" /> Template {instrumen.versi_template}
+            <Tag className="h-3 w-3" /> {labelVersi(instrumen)}
           </Badge>
           {instrumen.diimpor_pada && <span className="text-slate-500">Diimpor {formatWIBPanjang(instrumen.diimpor_pada)}</span>}
           {kepala && (
@@ -116,6 +117,7 @@ function IsiHalamanInstrumen() {
       </div>
 
       <HierarkiInstrumen kompetensi={instrumen.kompetensi} onUbah={kepala ? setUbahSub : undefined} />
+      <DaftarVersiInstrumen muatUlangKunci={`${instrumen.id}:${instrumen.revisi}`} />
       {dialogImpor}
       <UbahSubKompetensiDialog sub={ubahSub} onClose={() => setUbahSub(null)} onTersimpan={(baru) => { setUbahSub(null); setInstrumen(baru); }} />
     </div>

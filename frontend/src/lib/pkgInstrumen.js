@@ -3,7 +3,9 @@
 // TIRUAN SEMENTARA: struktur & teks diambil dari berkas resmi pkg_template_v2026.xlsx (sheet KOMP-1..KOMP (4)),
 // meniru kontrak yang direncanakan. Saat endpoint backend tersedia, ganti isi fungsi dengan panggilan `api`:
 //   GET /pkg/instrumen/aktif -> instrumen | null (belum ada instrumen aktif)
-// instrumen = { id, versi_template, checksum, is_active, diimpor_pada, kompetensi: [kompetensi] }
+// instrumen = { id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, kompetensi: [kompetensi] }
+//   GET /pkg/instrumen -> [versi]  (semua versi, terbaru dulu)
+//   versi = { id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, dipakai_penilaian }
 // kompetensi = { kode, nama, sub: [{ kode, nama, bobot, indikator: [{ level, teks }] }] }
 // Penilaian: tingkat kompetensi tiap sub = level 1–5 (nilai rating), jumlah maksimal 12 x 5 = 60.
 
@@ -137,7 +139,9 @@ const KOMPETENSI = [
 const TIRUAN = {
   id: 'instrumen-2026',
   versi_template: '2026',
+  revisi: 1,
   checksum: 'e4e768b7b5dfbdbc1a32a1b88d9a731bcceac2c1ffd2af9801aa8a994f637da5',
+  cocok_resmi: true,
   is_active: true,
   diimpor_pada: '2026-10-01T08:00:00+07:00',
   kompetensi: KOMPETENSI,
@@ -145,8 +149,28 @@ const TIRUAN = {
 
 const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(hasil == null ? null : JSON.parse(JSON.stringify(hasil))), ms); });
 
-// Instrumen aktif tiruan (di memori). Mode development menerima ?instrumen=kosong untuk memulai tanpa instrumen.
+// Instrumen aktif tiruan (di memori) + riwayat versi lama. Mode development menerima ?instrumen=kosong untuk
+// memulai tanpa instrumen.
 let aktif;
+const riwayat = [];
+// Jumlah penilaian (tiruan) yang memakai tiap versi; versi yang dipakai tidak diubah di tempat.
+const DIPAKAI_TIRUAN = { 'instrumen-2026': 9 };
+
+// Simpan versi aktif ke riwayat lalu jadikan `baru` aktif dengan nomor revisi berikutnya.
+function gantiAktif(baru) {
+  const lama = instrumenTiruanAktif();
+  if (lama) riwayat.unshift({ ...lama, is_active: false });
+  const revisi = Math.max(0, ...[lama, ...riwayat].filter(Boolean).map((x) => x.revisi || 0)) + 1;
+  aktif = { ...baru, revisi, is_active: true };
+  return lama;
+}
+
+export const labelVersi = (v) => (v ? `Template ${v.versi_template}${v.revisi ? ` · Rev ${v.revisi}` : ''}` : '-');
+
+export const daftarVersiInstrumen = () => tunda([instrumenTiruanAktif(), ...riwayat].filter(Boolean).map((v) => ({
+  id: v.id, versi_template: v.versi_template, revisi: v.revisi, checksum: v.checksum, cocok_resmi: v.cocok_resmi,
+  is_active: v.is_active, diimpor_pada: v.diimpor_pada, dipakai_penilaian: DIPAKAI_TIRUAN[v.id] || 0,
+})));
 function instrumenTiruanAktif() {
   if (aktif === undefined) {
     const kosong = process.env.NODE_ENV !== 'production'
@@ -208,14 +232,14 @@ export async function pratinjauImpor({ sumber, berkas = null }) {
 
 export async function terapkanImpor(token) {
   if (!pratinjauTerakhir || pratinjauTerakhir.token !== token) throw new Error('Pratinjau kedaluwarsa. Ulangi impor.');
-  const sebelumnya = instrumenTiruanAktif();
-  aktif = {
+  const sebelumnya = gantiAktif({
     ...TIRUAN,
     id: `instrumen-${Date.now()}`,
     checksum: pratinjauTerakhir.checksum,
+    cocok_resmi: pratinjauTerakhir.cocok_resmi,
     diimpor_pada: new Date().toISOString(),
     kompetensi: pratinjauTerakhir.kompetensi,
-  };
+  });
   const r = ringkasInstrumen(aktif);
   const hasil = {
     sumber: pratinjauTerakhir.sumber,
@@ -224,7 +248,7 @@ export async function terapkanImpor(token) {
     kompetensi: r.kompetensi,
     sub: r.sub,
     indikator: r.indikator,
-    instrumen_sebelumnya: sebelumnya ? { id: sebelumnya.id, versi_template: sebelumnya.versi_template } : null,
+    instrumen_sebelumnya: sebelumnya ? { id: sebelumnya.id, versi_template: sebelumnya.versi_template, revisi: sebelumnya.revisi } : null,
   };
   pratinjauTerakhir = null;
   return tunda({ instrumen: aktif, hasil });
@@ -283,11 +307,18 @@ export function validasiUbahSub(isian) {
 export async function ubahSubKompetensi(kode, isian) {
   const galat = validasiUbahSub(isian);
   if (Object.keys(galat).length) throw new Error(Object.values(galat)[0]);
-  const instrumen = instrumenTiruanAktif();
-  const sub = instrumen?.kompetensi.flatMap((k) => k.sub).find((x) => x.kode === kode);
-  if (!sub) throw new Error('Sub-kompetensi tidak ditemukan.');
+  const lama = instrumenTiruanAktif();
+  if (!lama?.kompetensi.some((k) => k.sub.some((x) => x.kode === kode))) throw new Error('Sub-kompetensi tidak ditemukan.');
+  const kompetensi = JSON.parse(JSON.stringify(lama.kompetensi));
+  const sub = kompetensi.flatMap((k) => k.sub).find((x) => x.kode === kode);
   sub.nama = isian.nama.trim();
   sub.bobot = Number(String(isian.bobot).replace(',', '.'));
   sub.indikator = isian.indikator.map((i) => ({ level: i.level, teks: i.teks.trim() }));
-  return tunda(instrumen);
+  if (DIPAKAI_TIRUAN[lama.id]) {
+    // Sudah dipakai penilaian: simpan sebagai revisi baru (checksum tidak lagi sama dengan template resmi).
+    gantiAktif({ ...lama, id: `instrumen-${Date.now()}`, kompetensi, cocok_resmi: false, diimpor_pada: new Date().toISOString() });
+  } else {
+    aktif = { ...lama, kompetensi, cocok_resmi: false };
+  }
+  return tunda(aktif);
 }

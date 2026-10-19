@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ShieldCheck, ShieldAlert, X } from 'lucide-react';
+import { labelVersi } from '@/lib/pkgInstrumen';
 
 // Ringkasan hasil impor instrumen yang baru diterapkan (ditampilkan sampai ditutup pengguna).
 // `hasil` = { sumber, nama_berkas, cocok_resmi, kompetensi, sub, indikator, instrumen_sebelumnya }.
@@ -21,7 +22,7 @@ export default function HasilImporInstrumen({ hasil, onTutup }) {
         </p>
         {hasil.instrumen_sebelumnya && (
           <p className="text-xs text-emerald-800">
-            Instrumen sebelumnya (template {hasil.instrumen_sebelumnya.versi_template}) tetap tersimpan dan dipakai oleh penilaian yang sudah berjalan.
+            Instrumen sebelumnya ({labelVersi(hasil.instrumen_sebelumnya)}) tetap tersimpan dan dipakai oleh penilaian yang sudah berjalan.
           </p>
         )}
       </div>
