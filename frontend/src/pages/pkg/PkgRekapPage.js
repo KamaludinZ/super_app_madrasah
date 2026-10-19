@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -97,7 +98,7 @@ function IsiHalamanRekap() {
                   {rekap.guru.map((g) => (
                       <TableRow key={g.guru_id} data-testid={`pkg-rekap-${g.guru_id}`}>
                         <TableCell className="min-w-[180px]">
-                          <div className="font-medium text-slate-900">{g.nama}</div>
+                          <Link to={`/pkg/rekap/${g.guru_id}`} className="font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
                           <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
                         </TableCell>
                         <TableCell className="text-sm text-slate-600 whitespace-nowrap">{g.penilai_nama || '-'}</TableCell>

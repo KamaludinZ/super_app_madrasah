@@ -4,6 +4,9 @@ import { levelCapaian, predikatJenjang } from '@/lib/pkgPenilaian';
 //
 // TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
 //   GET /pkg/rekap?periode_id= -> rekap   (periode bawaan: periode berjalan)
+//   GET /pkg/rekap/guru/{guru_id}?periode_id= -> rincian  (hanya lembar dalam cakupan pengguna)
+// rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
+//             instrumen: { id, versi_template, revisi, kompetensi }, isian: { kode_sub: { centang, catatan_bukti, tanggapan } } }
 // rekap = { periode, cakupan: 'semua' | 'penilai' | 'pribadi', ringkasan: { total, terkunci, draf, belum, rata_capaian },
 //           guru: [baris] }
 // baris = { guru_id, nama, nip, mapel, penilai_nama, status: 'belum'|'draf'|'terkunci', nilai_akhir, nilai_maks,
@@ -48,5 +51,45 @@ export async function ambilRekap({ periodeId } = {}) {
       rata_capaian: terkunci.length ? Math.round((terkunci.reduce((n, g) => n + g.capaian_persen, 0) / terkunci.length) * 100) / 100 : null,
     },
     guru,
+  });
+}
+
+// Struktur ringkas 12 sub-kompetensi (nama dari template resmi) untuk rincian tiruan.
+const KOMPETENSI_TIRUAN = [
+  ['1', 'Kompetensi Pedagogik', ['Lingkungan pembelajaran yang aman dan nyaman bagi peserta didik', 'Pembelajaran efektif yang berpusat pada peserta didik', 'Asesmen, umpan balik, dan pelaporan yang berpusat pada peserta didik']],
+  ['2', 'Kompetensi Kepribadian', ['Kematangan moral, emosi, dan spiritual untuk berperilaku sesuai dengan kode etik guru', 'Pengembangan diri melalui kebiasaan refleksi', 'Orientasi berpusat pada peserta didik']],
+  ['3', 'Kompetensi Sosial', ['Kolaborasi untuk peningkatan pembelajaran', 'Keterlibatan orangtua/wali dan masyarakat dalam pembelajaran', 'Keterlibatan dalam organisasi profesi dan jejaring yang lebih luas untuk peningkatan pembelajaran']],
+  ['4', 'Kompetensi Profesional', ['Pengetahuan konten pembelajaran dan cara mengajarkannya', 'Karakteristik dan cara belajar peserta didik', 'Kurikulum dan cara menggunakannya']],
+].map(([kode, nama, sub]) => ({
+  kode, nama, sub: sub.map((n, i) => ({ kode: `${kode}.${i + 1}`, nama: n, bobot: 1, indikator: [1, 2, 3, 4, 5].map((level) => ({ level, teks: `Indikator Level ${level}` })) })),
+}));
+
+// Bagi subtotal kompetensi ke tiga sub (mis. 11 -> 4, 4, 3) menjadi centang Level 1..n.
+function isianDariSubtotal(perKompetensi) {
+  const isian = {};
+  KOMPETENSI_TIRUAN.forEach((k) => {
+    let sisa = perKompetensi[k.kode] || 0;
+    k.sub.forEach((s, i) => {
+      const n = Math.min(5, Math.ceil(sisa / (k.sub.length - i)));
+      sisa -= n;
+      isian[s.kode] = { centang: Array.from({ length: n }, (_, j) => j + 1), catatan_bukti: n >= 4 ? 'Dokumen RPP, foto kegiatan' : '', tanggapan: n <= 2 ? 'Perlu pendampingan sejawat' : '' };
+    });
+  });
+  return isian;
+}
+
+export async function ambilRekapGuru(guruId) {
+  const g = GURU.find((x) => x.guru_id === guruId);
+  if (!g) throw new Error('Data rekap guru tidak ditemukan dalam cakupan Anda.');
+  const terkunci = g.status === 'terkunci';
+  return tunda({
+    periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027' },
+    guru: { id: g.guru_id, nama: g.nama, nip: g.nip, mapel: g.mapel },
+    penilai_nama: g.penilai_nama,
+    status: g.status,
+    hasil: terkunci ? { nilai_akhir: g.nilai_akhir, nilai_maks: g.nilai_maks, capaian_persen: g.capaian_persen, level_capaian: g.level_capaian, predikat: g.predikat, terkunci_pada: g.terkunci_pada } : null,
+    catatan_umum: terkunci ? 'Konsisten menerapkan pembelajaran berpusat pada peserta didik; tingkatkan kolaborasi sejawat.' : '',
+    instrumen: { id: 'instrumen-2026', versi_template: '2026', revisi: 1, kompetensi: KOMPETENSI_TIRUAN },
+    isian: terkunci ? isianDariSubtotal(g.per_kompetensi) : {},
   });
 }
