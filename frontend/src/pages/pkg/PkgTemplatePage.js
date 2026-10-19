@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileSpreadsheet, ShieldCheck, ShieldAlert, FileX2, Loader2, Copy, Tag } from 'lucide-react';
+import { FileSpreadsheet, ShieldCheck, ShieldAlert, FileX2, Loader2, Copy, Tag, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInfoTemplate, formatUkuran } from '@/lib/pkgTemplate';
@@ -20,14 +21,26 @@ function salin(teks) {
   navigator.clipboard?.writeText(teks).then(() => toast.success('Checksum disalin'), () => toast.error('Gagal menyalin'));
 }
 
-// Info versi template resmi PKG: berkas instrumen & rekap yang dipakai cetak, versinya, dan verifikasi checksum.
-// Data sementara dari lib/pkgTemplate (tiruan).
+// Info versi template resmi PKG: berkas instrumen & rekap yang dipakai cetak, versinya, dan verifikasi checksum
+// (GET /pkg/template/info). Kepala madrasah dapat meminta pemeriksaan ulang berkas di server.
 export default function PkgTemplatePage() {
+  const { keanggotaan } = useOutletContext() || {};
   const [info, setInfo] = useState(null);
+  const [memeriksa, setMemeriksa] = useState(false);
 
-  useEffect(() => {
-    ambilInfoTemplate().then(setInfo).catch(() => toast.error('Gagal memuat info template'));
+  const muat = useCallback(async (periksaUlang = false) => {
+    setMemeriksa(periksaUlang);
+    try {
+      setInfo(await ambilInfoTemplate({ periksaUlang }));
+      if (periksaUlang) toast.success('Berkas template diperiksa ulang');
+    } catch {
+      toast.error('Gagal memuat info template');
+    } finally {
+      setMemeriksa(false);
+    }
   }, []);
+
+  useEffect(() => { muat(); }, [muat]);
 
   if (!info) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
 
@@ -43,6 +56,11 @@ export default function PkgTemplatePage() {
             : 'Ada berkas template yang hilang atau berubah. Cetak dokumen resmi dapat tidak sesuai; hubungi admin sistem.'}
           <span className="block text-xs opacity-80">Diperiksa {formatWIBPanjang(info.diperiksa_pada)}</span>
         </span>
+        {keanggotaan?.peran === 'kepala' && (
+          <Button size="sm" variant="ghost" className="ml-auto h-8 shrink-0 gap-1" onClick={() => muat(true)} disabled={memeriksa} data-testid="pkg-template-periksa-ulang">
+            {memeriksa ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />} Periksa ulang
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

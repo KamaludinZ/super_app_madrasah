@@ -211,3 +211,19 @@ def bersihkan_sementara_lama(maks_umur_detik: int = 6 * 3600) -> int:
             shutil.rmtree(path, ignore_errors=True)
             dihapus += 1
     return dihapus
+
+
+def info_template(periksa_ulang: bool = False) -> Dict[str, Any]:
+    """Info untuk GET /pkg/template/info: hasil pemeriksaan terakhir (atau periksa sekarang). Path folder server
+    tidak disertakan."""
+    if periksa_ulang or not HASIL_TERAKHIR:
+        hasil = periksa_template()
+        HASIL_TERAKHIR.clear()
+        HASIL_TERAKHIR.update(hasil)
+    kunci_berkas = ('jenis', 'nama_berkas', 'judul', 'versi', 'ukuran', 'checksum', 'checksum_resmi', 'status')
+    return {
+        'versi_template': HASIL_TERAKHIR['versi_template'],
+        'diperiksa_pada': HASIL_TERAKHIR['diperiksa_pada'],
+        'utuh': HASIL_TERAKHIR['utuh'],
+        'berkas': [{k: b.get(k) for k in kunci_berkas} for b in HASIL_TERAKHIR['berkas']],
+    }

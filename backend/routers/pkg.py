@@ -1,13 +1,14 @@
 """API modul PKG (Penilaian Kinerja Guru). Akses dibatasi keanggotaan SK aktif (lihat pkg_akses & pkg_penjaga)."""
 from typing import Dict
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, sk_aktif
 from pkg_audit import AKSI_BUKA_BERANDA, catat_audit_pkg_harian
 from pkg_beranda import menu_pkg, pengingat_pkg, ringkasan_kinerja, tugas_penilaian_saya
 from pkg_penjaga import penjaga_pkg
+from pkg_template import info_template
 
 router = APIRouter()
 
@@ -66,3 +67,10 @@ async def pengingat_beranda(akses: Dict = Depends(anggota_sk)):
     """Pengingat tenggat PKG pengguna (tenggat periode & supervisi); juga dikirim ke lonceng via GET /notifications."""
     periode, sk = await sk_aktif(db)
     return await pengingat_pkg(db, akses['user'], akses['keanggotaan'], periode, sk)
+
+
+@router.get("/pkg/template/info")
+async def info_template_api(periksa_ulang: bool = Query(False), akses: Dict = Depends(anggota_sk)):
+    """Versi & checksum berkas template resmi PKG (hasil pemeriksaan terakhir). Hanya kepala madrasah yang dapat
+    meminta pemeriksaan ulang (`periksa_ulang=true`); anggota lain selalu mendapat hasil tersimpan."""
+    return info_template(periksa_ulang=periksa_ulang and akses['keanggotaan'].get('peran') == 'kepala')

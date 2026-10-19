@@ -126,3 +126,31 @@ def test_cetak_ke_salinan_sementara_dan_pembersihan(tmp_path, monkeypatch):
     os.utime(lain, (0, 0))
     assert pkg_template.bersihkan_sementara_lama() == 1
     assert sorted(os.listdir(tmp_path)) == ['bukan_pkg', 'pkg_berjalan']
+
+
+def test_endpoint_info_template(monkeypatch):
+    import asyncio
+    import pkg_penjaga
+    from routers import pkg as api
+    from tests.pkg_palsu import Db, Koleksi, Request
+
+    d = Db({'pkg_periode': Koleksi([{'id': 'p1', 'status': 'berjalan'}]),
+            'pkg_sk': Koleksi([{'id': 's1', 'periode_id': 'p1', 'is_active': True, 'penilai_ids': [], 'dinilai_ids': ['g1']}])})
+    monkeypatch.setattr(pkg_penjaga, 'db', d)
+    pkg_template.HASIL_TERAKHIR.clear()
+
+    def panggil(user, ulang=False):
+        async def jalan():
+            akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), user)
+            return await api.info_template_api(ulang, akses)
+        return asyncio.run(jalan())
+
+    guru = {'id': 'g1', 'roles': ['guru']}
+    info = panggil(guru)
+    assert info['versi_template'] == '2026' and info['utuh'] is True and 'folder' not in info
+    assert [b['status'] for b in info['berkas']] == ['cocok', 'cocok'] and 'ada' not in info['berkas'][0]
+    pertama = info['diperiksa_pada']
+    assert panggil(guru, ulang=True)['diperiksa_pada'] == pertama  # guru tidak dapat memicu periksa ulang
+    assert panggil({'id': 'kep', 'roles': ['kepala_sekolah']}, ulang=True)['diperiksa_pada'] >= pertama
+    with pytest.raises(Exception):
+        panggil({'id': 'asing', 'roles': ['guru']})
