@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, BellRing, Megaphone, Lock, CheckCheck, Pin, ChevronRight } from 'lucide-react';
+import { Bell, BellRing, Megaphone, Lock, CheckCheck, Pin, ChevronRight, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
+import { pengingatPkgLonceng } from '@/lib/pkgPengingat';
 import { PushToggle } from '@/components/pwa/EnableNotifications';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -33,8 +34,10 @@ const SEVERITY_STYLES = {
   critical: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
 };
 
+const SOURCE_LABELS = { announcement: 'Pengumuman', user: 'Untuk Anda', pkg: 'PKG' };
+
 function NotificationItem({ n, onClick }) {
-  const Icon = n.icon === 'lock' ? Lock : n.source === 'user' ? BellRing : Megaphone;
+  const Icon = n.icon === 'lock' ? Lock : n.icon === 'calendar-clock' ? CalendarClock : n.source === 'user' ? BellRing : Megaphone;
   const style = SEVERITY_STYLES[n.severity] || SEVERITY_STYLES.info;
   return (
     <button
@@ -61,7 +64,7 @@ function NotificationItem({ n, onClick }) {
           <div className="flex items-center gap-2 mt-1">
             <span className="text-[10px] text-slate-400">{formatRelative(n.created_at)}</span>
             <Badge variant="outline" className="text-[9px] py-0 px-1 capitalize">
-              {n.source === 'announcement' ? 'Pengumuman' : n.source === 'user' ? 'Untuk Anda' : 'Sistem'}
+              {SOURCE_LABELS[n.source] || 'Sistem'}
             </Badge>
           </div>
         </div>
@@ -80,7 +83,7 @@ export function NotificationBell() {
   const fetchUnread = async () => {
     try {
       const { data } = await api.get('/notifications/unread-count');
-      setUnread(data.unread || 0);
+      setUnread((data.unread || 0) + pengingatPkgLonceng().length);
     } catch { /* ignore */ }
   };
 
@@ -88,7 +91,8 @@ export function NotificationBell() {
     setLoading(true);
     try {
       const { data } = await api.get('/notifications');
-      setItems(data);
+      // Pengingat tenggat PKG (sintetis, selalu belum dibaca) ditaruh paling atas.
+      setItems([...pengingatPkgLonceng(), ...data]);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   };
