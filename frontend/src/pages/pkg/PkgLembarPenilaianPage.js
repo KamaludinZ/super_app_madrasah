@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound } from 'lucide-r
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import { labelVersi } from '@/lib/pkgInstrumen';
-import { BATAS_TEKS, ambilLembar, hitungNilai } from '@/lib/pkgPenilaian';
+import { BATAS_TEKS, ambilLembar, hitungNilai, validasiLembar } from '@/lib/pkgPenilaian';
 
 const STATUS = {
   belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
@@ -24,6 +24,8 @@ function IsiLembar() {
   const [lembar, setLembar] = useState(null);
   const [isian, setIsian] = useState({});
   const [catatanUmum, setCatatanUmum] = useState('');
+  // true setelah penilai mencoba mengirim: penanda isian kosong ditampilkan lebih tegas.
+  const [tegas, setTegas] = useState(false);
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
@@ -41,6 +43,7 @@ function IsiLembar() {
   useEffect(() => { muat(); }, [muat]);
 
   const nilai = useMemo(() => hitungNilai(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
+  const validasi = useMemo(() => validasiLembar(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
 
   if (galat) {
     return (
@@ -56,6 +59,13 @@ function IsiLembar() {
   const terkunci = lembar.status === 'terkunci';
   const status = STATUS[lembar.status] || STATUS.belum;
   const ubahSub = (kode) => (baru) => setIsian((x) => ({ ...x, [kode]: baru }));
+  // Tegaskan penanda isian bermasalah dan gulir ke yang pertama; true bila lembar sudah lengkap.
+  const periksaKelengkapan = () => {
+    setTegas(true);
+    const pertama = Object.keys(validasi.galat)[0];
+    if (pertama) document.getElementById(`sub-${pertama}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return validasi.sah;
+  };
 
   return (
     <div className="space-y-4" data-testid="pkg-lembar">
@@ -74,12 +84,28 @@ function IsiLembar() {
       </div>
 
       <div className="sticky top-0 z-10 rounded-xl border border-emerald-200 bg-emerald-50/95 p-3 backdrop-blur" data-testid="pkg-lembar-ringkasan">
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>Nilai <span className="text-lg font-bold tabular-nums text-[#006837]">{nilai.total}</span><span className="text-slate-500">/{nilai.maks}</span></span>
           <span>Capaian <span className="font-bold tabular-nums text-[#006837]">{FORMAT_PERSEN.format(nilai.persen)}%</span></span>
           <span className="text-slate-600">Sub-kompetensi dinilai <span className="font-semibold tabular-nums">{nilai.terisi}/{nilai.jumlahSub}</span></span>
+          {!terkunci && (
+            <Button type="button" size="sm" variant="outline" className="ml-auto h-7 bg-white text-xs" onClick={periksaKelengkapan} data-testid="pkg-lembar-periksa">
+              Periksa kelengkapan
+            </Button>
+          )}
         </div>
         <Progress value={nilai.jumlahSub ? (nilai.terisi / nilai.jumlahSub) * 100 : 0} className="mt-2 h-1.5" aria-label="Kelengkapan penilaian" />
+        {!terkunci && !validasi.sah && (
+          <div className={`mt-2 text-xs ${tegas ? 'text-rose-700' : 'text-amber-800'}`} data-testid="pkg-lembar-belum-lengkap">
+            <span className="font-semibold">{Object.keys(validasi.galat).length} sub-kompetensi perlu dilengkapi:</span>{' '}
+            {Object.keys(validasi.galat).map((kode, i) => (
+              <React.Fragment key={kode}>
+                {i > 0 && ', '}
+                <a href={`#sub-${kode}`} className="font-mono underline underline-offset-2 hover:text-rose-900">{kode}</a>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </div>
 
       {lembar.instrumen.kompetensi.map((k) => (
@@ -89,7 +115,8 @@ function IsiLembar() {
           </h3>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {k.sub.map((s) => (
-              <KartuSubPenilaian key={s.kode} sub={s} isian={isian[s.kode]} terkunci={terkunci} onUbah={ubahSub(s.kode)} />
+              <KartuSubPenilaian key={s.kode} sub={s} isian={isian[s.kode]} terkunci={terkunci} onUbah={ubahSub(s.kode)}
+                galat={validasi.galat[s.kode]} tegas={tegas} />
             ))}
           </div>
         </section>

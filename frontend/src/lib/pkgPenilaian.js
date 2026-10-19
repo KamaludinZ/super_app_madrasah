@@ -64,3 +64,30 @@ export function hitungNilai(kompetensi = [], isian = {}) {
     jumlahSub: perSub.length,
   };
 }
+
+// Validasi kelengkapan lembar (aturan sama dengan backend saat kirim & kunci):
+//   - setiap sub-kompetensi wajib dinilai (minimal Level 1 tercentang);
+//   - level dicentang berurutan dari Level 1 tanpa lompatan;
+//   - teks catatan/tanggapan tidak melebihi BATAS_TEKS.
+// Hasil: { sah, kosong: [kode], lompat: [kode], galat: { [kode]: pesan } }.
+export function validasiLembar(kompetensi = [], isian = {}) {
+  const kosong = [];
+  const lompat = [];
+  const galat = {};
+  kompetensi.flatMap((k) => k.sub || []).forEach((s) => {
+    const isi = isian[s.kode] || {};
+    const centang = isi.centang || [];
+    const tingkat = hitungTingkat(centang);
+    if (tingkat === 0) {
+      kosong.push(s.kode);
+      galat[s.kode] = centang.length ? 'Level 1 belum dicentang.' : 'Belum dinilai.';
+    } else if (centang.some((l) => l > tingkat)) {
+      lompat.push(s.kode);
+      galat[s.kode] = `Centang melompat setelah Level ${tingkat}; lengkapi level di antaranya atau lepas centang yang lebih tinggi.`;
+    }
+    ['catatan_bukti', 'tanggapan'].forEach((kunci) => {
+      if ((isi[kunci] || '').length > BATAS_TEKS) galat[s.kode] = `Teks melebihi ${BATAS_TEKS} karakter.`;
+    });
+  });
+  return { sah: Object.keys(galat).length === 0, kosong, lompat, galat };
+}
