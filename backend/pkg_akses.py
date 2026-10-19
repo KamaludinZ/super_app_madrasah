@@ -5,9 +5,10 @@ Koleksi:
                     status ('draf' | 'berjalan' | 'ditutup'), dibuat_oleh, created_at, updated_at}
     pkg_sk         {id, nomor_sk, periode_id, ditetapkan_oleh, penilai_ids, dinilai_ids, is_active, ...}
     pkg_penugasan  {id, periode_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
-                    supervisi_selesai, tanggal_supervisi, disupervisi_oleh}
+                    supervisi_selesai, tanggal_supervisi, disupervisi_oleh,
+                    snapshot_guru {<guru_id>: {nama, nip, mapel}}}  (identitas disalin per periode)
     pkg_penilaian  {id, sk_id, periode_id, penilai_id, guru_dinilai_id, instrumen_id, skor_per_indikator,
-                    nilai_akhir, predikat, status ('draf' | 'terkunci'), created_at, updated_at}
+                    progres (0–100), nilai_akhir, predikat, status ('draf' | 'terkunci'), created_at, updated_at}
 
 Aturan akses:
     - Modul hanya untuk personil SK aktif (SK is_active pada periode berstatus 'berjalan').

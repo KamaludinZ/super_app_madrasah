@@ -145,3 +145,30 @@ def test_ringkasan_kinerja(db):
     with pytest.raises(HTTPException) as e:
         asyncio.run(api.ringkasan_beranda(GURU('asing')))
     assert e.value.status_code == 403
+
+
+def test_tugas_penilaian_saya(db):
+    db['users'] = _Koleksi([
+        {'id': 'g1', 'full_name': 'Budi', 'nip_nuptk': '111'},
+        {'id': 'g2', 'full_name': 'Ani', 'nip_nuptk': '222'},
+        {'id': 'g3', 'full_name': 'Citra', 'nip_nuptk': '333'},
+    ])
+    db['pkg_penugasan'].docs[0].update({
+        'guru_dinilai_ids': ['g1', 'g2', 'g3', 'pen', 'g1'],  # diri sendiri & ganda diabaikan
+        'snapshot_guru': {'g2': {'nama': 'Ani, S.Pd.', 'nip': '222-snap', 'mapel': 'IPA'}},
+    })
+    db['pkg_penilaian'] = _Koleksi([
+        {'id': 'n1', 'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g1', 'status': 'terkunci', 'progres': 40},
+        {'id': 'n2', 'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g2', 'status': 'draf', 'progres': 250},
+        {'id': 'n3', 'sk_id': 'sk1', 'penilai_id': 'lain', 'guru_dinilai_id': 'g3', 'status': 'draf', 'progres': 50},
+    ])
+    tugas = asyncio.run(api.tugas_saya(GURU('pen')))
+    assert [(t['id'], t['status'], t['progres']) for t in tugas] == [('g2', 'draf', 100), ('g3', 'belum', 0), ('g1', 'terkunci', 100)]
+    ani = tugas[0]
+    assert (ani['nama'], ani['nip'], ani['mapel'], ani['penilaian_id']) == ('Ani, S.Pd.', '222-snap', 'IPA', 'n2')
+    assert (tugas[1]['nama'], tugas[1]['nip'], tugas[1]['penilaian_id']) == ('Citra', '333', None)
+
+    assert asyncio.run(api.tugas_saya(GURU('gur'))) == []  # hanya dinilai → tanpa tugas
+    assert asyncio.run(api.beranda_pkg(GURU('pen')))['tugas'] == tugas
+    with pytest.raises(HTTPException):
+        asyncio.run(api.tugas_saya(GURU('asing')))
