@@ -186,3 +186,21 @@ def test_konfigurasi_docker_menyertakan_template():
         with open(os.path.join(akar, berkas), encoding='utf-8') as f:
             isi = f.read()
         assert 'pkg_template as t' in isi and "sys.exit(0 if h['utuh'] else 1)" in isi, berkas
+
+
+def test_sheet_wajib_template(tmp_path, monkeypatch, caplog):
+    assert pkg_template.SHEET_KOMPETENSI == ('KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)')
+    assert pkg_template.sheet_hilang('instrumen') == [] and pkg_template.sheet_hilang('rekap') == []
+    assert pkg_template.info_berkas('instrumen')['sheet_hilang'] == []
+
+    from openpyxl import Workbook
+    monkeypatch.setattr(pkg_template, 'FOLDER_TEMPLATE', str(tmp_path))
+    wb = Workbook()
+    wb.active.title = 'KOMP-1'
+    wb.save(tmp_path / 'pkg_template_v2026.xlsx')
+    (tmp_path / 'rekap_hasil_pkg_v2026.xlsx').write_bytes(b'bukan xlsx')
+    with caplog.at_level(logging.WARNING, logger='matsandatama'):
+        hasil = {b['jenis']: b for b in pkg_template.periksa_template()['berkas']}
+    assert hasil['instrumen']['sheet_hilang'] == ['KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG']
+    assert hasil['rekap']['sheet_hilang'] is None
+    assert 'tidak memuat sheet wajib' in caplog.text

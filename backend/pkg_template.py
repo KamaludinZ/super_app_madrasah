@@ -34,10 +34,13 @@ TEMPLATE_PKG = {
     'instrumen': {
         'nama_berkas': 'pkg_template_v2026.xlsx', 'judul': 'Instrumen PKG Tahun 2026', 'versi': '2026',
         'checksum_resmi': 'e4e768b7b5dfbdbc1a32a1b88d9a731bcceac2c1ffd2af9801aa8a994f637da5',
+        # Sheet wajib: empat kompetensi (sumber impor instrumen) & rekap per guru (format cetak).
+        'sheet_wajib': ('KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG'),
     },
     'rekap': {
         'nama_berkas': 'rekap_hasil_pkg_v2026.xlsx', 'judul': 'Rekap Hasil PKG 2026', 'versi': '2026',
         'checksum_resmi': '5a8d72c523c82869b3a874679eb6392d2e365660af3d81628e750b89376a775e',
+        'sheet_wajib': ('Rekap hasil PKG',),
     },
 }
 
@@ -60,17 +63,36 @@ def hitung_checksum(path: str) -> Optional[str]:
     return h.hexdigest()
 
 
+# Sheet kompetensi di template instrumen, berurutan sesuai kode kompetensi 1–4.
+SHEET_KOMPETENSI = TEMPLATE_PKG['instrumen']['sheet_wajib'][:4]
+
+
+def sheet_hilang(jenis: str) -> Optional[list]:
+    """Sheet wajib yang tidak ada di berkas template; None bila berkas tidak dapat dibuka."""
+    try:
+        wb = load_workbook(path_template(jenis), read_only=True)
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        return [n for n in TEMPLATE_PKG[jenis]['sheet_wajib'] if n not in wb.sheetnames]
+    finally:
+        wb.close()
+
+
 def info_berkas(jenis: str) -> Dict[str, Any]:
     """Info satu berkas template: versi, ukuran, checksum vs checksum resmi, status 'cocok'|'berbeda'|'hilang'."""
     info = TEMPLATE_PKG[jenis]
     path = path_template(jenis)
     checksum = hitung_checksum(path)
     status = 'hilang' if checksum is None else 'cocok' if checksum == info['checksum_resmi'] else 'berbeda'
+    # Isi yang cocok checksum resmi pasti memuat semua sheet; berkas berbeda diperiksa strukturnya.
+    hilang = [] if status == 'cocok' else (sheet_hilang(jenis) if checksum is not None else None)
     return {
         'jenis': jenis, 'nama_berkas': info['nama_berkas'], 'judul': info['judul'], 'versi': info['versi'],
         'ukuran': os.path.getsize(path) if checksum is not None else None,
         'checksum': checksum, 'checksum_resmi': info['checksum_resmi'], 'status': status,
         'ada': checksum is not None,
+        'sheet_hilang': hilang,
     }
 
 
@@ -85,6 +107,9 @@ def periksa_template() -> Dict[str, Any]:
         elif b['status'] == 'berbeda':
             logger.warning(f"[pkg] Checksum berkas template {b['nama_berkas']} berbeda dari checksum resmi "
                            f"v{b['versi']}; cetak dokumen resmi dapat tidak sesuai.")
+            if b['sheet_hilang'] is None or b['sheet_hilang']:
+                logger.warning(f"[pkg] Berkas template {b['nama_berkas']} tidak memuat sheet wajib: "
+                               f"{b['sheet_hilang'] if b['sheet_hilang'] is not None else 'berkas tidak dapat dibuka'}.")
     hasil = {'folder': FOLDER_TEMPLATE, 'versi': VERSI_TEMPLATE, 'versi_template': VERSI_TEMPLATE,
              'diperiksa_pada': datetime.now(timezone.utc).isoformat(), 'berkas': berkas,
              'lengkap': all(b['ada'] for b in berkas), 'utuh': all(b['status'] == 'cocok' for b in berkas)}
