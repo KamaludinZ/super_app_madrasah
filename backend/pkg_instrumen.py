@@ -196,3 +196,20 @@ async def ubah_sub_instrumen(db, kode: str, data: UbahSubInstrumenRequest, kepal
         await db[KOLEKSI_INSTRUMEN].update_one({'id': lama['id']}, {'$set': perubahan})
         baru = {**lama, **perubahan}
     return {'instrumen': baru, 'sebelum': sub_lama, 'sesudah': sub_baru, 'revisi_baru': bool(dipakai)}
+
+
+async def aktifkan_instrumen(db, instrumen_id: str) -> Dict[str, Any]:
+    """Jadikan versi `instrumen_id` acuan aktif lembar penilaian baru. Lembar yang sudah ada tetap memakai
+    instrumen yang dirujuknya. Hasil: {'instrumen': dok, 'sebelumnya': dok | None}."""
+    target = await db[KOLEKSI_INSTRUMEN].find_one({'id': instrumen_id}, {'_id': 0})
+    if not target:
+        raise HTTPException(404, 'Instrumen tidak ditemukan.')
+    if target.get('is_active'):
+        raise HTTPException(400, 'Instrumen ini sudah menjadi acuan aktif.')
+    if not target.get('kompetensi'):
+        raise HTTPException(409, 'Instrumen tanpa kompetensi tidak dapat dijadikan acuan.')
+    sebelumnya = await instrumen_aktif(db)
+    sekarang = datetime.now(timezone.utc).isoformat()
+    await db[KOLEKSI_INSTRUMEN].update_many({'is_active': True}, {'$set': {'is_active': False, 'updated_at': sekarang}})
+    await db[KOLEKSI_INSTRUMEN].update_one({'id': instrumen_id}, {'$set': {'is_active': True, 'updated_at': sekarang}})
+    return {'instrumen': {**target, 'is_active': True, 'updated_at': sekarang}, 'sebelumnya': sebelumnya}

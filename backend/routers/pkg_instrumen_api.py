@@ -7,11 +7,13 @@ from core import db
 from pkg_audit import catat_audit_pkg
 from pkg_instrumen import (
     ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
-    terapkan_pratinjau, ubah_sub_instrumen,
+    aktifkan_instrumen, terapkan_pratinjau, ubah_sub_instrumen,
 )
 from pkg_instrumen_impor import BATAS_UKURAN_BERKAS, GalatImporInstrumen, pratinjau_dari_bytes, pratinjau_dari_template
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import POLA_ID, POLA_KODE_SUB, TerapkanImporRequest, UbahSubInstrumenRequest
+from pkg_skema import (
+    POLA_ID, POLA_KODE_SUB, AktifkanInstrumenRequest, TerapkanImporRequest, UbahSubInstrumenRequest,
+)
 from pkg_template import TemplateTidakTersedia
 
 router = APIRouter()
@@ -101,3 +103,18 @@ async def daftar_kompetensi_api(
     """Daftar kompetensi & indikator dengan bobot dan porsi persen; `instrumen_id` boleh 'aktif'.
     Filter: `kompetensi` (kode) dan `cari` (nama kompetensi/sub atau teks indikator)."""
     return daftar_kompetensi(await ambil_instrumen(db, instrumen_id), kompetensi, cari)
+
+
+@router.post("/pkg/instrumen/{instrumen_id}/aktifkan")
+async def aktifkan_instrumen_api(data: AktifkanInstrumenRequest, request: Request,
+                                 instrumen_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(kepala)):
+    """Tandai versi instrumen sebagai acuan aktif lembar penilaian baru (mis. kembali ke revisi sebelumnya).
+    Alasan wajib; lembar yang sudah ada tetap memakai versinya."""
+    hasil = await aktifkan_instrumen(db, instrumen_id)
+    baru, lama = hasil['instrumen'], hasil['sebelumnya']
+    await catat_audit_pkg(db, 'instrumen_aktifkan', akses['user'], {
+        'instrumen_id': baru['id'], 'versi_template': baru.get('versi_template'), 'revisi': baru.get('revisi'),
+        'alasan': data.alasan,
+        'sebelumnya': {k: lama.get(k) for k in ('id', 'versi_template', 'revisi')} if lama else None,
+    }, request=request)
+    return instrumen_tampil(baru)

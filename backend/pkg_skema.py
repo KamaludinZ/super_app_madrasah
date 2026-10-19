@@ -403,3 +403,15 @@ class UbahSubInstrumenRequest(IsianPkg):
 
 class TerapkanImporRequest(IsianPkg):
     token: str = Field(..., pattern=POLA_ID)
+
+
+class AktifkanInstrumenRequest(IsianPkg):
+    alasan: str = Field(..., max_length=300)
+
+    @field_validator('alasan')
+    @classmethod
+    def _alasan_wajib(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('alasan wajib diisi')
+        return v

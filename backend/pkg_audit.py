@@ -45,6 +45,7 @@ LABEL_AKSI = {
     'supervisi_batal': 'Membatalkan supervisi penilai',
     'instrumen_impor': 'Mengimpor instrumen',
     'instrumen_ubah': 'Mengubah instrumen',
+    'instrumen_aktifkan': 'Menetapkan instrumen acuan',
     AKSI_LIHAT_TEMPLATE: 'Melihat info template',
     AKSI_PERIKSA_TEMPLATE: 'Memeriksa ulang berkas template',
     AKSI_CETAK_TEMPLATE: 'Mencetak dokumen dari template',

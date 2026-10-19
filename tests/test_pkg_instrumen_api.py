@@ -159,3 +159,23 @@ def test_ubah_sub_instrumen(db):
     with pytest.raises(HTTPException) as e:
         _api(api.ubah_sub_api, _ubah(), Request(), kode='1.1', user=GURU)
     assert e.value.detail['alasan'] == 'bukan_kepala'
+
+
+def test_aktifkan_instrumen_acuan(db):
+    from pkg_skema import AktifkanInstrumenRequest
+    ids = []
+    for _ in range(2):
+        p = _api(api.pratinjau_impor_api, sumber='template', berkas=None)
+        ids.append(_api(api.terapkan_impor_api, TerapkanImporRequest(token=p['token']), Request())['instrumen']['id'])
+    hasil = _api(api.aktifkan_instrumen_api, AktifkanInstrumenRequest(alasan='kembali ke rev 1'), Request(), instrumen_id=ids[0])
+    assert hasil['id'] == ids[0] and hasil['is_active'] is True
+    assert [d['id'] for d in db['pkg_instrumen'].docs if d['is_active']] == [ids[0]]
+    meta = db['pkg_audit_log'].docs[-1]['metadata']
+    assert db['pkg_audit_log'].docs[-1]['aksi'] == 'instrumen_aktifkan' and meta['sebelumnya']['id'] == ids[1]
+
+    for iid, kode in ((ids[0], 400), ('tidak-ada', 404)):
+        with pytest.raises(HTTPException) as e:
+            _api(api.aktifkan_instrumen_api, AktifkanInstrumenRequest(alasan='x'), Request(), instrumen_id=iid)
+        assert e.value.status_code == kode
+    with pytest.raises(Exception):
+        AktifkanInstrumenRequest(alasan='  ')
