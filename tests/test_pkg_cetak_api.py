@@ -229,3 +229,25 @@ def test_audit_unduhan_berhasil_gagal_dan_lihat_riwayat(klien, monkeypatch):
     k.get('/api/pkg/cetak/unduhan', params={'format': 'pdf'})
     lihat = audit('lihat_unduhan')
     assert len(lihat) == 1 and lihat[0]['jumlah'] == 2 and lihat[0]['aktor_id'] == 'pen'
+
+
+def test_unduhan_excel_dan_pdf_tercatat_berpasangan(klien, monkeypatch):
+    import hashlib
+    import pkg_pdf
+    k, d, _ = klien
+    berkas = [k.post('/api/pkg/cetak', json={'jenis': 'guru', 'format': 'xlsx', 'guru_id': 'g1'}),
+              k.post('/api/pkg/cetak/pdf', json={'jenis': 'rekap', 'format': 'pdf'})]
+    monkeypatch.setattr(pkg_pdf, 'cari_soffice', lambda: None)
+    berkas.append(k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'pdf'}))
+    audit = [a for a in d['pkg_audit_log'].docs if a['aksi'] == 'cetak_template']
+    unduhan = d['pkg_unduhan'].docs
+    assert len(audit) == len(unduhan) == 3
+    for r, a, u in zip(berkas, audit, unduhan):
+        assert r.status_code == 200 and u['id'] == u['audit_id'] == a['id']
+        assert u['checksum_berkas'] == a['metadata']['checksum_berkas'] == hashlib.sha256(r.content).hexdigest()
+        assert u['ukuran'] == a['metadata']['ukuran'] == len(r.content) and u['mesin'] == r.headers['x-pkg-mesin']
+        assert a['kategori'] == 'unduhan' and a['periode_id'] == u['periode_id'] == 'p1' and u['tanggal'] == a['tanggal']
+    assert [(u['jenis'], u['format'], u['mesin'], u['alasan_cadangan']) for u in unduhan] == [
+        ('guru', 'xlsx', 'openpyxl', None), ('rekap', 'pdf', 'libreoffice', None),
+        ('rekap', 'pdf', 'reportlab', 'libreoffice_tidak_tersedia')]
+    assert audit[0]['guru_id'] == unduhan[0]['guru_id'] == 'g1' and unduhan[1]['endpoint'] == '/api/pkg/cetak/pdf'

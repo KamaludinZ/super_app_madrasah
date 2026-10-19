@@ -253,24 +253,29 @@ async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_templa
                                periode_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None,
                                request=None, jenis_dokumen: Optional[str] = None, guru_id: Optional[str] = None,
                                mesin: Optional[str] = None, isi: Optional[bytes] = None) -> None:
-    """Catat satu cetak/unduh dokumen dari template resmi: jejak audit (aksi cetak_template) dan riwayat unduhan
-    (pkg_unduhan) — siapa, kapan, dokumen & guru, template & versi/checksum, mesin cetak, format, nama, ukuran, dan
-    SHA-256 berkas hasil (bukti isi yang diunduh)."""
+    """Catat satu cetak/unduh dokumen (Excel atau PDF) dari template resmi: jejak audit (aksi cetak_template) dan
+    riwayat unduhan (pkg_unduhan) dengan id yang sama (`audit_id`) — siapa, kapan, dokumen & guru, template &
+    versi/checksum, mesin cetak (openpyxl/libreoffice/reportlab, alasan cadangan), format, nama, ukuran, dan SHA-256
+    berkas hasil (bukti isi yang diunduh). Galat pencatatan hanya dicatat ke logger."""
     checksum_berkas = hashlib.sha256(isi).hexdigest() if isi is not None else None
     meta = {'jenis_dokumen': jenis_dokumen or jenis_template, 'jenis_template': jenis_template, 'format': format_berkas,
             'nama_berkas': nama_berkas, 'versi_template': versi_template, 'checksum_template': checksum_template,
             'periode_id': periode_id, 'guru_id': guru_id, 'mesin': mesin, 'checksum_berkas': checksum_berkas,
-            **(metadata or {})}
-    await catat_audit_pkg(db, AKSI_CETAK_TEMPLATE, aktor, meta, request=request)
+            'ukuran': len(isi) if isi is not None else None, **(metadata or {})}
+    dasar = _dasar(AKSI_CETAK_TEMPLATE, aktor, meta, None, request)
     try:
-        dasar = _dasar(AKSI_CETAK_TEMPLATE, aktor, meta, None, request)
+        await db[KOLEKSI_AUDIT].insert_one(dict(dasar))
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[pkg_audit] gagal mencatat {AKSI_CETAK_TEMPLATE}: {e}")
+    try:
         await db[KOLEKSI_UNDUHAN].insert_one({
-            'id': dasar['id'], 'jenis': jenis_dokumen or jenis_template, 'jenis_template': jenis_template,
-            'format': format_berkas, 'mesin': mesin, 'periode_id': periode_id, 'guru_id': guru_id,
-            'nama_berkas': nama_berkas, 'ukuran': len(isi) if isi is not None else None, 'checksum_berkas': checksum_berkas,
-            'versi_template': versi_template, 'checksum_template': checksum_template,
+            'id': dasar['id'], 'audit_id': dasar['id'], 'jenis': meta['jenis_dokumen'], 'jenis_template': jenis_template,
+            'format': format_berkas, 'mesin': mesin, 'alasan_cadangan': meta.get('alasan_cadangan'),
+            'periode_id': periode_id, 'guru_id': guru_id, 'nama_berkas': nama_berkas, 'ukuran': meta['ukuran'],
+            'checksum_berkas': checksum_berkas, 'versi_template': versi_template, 'checksum_template': checksum_template,
             'aktor_id': dasar['aktor_id'], 'aktor_nama': dasar['aktor_nama'], 'aktor_peran': dasar['aktor_peran'],
-            'ip_address': dasar['ip_address'], 'timestamp': dasar['timestamp'],
+            'ip_address': dasar['ip_address'], 'endpoint': meta.get('endpoint'), 'timestamp': dasar['timestamp'],
+            'tanggal': dasar['tanggal'],
         })
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg_audit] gagal mencatat riwayat unduhan: {e}")

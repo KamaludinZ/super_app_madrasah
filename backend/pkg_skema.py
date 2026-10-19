@@ -22,9 +22,10 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                    Satu lembar per guru per SK; lembar terkunci tidak dapat diubah.
     Tugas penilaian = pkg_penugasan.guru_dinilai_ids milik penilai pada periode berjalan (lihat pkg_beranda).
     pkg_audit_log  lihat pkg_audit.py
-    pkg_unduhan    {id, jenis ('rekap' | 'guru'), jenis_template, format ('xlsx' | 'pdf'), mesin ('openpyxl' |
-                    'libreoffice' | 'reportlab'), periode_id, guru_id, nama_berkas, ukuran, checksum_berkas (SHA-256 hasil),
-                    versi_template, checksum_template, aktor_id, aktor_nama, aktor_peran, ip_address, timestamp}
+    pkg_unduhan    {id (= audit_id entri cetak_template), jenis ('rekap' | 'guru'), jenis_template, format ('xlsx' | 'pdf'),
+                    mesin ('openpyxl' | 'libreoffice' | 'reportlab'), alasan_cadangan, periode_id, guru_id, nama_berkas,
+                    ukuran, checksum_berkas (SHA-256 hasil), versi_template, checksum_template, aktor_id, aktor_nama,
+                    aktor_peran, ip_address, endpoint, timestamp, tanggal (WIB)}
                    Riwayat unduhan & cetak dokumen resmi (pasangan jejak audit aksi cetak_template).
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
