@@ -90,6 +90,7 @@ export default function PkgLayout() {
       <nav aria-label="Sub-menu PKG" className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 px-1 pb-2" data-testid="pkg-subnav">
         <NavLink to="/pkg" end className={kelasTab}>Beranda</NavLink>
         <NavLink to="/pkg/keanggotaan" className={kelasTab} data-testid="pkg-subnav-keanggotaan">Status Saya</NavLink>
+        <NavLink to="/pkg/template" className={kelasTab} data-testid="pkg-subnav-template">Template</NavLink>
         {menu.map((m) => {
           const siap = m.akses && RUTE_PKG_TERSEDIA.has(m.to);
           return siap ? (
