@@ -1,4 +1,4 @@
-"""API pengelolaan PKG oleh kepala madrasah: periode, SK & anggotanya, pembagian jatah penilaian (supervisi menyusul).
+"""API pengelolaan PKG oleh kepala madrasah: periode, SK & anggotanya, pembagian jatah penilaian, supervisi penilai.
 
 Semua endpoint memakai penjaga_pkg('kepala'): selain akun kepala madrasah ditolak 403 {'alasan': 'bukan_kepala'}
 dan penolakannya tercatat. Setiap perubahan tercatat di pkg_audit_log.
@@ -13,8 +13,11 @@ from pkg_audit import catat_audit_pkg
 from pkg_periode import ambil_periode, buat_periode, daftar_periode, periode_tampil, ubah_periode, ubah_status_periode
 from pkg_penjaga import penjaga_pkg
 from pkg_penugasan import ambil_pembagian, simpan_pembagian
+from pkg_supervisi import batalkan_supervisi, daftar_supervisi, tandai_supervisi
 from pkg_sk import aktifkan_sk, ambil_sk, atur_dinilai, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_sk, sk_tampil, ubah_sk
-from pkg_skema import DinilaiSkRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest
+from pkg_skema import (
+    DinilaiSkRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest, SupervisiRequest,
+)
 
 router = APIRouter()
 
@@ -165,4 +168,27 @@ async def simpan_pembagian_api(data: PenugasanRequest, request: Request, akses: 
         if setelah_berjalan:
             meta['alasan'] = data.alasan_perubahan
         await catat_audit_pkg(db, 'penugasan_simpan', akses['user'], meta, request=request)
+    return hasil
+
+
+@router.get("/pkg/supervisi")
+async def daftar_supervisi_api(akses: Dict = Depends(kepala)):
+    """Status supervisi tiap penilai SK aktif (selain kepala) beserta jumlah guru yang dibagikan."""
+    return await daftar_supervisi(db)
+
+
+@router.post("/pkg/supervisi/{penilai_id}")
+async def tandai_supervisi_api(penilai_id: str, data: SupervisiRequest, request: Request, akses: Dict = Depends(kepala)):
+    """Tandai penilai sudah disupervisi; lembar penilaian guru yang dibagikan kepadanya terbuka."""
+    hasil = await tandai_supervisi(db, penilai_id, data, akses['user'])
+    await catat_audit_pkg(db, 'supervisi_tandai', akses['user'],
+                          {'penilai_id': penilai_id, 'tanggal_supervisi': data.tanggal_supervisi}, request=request)
+    return hasil
+
+
+@router.delete("/pkg/supervisi/{penilai_id}")
+async def batalkan_supervisi_api(penilai_id: str, request: Request, akses: Dict = Depends(kepala)):
+    """Batalkan tanda supervisi; lembar penilaian penilai terkunci kembali."""
+    hasil = await batalkan_supervisi(db, penilai_id)
+    await catat_audit_pkg(db, 'supervisi_batal', akses['user'], {'penilai_id': penilai_id}, request=request)
     return hasil
