@@ -314,6 +314,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to ensure notification indexes: {e}")
 
+    # Index jejak audit PKG (pkg_audit_log)
+    try:
+        from pkg_audit import ensure_pkg_audit_indexes
+        gagal = await ensure_pkg_audit_indexes(db)
+        if gagal:
+            logger.error(f"Index audit PKG gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure PKG audit indexes: {e}")
+
     # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
     try:
         from penyimpanan import periksa_penyimpanan

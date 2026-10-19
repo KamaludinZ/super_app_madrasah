@@ -10,6 +10,7 @@ from fastapi import HTTPException
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pkg_akses  # noqa: E402
+import pkg_audit  # noqa: E402
 import pkg_beranda  # noqa: E402
 from routers import pkg as api  # noqa: E402
 
@@ -42,6 +43,20 @@ class _Koleksi:
 
     async def find_one(self, q, _proj=None):
         return next((dict(d) for d in self.docs if self._cocok(d, q)), None)
+
+    async def insert_one(self, doc):
+        self.docs.append(dict(doc))
+
+    async def update_one(self, q, u, upsert=False):
+        d = next((d for d in self.docs if self._cocok(d, q)), None)
+        if d is None:
+            if not upsert:
+                return
+            d = {**q, **u.get('$setOnInsert', {})}
+            self.docs.append(d)
+        d.update(u.get('$set', {}))
+        for k, v in u.get('$inc', {}).items():
+            d[k] = d.get(k, 0) + v
 
 
 class _Db(dict):
@@ -115,11 +130,11 @@ def test_tanpa_periode_berjalan(db):
 
 def test_endpoint_beranda_403_terstruktur(db):
     with pytest.raises(HTTPException) as e:
-        asyncio.run(api.beranda_pkg(GURU('asing')))
+        asyncio.run(api.beranda_pkg(None, GURU('asing')))
     assert e.value.status_code == 403
     assert e.value.detail['alasan'] == 'bukan_anggota_sk' and e.value.detail['pesan']
 
-    hasil = asyncio.run(api.beranda_pkg(GURU('pen')))
+    hasil = asyncio.run(api.beranda_pkg(None, GURU('pen')))
     assert hasil['periode']['id'] == 'p1' and hasil['keanggotaan']['peran'] == 'penilai'
     assert 'penolakan' not in hasil['keanggotaan']
 
@@ -139,11 +154,11 @@ def test_ringkasan_kinerja(db):
         {'sk_id': 'sk-lama', 'guru_dinilai_id': 'g4', 'status': 'terkunci'},  # SK lain diabaikan
     ])
     hasil = {'total': 4, 'selesai': 2, 'sedang': 1, 'belum': 1}
-    assert asyncio.run(api.ringkasan_beranda(GURU('pen'))) == hasil
-    assert asyncio.run(api.beranda_pkg(GURU('gur')))['ringkasan'] == hasil
+    assert asyncio.run(api.ringkasan_beranda(None, GURU('pen'))) == hasil
+    assert asyncio.run(api.beranda_pkg(None, GURU('gur')))['ringkasan'] == hasil
     assert asyncio.run(pkg_beranda.ringkasan_kinerja(db, None)) == {'total': 0, 'selesai': 0, 'sedang': 0, 'belum': 0}
     with pytest.raises(HTTPException) as e:
-        asyncio.run(api.ringkasan_beranda(GURU('asing')))
+        asyncio.run(api.ringkasan_beranda(None, GURU('asing')))
     assert e.value.status_code == 403
 
 
@@ -162,21 +177,21 @@ def test_tugas_penilaian_saya(db):
         {'id': 'n2', 'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g2', 'status': 'draf', 'progres': 250},
         {'id': 'n3', 'sk_id': 'sk1', 'penilai_id': 'lain', 'guru_dinilai_id': 'g3', 'status': 'draf', 'progres': 50},
     ])
-    tugas = asyncio.run(api.tugas_saya(GURU('pen')))
+    tugas = asyncio.run(api.tugas_saya(None, GURU('pen')))
     assert [(t['id'], t['status'], t['progres']) for t in tugas] == [('g2', 'draf', 100), ('g3', 'belum', 0), ('g1', 'terkunci', 100)]
     ani = tugas[0]
     assert (ani['nama'], ani['nip'], ani['mapel'], ani['penilaian_id']) == ('Ani, S.Pd.', '222-snap', 'IPA', 'n2')
     assert (tugas[1]['nama'], tugas[1]['nip'], tugas[1]['penilaian_id']) == ('Citra', '333', None)
 
-    assert asyncio.run(api.tugas_saya(GURU('gur'))) == []  # hanya dinilai → tanpa tugas
-    assert asyncio.run(api.beranda_pkg(GURU('pen')))['tugas'] == tugas
+    assert asyncio.run(api.tugas_saya(None, GURU('gur'))) == []  # hanya dinilai → tanpa tugas
+    assert asyncio.run(api.beranda_pkg(None, GURU('pen')))['tugas'] == tugas
     with pytest.raises(HTTPException):
-        asyncio.run(api.tugas_saya(GURU('asing')))
+        asyncio.run(api.tugas_saya(None, GURU('asing')))
 
 
 def test_menu_sesuai_akses(db):
     def akses(user):
-        return {m['key']: m['alasan'] for m in asyncio.run(api.menu_beranda(user))}
+        return {m['key']: m['alasan'] for m in asyncio.run(api.menu_beranda(None, user))}
 
     kepala = akses(KEPALA)
     assert len(kepala) == 9 and all(a is None for a in kepala.values())
@@ -192,10 +207,10 @@ def test_menu_sesuai_akses(db):
     assert gur['penilaian'] == 'bukan_penilai' and gur['cetak'] == 'bukan_penilai'
     assert gur['instrumen'] is None and gur['rekap'] is None
 
-    menu = asyncio.run(api.beranda_pkg(GURU('pen')))['menu']
+    menu = asyncio.run(api.beranda_pkg(None, GURU('pen')))['menu']
     assert [m['key'] for m in menu][:2] == ['periode', 'sk'] and menu[0]['khusus'] == 'kepala' and menu[0]['akses'] is False
     with pytest.raises(HTTPException):
-        asyncio.run(api.menu_beranda(GURU('asing')))
+        asyncio.run(api.menu_beranda(None, GURU('asing')))
 
 
 def test_pengingat_dan_notifikasi(db):
@@ -205,12 +220,12 @@ def test_pengingat_dan_notifikasi(db):
     db['pkg_penugasan'].docs[1]['guru_dinilai_ids'] = ['g3']
     db['pkg_penilaian'] = _Koleksi([{'sk_id': 'sk1', 'penilai_id': 'pen', 'guru_dinilai_id': 'g1', 'status': 'terkunci'}])
 
-    pen = asyncio.run(api.pengingat_beranda(GURU('pen')))
+    pen = asyncio.run(api.pengingat_beranda(None, GURU('pen')))
     assert [(p['jenis'], p['tanggal']) for p in pen] == [('tenggat', '2026-11-30')] and pen[0]['keterangan'].startswith('1 guru')
-    rangkap = asyncio.run(api.pengingat_beranda(GURU('rangkap')))
+    rangkap = asyncio.run(api.pengingat_beranda(None, GURU('rangkap')))
     assert [p['jenis'] for p in rangkap] == ['supervisi', 'tenggat']
-    assert asyncio.run(api.pengingat_beranda(GURU('gur'))) == []  # hanya dinilai
-    kep = asyncio.run(api.pengingat_beranda(KEPALA))
+    assert asyncio.run(api.pengingat_beranda(None, GURU('gur'))) == []  # hanya dinilai
+    kep = asyncio.run(api.pengingat_beranda(None, KEPALA))
     assert [p['jenis'] for p in kep] == ['tenggat']
 
     ubah = pkg_beranda.pengingat_ke_notifikasi
@@ -223,4 +238,30 @@ def test_pengingat_dan_notifikasi(db):
     assert [(n['source_id'], n['severity']) for n in supervisi] == [('supervisi_p1', 'warning')]
 
     assert asyncio.run(pkg_beranda.notifikasi_pkg(db, GURU('asing'))) == []
-    assert 'pengingat' in asyncio.run(api.beranda_pkg(GURU('pen')))
+    assert 'pengingat' in asyncio.run(api.beranda_pkg(None, GURU('pen')))
+
+
+def test_audit_beranda_harian(db):
+    for _ in range(3):
+        asyncio.run(api.beranda_pkg(None, GURU('pen')))
+    for _ in range(2):
+        with pytest.raises(HTTPException):
+            asyncio.run(api.menu_beranda(None, GURU('asing')))
+    log = db['pkg_audit_log'].docs
+    buka = [d for d in log if d['aksi'] == 'buka_beranda']
+    assert len(buka) == 1 and buka[0]['jumlah'] == 3 and buka[0]['aktor_id'] == 'pen'
+    assert buka[0]['metadata'] == {'periode_id': 'p1'} and buka[0]['tanggal'] and buka[0]['terakhir']
+    tolak = [d for d in log if d['aksi'] == 'tolak_akses']
+    assert len(tolak) == 1 and tolak[0]['jumlah'] == 2
+    assert tolak[0]['metadata'] == {'endpoint': '/pkg/beranda/menu', 'alasan': 'bukan_anggota_sk'}
+
+
+async def test_audit_harian_mongodb(mongo_db):
+    assert await pkg_audit.ensure_pkg_audit_indexes(mongo_db) == []
+    for _ in range(2):
+        await pkg_audit.catat_audit_pkg_harian(mongo_db, 'buka_beranda', GURU('pen'), metadata={'periode_id': 'p1'})
+    await pkg_audit.catat_audit_pkg(mongo_db, 'simpan_draf', GURU('pen'), {'skor': 3}, penilaian_id='n1')
+    docs = await mongo_db['pkg_audit_log'].find({}, {'_id': 0}).to_list(10)
+    harian = [d for d in docs if d['aksi'] == 'buka_beranda']
+    assert len(docs) == 2 and harian[0]['jumlah'] == 2 and harian[0]['id']
+    assert next(d for d in docs if d['aksi'] == 'simpan_draf')['penilaian_id'] == 'n1'
