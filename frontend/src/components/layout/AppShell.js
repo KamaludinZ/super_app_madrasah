@@ -21,6 +21,8 @@ import {
 import ViewContextDialog from './ViewContextDialog';
 import { menuTatib } from '@/lib/aksesTatib';
 import { tambahMenuUmum } from '@/lib/menuUmum';
+import { menuPkg, perluMenuPkg, tambahMenuPkg } from '@/lib/menuPkg';
+import { ambilKeanggotaan, ambilMenuPkg } from '@/lib/pkg';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -867,7 +869,7 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
   const toggleGroup = (groupKey) => {
     setExpandedGroups((prev) => ({
       ...prev,
-      [groupKey]: !prev[groupKey],
+      [groupKey]: !(prev[groupKey] ?? true),
     }));
   };
 
@@ -907,7 +909,8 @@ function Sidebar({ items, current, onItemClick, viewCtx, onTPClick }) {
             }
             // Otherwise it's a group
             const groupKey = item.title || idx;
-            const isExpanded = expandedGroups[groupKey];
+            // Grup yang muncul belakangan (mis. menu PKG yang dimuat async) ikut terbuka seperti grup lain.
+            const isExpanded = expandedGroups[groupKey] ?? true;
             return (
               <div key={groupKey} className="mt-3 first:mt-0">
                 <button
@@ -966,8 +969,24 @@ export default function AppShell({ children }) {
     return () => { alive = false; };
   }, [activeRole]);
 
+  // Grup menu PKG bergantung pada keanggotaan SK aktif (diperiksa server), dimuat sekali per pengguna/peran.
+  const [itemPkg, setItemPkg] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    setItemPkg([]);
+    if (!perluMenuPkg(activeRole)) return undefined;
+    (async () => {
+      try {
+        const k = await ambilKeanggotaan();
+        const menu = k?.anggota ? await ambilMenuPkg() : [];
+        if (alive) setItemPkg(menuPkg(k, menu));
+      } catch { /* menu PKG disembunyikan bila gagal */ }
+    })();
+    return () => { alive = false; };
+  }, [activeRole, user?.id]);
+
   // Get base menu items for role
-  const roleItems = navForRole(activeRole, user?.roles || []);
+  const roleItems = tambahMenuPkg(navForRole(activeRole, user?.roles || []), itemPkg);
   const showGuruPengganti = serverCanManageGP ?? canManageGuruPengganti(activeRole);
   const items = showGuruPengganti ? roleItems : withoutGuruPengganti(roleItems);
 
