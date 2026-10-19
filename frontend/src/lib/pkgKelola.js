@@ -15,6 +15,10 @@
 //   PUT  /pkg/sk/{id}/dinilai            -> sk             body: { dinilai_ids }  (kepala ditolak)
 //   GET  /pkg/penugasan                  -> pembagian      (SK aktif pada periode berjalan)
 //   PUT  /pkg/penugasan                  -> pembagian      body: { penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n} }
+//   GET  /pkg/supervisi                  -> [supervisi]    (penilai SK aktif selain kepala)
+//   POST /pkg/supervisi/{penilai_id}     -> supervisi      body: { tanggal_supervisi, catatan }
+//   DELETE /pkg/supervisi/{penilai_id}   -> supervisi      (batalkan; lembar penilai terkunci lagi)
+// supervisi = { penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru }
 // pembagian = { periode, sk, penilai: [anggota], dinilai: [anggota], penugasan: {guru_id: penilai_id},
 //               jatah: {penilai_id: n}, penilaian_dimulai: bool }
 // periode = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
@@ -53,6 +57,7 @@ const store = {
       penugasan: { 'u-1': 'u-3', 'u-2': 'u-1', 'u-4': 'u-1', 'u-5': 'u-3' },
       jatah: { 'u-kepala': 1, 'u-1': 2, 'u-3': 2 },
       penilaian_dimulai: true,
+      supervisi: { 'u-1': { tanggal_supervisi: '2026-10-08', catatan: 'Supervisi akademik kelas 8B', disupervisi_oleh: 'Drs. H. Mahmud, M.Pd.' } },
     },
     {
       id: 'sk-0', nomor_sk: 'B-045/Mts.10.05/KP.07.6/02/2026', tanggal_sk: '2026-02-20',
@@ -201,4 +206,43 @@ export async function simpanPenugasan({ penugasan, jatah }) {
   sk.penugasan = { ...penugasan };
   sk.jatah = { ...jatah };
   return ambilPenugasan();
+}
+
+const KEPALA_ID = () => GURU.find((g) => g.kepala)?.id;
+
+function barisSupervisi(sk, p) {
+  const sv = (sk.supervisi || {})[p.id];
+  return {
+    penilai: p,
+    supervisi_selesai: !!sv,
+    tanggal_supervisi: sv?.tanggal_supervisi || null,
+    catatan: sv?.catatan || '',
+    disupervisi_oleh: sv?.disupervisi_oleh || null,
+    jumlah_guru: Object.values(sk.penugasan || {}).filter((pid) => pid === p.id).length,
+  };
+}
+
+export async function daftarSupervisi() {
+  const { sk } = skBerjalan();
+  if (!sk) return tunda([]);
+  return tunda(sk.penilai.filter((p) => p.id !== KEPALA_ID()).map((p) => barisSupervisi(sk, p)));
+}
+
+export async function tandaiSupervisi(penilaiId, { tanggal_supervisi: tanggal, catatan }) {
+  const { sk } = skBerjalan();
+  if (!sk) throw new GalatValidasi('Belum ada SK aktif pada periode berjalan.');
+  const p = sk.penilai.find((x) => x.id === penilaiId && x.id !== KEPALA_ID());
+  if (!p) throw new GalatValidasi('Penilai tidak tercantum di SK aktif.');
+  if (!tanggal) throw new GalatValidasi('Tanggal supervisi wajib diisi.');
+  sk.supervisi = { ...(sk.supervisi || {}), [p.id]: { tanggal_supervisi: tanggal, catatan: (catatan || '').trim(), disupervisi_oleh: anggota(KEPALA_ID()).nama } };
+  return tunda(barisSupervisi(sk, p));
+}
+
+export async function batalkanSupervisi(penilaiId) {
+  const { sk } = skBerjalan();
+  const p = sk?.penilai.find((x) => x.id === penilaiId);
+  if (!p) throw new GalatValidasi('Penilai tidak tercantum di SK aktif.');
+  const { [p.id]: _, ...sisa } = sk.supervisi || {};
+  sk.supervisi = sisa;
+  return tunda(barisSupervisi(sk, p));
 }
