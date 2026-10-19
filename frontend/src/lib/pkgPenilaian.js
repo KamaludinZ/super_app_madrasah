@@ -9,7 +9,9 @@ import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
 //   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci + hasil
 //        hasil = { nilai_akhir, nilai_maks, capaian_persen, level_capaian, predikat, terkunci_pada }
 //        (backend memvalidasi ulang kelengkapan; lembar terkunci permanen dan tercatat di jejak audit)
-// lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel }, periode,
+//   gagal 403 -> detail { alasan: 'bukan_penugasan' | 'belum_disupervisi' | ..., pesan }
+// lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel, akun_aktif, juga_penilai },
+//            periode: { id, nama_periode, tanggal_buka, tanggal_tutup }, dapat_diisi, alasan_tidak_dapat_diisi,
 //            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, updated_at }
 // isianSub = { centang: [level...], catatan_bukti, tanggapan }   (catatan & tanggapan maks BATAS_TEKS karakter)
 // lembar juga memuat catatan_umum (rekomendasi penilai untuk rekap per guru).
@@ -24,9 +26,17 @@ import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
 export const BATAS_TEKS = 500;
 
 const GURU_TIRUAN = {
-  g1: { id: 'g1', nama: 'Ahmad Fauzi, S.Pd.', nip: '198703122019031004', mapel: 'Matematika' },
-  g2: { id: 'g2', nama: 'Siti Rahmawati, S.Ag.', nip: '199001252020122012', mapel: 'Akidah Akhlak' },
+  g1: { id: 'g1', nama: 'Ahmad Fauzi, S.Pd.', nip: '198703122019031004', mapel: 'Matematika', akun_aktif: true, juga_penilai: true },
+  g2: { id: 'g2', nama: 'Siti Rahmawati, S.Ag.', nip: '199001252020122012', mapel: 'Akidah Akhlak', akun_aktif: false, juga_penilai: false },
 };
+
+// Galat akses lembar (bentuk sama dengan lib/pkg GalatPkg): `penolakan` = { alasan, pesan } dari detail 403.
+export class GalatLembar extends Error {
+  constructor(pesan, penolakan = null) {
+    super(pesan);
+    this.penolakan = penolakan;
+  }
+}
 
 const ISIAN_TIRUAN = {
   g1: { '1.1': { centang: [1, 2, 3, 4], catatan_bukti: 'RPP & foto kelas', tanggapan: '' }, '1.2': { centang: [1, 2, 3], catatan_bukti: '', tanggapan: '' } },
@@ -37,6 +47,10 @@ const TERKUNCI_TIRUAN = {}; // guru_id -> hasil
 const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), ms); });
 
 export async function ambilLembar(guruId) {
+  // Tiruan: ?lembar=tolak (development) mensimulasikan guru yang tidak dibagikan kepada penilai.
+  if (process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).get('lembar') === 'tolak') {
+    throw new GalatLembar('Guru ini tidak dibagikan kepada Anda.', { alasan: 'bukan_penugasan', pesan: 'Guru ini tidak dibagikan kepada Anda pada periode berjalan.' });
+  }
   const instrumen = await ambilInstrumenAktif();
   if (!instrumen) throw new Error('Instrumen PKG belum dimuat. Hubungi kepala madrasah.');
   const isian = ISIAN_TIRUAN[guruId] || {};
@@ -45,8 +59,11 @@ export async function ambilLembar(guruId) {
     id: Object.keys(isian).length ? `lembar-${guruId}` : null,
     status: hasil ? 'terkunci' : Object.keys(isian).length ? 'draf' : 'belum',
     hasil,
-    guru: GURU_TIRUAN[guruId] || { id: guruId, nama: 'Guru yang dinilai', nip: null, mapel: null },
-    periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027' },
+    guru: GURU_TIRUAN[guruId] || { id: guruId, nama: 'Guru yang dinilai', nip: null, mapel: null, akun_aktif: true, juga_penilai: false },
+    periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', tanggal_buka: '2026-10-01', tanggal_tutup: '2026-11-30' },
+    // Server menentukan apakah lembar boleh diisi (masa penilaian, supervisi, status kunci).
+    dapat_diisi: !hasil,
+    alasan_tidak_dapat_diisi: hasil ? 'terkunci' : null,
     instrumen: { id: instrumen.id, versi_template: instrumen.versi_template, revisi: instrumen.revisi, kompetensi: instrumen.kompetensi },
     isian,
     catatan_umum: DRAF_TIRUAN[guruId]?.catatan_umum || '',

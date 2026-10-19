@@ -21,6 +21,16 @@ const ALASAN = {
     saran: 'Penilai wajib disupervisi kepala madrasah lebih dahulu sebelum membuka lembar penilaian guru yang dibagikan.',
     Icon: ShieldAlert,
   },
+  bukan_penugasan: {
+    judul: 'Guru ini tidak dibagikan kepada Anda',
+    saran: 'Penilai hanya dapat membuka lembar penilaian guru yang dibagikan kepala madrasah kepadanya pada periode berjalan.',
+    Icon: ShieldX,
+  },
+  di_luar_masa: {
+    judul: 'Di luar masa penilaian',
+    saran: 'Lembar penilaian hanya dapat diisi pada rentang tanggal buka–tutup periode PKG.',
+    Icon: ShieldAlert,
+  },
   bukan_kepala: {
     judul: 'Khusus kepala madrasah',
     saran: 'Penetapan periode, tim penilai, dan pembagian guru yang dinilai hanya dapat dilakukan dari akun kepala madrasah.',

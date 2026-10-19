@@ -1,18 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, Send, UserX, Repeat, CalendarX } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import PesanTolakPkg from '@/components/pkg/PesanTolakPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import useAutosaveDraf from '@/hooks/useAutosaveDraf';
 import { labelVersi } from '@/lib/pkgInstrumen';
+import { formatWIBPanjang } from '@/lib/datetime';
 import { toast } from 'sonner';
 import { BATAS_TEKS, ambilLembar, hitungHasilAkhir, hitungNilai, kirimLembar, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
 
@@ -26,6 +28,7 @@ const FORMAT_PERSEN = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2,
 
 function IsiLembar() {
   const { guruId } = useParams();
+  const { keanggotaan } = useOutletContext() || {};
   const [lembar, setLembar] = useState(null);
   const [isian, setIsian] = useState({});
   const [catatanUmum, setCatatanUmum] = useState('');
@@ -59,7 +62,7 @@ function IsiLembar() {
   const draf = useAutosaveDraf({
     data: { isian, catatanUmum },
     simpan,
-    aktif: !!lembar && lembar.status !== 'terkunci',
+    aktif: !!lembar && lembar.status !== 'terkunci' && lembar.dapat_diisi !== false && keanggotaan?.dalam_masa_penilaian !== false,
     tersimpanAwal: lembar?.updated_at || null,
   });
   const simpanManual = () => draf.simpanSekarang().catch((e) => toast.error(e.message || 'Gagal menyimpan draf'));
@@ -93,6 +96,7 @@ function IsiLembar() {
     }
   };
 
+  if (galat?.penolakan) return <PesanTolakPkg penolakan={galat.penolakan} />;
   if (galat) {
     return (
       <div className="flex flex-col items-center gap-3 py-12 text-center" role="alert">
@@ -104,7 +108,9 @@ function IsiLembar() {
   }
   if (!lembar) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
 
-  const terkunci = lembar.status === 'terkunci';
+  // Di luar masa penilaian lembar hanya dapat dibaca (server juga menolak penyimpanan).
+  const diLuarMasa = keanggotaan?.dalam_masa_penilaian === false && lembar.status !== 'terkunci';
+  const terkunci = lembar.status === 'terkunci' || diLuarMasa || lembar.dapat_diisi === false;
   const status = STATUS[lembar.status] || STATUS.belum;
   const ubahSub = (kode) => (baru) => setIsian((x) => ({ ...x, [kode]: baru }));
   // Tegaskan penanda isian bermasalah dan gulir ke yang pertama; true bila lembar sudah lengkap.
@@ -125,13 +131,31 @@ function IsiLembar() {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">{lembar.guru.nama}</h2>
             <Badge className={status.kelas}>{status.label}</Badge>
+            {lembar.guru.akun_aktif === false && (
+              <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700" title="Identitas memakai snapshot periode"><UserX className="h-3 w-3" /> Akun nonaktif</Badge>
+            )}
+            {lembar.guru.juga_penilai && (
+              <Badge variant="outline" className="gap-1 text-slate-600" title="Guru ini juga anggota tim penilai"><Repeat className="h-3 w-3" /> Juga penilai</Badge>
+            )}
           </div>
           <p className="text-xs text-slate-500">{lembar.guru.mapel || '-'} · NIP {lembar.guru.nip || '-'} · {lembar.periode?.nama_periode}</p>
         </div>
         <Badge variant="outline" className="shrink-0" title="Instrumen yang dipakai lembar ini">{labelVersi(lembar.instrumen)}</Badge>
       </div>
 
-      {terkunci && <HasilAkhirPenilaian hasil={lembar.hasil} kompetensi={lembar.instrumen.kompetensi} isian={isian} />}
+      {diLuarMasa && (
+        <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status" data-testid="pkg-lembar-luar-masa">
+          <CalendarX className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>
+            Di luar masa penilaian
+            {lembar.periode?.tanggal_buka && lembar.periode?.tanggal_tutup
+              ? ` (${formatWIBPanjang(lembar.periode.tanggal_buka, false)} – ${formatWIBPanjang(lembar.periode.tanggal_tutup, false)})` : ''}.
+            {' '}Lembar hanya dapat dilihat.
+          </span>
+        </div>
+      )}
+
+      {lembar.status === 'terkunci' && <HasilAkhirPenilaian hasil={lembar.hasil} kompetensi={lembar.instrumen.kompetensi} isian={isian} />}
 
       <div className="sticky top-0 z-10 rounded-xl border border-emerald-200 bg-emerald-50/95 p-3 backdrop-blur" data-testid="pkg-lembar-ringkasan">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
