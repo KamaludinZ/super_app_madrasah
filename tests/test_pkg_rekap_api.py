@@ -178,3 +178,41 @@ def test_akses_periode_lama_tanpa_sk_aktif_sekarang(db):
     assert e.value.detail['alasan'] == 'bukan_anggota_sk'
     tolak = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
     assert tolak and tolak[0]['metadata']['periode_id'] == 'p1'
+
+
+def test_audit_hitung_ulang_dan_unduhan(db):
+    import pkg_audit
+    _api_get(api.rekap_api, 'kep')
+    _api_get(api.rekap_api, 'kep')
+    _rincian('kep', 'g1')
+    lihat = {d['aksi']: d for d in db['pkg_audit_log'].docs}
+    assert lihat['lihat_rekap']['jumlah'] >= 2 and lihat['lihat_rekap_guru']['metadata']['guru_id'] == 'g1'
+
+    async def kepala(fn, *a, **kw):
+        akses = await pkg_penjaga.penjaga_pkg('kepala')(Request(), _guru('kep'))
+        return await fn(*a, akses=akses, **kw)
+    db['pkg_rekap'].docs = []
+    hasil = asyncio.run(kepala(api.hitung_ulang_api, Request(), periode_id='p1'))
+    assert hasil['ditulis'] == 2 and len(db['pkg_rekap'].docs) == 2
+    assert db['pkg_audit_log'].docs[-1]['aksi'] == 'rekap_hitung_ulang'
+
+    asyncio.run(pkg_audit.catat_cetak_template(db, _guru('kep'), 'rekap', 'xlsx', 'Rekap.xlsx', '2026', 'abc', periode_id='p1'))
+    asyncio.run(pkg_audit.catat_cetak_template(db, _guru('kep'), 'rekap', 'pdf', 'Rekap.pdf', '2026', 'abc', periode_id='p0'))
+    assert [u['format'] for u in asyncio.run(kepala(api.riwayat_unduhan_api, periode_id='p1'))] == ['xlsx']
+    assert len(asyncio.run(kepala(api.riwayat_unduhan_api, periode_id=None))) == 2
+    with pytest.raises(HTTPException):
+        asyncio.run(api.riwayat_unduhan_api(None, akses=asyncio.run(pkg_penjaga.penjaga_pkg('kepala')(Request(), _guru('pen')))))
+
+
+def test_validasi_input_rekap_lewat_http(db):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from core import get_current_user
+    app = FastAPI()
+    app.include_router(api.router, prefix='/api')
+    app.dependency_overrides[get_current_user] = lambda: _guru('kep')
+    k = TestClient(app)
+    for url, params in (('/api/pkg/rekap', {'periode_id': 'p1;x'}), ('/api/pkg/rekap', {'semester': 'x' * 41}),
+                        ('/api/pkg/rekap/guru/g%241', {}), ('/api/pkg/rekap/statistik', {'tahun_pelajaran': '2026'})):
+        assert k.get(url, params=params).status_code == 422, (url, params)
+    assert k.post('/api/pkg/rekap/hitung-ulang').status_code == 422  # periode_id wajib

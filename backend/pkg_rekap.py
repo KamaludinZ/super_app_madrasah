@@ -352,3 +352,12 @@ async def anggota_periode(db, user: Dict[str, Any], periode: Dict[str, Any], sk:
         return True
     return bool(await db[KOLEKSI_PENILAIAN].find_one(
         {'periode_id': periode['id'], '$or': [{'penilai_id': uid}, {'guru_dinilai_id': uid}]}, {'_id': 0, 'id': 1}))
+
+
+
+async def riwayat_unduhan(db, periode_id: Optional[str] = None, batas: int = 200) -> list:
+    """Riwayat unduhan/cetak dokumen PKG (pkg_unduhan), terbaru dulu; opsional satu periode."""
+    from pkg_skema import KOLEKSI_UNDUHAN
+    docs = await db[KOLEKSI_UNDUHAN].find({'periode_id': periode_id} if periode_id else {}, {'_id': 0}).to_list(5000)
+    docs.sort(key=lambda d: d.get('timestamp') or '', reverse=True)
+    return docs[:batas]

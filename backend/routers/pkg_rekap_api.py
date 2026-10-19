@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, tolak
-from pkg_audit import AKSI_TOLAK_AKSES, catat_audit_pkg_harian
+from pkg_penjaga import penjaga_pkg
+from pkg_audit import AKSI_TOLAK_AKSES, catat_audit_pkg, catat_audit_pkg_harian
 from pkg_rekap import (
-    anggota_periode, boleh_lihat_guru, cakupan_rekap, daftar_periode_rekap, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru,
+    anggota_periode, bangun_ulang_rekap, boleh_lihat_guru, cakupan_rekap, riwayat_unduhan, daftar_periode_rekap, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru,
     statistik_lengkap,
 )
 from pkg_skema import POLA_ID
@@ -41,7 +42,14 @@ async def akses_rekap(
                                      request=request)
         raise tolak('bukan_anggota_sk', 'Anda tidak termasuk personil PKG pada periode ini.')
     k = await keanggotaan_sk(db, user)
+    # Akses rekap dicatat harian per pengguna/endpoint/periode (bukan setiap muat ulang).
+    endpoint = request.url.path if request is not None else 'rekap'
+    await catat_audit_pkg_harian(db, 'lihat_rekap', user, kunci=f"{endpoint}:{periode['id']}",
+                                 metadata={'endpoint': endpoint, 'periode_id': periode['id']}, request=request)
     return {'user': user, 'keanggotaan': k, 'periode': periode, 'sk': sk}
+
+
+kepala = penjaga_pkg('kepala')
 
 
 @router.get("/pkg/rekap")
@@ -97,4 +105,22 @@ async def rekap_guru_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict 
     rincian = await rincian_guru(db, periode, sk, guru_id)
     if not rincian or not boleh_lihat_guru(cakupan, guru_id, rincian['status'] == 'terkunci'):
         raise tolak('bukan_penugasan', 'Rekap guru ini tidak termasuk dalam cakupan Anda.')
+    await catat_audit_pkg_harian(db, 'lihat_rekap_guru', akses['user'], kunci=f"{periode['id']}:{guru_id}",
+                                 metadata={'periode_id': periode['id'], 'guru_id': guru_id})
     return rincian
+
+
+
+@router.post("/pkg/rekap/hitung-ulang")
+async def hitung_ulang_api(request: Request, periode_id: str = Query(..., pattern=POLA_ID), akses: Dict = Depends(kepala)):
+    """Bangun ulang rekap satu periode dari lembar terkunci (kepala madrasah), mis. setelah perbaikan data."""
+    periode, _ = await periode_dan_sk(db, periode_id)
+    hasil = await bangun_ulang_rekap(db, periode['id'])
+    await catat_audit_pkg(db, 'rekap_hitung_ulang', akses['user'], {'periode_id': periode['id'], **hasil}, request=request)
+    return hasil
+
+
+@router.get("/pkg/rekap/unduhan")
+async def riwayat_unduhan_api(periode_id: Optional[str] = Query(None, pattern=POLA_ID), akses: Dict = Depends(kepala)):
+    """Riwayat unduhan & cetak dokumen PKG (siapa, kapan, berkas, format, versi template), terbaru dulu."""
+    return await riwayat_unduhan(db, periode_id)
