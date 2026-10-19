@@ -124,7 +124,7 @@ function IsiHalamanCetak() {
 }
 
 // Cetak dokumen resmi PKG (kepala & penilai): rekap seluruh guru dan laporan per guru dalam Excel/PDF.
-// Data guru dari rekap (cakupan peran); berkas sementara dari lib/pkgCetak (tiruan).
+// Data guru dari rekap (cakupan peran); berkas dari POST /pkg/cetak (lib/pkgCetak).
 export default function PkgCetakPage() {
   return (
     <PenjagaMenuPkg menuKey="cetak">

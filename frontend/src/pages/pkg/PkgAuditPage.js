@@ -165,7 +165,7 @@ function IsiHalamanAudit() {
 }
 
 // Jejak audit PKG (khusus kepala madrasah): daftar aksi terbaru dengan kategori, pelaku, dan ringkasan.
-// Data sementara dari lib/pkgAudit (tiruan).
+// Data dari GET /pkg/audit & /pkg/audit/guru/{guru_id} (lib/pkgAudit).
 const TAB_AUDIT = ['semua', 'guru', 'instrumen', 'unduhan'];
 
 export default function PkgAuditPage() {
