@@ -92,3 +92,21 @@ def test_cetak_ditolak_dan_divalidasi(klien):
     for isian in ({'jenis': 'guru', 'format': 'xlsx'}, {'jenis': 'rekap', 'format': 'doc'}, {'jenis': 'rekap', 'format': 'xlsx', 'periode_id': 'p$1'}):
         assert k.post('/api/pkg/cetak', json=isian).status_code == 422, isian
     assert d['pkg_unduhan'].docs == []  # gagal tidak tercatat sebagai unduhan
+
+
+@pytest.mark.skipif(not __import__('pkg_pdf').libreoffice_tersedia(), reason='LibreOffice tidak tersedia')
+def test_cetak_pdf_libreoffice(klien):
+    k, d, _ = klien
+    r = k.post('/api/pkg/cetak', json={'jenis': 'guru', 'format': 'pdf', 'guru_id': 'g3'})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF') and r.headers['content-type'] == 'application/pdf'
+    assert r.headers['x-pkg-mesin'] == 'libreoffice' and '.pdf' in r.headers['content-disposition']
+    assert d['pkg_unduhan'].docs[-1]['mesin'] == 'libreoffice' and d['pkg_unduhan'].docs[-1]['format'] == 'pdf'
+
+
+def test_cetak_pdf_tanpa_libreoffice_503(klien, monkeypatch):
+    import pkg_pdf
+    k, d, _ = klien
+    monkeypatch.setattr(pkg_pdf, 'cari_soffice', lambda: None)
+    r = k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'pdf'})
+    assert r.status_code == 503 and 'PDF tidak dapat dibuat' in r.json()['detail']
+    assert d['pkg_unduhan'].docs == []

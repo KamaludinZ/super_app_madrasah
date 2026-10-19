@@ -180,6 +180,16 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
                 ws[f'{kol}{baris + level - 1}'] = 'v' if level in centang else None
 
 
-def laporan_guru_excel(laporan: Dict[str, Any]) -> bytes:
-    """Berkas .xlsx laporan PKG satu guru dari template instrumen resmi (seluruh sheet resmi ikut)."""
-    return isi_template_ke_bytes('instrumen', lambda wb: isi_laporan_guru(wb, laporan))
+def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False) -> bytes:
+    """Berkas .xlsx laporan PKG satu guru dari template instrumen resmi (seluruh sheet resmi ikut).
+    `hanya_rekap=True` (untuk PDF): sheet selain 04-RKAP-PKG disembunyikan agar hanya lembar rekapitulasi yang
+    dicetak; rumusnya tetap menghitung dari sheet tersembunyi."""
+    def pengisi(wb):
+        isi_laporan_guru(wb, laporan)
+        if hanya_rekap:
+            utama = wb[PETA_CETAK['instrumen']['sheet_rekap']]
+            wb.active = wb.worksheets.index(utama)
+            for ws in wb.worksheets:
+                ws.sheet_state = 'visible' if ws is utama else 'hidden'
+                ws.sheet_view.tabSelected = ws is utama
+    return isi_template_ke_bytes('instrumen', pengisi)

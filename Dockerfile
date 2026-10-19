@@ -36,6 +36,11 @@ RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     zlib1g-dev \
     libpq-dev \
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    libreoffice-calc-nogui \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements

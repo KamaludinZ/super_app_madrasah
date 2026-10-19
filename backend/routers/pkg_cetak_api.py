@@ -1,4 +1,4 @@
-"""API cetak dokumen resmi PKG (Excel; PDF menyusul) dengan otorisasi & validasi masukan.
+"""API cetak dokumen resmi PKG (Excel & PDF via LibreOffice) dengan otorisasi & validasi masukan.
 
 Otorisasi: pengguna personil PKG pada periode yang dicetak (pkg_rekap.anggota_periode) dan berperan pengelola
 (kepala madrasah atau penilai); data mengikuti cakupan peran (kepala semua guru, penilai guru yang dinilainya).
@@ -15,6 +15,7 @@ from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_audit import catat_cetak_template
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
+from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, xlsx_ke_pdf
 from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, periode_dan_sk
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, CetakRequest
 from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, nama_berkas_cetak
@@ -70,7 +71,7 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
         'terkunci_pada': lembar.get('terkunci_pada'),
     }
     try:
-        isi = laporan_guru_excel(laporan)
+        isi = laporan_guru_excel(laporan, hanya_rekap=data.format == 'pdf')
     except StrukturTidakSesuai as e:
         raise HTTPException(409, str(e)) from e
     return {'jenis_template': 'instrumen', 'dasar_nama': f"Laporan_PKG_{guru.get('nama') or data.guru_id}_{periode.get('nama_periode') or ''}",
@@ -87,18 +88,24 @@ def respon_berkas(isi: bytes, nama: str, format_berkas: str, mesin: str) -> Resp
 @router.post("/pkg/cetak")
 async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(get_current_user)):
     """Unduh dokumen resmi: rekap seluruh guru dalam cakupan (`jenis=rekap`) atau laporan satu guru (`jenis=guru`)
-    sebagai Excel dari template resmi. 403 di luar hak/cakupan, 409 bila belum ada lembar terkunci, 503 bila template
-    tidak tersedia/berubah."""
-    if data.format != 'xlsx':
-        raise HTTPException(400, 'Format PDF belum tersedia.')
+    sebagai Excel dari template resmi, atau PDF hasil konversi LibreOffice (rumus template dihitung ulang; laporan
+    per guru hanya lembar rekapitulasi 04-RKAP-PKG). 403 di luar hak/cakupan, 409 bila belum ada lembar terkunci,
+    503 bila template tidak tersedia/berubah atau PDF tidak dapat dibuat."""
     try:
         siap = await siapkan_cetak(db, user, data)
     except TemplateTidakTersedia as e:
         raise HTTPException(503, str(e)) from e
-    nama = nama_berkas_cetak(siap['dasar_nama'], 'xlsx')
+    if data.format == 'pdf':
+        try:
+            isi, mesin = await xlsx_ke_pdf(siap['xlsx'], nama_berkas_cetak(siap['dasar_nama'], 'xlsx')), 'libreoffice'
+        except (LibreOfficeTidakTersedia, KonversiPdfGagal) as e:
+            raise HTTPException(503, f'PDF tidak dapat dibuat: {e}') from e
+    else:
+        isi, mesin = siap['xlsx'], 'openpyxl'
+    nama = nama_berkas_cetak(siap['dasar_nama'], data.format)
     info = TEMPLATE_PKG[siap['jenis_template']]
-    await catat_cetak_template(db, user, siap['jenis_template'], 'xlsx', nama, info['versi'], info['checksum_resmi'],
+    await catat_cetak_template(db, user, siap['jenis_template'], data.format, nama, info['versi'], info['checksum_resmi'],
                                periode_id=siap['periode']['id'], request=request, jenis_dokumen=data.jenis,
-                               guru_id=siap['guru_id'], mesin='openpyxl', isi=siap['xlsx'],
+                               guru_id=siap['guru_id'], mesin=mesin, isi=isi,
                                metadata={'tanggal_cetak': date.today().isoformat()})
-    return respon_berkas(siap['xlsx'], nama, 'xlsx', 'openpyxl')
+    return respon_berkas(isi, nama, data.format, mesin)

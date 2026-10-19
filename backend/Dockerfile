@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     fonts-dejavu-core \
     fonts-liberation \
+    libreoffice-calc-nogui \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
