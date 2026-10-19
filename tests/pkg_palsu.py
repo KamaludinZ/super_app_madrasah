@@ -36,7 +36,13 @@ class Koleksi:
         self.docs = [dict(d) for d in docs]
 
     def _cocok(self, d, q):
-        return all(cocok_nilai(d.get(k), v) for k, v in (q or {}).items())
+        for k, v in (q or {}).items():
+            if k == '$or':
+                if not any(self._cocok(d, sub) for sub in v):
+                    return False
+            elif not cocok_nilai(d.get(k), v):
+                return False
+        return True
 
     def find(self, q=None, _proj=None):
         return Cursor([d for d in self.docs if self._cocok(d, q)])

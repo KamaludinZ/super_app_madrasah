@@ -262,11 +262,10 @@ async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]]
     }
 
 
-async def rekap_periode(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode_id: Optional[str],
-                        tahun_pelajaran: Optional[str] = None, semester: Optional[str] = None) -> Dict[str, Any]:
+async def rekap_periode(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode: Dict[str, Any],
+                        sk: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Rekap utama (kontrak frontend GET /pkg/rekap): periode, SK, cakupan, ringkasan, statistik, dan guru dalam
     cakupan pengguna (hasil pribadi hanya bila terkunci)."""
-    periode, sk = await periode_dan_sk(db, periode_id, tahun_pelajaran, semester)
     cakupan = await cakupan_rekap(db, user, keanggotaan, periode)
     agregat = await agregasi_rekap(db, periode, sk, saring_guru=cakupan['guru'], hanya_terkunci=cakupan['cakupan'] == 'pribadi')
     if cakupan['cakupan'] == 'penilai':
@@ -337,3 +336,19 @@ def statistik_lengkap(baris: list) -> Dict[str, Any]:
     per_kompetensi = [{'kode': k, 'rata': _bulat2(sum((b.get('per_kompetensi') or {}).get(k, 0) for b in nilai) / len(nilai))}
                       for k in kode] if nilai else []
     return {**st, 'sebaran_capaian': sebaran, 'rata_per_kompetensi': per_kompetensi}
+
+
+async def anggota_periode(db, user: Dict[str, Any], periode: Dict[str, Any], sk: Optional[Dict[str, Any]]) -> bool:
+    """Apakah pengguna termasuk personil PKG pada periode itu: kepala madrasah, tercantum di SK periode (penilai/
+    dinilai), atau tercatat di penugasan/lembar periode tersebut (data historis setelah SK berubah)."""
+    from pkg_akses import adalah_kepala
+    from pkg_skema import KOLEKSI_PENUGASAN
+    uid = user.get('id')
+    if adalah_kepala(user):
+        return True
+    if sk and (uid in (sk.get('penilai_ids') or []) or uid in (sk.get('dinilai_ids') or [])):
+        return True
+    if await db[KOLEKSI_PENUGASAN].find_one({'periode_id': periode['id'], '$or': [{'penilai_id': uid}, {'guru_dinilai_ids': uid}]}, {'_id': 0, 'id': 1}):
+        return True
+    return bool(await db[KOLEKSI_PENILAIAN].find_one(
+        {'periode_id': periode['id'], '$or': [{'penilai_id': uid}, {'guru_dinilai_id': uid}]}, {'_id': 0, 'id': 1}))

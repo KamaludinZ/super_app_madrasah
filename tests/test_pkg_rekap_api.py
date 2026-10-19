@@ -49,10 +49,13 @@ def _guru(uid):
     return {'id': uid, 'roles': ['kepala_sekolah'] if uid == 'kep' else ['guru'], 'active_role': 'guru'}
 
 
+def _akses(user, periode=None, tahun=None, semester=None):
+    return api.akses_rekap(Request('/pkg/rekap'), periode, tahun, semester, _guru(user))
+
+
 def _rincian(user, guru, periode=None):
     async def jalan():
-        akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru(user))
-        return await api.rekap_guru_api(guru, periode, tahun_pelajaran=None, semester=None, akses=akses)
+        return await api.rekap_guru_api(guru, akses=await _akses(user, periode))
     return asyncio.run(jalan())
 
 
@@ -86,8 +89,7 @@ def test_hasil_sendiri_belum_dikunci_ditolak(db):
 
 def _api_get(fn, user, periode=None, tahun=None, semester=None):
     async def jalan():
-        akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru(user))
-        return await fn(periode, tahun_pelajaran=tahun, semester=semester, akses=akses)
+        return await fn(akses=await _akses(user, periode, tahun, semester))
     return asyncio.run(jalan())
 
 
@@ -128,12 +130,12 @@ def test_statistik_api(db):
 
 
 def test_saringan_periode_tahun(db):
-    async def daftar(tahun=None, semester=None):
-        akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), _guru('g1'))
-        return await api.periode_rekap_api(tahun_pelajaran=tahun, semester=semester, akses=akses)
+    async def daftar(tahun=None, semester=None, user='kep'):
+        return await api.periode_rekap_api(tahun_pelajaran=tahun, semester=semester, user=_guru(user))
     assert [p['id'] for p in asyncio.run(daftar())] == ['p1', 'p0']  # draf tidak ikut, terbaru dulu
     assert [p['id'] for p in asyncio.run(daftar('2025/2026'))] == ['p0']
     assert asyncio.run(daftar('2026/2027', 'Genap')) == []
+    assert [p['id'] for p in asyncio.run(daftar(user='g1'))] == ['p1']  # bukan personil periode p0
 
     assert _api_get(api.rekap_api, 'kep', tahun='2025/2026')['periode']['id'] == 'p0'
     assert _api_get(api.rekap_api, 'kep', tahun='2026/2027', semester='Ganjil')['periode']['id'] == 'p1'
@@ -156,4 +158,23 @@ def test_saringan_lewat_http(db):
     assert k.get('/api/pkg/rekap').json()['periode']['id'] == 'p1'
     assert k.get('/api/pkg/rekap', params={'tahun_pelajaran': '2025-2026'}).status_code == 422
     assert [p['id'] for p in k.get('/api/pkg/rekap/periode').json()] == ['p1', 'p0']
+    app.dependency_overrides[get_current_user] = lambda: _guru('asing')
+    assert k.get('/api/pkg/rekap').status_code == 403
+    assert k.get('/api/pkg/rekap/periode').json() == []
+    app.dependency_overrides[get_current_user] = lambda: _guru('kep')
     assert k.get('/api/pkg/rekap/guru/g1', params={'semester': 'Ganjil'}).json()['status'] == 'terkunci'
+
+
+
+def test_akses_periode_lama_tanpa_sk_aktif_sekarang(db):
+    # Periode lama p0: guru "lama" dinilai & lembarnya terkunci; ia tidak tercantum di SK aktif periode berjalan.
+    db['pkg_sk'].docs.append({'id': 's0', 'periode_id': 'p0', 'is_active': True, 'penilai_ids': ['kep'], 'dinilai_ids': ['lama']})
+    db['pkg_penilaian'].docs.append({**_lembar('n9', 'lama', 'kep'), 'periode_id': 'p0', 'sk_id': 's0'})
+    asyncio.run(pkg_rekap.bangun_ulang_rekap(db))
+    r = _api_get(api.rekap_api, 'lama', periode='p0')
+    assert r['cakupan'] == 'pribadi' and [b['guru_id'] for b in r['guru']] == ['lama']
+    with pytest.raises(HTTPException) as e:  # bukan personil periode berjalan
+        _api_get(api.rekap_api, 'lama')
+    assert e.value.detail['alasan'] == 'bukan_anggota_sk'
+    tolak = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
+    assert tolak and tolak[0]['metadata']['periode_id'] == 'p1'
