@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Split, Loader2, Wand2, Save, AlertTriangle, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import DaftarTugasPerPenilai from '@/components/pkg/DaftarTugasPerPenilai';
 import { ambilPenugasan, cekPenugasan, simpanPenugasan } from '@/lib/pkgKelola';
 
 const KOSONG = '__kosong__';
@@ -178,6 +179,14 @@ function IsiHalamanPenugasan() {
           })}
         </CardContent>
       </Card>
+
+      <DaftarTugasPerPenilai
+        penilai={data.penilai}
+        dinilai={data.dinilai}
+        penugasan={data.penugasan}
+        jatah={data.jatah}
+        adaPerubahan={berubah}
+      />
     </div>
   );
 }
