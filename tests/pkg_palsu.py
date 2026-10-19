@@ -53,6 +53,15 @@ class Hasil:
         self.__dict__.update(kw)
 
 
+def _ambil(d, kunci):
+    """Nilai field, termasuk jalur bertitik ('metadata.nama_berkas') seperti MongoDB."""
+    for bagian in kunci.split('.'):
+        if not isinstance(d, dict):
+            return None
+        d = d.get(bagian)
+    return d
+
+
 class Koleksi:
     def __init__(self, docs=()):
         self.docs = [dict(d) for d in docs]
@@ -62,7 +71,7 @@ class Koleksi:
             if k == '$or':
                 if not any(self._cocok(d, sub) for sub in v):
                     return False
-            elif not cocok_nilai(d.get(k), v):
+            elif not cocok_nilai(_ambil(d, k), v):
                 return False
         return True
 

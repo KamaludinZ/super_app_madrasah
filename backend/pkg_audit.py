@@ -32,6 +32,7 @@ AKSI_PERIKSA_TEMPLATE = 'periksa_template'
 AKSI_CETAK_TEMPLATE = 'cetak_template'
 AKSI_CETAK_GAGAL = 'cetak_gagal'
 AKSI_LIHAT_UNDUHAN = 'lihat_unduhan'
+AKSI_LIHAT_AUDIT = 'lihat_audit'
 
 # Katalog kode aksi pkg_audit_log beserta labelnya (untuk halaman Jejak Audit PKG). Setiap aksi yang dicatat
 # router PKG wajib terdaftar di sini (diuji di tests/test_pkg_validasi.py).
@@ -66,6 +67,7 @@ LABEL_AKSI = {
     AKSI_CETAK_TEMPLATE: 'Mencetak dokumen dari template',
     AKSI_CETAK_GAGAL: 'Gagal mencetak dokumen',
     AKSI_LIHAT_UNDUHAN: 'Melihat riwayat unduhan',
+    AKSI_LIHAT_AUDIT: 'Melihat jejak audit',
 }
 
 
@@ -79,7 +81,7 @@ KATEGORI_AKSI = {
                               'supervisi_tandai', 'supervisi_batal')},
     **{a: 'unduhan' for a in (AKSI_CETAK_TEMPLATE, AKSI_CETAK_GAGAL, AKSI_LIHAT_UNDUHAN, AKSI_LIHAT_TEMPLATE,
                               AKSI_PERIKSA_TEMPLATE)},
-    **{a: 'akses' for a in (AKSI_BUKA_BERANDA, AKSI_TOLAK_AKSES, 'lihat_rekap', 'lihat_rekap_guru')},
+    **{a: 'akses' for a in (AKSI_BUKA_BERANDA, AKSI_TOLAK_AKSES, AKSI_LIHAT_AUDIT, 'lihat_rekap', 'lihat_rekap_guru')},
 }
 
 

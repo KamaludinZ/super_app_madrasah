@@ -76,8 +76,8 @@ def test_setiap_aksi_audit_berkategori():
 
 
 def _rute_pkg():
-    from routers import pkg, pkg_cetak_api, pkg_instrumen_api, pkg_penilaian_api, pkg_rekap_api
-    for modul in (pkg, pkg_kelola, pkg_instrumen_api, pkg_penilaian_api, pkg_rekap_api, pkg_cetak_api):
+    from routers import pkg, pkg_audit_api, pkg_cetak_api, pkg_instrumen_api, pkg_penilaian_api, pkg_rekap_api
+    for modul in (pkg, pkg_kelola, pkg_instrumen_api, pkg_penilaian_api, pkg_rekap_api, pkg_cetak_api, pkg_audit_api):
         yield from modul.router.routes
 
 

@@ -53,7 +53,8 @@ async def buka_lembar_api(request: Request, guru_id: str = Path(..., pattern=POL
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], guru_id)
     lembar_id = (ktx['lembar'] or {}).get('id')
     await catat_audit_pkg_harian(db, 'penilaian_buka', akses['user'], kunci=lembar_id or f'guru:{guru_id}',
-                                 metadata={'guru_id': guru_id, 'status': (ktx['lembar'] or {}).get('status') or 'belum'},
+                                 metadata={'guru_id': guru_id, 'periode_id': (ktx.get('periode') or {}).get('id'),
+                                           'status': (ktx['lembar'] or {}).get('status') or 'belum'},
                                  request=request, penilaian_id=lembar_id)
     return await lembar_tampil(db, ktx, guru_id)
 
