@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, sk_aktif
-from pkg_audit import AKSI_BUKA_BERANDA, catat_audit_pkg_harian
+from pkg_audit import (
+    AKSI_BUKA_BERANDA, AKSI_LIHAT_TEMPLATE, AKSI_PERIKSA_TEMPLATE, catat_audit_pkg, catat_audit_pkg_harian,
+)
 from pkg_beranda import menu_pkg, pengingat_pkg, ringkasan_kinerja, tugas_penilaian_saya
 from pkg_penjaga import penjaga_pkg
 from pkg_template import info_template
@@ -70,7 +72,17 @@ async def pengingat_beranda(akses: Dict = Depends(anggota_sk)):
 
 
 @router.get("/pkg/template/info")
-async def info_template_api(periksa_ulang: bool = Query(False), akses: Dict = Depends(anggota_sk)):
+async def info_template_api(request: Request, periksa_ulang: bool = Query(False), akses: Dict = Depends(anggota_sk)):
     """Versi & checksum berkas template resmi PKG (hasil pemeriksaan terakhir). Hanya kepala madrasah yang dapat
-    meminta pemeriksaan ulang (`periksa_ulang=true`); anggota lain selalu mendapat hasil tersimpan."""
-    return info_template(periksa_ulang=periksa_ulang and akses['keanggotaan'].get('peran') == 'kepala')
+    meminta pemeriksaan ulang (`periksa_ulang=true`); anggota lain selalu mendapat hasil tersimpan.
+    Akses dicatat harian; pemeriksaan ulang dicatat per aksi beserta status berkas."""
+    ulang = periksa_ulang and akses['keanggotaan'].get('peran') == 'kepala'
+    info = info_template(periksa_ulang=ulang)
+    if ulang:
+        await catat_audit_pkg(db, AKSI_PERIKSA_TEMPLATE, akses['user'],
+                              {'utuh': info['utuh'], 'status': {b['jenis']: b['status'] for b in info['berkas']}},
+                              request=request)
+    else:
+        await catat_audit_pkg_harian(db, AKSI_LIHAT_TEMPLATE, akses['user'], metadata={'versi_template': info['versi_template']},
+                                     request=request)
+    return info

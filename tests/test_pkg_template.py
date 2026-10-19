@@ -137,12 +137,13 @@ def test_endpoint_info_template(monkeypatch):
     d = Db({'pkg_periode': Koleksi([{'id': 'p1', 'status': 'berjalan'}]),
             'pkg_sk': Koleksi([{'id': 's1', 'periode_id': 'p1', 'is_active': True, 'penilai_ids': [], 'dinilai_ids': ['g1']}])})
     monkeypatch.setattr(pkg_penjaga, 'db', d)
+    monkeypatch.setattr(api, 'db', d)
     pkg_template.HASIL_TERAKHIR.clear()
 
     def panggil(user, ulang=False):
         async def jalan():
             akses = await pkg_penjaga.penjaga_pkg('anggota')(Request(), user)
-            return await api.info_template_api(ulang, akses)
+            return await api.info_template_api(Request('/pkg/template/info'), ulang, akses)
         return asyncio.run(jalan())
 
     guru = {'id': 'g1', 'roles': ['guru']}
@@ -154,6 +155,26 @@ def test_endpoint_info_template(monkeypatch):
     assert panggil({'id': 'kep', 'roles': ['kepala_sekolah']}, ulang=True)['diperiksa_pada'] >= pertama
     with pytest.raises(Exception):
         panggil({'id': 'asing', 'roles': ['guru']})
+
+    aksi = [(x['aksi'], x.get('jumlah')) for x in d['pkg_audit_log'].docs if x['aksi'] != 'tolak_akses']
+    assert ('lihat_template', 2) in aksi and ('periksa_template', None) in aksi  # lihat dicatat harian (2x guru)
+
+
+def test_catat_cetak_template():
+    import asyncio
+    import pkg_audit
+    from tests.pkg_palsu import Db, Request
+    d = Db()
+    info = pkg_template.info_berkas('rekap')
+    asyncio.run(pkg_audit.catat_cetak_template(
+        d, {'id': 'kep', 'full_name': 'Kepala'}, 'rekap', 'pdf', 'Rekap_PKG.pdf', info['versi'], info['checksum'],
+        periode_id='p1', metadata={'mesin': 'libreoffice'}, request=Request('/pkg/cetak')))
+    audit = d['pkg_audit_log'].docs[0]
+    assert audit['aksi'] == 'cetak_template' and audit['metadata']['mesin'] == 'libreoffice'
+    assert audit['metadata']['checksum_template'] == info['checksum'] and audit['ip_address'] == '10.0.0.1'
+    unduh = d['pkg_unduhan'].docs[0]
+    assert (unduh['jenis'], unduh['format'], unduh['nama_berkas'], unduh['aktor_nama'], unduh['periode_id']) == \
+        ('rekap', 'pdf', 'Rekap_PKG.pdf', 'Kepala', 'p1')
 
 
 def test_konfigurasi_docker_menyertakan_template():
