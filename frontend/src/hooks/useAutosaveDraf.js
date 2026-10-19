@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Simpan otomatis draf setelah `jeda` ms tanpa perubahan. `data` = nilai yang disimpan (dibandingkan via JSON);
 // `simpan(data)` mengembalikan Promise berisi { updated_at }. Perubahan pertama (pemuatan awal) tidak disimpan.
-// Status: 'diam' | 'menunggu' | 'menyimpan' | 'tersimpan' | 'gagal'. Saat ada perubahan belum tersimpan,
+// Status: 'diam' | 'menunggu' | 'menyimpan' | 'tersimpan' | 'gagal' (+ pesanGalat dari server). Saat ada perubahan belum tersimpan,
 // browser memperingatkan pengguna sebelum menutup/meninggalkan halaman.
 export default function useAutosaveDraf({ data, simpan, aktif = true, jeda = 2000, tersimpanAwal = null }) {
   const [status, setStatus] = useState('diam');
   const [tersimpanPada, setTersimpanPada] = useState(tersimpanAwal);
+  const [pesanGalat, setPesanGalat] = useState(null);
   const terakhir = useRef(null); // JSON data yang terakhir tersimpan / dimuat
   const timer = useRef(null);
   const jsonData = JSON.stringify(data);
@@ -21,6 +22,7 @@ export default function useAutosaveDraf({ data, simpan, aktif = true, jeda = 200
     clearTimeout(timer.current);
     const kirim = jsonData;
     setStatus('menyimpan');
+    setPesanGalat(null);
     try {
       const hasil = await simpan(JSON.parse(kirim));
       terakhir.current = kirim;
@@ -29,6 +31,7 @@ export default function useAutosaveDraf({ data, simpan, aktif = true, jeda = 200
       return hasil;
     } catch (e) {
       setStatus('gagal');
+      setPesanGalat(e?.message || null);
       throw e;
     }
   }, [jsonData, simpan]);
@@ -53,5 +56,5 @@ export default function useAutosaveDraf({ data, simpan, aktif = true, jeda = 200
     return () => window.removeEventListener('beforeunload', peringatan);
   }, [belumTersimpan]);
 
-  return { status, tersimpanPada, belumTersimpan, simpanSekarang };
+  return { status, tersimpanPada, pesanGalat, belumTersimpan, simpanSekarang };
 }

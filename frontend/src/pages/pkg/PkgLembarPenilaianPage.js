@@ -33,6 +33,8 @@ function IsiLembar() {
   // true setelah penilai mencoba mengirim: penanda isian kosong ditampilkan lebih tegas.
   const [tegas, setTegas] = useState(false);
   const [mengirim, setMengirim] = useState(false);
+  // Galat kelengkapan dari server saat kirim (kode_sub -> pesan); dihapus untuk sub yang kemudian diubah.
+  const [galatServer, setGalatServer] = useState({});
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
@@ -50,7 +52,11 @@ function IsiLembar() {
   useEffect(() => { muat(); }, [muat]);
 
   const nilai = useMemo(() => hitungNilai(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
-  const validasi = useMemo(() => validasiLembar(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
+  const validasiKlien = useMemo(() => validasiLembar(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
+  const validasi = useMemo(() => {
+    const galat = { ...galatServer, ...validasiKlien.galat };
+    return { ...validasiKlien, galat, sah: Object.keys(galat).length === 0 };
+  }, [validasiKlien, galatServer]);
 
   const kompetensi = lembar?.instrumen?.kompetensi;
   const muatRiwayat = useCallback(() => riwayatLembar(guruId), [guruId]);
@@ -89,6 +95,12 @@ function IsiLembar() {
       toast.success('Penilaian dikirim dan dikunci');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
+      if (e.galat && typeof e.galat === 'object') {
+        // Server menemukan sub yang belum lengkap: tandai di form dan gulir ke yang pertama.
+        setGalatServer(e.galat);
+        const pertama = Object.keys(e.galat)[0];
+        document.getElementById(`sub-${pertama}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       toast.error(e.message || 'Gagal mengirim penilaian');
     } finally {
       setMengirim(false);
@@ -110,7 +122,10 @@ function IsiLembar() {
   // Di luar masa penilaian lembar hanya dapat dibaca (server juga menolak penyimpanan).
   const diLuarMasa = keanggotaan?.dalam_masa_penilaian === false && lembar.status !== 'terkunci';
   const terkunci = lembar.status === 'terkunci' || diLuarMasa || lembar.dapat_diisi === false;
-  const ubahSub = (kode) => (baru) => setIsian((x) => ({ ...x, [kode]: baru }));
+  const ubahSub = (kode) => (baru) => {
+    setIsian((x) => ({ ...x, [kode]: baru }));
+    setGalatServer(({ [kode]: _, ...sisa }) => sisa);
+  };
   // Tegaskan penanda isian bermasalah dan gulir ke yang pertama; true bila lembar sudah lengkap.
   const periksaKelengkapan = () => {
     setTegas(true);
@@ -162,7 +177,7 @@ function IsiLembar() {
           <span className="text-slate-600">Sub-kompetensi dinilai <span className="font-semibold tabular-nums">{nilai.terisi}/{nilai.jumlahSub}</span></span>
           {!terkunci && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <StatusSimpanDraf status={draf.status} tersimpanPada={draf.tersimpanPada} onSimpan={simpanManual} />
+              <StatusSimpanDraf status={draf.status} tersimpanPada={draf.tersimpanPada} pesanGalat={draf.pesanGalat} onSimpan={simpanManual} />
               <Button type="button" size="sm" variant="outline" className="h-7 bg-white text-xs" onClick={periksaKelengkapan} data-testid="pkg-lembar-periksa">
                 Periksa kelengkapan
               </Button>

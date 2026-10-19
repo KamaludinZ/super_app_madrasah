@@ -60,7 +60,8 @@ export default function KartuSubPenilaian({ sub, isian, terkunci, onUbah, galat,
             <div key={kunci} className="space-y-1">
               <div className="flex items-baseline justify-between">
                 <Label htmlFor={id} className="text-xs text-slate-600">{label}</Label>
-                <span className="text-[10px] tabular-nums text-slate-400">{teks.length}/{BATAS_TEKS}</span>
+                <span className={`text-[10px] tabular-nums ${teks.length >= BATAS_TEKS * 0.9 ? 'text-amber-700 font-semibold' : 'text-slate-400'}`}
+                  aria-live={teks.length >= BATAS_TEKS * 0.9 ? 'polite' : undefined}>{teks.length}/{BATAS_TEKS}</span>
               </div>
               <Textarea id={id} value={teks} onChange={ubahTeks(kunci)} rows={2} maxLength={BATAS_TEKS} placeholder={contoh}
                 disabled={terkunci} className="text-sm" data-testid={`pkg-lembar-${kunci}-${sub.kode}`} />
