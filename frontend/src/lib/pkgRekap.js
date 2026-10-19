@@ -141,3 +141,35 @@ export function kelompokkanPerTim(guru = [], urut = 'capaian') {
     };
   }).sort((a, b) => a.penilai_nama.localeCompare(b.penilai_nama, 'id'));
 }
+
+// Urutan tetap predikat jenjang (rumus template 04-RKAP-PKG!F45), dari capaian terendah ke tertinggi.
+export const URUTAN_PREDIKAT = [
+  { kunci: 'Terpenuhi pada Jenjang Jabatan Guru Ahli Pertama', label: 'Ahli Pertama', rentang: '≤ 55%' },
+  { kunci: 'Terpenuhi pada Jenjang Jabatan Guru Ahli Muda', label: 'Ahli Muda', rentang: '55–75%' },
+  { kunci: 'Terpenuhi pada Jenjang Jabatan Guru Ahli Madya', label: 'Ahli Madya', rentang: '75–90%' },
+  { kunci: 'Terpenuhi pada Jenjang Jabatan Guru Ahli Utama', label: 'Ahli Utama', rentang: '> 90%' },
+];
+
+const bulat2 = (n) => Math.round(n * 100) / 100;
+
+// Statistik capaian dari lembar terkunci: jumlah, rata-rata, median, tertinggi, terendah, dan sebaran predikat
+// (semua kelas predikat selalu ada, termasuk yang nol, dalam URUTAN_PREDIKAT).
+export function hitungStatistik(guru = []) {
+  const nilai = guru.filter((g) => g.status === 'terkunci' && g.capaian_persen != null);
+  const capaian = nilai.map((g) => g.capaian_persen).sort((a, b) => a - b);
+  const n = capaian.length;
+  const median = n ? (n % 2 ? capaian[(n - 1) / 2] : (capaian[n / 2 - 1] + capaian[n / 2]) / 2) : null;
+  const tertinggi = n ? nilai.reduce((a, b) => (b.capaian_persen > a.capaian_persen ? b : a)) : null;
+  const terendah = n ? nilai.reduce((a, b) => (b.capaian_persen < a.capaian_persen ? b : a)) : null;
+  return {
+    jumlah: n,
+    rata: n ? bulat2(capaian.reduce((a, b) => a + b, 0) / n) : null,
+    median: median == null ? null : bulat2(median),
+    tertinggi: tertinggi && { nilai: tertinggi.capaian_persen, nama: tertinggi.nama },
+    terendah: terendah && { nilai: terendah.capaian_persen, nama: terendah.nama },
+    sebaranPredikat: URUTAN_PREDIKAT.map((p) => {
+      const jumlah = nilai.filter((g) => g.predikat === p.kunci).length;
+      return { ...p, jumlah, persen: n ? bulat2((jumlah / n) * 100) : 0 };
+    }),
+  };
+}

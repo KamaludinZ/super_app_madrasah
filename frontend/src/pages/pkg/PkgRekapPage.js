@@ -8,6 +8,7 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import RekapPerTim from '@/components/pkg/RekapPerTim';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
+import StatistikRekap from '@/components/pkg/StatistikRekap';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ambilRekap } from '@/lib/pkgRekap';
 
@@ -87,8 +88,12 @@ function IsiHalamanRekap() {
           <TabsList>
             <TabsTrigger value="guru" data-testid="pkg-rekap-tab-guru">Per Guru</TabsTrigger>
             <TabsTrigger value="tim" data-testid="pkg-rekap-tab-tim">Per Tim Penilai</TabsTrigger>
+            <TabsTrigger value="statistik" data-testid="pkg-rekap-tab-statistik">Statistik</TabsTrigger>
           </TabsList>
         )}
+        <TabsContent value="statistik">
+          <StatistikRekap guru={rekap.guru} />
+        </TabsContent>
         <TabsContent value="tim">
           <RekapPerTim guru={rekap.guru} nomorSk={rekap.sk?.nomor_sk} />
         </TabsContent>
