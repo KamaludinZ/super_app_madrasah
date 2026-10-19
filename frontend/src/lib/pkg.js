@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 // Penolakan akses dikirim sebagai HTTP 403 dengan detail { alasan, pesan }.
 
 // Rute sub-menu PKG yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen']);
+export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen', '/pkg/penilaian']);
 
 // Galat API PKG: menyimpan status & penolakan terstruktur (bila 403) untuk ditampilkan PesanTolakPkg.
 export class GalatPkg extends Error {
@@ -29,6 +29,7 @@ async function panggil(fn, cadangan) {
 export const ambilKeanggotaan = () => panggil(() => api.get('/pkg/sk/my-membership'), 'Gagal memuat keanggotaan SK PKG.');
 export const ambilMenuPkg = () => panggil(() => api.get('/pkg/beranda/menu'), 'Gagal memuat menu PKG.');
 export const ambilBeranda = () => panggil(() => api.get('/pkg/beranda'), 'Gagal memuat beranda PKG.');
+export const ambilTugasSaya = () => panggil(() => api.get('/pkg/beranda/tugas-saya'), 'Gagal memuat tugas penilaian.');
 
 export const LABEL_PERAN_PKG = {
   kepala: 'Kepala Madrasah · Penilai',
