@@ -1,6 +1,7 @@
 """Template PKG: berkas resmi tersedia di folder internal, path tetap, dan peringatan startup bila hilang."""
 
 import logging
+import tempfile
 import os
 import sys
 
@@ -66,3 +67,34 @@ def test_pemeriksaan_startup_tetap_jalan_bila_db_gagal():
         def __getitem__(self, _):
             raise RuntimeError('db mati')
     assert asyncio.run(pkg_template.periksa_template_startup(DbRusak()))['lengkap'] is True
+
+
+def test_baca_template_tanpa_menimpa(tmp_path, monkeypatch):
+    path_asli = pkg_template.path_template('rekap')
+    sebelum = pkg_template.hitung_checksum(path_asli)
+    mtime = os.path.getmtime(path_asli)
+
+    wb = pkg_template.buka_template('rekap')
+    assert wb.sheetnames  # bisa dibaca
+    wb.close()
+
+    def pengisi(wb):
+        wb.active['A1'] = 'DIUBAH UJI'
+    hasil = pkg_template.isi_template_ke_bytes('rekap', pengisi)
+    assert hasil[:2] == b'PK'  # berkas xlsx (zip) baru
+    assert pkg_template.hitung_checksum(path_asli) == sebelum and os.path.getmtime(path_asli) == mtime
+
+    with pkg_template.salinan_sementara(hasil, '../../keluar.xlsx') as p:
+        folder = os.path.dirname(p)
+        assert os.path.basename(p) == 'keluar.xlsx' and os.path.isfile(p) and folder.startswith(tempfile.gettempdir())
+    assert not os.path.exists(folder)  # folder sementara dibersihkan
+
+
+def test_template_tidak_tersedia_atau_berubah(tmp_path, monkeypatch):
+    monkeypatch.setattr(pkg_template, 'FOLDER_TEMPLATE', str(tmp_path))
+    with pytest.raises(pkg_template.TemplateTidakTersedia):
+        pkg_template.baca_bytes_template('instrumen')
+    (tmp_path / 'pkg_template_v2026.xlsx').write_bytes(b'bukan resmi')
+    assert pkg_template.baca_bytes_template('instrumen') == b'bukan resmi'
+    with pytest.raises(pkg_template.TemplateTidakTersedia):
+        pkg_template.baca_bytes_template('instrumen', wajib_utuh=True)

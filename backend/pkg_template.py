@@ -10,11 +10,17 @@ terdeteksi sebelum pengguna mencetak.
 
 Mengganti berkas template resmi = menaikkan VERSI_TEMPLATE, nama berkas, dan CHECKSUM_RESMI bersamaan.
 """
+import contextlib
 import hashlib
+import io
 import logging
 import os
+import shutil
+import tempfile
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
+
+from openpyxl import Workbook, load_workbook
 
 logger = logging.getLogger('matsandatama')
 
@@ -107,3 +113,55 @@ async def periksa_template_startup(db) -> Dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg] Gagal menyimpan hasil pemeriksaan template: {e}")
     return hasil
+
+
+
+# ---------------------------------------------------------------- baca template tanpa menimpa (pola ckg_impor/excel_io)
+
+class TemplateTidakTersedia(Exception):
+    """Berkas template tidak ada, atau isinya berbeda dari checksum resmi saat keutuhan diwajibkan."""
+
+
+def baca_bytes_template(jenis: str, wajib_utuh: bool = False) -> bytes:
+    """Isi berkas template `jenis` dari path internal (mode baca saja). `wajib_utuh` memeriksa checksum resmi."""
+    path = path_template(jenis)
+    if not os.path.isfile(path):
+        raise TemplateTidakTersedia(f"Berkas template {TEMPLATE_PKG[jenis]['nama_berkas']} tidak ditemukan.")
+    with open(path, 'rb') as f:
+        isi = f.read()
+    if wajib_utuh and hashlib.sha256(isi).hexdigest() != TEMPLATE_PKG[jenis]['checksum_resmi']:
+        raise TemplateTidakTersedia(f"Berkas template {TEMPLATE_PKG[jenis]['nama_berkas']} berbeda dari versi resmi.")
+    return isi
+
+
+def buka_template(jenis: str, hanya_baca: bool = True, wajib_utuh: bool = False) -> Workbook:
+    """Workbook template dimuat dari salinan bytes di memori, sehingga berkas asli tidak pernah dibuka untuk ditulis.
+    `hanya_baca=True` (read_only + data_only) untuk impor/pembacaan cepat; False untuk diisi lalu disimpan ke
+    tempat lain (format & rumus dipertahankan)."""
+    isi = baca_bytes_template(jenis, wajib_utuh=wajib_utuh)
+    if hanya_baca:
+        return load_workbook(io.BytesIO(isi), read_only=True, data_only=True)
+    return load_workbook(io.BytesIO(isi))
+
+
+def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True) -> bytes:
+    """Muat template, jalankan `pengisi(wb)`, dan kembalikan hasilnya sebagai bytes .xlsx baru (template asli utuh)."""
+    wb = buka_template(jenis, hanya_baca=False, wajib_utuh=wajib_utuh)
+    pengisi(wb)
+    keluaran = io.BytesIO()
+    wb.save(keluaran)
+    return keluaran.getvalue()
+
+
+@contextlib.contextmanager
+def salinan_sementara(isi: bytes, nama_berkas: str = 'pkg.xlsx') -> Iterator[str]:
+    """Tulis `isi` ke berkas di folder sementara khusus (mis. untuk konversi PDF LibreOffice), lalu hapus
+    seluruh folder setelah blok selesai. Nama berkas disaring agar tetap di dalam folder sementara."""
+    folder = tempfile.mkdtemp(prefix='pkg_')
+    try:
+        path = os.path.join(folder, os.path.basename(nama_berkas) or 'pkg.xlsx')
+        with open(path, 'wb') as f:
+            f.write(isi)
+        yield path
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
