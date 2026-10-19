@@ -44,6 +44,7 @@ from routers import (
     notifications,
     perpus,
     phase4,
+    pkg,
     promotions,
     public,
     push,
@@ -135,6 +136,7 @@ api_router.include_router(uks.router)
 api_router.include_router(sarpras.router)
 api_router.include_router(lab.router)
 api_router.include_router(guru_pengganti.router)
+api_router.include_router(pkg.router)
 api_router.include_router(mobile.router)
 
 api_router.include_router(kelas_digital.router)
