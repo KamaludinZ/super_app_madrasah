@@ -6,9 +6,13 @@ Bentuk untuk API (sama dengan kontrak frontend lib/pkgInstrumen):
     versi     = {id, versi_template, revisi, checksum, cocok_resmi, is_active, diimpor_pada, dipakai_penilaian}
 """
 import logging
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN
+from fastapi import HTTPException
+
+from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PRATINJAU_IMPOR
 
 logger = logging.getLogger('matsandatama')
 
@@ -68,3 +72,50 @@ async def periksa_instrumen_startup(db, hasil_template: Dict[str, Any]) -> Dict[
         logger.warning(f"[pkg] Instrumen aktif memakai template {hasil['versi_aktif']} (rev {aktif.get('revisi')}), "
                        f"sedangkan template resmi di server versi {versi_template}.")
     return hasil
+
+
+MASA_PRATINJAU = timedelta(minutes=30)
+
+
+async def simpan_pratinjau(db, pratinjau: Dict[str, Any], pembuat: Dict[str, Any]) -> Dict[str, Any]:
+    """Simpan pratinjau impor (dibaca ulang saat diterapkan; aman untuk beberapa worker) dan beri token."""
+    token = uuid.uuid4().hex
+    await db[KOLEKSI_PRATINJAU_IMPOR].insert_one({
+        'token': token, 'pembuat_id': pembuat.get('id'), 'pratinjau': pratinjau,
+        'expire_at': datetime.now(timezone.utc) + MASA_PRATINJAU,
+    })
+    return {**pratinjau, 'token': token}
+
+
+async def terapkan_pratinjau(db, token: str, kepala: Dict[str, Any]) -> Dict[str, Any]:
+    """Jadikan pratinjau instrumen aktif baru. Instrumen lama dinonaktifkan namun tetap tersimpan (dirujuk lembar
+    penilaian lama). Hasil: {'instrumen': dok, 'hasil': ringkasan, 'sebelumnya': dok | None}."""
+    simpanan = await db[KOLEKSI_PRATINJAU_IMPOR].find_one({'token': token, 'pembuat_id': kepala.get('id')}, {'_id': 0})
+    kedaluwarsa = simpanan and simpanan.get('expire_at') and \
+        (simpanan['expire_at'] if simpanan['expire_at'].tzinfo else simpanan['expire_at'].replace(tzinfo=timezone.utc)) < datetime.now(timezone.utc)
+    if not simpanan or kedaluwarsa:
+        raise HTTPException(404, 'Pratinjau tidak ditemukan atau kedaluwarsa. Ulangi impor.')
+    p = simpanan['pratinjau']
+    sebelumnya = await instrumen_aktif(db)
+    revisi_terakhir = await db[KOLEKSI_INSTRUMEN].find(
+        {'versi_template': p['versi_template']}, {'_id': 0, 'revisi': 1}).to_list(1000)
+    sekarang = datetime.now(timezone.utc).isoformat()
+    baru = {
+        'id': str(uuid.uuid4()), 'versi_template': p['versi_template'],
+        'revisi': max([r.get('revisi') or 0 for r in revisi_terakhir], default=0) + 1,
+        'checksum': p['checksum'], 'cocok_resmi': bool(p['cocok_resmi']), 'sumber': p['sumber'],
+        'nama_berkas': p['nama_berkas'], 'revisi_dari': (sebelumnya or {}).get('id'), 'alasan_perubahan': None,
+        'diimpor_oleh': kepala.get('id'), 'diimpor_pada': sekarang, 'is_active': True,
+        'kompetensi': p['kompetensi'], 'created_at': sekarang, 'updated_at': sekarang,
+    }
+    # Index unik parsial: nonaktifkan instrumen lama lebih dahulu.
+    await db[KOLEKSI_INSTRUMEN].update_many({'is_active': True}, {'$set': {'is_active': False, 'updated_at': sekarang}})
+    await db[KOLEKSI_INSTRUMEN].insert_one(dict(baru))
+    await db[KOLEKSI_PRATINJAU_IMPOR].delete_one({'token': token})
+    r = ringkas_instrumen(baru)
+    hasil = {
+        'sumber': baru['sumber'], 'nama_berkas': baru['nama_berkas'], 'cocok_resmi': baru['cocok_resmi'],
+        'kompetensi': r['kompetensi'], 'sub': r['sub'], 'indikator': r['indikator'],
+        'instrumen_sebelumnya': {k: sebelumnya.get(k) for k in ('id', 'versi_template', 'revisi')} if sebelumnya else None,
+    }
+    return {'instrumen': baru, 'hasil': hasil}

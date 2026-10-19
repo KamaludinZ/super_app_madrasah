@@ -19,6 +19,7 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
     pkg_audit_log  lihat pkg_audit.py
     pkg_unduhan    {id, jenis, format, periode_id, nama_berkas, aktor_id, aktor_nama, timestamp}
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
+    pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
 
 Integritas dijaga index: hanya satu periode 'berjalan', satu SK aktif per periode, nomor SK unik,
 satu penugasan per penilai per periode, satu lembar penilaian per guru per SK.
@@ -40,6 +41,7 @@ KOLEKSI_PENILAIAN = 'pkg_penilaian'
 KOLEKSI_AUDIT = 'pkg_audit_log'
 KOLEKSI_UNDUHAN = 'pkg_unduhan'
 KOLEKSI_TEMPLATE = 'pkg_template'
+KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
 
 STATUS_PERIODE = ('draf', 'berjalan', 'ditutup')
 STATUS_PENILAIAN = ('draf', 'terkunci')
@@ -66,6 +68,8 @@ INDEX_PKG = [
     (KOLEKSI_UNDUHAN, [('timestamp', -1)], {'name': 'waktu'}),
     (KOLEKSI_UNDUHAN, [('aktor_id', 1), ('timestamp', -1)], {'name': 'aktor_waktu'}),
     (KOLEKSI_TEMPLATE, [('jenis', 1)], {'unique': True, 'name': 'jenis_unik'}),
+    (KOLEKSI_PRATINJAU_IMPOR, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
+    (KOLEKSI_PRATINJAU_IMPOR, [('expire_at', 1)], {'expireAfterSeconds': 0, 'name': 'ttl_expire_at'}),
 ]
 
 
@@ -395,3 +399,7 @@ class UbahSubInstrumenRequest(IsianPkg):
         if not v:
             raise ValueError('alasan perubahan wajib diisi')
         return v
+
+
+class TerapkanImporRequest(IsianPkg):
+    token: str = Field(..., pattern=POLA_ID)
