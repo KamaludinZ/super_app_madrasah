@@ -8,6 +8,7 @@ cepat (membuka beranda, penolakan akses) memakai `catat_audit_pkg_harian`: satu 
 hari per kunci, dengan `jumlah` dan `terakhir` diperbarui agar log tidak membanjir.
 Galat audit dicatat ke logger dan tidak pernah menggagalkan permintaan.
 """
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -123,19 +124,26 @@ async def catat_audit_pkg_harian(db, aksi: str, aktor: Optional[Dict[str, Any]],
 async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_template: str, format_berkas: str,
                                nama_berkas: str, versi_template: str, checksum_template: Optional[str],
                                periode_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None,
-                               request=None) -> None:
+                               request=None, jenis_dokumen: Optional[str] = None, guru_id: Optional[str] = None,
+                               mesin: Optional[str] = None, isi: Optional[bytes] = None) -> None:
     """Catat satu cetak/unduh dokumen dari template resmi: jejak audit (aksi cetak_template) dan riwayat unduhan
-    (pkg_unduhan) — siapa, kapan, template & versi/checksum yang dipakai, format, dan nama berkas hasil."""
-    meta = {'jenis_template': jenis_template, 'format': format_berkas, 'nama_berkas': nama_berkas,
-            'versi_template': versi_template, 'checksum_template': checksum_template, 'periode_id': periode_id,
+    (pkg_unduhan) — siapa, kapan, dokumen & guru, template & versi/checksum, mesin cetak, format, nama, ukuran, dan
+    SHA-256 berkas hasil (bukti isi yang diunduh)."""
+    checksum_berkas = hashlib.sha256(isi).hexdigest() if isi is not None else None
+    meta = {'jenis_dokumen': jenis_dokumen or jenis_template, 'jenis_template': jenis_template, 'format': format_berkas,
+            'nama_berkas': nama_berkas, 'versi_template': versi_template, 'checksum_template': checksum_template,
+            'periode_id': periode_id, 'guru_id': guru_id, 'mesin': mesin, 'checksum_berkas': checksum_berkas,
             **(metadata or {})}
     await catat_audit_pkg(db, AKSI_CETAK_TEMPLATE, aktor, meta, request=request)
     try:
         dasar = _dasar(AKSI_CETAK_TEMPLATE, aktor, meta, None, request)
         await db[KOLEKSI_UNDUHAN].insert_one({
-            'id': dasar['id'], 'jenis': jenis_template, 'format': format_berkas, 'periode_id': periode_id,
-            'nama_berkas': nama_berkas, 'versi_template': versi_template, 'checksum_template': checksum_template,
-            'aktor_id': dasar['aktor_id'], 'aktor_nama': dasar['aktor_nama'], 'timestamp': dasar['timestamp'],
+            'id': dasar['id'], 'jenis': jenis_dokumen or jenis_template, 'jenis_template': jenis_template,
+            'format': format_berkas, 'mesin': mesin, 'periode_id': periode_id, 'guru_id': guru_id,
+            'nama_berkas': nama_berkas, 'ukuran': len(isi) if isi is not None else None, 'checksum_berkas': checksum_berkas,
+            'versi_template': versi_template, 'checksum_template': checksum_template,
+            'aktor_id': dasar['aktor_id'], 'aktor_nama': dasar['aktor_nama'], 'aktor_peran': dasar['aktor_peran'],
+            'ip_address': dasar['ip_address'], 'timestamp': dasar['timestamp'],
         })
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg_audit] gagal mencatat riwayat unduhan: {e}")

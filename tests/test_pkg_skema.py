@@ -79,3 +79,13 @@ def test_validasi_isian_penilaian():
     with pytest.raises(ValidationError):
         skema.DrafPenilaianRequest(guru_id='g 1')
     assert isinstance(skema.KirimPenilaianRequest(guru_id='g1'), skema.DrafPenilaianRequest)
+
+
+def test_validasi_cetak_request():
+    ok = skema.CetakRequest(jenis='guru', format='PDF', guru_id='g1', periode_id='p1')
+    assert (ok.format, ok.guru_id) == ('pdf', 'g1')
+    assert skema.CetakRequest(jenis='rekap', format='xlsx').periode_id is None
+    for isian in ({'jenis': 'guru', 'format': 'pdf'}, {'jenis': 'lain', 'format': 'pdf'}, {'jenis': 'rekap', 'format': 'docx'},
+                  {'jenis': 'rekap', 'format': 'pdf', 'periode_id': 'p 1'}, {'jenis': 'rekap', 'format': 'pdf', 'liar': 1}):
+        with pytest.raises(ValidationError):
+            skema.CetakRequest(**isian)

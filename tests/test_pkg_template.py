@@ -229,3 +229,20 @@ def test_struktur_cetak_berubah_terdeteksi(tmp_path, monkeypatch, caplog):
         pkg_template.periksa_template()
     assert b['status'] == 'berbeda' and b['struktur_cetak_salah']
     assert 'Tata letak berkas template rekap_hasil_pkg_v2026.xlsx berubah' in caplog.text
+
+
+def test_riwayat_unduhan_lengkap():
+    import asyncio
+    import hashlib
+    import pkg_audit
+    from tests.pkg_palsu import Db, Request
+    d = Db()
+    isi = b'%PDF-1.7 isi'
+    asyncio.run(pkg_audit.catat_cetak_template(
+        d, {'id': 'pen', 'full_name': 'Penilai', 'active_role': 'guru'}, 'instrumen', 'pdf', 'Laporan_PKG_Budi.pdf', '2026',
+        'abc', periode_id='p1', request=Request('/pkg/cetak'), jenis_dokumen='guru', guru_id='g1', mesin='reportlab', isi=isi))
+    u = d['pkg_unduhan'].docs[0]
+    assert (u['jenis'], u['jenis_template'], u['guru_id'], u['mesin'], u['ukuran']) == ('guru', 'instrumen', 'g1', 'reportlab', len(isi))
+    assert u['checksum_berkas'] == hashlib.sha256(isi).hexdigest() and u['aktor_peran'] == 'guru' and u['ip_address'] == '10.0.0.1'
+    meta = d['pkg_audit_log'].docs[0]['metadata']
+    assert meta['mesin'] == 'reportlab' and meta['jenis_dokumen'] == 'guru' and meta['checksum_berkas'] == u['checksum_berkas']

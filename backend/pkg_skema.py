@@ -22,7 +22,10 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                    Satu lembar per guru per SK; lembar terkunci tidak dapat diubah.
     Tugas penilaian = pkg_penugasan.guru_dinilai_ids milik penilai pada periode berjalan (lihat pkg_beranda).
     pkg_audit_log  lihat pkg_audit.py
-    pkg_unduhan    {id, jenis, format, periode_id, nama_berkas, aktor_id, aktor_nama, timestamp}
+    pkg_unduhan    {id, jenis ('rekap' | 'guru'), jenis_template, format ('xlsx' | 'pdf'), mesin ('openpyxl' |
+                    'libreoffice' | 'reportlab'), periode_id, guru_id, nama_berkas, ukuran, checksum_berkas (SHA-256 hasil),
+                    versi_template, checksum_template, aktor_id, aktor_nama, aktor_peran, ip_address, timestamp}
+                   Riwayat unduhan & cetak dokumen resmi (pasangan jejak audit aksi cetak_template).
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
     pkg_rekap      {id (= penilaian_id), periode_id, sk_id, guru_id, penilai_id, nama, nip, mapel, penilai_nama,
@@ -80,6 +83,9 @@ INDEX_PKG = [
     (KOLEKSI_PENILAIAN, [('instrumen_id', 1)], {'name': 'instrumen'}),
     (KOLEKSI_UNDUHAN, [('timestamp', -1)], {'name': 'waktu'}),
     (KOLEKSI_UNDUHAN, [('aktor_id', 1), ('timestamp', -1)], {'name': 'aktor_waktu'}),
+    (KOLEKSI_UNDUHAN, [('periode_id', 1), ('timestamp', -1)], {'name': 'periode_waktu'}),
+    (KOLEKSI_UNDUHAN, [('guru_id', 1), ('timestamp', -1)], {'name': 'guru_waktu'}),
+    (KOLEKSI_AUDIT, [('aksi', 1), ('timestamp', -1)], {'name': 'aksi_waktu'}),
     (KOLEKSI_TEMPLATE, [('jenis', 1)], {'unique': True, 'name': 'jenis_unik'}),
     (KOLEKSI_REKAP, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_REKAP, [('periode_id', 1), ('capaian_persen', -1)], {'name': 'periode_capaian'}),
@@ -483,3 +489,38 @@ class DrafPenilaianRequest(IsianPkg):
 
 class KirimPenilaianRequest(DrafPenilaianRequest):
     """Kirim & kunci lembar: isian terakhir ikut dikirim dan divalidasi kelengkapannya di server."""
+
+
+# ---------------------------------------------------------------- cetak dokumen
+
+JENIS_DOKUMEN = ('rekap', 'guru')
+FORMAT_CETAK = ('xlsx', 'pdf')
+
+
+class CetakRequest(IsianPkg):
+    """Permintaan cetak dokumen resmi: rekap seluruh guru dalam cakupan, atau laporan satu guru."""
+    jenis: str
+    format: str
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    guru_id: Optional[str] = Field(None, pattern=POLA_ID)
+
+    @field_validator('jenis')
+    @classmethod
+    def _jenis(cls, v):
+        if v not in JENIS_DOKUMEN:
+            raise ValueError("jenis harus 'rekap' atau 'guru'")
+        return v
+
+    @field_validator('format')
+    @classmethod
+    def _format(cls, v):
+        v = (v or '').lower()
+        if v not in FORMAT_CETAK:
+            raise ValueError("format harus 'xlsx' atau 'pdf'")
+        return v
+
+    @model_validator(mode='after')
+    def _guru_wajib(self):
+        if self.jenis == 'guru' and not self.guru_id:
+            raise ValueError('guru_id wajib untuk laporan per guru')
+        return self
