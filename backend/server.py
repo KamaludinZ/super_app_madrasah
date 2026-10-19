@@ -48,6 +48,7 @@ from routers import (
     pkg_instrumen_api,
     pkg_kelola,
     pkg_penilaian_api,
+    pkg_rekap_api,
     promotions,
     public,
     push,
@@ -143,6 +144,7 @@ api_router.include_router(pkg.router)
 api_router.include_router(pkg_kelola.router)
 api_router.include_router(pkg_instrumen_api.router)
 api_router.include_router(pkg_penilaian_api.router)
+api_router.include_router(pkg_rekap_api.router)
 api_router.include_router(mobile.router)
 
 api_router.include_router(kelas_digital.router)

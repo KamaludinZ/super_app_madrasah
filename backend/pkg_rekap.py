@@ -176,3 +176,65 @@ async def agregasi_rekap(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any
         'statistik': statistik,
         'guru': baris,
     }
+
+
+# ---------------------------------------------------------------- periode, cakupan, rincian per guru
+
+async def periode_dan_sk(db, periode_id: Optional[str]) -> tuple:
+    """(periode, sk) untuk rekap: periode terpilih atau periode berjalan; SK aktif periode itu (bila ada).
+    HTTP 404 bila periode tidak ditemukan/tidak ada periode berjalan."""
+    from fastapi import HTTPException
+    from pkg_skema import KOLEKSI_PERIODE
+    if periode_id:
+        periode = await db[KOLEKSI_PERIODE].find_one({'id': periode_id}, {'_id': 0})
+    else:
+        periode = await db[KOLEKSI_PERIODE].find_one({'status': 'berjalan'}, {'_id': 0})
+    if not periode:
+        raise HTTPException(404, 'Periode PKG tidak ditemukan.')
+    sk = await db[KOLEKSI_SK].find_one({'periode_id': periode['id'], 'is_active': True}, {'_id': 0})
+    return periode, sk
+
+
+async def cakupan_rekap(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], periode: Dict[str, Any]) -> Dict[str, Any]:
+    """Cakupan data rekap pengguna pada periode:
+       kepala  -> {'cakupan': 'semua', 'guru': None}
+       penilai -> {'cakupan': 'penilai', 'guru': guru yang dibagikan/dinilainya + dirinya (bila juga dinilai)}
+       lainnya -> {'cakupan': 'pribadi', 'guru': {dirinya}}  (hanya lembar terkunci)."""
+    if keanggotaan.get('peran') == 'kepala':
+        return {'cakupan': 'semua', 'guru': None, 'diri': user['id']}
+    from pkg_skema import KOLEKSI_PENUGASAN
+    tugas = await db[KOLEKSI_PENUGASAN].find_one({'periode_id': periode['id'], 'penilai_id': user['id']}, {'_id': 0}) or {}
+    dinilai_olehnya = {d['guru_dinilai_id'] for d in await db[KOLEKSI_PENILAIAN].find(
+        {'periode_id': periode['id'], 'penilai_id': user['id']}, {'_id': 0, 'guru_dinilai_id': 1}).to_list(1000)}
+    guru = set(tugas.get('guru_dinilai_ids') or []) | dinilai_olehnya
+    if guru:
+        return {'cakupan': 'penilai', 'guru': guru | {user['id']}, 'diri': user['id']}
+    return {'cakupan': 'pribadi', 'guru': {user['id']}, 'diri': user['id']}
+
+
+def boleh_lihat_guru(cakupan: Dict[str, Any], guru_id: str, terkunci: bool) -> bool:
+    """Hasil diri sendiri hanya tampil setelah dikunci; guru lain hanya dalam cakupan."""
+    if guru_id == cakupan['diri'] and cakupan['cakupan'] != 'semua':
+        return terkunci
+    return cakupan['guru'] is None or guru_id in cakupan['guru']
+
+
+async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str) -> Optional[Dict[str, Any]]:
+    """Rincian rekap satu guru (kontrak frontend lib/pkgRekap.ambilRekapGuru); None bila guru tidak ada di periode."""
+    agregat = await agregasi_rekap(db, periode, sk, saring_guru={guru_id})
+    if not agregat['guru']:
+        return None
+    b = agregat['guru'][0]
+    lembar = await db[KOLEKSI_PENILAIAN].find_one({'periode_id': periode['id'], 'guru_dinilai_id': guru_id, 'status': 'terkunci'}, {'_id': 0}) \
+        if b['status'] == 'terkunci' else None
+    instrumen = await db[KOLEKSI_INSTRUMEN].find_one({'id': (lembar or {}).get('instrumen_id')}, {'_id': 0}) if lembar else None
+    return {
+        'periode': {k: periode.get(k) for k in ('id', 'nama_periode', 'tahun_pelajaran', 'semester', 'status')},
+        'guru': {'id': guru_id, 'nama': b['nama'], 'nip': b['nip'], 'mapel': b['mapel']},
+        'penilai_nama': b['penilai_nama'],
+        'status': b['status'],
+        'hasil': {k: b.get(k) for k in KUNCI_NILAI} if b['status'] == 'terkunci' else None,
+        'catatan_umum': (lembar or {}).get('catatan_umum') or '',
+        'instrumen': {k: instrumen.get(k) for k in ('id', 'versi_template', 'revisi', 'kompetensi')} if instrumen else None,
+        'isian': (lembar or {}).get('isian') or {},
+    }
