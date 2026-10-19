@@ -204,3 +204,28 @@ def test_sheet_wajib_template(tmp_path, monkeypatch, caplog):
     assert hasil['instrumen']['sheet_hilang'] == ['KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG']
     assert hasil['rekap']['sheet_hilang'] is None
     assert 'tidak memuat sheet wajib' in caplog.text
+
+
+def test_peta_cetak_cocok_dengan_template_resmi():
+    assert pkg_template.periksa_struktur_cetak('rekap') == []
+    assert pkg_template.periksa_struktur_cetak('instrumen') == []
+    assert pkg_template.info_berkas('rekap')['struktur_cetak_salah'] == []
+
+
+def test_struktur_cetak_berubah_terdeteksi(tmp_path, monkeypatch, caplog):
+    from openpyxl import load_workbook
+    wb = load_workbook(pkg_template.path_template('rekap'))
+    wb['Rekap hasil PKG']['F5'] = 'Kolom lain'
+    wb['Rekap hasil PKG'].insert_rows(3)  # geser seluruh tata letak
+    import io as _io
+    buf = _io.BytesIO()
+    wb.save(buf)
+    salah = pkg_template.periksa_struktur_cetak('rekap', buf.getvalue())
+    assert salah and any('A5' in x for x in salah)
+    monkeypatch.setattr(pkg_template, 'FOLDER_TEMPLATE', str(tmp_path))
+    (tmp_path / 'rekap_hasil_pkg_v2026.xlsx').write_bytes(buf.getvalue())
+    with caplog.at_level(logging.WARNING, logger='matsandatama'):
+        b = pkg_template.info_berkas('rekap')
+        pkg_template.periksa_template()
+    assert b['status'] == 'berbeda' and b['struktur_cetak_salah']
+    assert 'Tata letak berkas template rekap_hasil_pkg_v2026.xlsx berubah' in caplog.text

@@ -66,6 +66,67 @@ def hitung_checksum(path: str) -> Optional[str]:
 # Sheet kompetensi di template instrumen, berurutan sesuai kode kompetensi 1–4.
 SHEET_KOMPETENSI = TEMPLATE_PKG['instrumen']['sheet_wajib'][:4]
 
+# Peta sel pengisian cetak (posisi tetap pada template resmi v2026; diverifikasi lewat label jangkar).
+#   rekap     : satu baris per guru mulai baris 6 (template menyediakan 10 baris; baris ditambah bila perlu),
+#               kolom F = Nilai Kompetensi Guru (capaian %), G = predikat skala rekap (rumus di template).
+#   instrumen : laporan per guru — identitas di '00-DATA', centang indikator 'v' di kolom B sheet KOMP-n
+#               (sub ke-1/2/3 mulai baris 7/20/33, Level 1–5 berurutan); hasil dihitung rumus 04-RKAP-PKG.
+PETA_CETAK = {
+    'rekap': {
+        'sheet': 'Rekap hasil PKG', 'judul': 'A1', 'subjudul': 'A2', 'baris_awal': 6, 'baris_tersedia': 10,
+        'kolom': {'no': 'A', 'nama': 'B', 'pangkat': 'C', 'mapel': 'D', 'tugas_tambahan': 'E', 'nkg': 'F', 'predikat': 'G',
+                  'rekomendasi': 'H'},
+        'baris_jumlah': 16, 'baris_rata': 17, 'tempat_tanggal': 'G19', 'nama_kepala': 'G24',
+        'jangkar': {'A5': 'No', 'B5': 'Nama Guru', 'F5': 'Nilai Kompetensi Guru', 'G5': 'Predikat', 'A16': 'Jumlah',
+                    'A17': 'Rata', 'G20': 'Kepala'},
+    },
+    'instrumen': {
+        'sheet_rekap': '04-RKAP-PKG', 'sheet_data': '00-DATA',
+        'data': {'nama_guru': 'E5', 'nip_guru': 'E6', 'tahun': 'E15', 'nama_kepala': 'E17', 'nip_kepala': 'E18',
+                 'nama_sekolah': 'E26', 'penilai': 'E33', 'nip_penilai': 'E34', 'nomor_sk': 'E36', 'tanggal_sk': 'E37',
+                 'periode_awal': 'C41', 'periode_akhir': 'E41', 'tanggal_nilai': 'H41'},
+        'kolom_centang': 'B', 'baris_sub': (7, 20, 33),
+        'jangkar': {('00-DATA', 'C5'): 'Nama Guru', ('00-DATA', 'C33'): 'Penilai', ('00-DATA', 'C17'): 'Nama Kepsek',
+                    ('04-RKAP-PKG', 'B44'): 'Jumlah', ('04-RKAP-PKG', 'B45'): 'Cap. Tingkat Kompetensi'},
+    },
+}
+
+
+def _jangkar_instrumen() -> Dict[tuple, str]:
+    """Jangkar kode indikator 'L.M' pada kolom C tiap sheet kompetensi (baris pertama & terakhir tiap sub)."""
+    peta = PETA_CETAK['instrumen']
+    hasil = dict(peta['jangkar'])
+    for sheet in SHEET_KOMPETENSI:
+        for urutan, baris in enumerate(peta['baris_sub'], 1):
+            hasil[(sheet, f'C{baris}')] = f'1.{urutan}'
+            hasil[(sheet, f'C{baris + 4}')] = f'5.{urutan}'
+    return hasil
+
+
+def periksa_struktur_cetak(jenis: str, isi: Optional[bytes] = None) -> list:
+    """Label jangkar yang tidak cocok pada template `jenis` (kosong = peta sel cetak masih berlaku)."""
+    try:
+        wb = load_workbook(io.BytesIO(isi if isi is not None else baca_bytes_template(jenis)), read_only=True)
+    except Exception as e:  # noqa: BLE001
+        return [f'berkas tidak dapat dibuka: {e}']
+    salah = []
+    try:
+        if jenis == 'rekap':
+            peta = PETA_CETAK['rekap']
+            jangkar = {(peta['sheet'], sel): label for sel, label in peta['jangkar'].items()}
+        else:
+            jangkar = _jangkar_instrumen()
+        for (sheet, sel), label in jangkar.items():
+            if sheet not in wb.sheetnames:
+                salah.append(f'{sheet} tidak ada')
+                continue
+            nilai = str(wb[sheet][sel].value or '').strip()
+            if not nilai.lower().startswith(label.lower()):
+                salah.append(f'{sheet}!{sel} = "{nilai[:30]}" (seharusnya diawali "{label}")')
+    finally:
+        wb.close()
+    return salah
+
 
 def sheet_hilang(jenis: str) -> Optional[list]:
     """Sheet wajib yang tidak ada di berkas template; None bila berkas tidak dapat dibuka."""
@@ -85,14 +146,16 @@ def info_berkas(jenis: str) -> Dict[str, Any]:
     path = path_template(jenis)
     checksum = hitung_checksum(path)
     status = 'hilang' if checksum is None else 'cocok' if checksum == info['checksum_resmi'] else 'berbeda'
-    # Isi yang cocok checksum resmi pasti memuat semua sheet; berkas berbeda diperiksa strukturnya.
+    # Isi yang cocok checksum resmi pasti memuat semua sheet & sel cetak; berkas berbeda diperiksa strukturnya.
     hilang = [] if status == 'cocok' else (sheet_hilang(jenis) if checksum is not None else None)
+    struktur = [] if status == 'cocok' else (periksa_struktur_cetak(jenis) if checksum is not None and not hilang else None)
     return {
         'jenis': jenis, 'nama_berkas': info['nama_berkas'], 'judul': info['judul'], 'versi': info['versi'],
         'ukuran': os.path.getsize(path) if checksum is not None else None,
         'checksum': checksum, 'checksum_resmi': info['checksum_resmi'], 'status': status,
         'ada': checksum is not None,
         'sheet_hilang': hilang,
+        'struktur_cetak_salah': struktur,
     }
 
 
@@ -107,6 +170,9 @@ def periksa_template() -> Dict[str, Any]:
         elif b['status'] == 'berbeda':
             logger.warning(f"[pkg] Checksum berkas template {b['nama_berkas']} berbeda dari checksum resmi "
                            f"v{b['versi']}; cetak dokumen resmi dapat tidak sesuai.")
+            if b['struktur_cetak_salah']:
+                logger.warning(f"[pkg] Tata letak berkas template {b['nama_berkas']} berubah; cetak dapat mengisi sel yang "
+                               f"salah: {'; '.join(b['struktur_cetak_salah'][:3])}")
             if b['sheet_hilang'] is None or b['sheet_hilang']:
                 logger.warning(f"[pkg] Berkas template {b['nama_berkas']} tidak memuat sheet wajib: "
                                f"{b['sheet_hilang'] if b['sheet_hilang'] is not None else 'berkas tidak dapat dibuka'}.")
