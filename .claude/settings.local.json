@@ -51,7 +51,11 @@
       "Bash(routers/kelas_digital.py)",
       "Skill(impeccable)",
       "Bash(C:UsersMTsN 2 KOTA MALANG.claudeskillsimpeccablescriptsimpeccable.cmd context)",
-      "Bash(\"C:\\Users\\MTsN 2 KOTA MALANG\\.claude\\skills\\impeccable\\scripts\\impeccable.cmd\" context)"
+      "Bash(\"C:\\Users\\MTsN 2 KOTA MALANG\\.claude\\skills\\impeccable\\scripts\\impeccable.cmd\" context)",
+      "PowerShell(npx ngodingpakeai *)",
+      "PowerShell(npx -y ngodingpakeai *)",
+      "Bash(npx ngodingpakeai *)",
+      "Bash(npx -y ngodingpakeai *)"
     ],
     "deny": [],
     "ask": []

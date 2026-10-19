@@ -7,8 +7,19 @@
 # *.snap
 # fixtures/
 
-# Artefak hasil generate (bukan kode sumber)
+# Artefak hasil generate, cache tooling, backup, dan hasil test (bukan kode sumber)
 .pytest_cache/
 test_reports/
+testsprite_tests/tmp/
 .emergent/
 .gradle/
+.impeccable/
+**/.impeccable/
+*.backup
+frontend/package-lock.json
+openapi.json
+**/.gitkeep
+
+# Cache lokal Expo (berisi status dev server, bukan kode)
+mobile/.expo/
+mobile/yarn.lock
