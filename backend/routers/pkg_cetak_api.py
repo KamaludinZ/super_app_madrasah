@@ -9,17 +9,18 @@ from datetime import date
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from core import db, get_current_user, logger
 from pkg_akses import keanggotaan_sk, tolak
-from pkg_audit import catat_cetak_template
+from pkg_penjaga import penjaga_pkg
+from pkg_audit import URUT_UNDUHAN, catat_cetak_template, daftar_unduhan
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
 from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, periode_dan_sk
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, CetakRequest
+from pkg_skema import JENIS_DOKUMEN, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, POLA_ID, CetakRequest
 from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, info_template, nama_berkas_cetak
 
 router = APIRouter()
@@ -147,3 +148,43 @@ async def cetak_pdf_api(data: CetakRequest, request: Request, user: Dict = Depen
     """Unduh PDF (format pada badan permintaan diabaikan). Header X-PKG-Mesin: libreoffice | reportlab; untuk cadangan
     ditambah X-PKG-Cadangan berisi alasannya. Ketersediaan alat dapat dicek lebih dulu lewat GET /pkg/cetak/kemampuan."""
     return await cetak_api(data.model_copy(update={'format': 'pdf'}), request, user)
+
+
+POLA_TANGGAL = r'^\d{4}-\d{2}-\d{2}$'
+
+
+@router.get("/pkg/cetak/unduhan")
+async def daftar_unduhan_api(
+    periode_id: Optional[str] = Query(None, pattern=POLA_ID),
+    jenis: Optional[str] = Query(None, pattern='^(' + '|'.join(JENIS_DOKUMEN) + ')$'),
+    format: Optional[str] = Query(None, pattern='^(xlsx|pdf)$'),
+    mesin: Optional[str] = Query(None, pattern='^(openpyxl|libreoffice|reportlab)$'),
+    guru_id: Optional[str] = Query(None, pattern=POLA_ID),
+    aktor_id: Optional[str] = Query(None, pattern=POLA_ID),
+    dari: Optional[str] = Query(None, pattern=POLA_TANGGAL),
+    sampai: Optional[str] = Query(None, pattern=POLA_TANGGAL),
+    cari: Optional[str] = Query(None, max_length=100),
+    urut: str = Query('timestamp', pattern='^(' + '|'.join(URUT_UNDUHAN) + ')$'),
+    arah: str = Query('desc', pattern='^(asc|desc)$'),
+    halaman: int = Query(1, ge=1, le=10000),
+    per_halaman: int = Query(25, ge=1, le=100),
+    akses: Dict = Depends(penjaga_pkg('anggota')),
+):
+    """Riwayat unduhan dokumen resmi berhalaman: saring periode/jenis/format/mesin/guru/pengunduh/rentang tanggal (WIB)
+    & cari nama berkas/pengunduh; urut per kolom. Kepala madrasah melihat semua unduhan; penilai hanya unduhannya
+    sendiri (aktor_id dipaksa); selain itu 403. Hasil {item, total, halaman, per_halaman, urut, arah}."""
+    user, k = akses['user'], akses['keanggotaan']
+    if k.get('peran') != 'kepala':
+        if not k.get('sebagai_penilai'):
+            raise tolak('bukan_penilai', 'Riwayat unduhan hanya untuk kepala madrasah dan tim penilai.')
+        aktor_id = user['id']
+    try:
+        for tanggal in filter(None, (dari, sampai)):
+            date.fromisoformat(tanggal)
+    except ValueError as e:
+        raise HTTPException(422, 'Tanggal saringan tidak valid.') from e
+    if dari and sampai and dari > sampai:
+        raise HTTPException(422, 'Tanggal awal melewati tanggal akhir.')
+    return await daftar_unduhan(db, periode_id=periode_id, jenis=jenis, format_berkas=format, mesin=mesin,
+                                guru_id=guru_id, aktor_id=aktor_id, dari=dari, sampai=sampai, cari=cari, urut=urut,
+                                arah=arah, halaman=halaman, per_halaman=per_halaman)

@@ -152,3 +152,44 @@ def test_cetak_pdf_konversi_gagal_pakai_cadangan(klien, monkeypatch):
     assert r.status_code == 200 and r.headers['x-pkg-mesin'] == 'reportlab' and r.headers['x-pkg-cadangan'] == 'konversi_gagal'
     r = k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'xlsx'})
     assert 'x-pkg-cadangan' not in r.headers and r.headers['x-pkg-mesin'] == 'openpyxl'
+
+
+def test_daftar_unduhan_saring_urut_halaman(klien, monkeypatch):
+    import pkg_penjaga
+    k, d, pengguna = klien
+    monkeypatch.setattr(pkg_penjaga, 'db', d)
+    contoh = [
+        ('u1', 'rekap', 'xlsx', 'openpyxl', None, 'kep', 'Kepala', 'Rekap_A.xlsx', 900, '2026-10-17T16:59:00+00:00'),  # 17 Okt WIB
+        ('u2', 'rekap', 'pdf', 'reportlab', None, 'kep', 'Kepala', 'Rekap_B.pdf', 300, '2026-10-17T17:00:00+00:00'),  # 18 Okt WIB
+        ('u3', 'guru', 'pdf', 'libreoffice', 'g1', 'pen', 'Penilai Satu', 'Laporan_g1.pdf', 500, '2026-10-18T05:00:00+00:00'),
+        ('u4', 'guru', 'xlsx', 'openpyxl', 'g2', 'pen', 'Penilai Satu', 'Laporan_g2.xlsx', 700, '2026-10-19T01:00:00+00:00'),
+    ]
+    d['pkg_unduhan'].docs = [dict(zip(('id', 'jenis', 'format', 'mesin', 'guru_id', 'aktor_id', 'aktor_nama', 'nama_berkas',
+                                       'ukuran', 'timestamp'), c), periode_id='p1') for c in contoh]
+    ambil = lambda **p: k.get('/api/pkg/cetak/unduhan', params=p)  # noqa: E731
+    ids = lambda r: [u['id'] for u in r.json()['item']]  # noqa: E731
+
+    r = ambil()
+    assert r.status_code == 200 and ids(r) == ['u4', 'u3', 'u2', 'u1'] and r.json()['total'] == 4
+    assert ids(ambil(urut='ukuran', arah='asc')) == ['u2', 'u3', 'u4', 'u1']
+    assert ids(ambil(urut='nama_berkas', arah='asc')) == ['u3', 'u4', 'u1', 'u2']
+    halaman2 = ambil(per_halaman=3, halaman=2).json()
+    assert [u['id'] for u in halaman2['item']] == ['u1'] and halaman2['total'] == 4 and halaman2['halaman'] == 2
+    assert ids(ambil(format='pdf')) == ['u3', 'u2'] and ids(ambil(jenis='guru', mesin='openpyxl')) == ['u4']
+    assert ids(ambil(guru_id='g1')) == ['u3'] and ids(ambil(aktor_id='kep')) == ['u2', 'u1']
+    # Rentang tanggal memakai tanggal WIB (inklusif).
+    assert ids(ambil(dari='2026-10-18', sampai='2026-10-18')) == ['u3', 'u2']
+    assert ids(ambil(sampai='2026-10-17')) == ['u1'] and ids(ambil(dari='2026-10-19')) == ['u4']
+    # Pencarian tanpa beda huruf, karakter regex aman.
+    assert ids(ambil(cari='penilai')) == ['u4', 'u3'] and ids(ambil(cari='rekap_b')) == ['u2'] and ids(ambil(cari='.*')) == []
+
+    for salah in ({'urut': 'ip_address'}, {'arah': 'naik'}, {'format': 'docx'}, {'per_halaman': 500}, {'halaman': 0},
+                  {'dari': '2026-13-01'}, {'dari': '2026-10-19', 'sampai': '2026-10-18'}, {'periode_id': 'x y'}):
+        assert ambil(**salah).status_code == 422, salah
+
+    # Penilai hanya melihat unduhannya sendiri walau meminta aktor lain; guru biasa ditolak.
+    pengguna['user'] = {'id': 'pen', 'roles': ['guru'], 'full_name': 'Penilai Satu'}
+    assert ids(ambil()) == ['u4', 'u3'] and ids(ambil(aktor_id='kep')) == ['u4', 'u3']
+    pengguna['user'] = {'id': 'g1', 'roles': ['guru'], 'full_name': 'Guru g1'}
+    r = ambil()
+    assert r.status_code == 403 and r.json()['detail']['alasan'] == 'bukan_penilai'

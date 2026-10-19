@@ -1,11 +1,27 @@
 """Basis data tiruan (dalam memori) untuk uji modul PKG: subset operasi Motor yang dipakai service PKG."""
 
 import asyncio
+import re
 
 
 class Cursor:
     def __init__(self, docs):
         self.docs = docs
+
+    def sort(self, kunci, arah=1):
+        urutan = kunci if isinstance(kunci, list) else [(kunci, arah)]
+        for k, a in reversed(urutan):  # sort stabil: kunci terakhir dulu
+            self.docs = sorted(self.docs, key=lambda d: (d.get(k) is not None, d.get(k) if d.get(k) is not None else ''),
+                               reverse=a == -1)
+        return self
+
+    def skip(self, n):
+        self.docs = self.docs[n:]
+        return self
+
+    def limit(self, n):
+        self.docs = self.docs[:n] if n else self.docs
+        return self
 
     async def to_list(self, _n):
         return [dict(d) for d in self.docs]
@@ -19,6 +35,12 @@ def cocok_nilai(nilai, syarat):
             if op == '$ne' and nilai == arg:
                 return False
             if op == '$exists' and (nilai is not None) != arg:
+                return False
+            if op in ('$gte', '$gt', '$lte', '$lt') and (nilai is None or not {
+                    '$gte': nilai >= arg, '$gt': nilai > arg, '$lte': nilai <= arg, '$lt': nilai < arg}[op]):
+                return False
+            if op == '$regex' and not (isinstance(nilai, str) and re.search(
+                    arg, nilai, re.IGNORECASE if 'i' in syarat.get('$options', '') else 0)):
                 return False
         return True
     if isinstance(nilai, list):  # field array cocok bila memuat nilai (seperti MongoDB)

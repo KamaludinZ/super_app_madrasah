@@ -10,8 +10,9 @@ Galat audit dicatat ke logger dan tidak pernah menggagalkan permintaan.
 """
 import hashlib
 import logging
+import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from pkg_skema import KOLEKSI_AUDIT, KOLEKSI_UNDUHAN
@@ -147,3 +148,56 @@ async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_templa
         })
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg_audit] gagal mencatat riwayat unduhan: {e}")
+
+
+# ---------------------------------------------------------------- daftar berhalaman (riwayat unduhan & jejak audit)
+
+def saring_waktu_wib(dari: Optional[str], sampai: Optional[str]) -> Dict[str, str]:
+    """Syarat Mongo untuk field `timestamp` (UTC ISO) dari rentang tanggal WIB 'YYYY-MM-DD' (keduanya inklusif)."""
+    syarat = {}
+    if dari:
+        syarat['$gte'] = datetime.combine(date.fromisoformat(dari), time.min, WIB).astimezone(timezone.utc).isoformat()
+    if sampai:
+        akhir = datetime.combine(date.fromisoformat(sampai) + timedelta(days=1), time.min, WIB)
+        syarat['$lt'] = akhir.astimezone(timezone.utc).isoformat()
+    return syarat
+
+
+def syarat_cari(teks: Optional[str], field: tuple) -> Optional[Dict[str, Any]]:
+    """Syarat $or pencarian teks (tanpa beda huruf besar/kecil, karakter regex di-escape) atas beberapa field."""
+    teks = (teks or '').strip()
+    if not teks:
+        return None
+    pola = re.escape(teks)
+    return {'$or': [{f: {'$regex': pola, '$options': 'i'}} for f in field]}
+
+
+async def daftar_berhalaman(db, koleksi: str, q: Dict[str, Any], urut: str = 'timestamp', arah: str = 'desc',
+                            halaman: int = 1, per_halaman: int = 25) -> Dict[str, Any]:
+    """{item, total, halaman, per_halaman, urut, arah} dari koleksi; urutan kedua selalu timestamp lalu id agar stabil."""
+    total = await db[koleksi].count_documents(q)
+    a = -1 if arah == 'desc' else 1
+    kunci = [(urut, a)] + ([('timestamp', -1)] if urut != 'timestamp' else []) + [('id', 1)]
+    item = await db[koleksi].find(q, {'_id': 0}).sort(kunci).skip((halaman - 1) * per_halaman).limit(per_halaman) \
+        .to_list(per_halaman)
+    return {'item': item, 'total': total, 'halaman': halaman, 'per_halaman': per_halaman, 'urut': urut, 'arah': arah}
+
+
+URUT_UNDUHAN = ('timestamp', 'nama_berkas', 'ukuran', 'aktor_nama', 'format', 'jenis', 'mesin')
+
+
+async def daftar_unduhan(db, *, periode_id: Optional[str] = None, jenis: Optional[str] = None,
+                         format_berkas: Optional[str] = None, mesin: Optional[str] = None, guru_id: Optional[str] = None,
+                         aktor_id: Optional[str] = None, dari: Optional[str] = None, sampai: Optional[str] = None,
+                         cari: Optional[str] = None, urut: str = 'timestamp', arah: str = 'desc', halaman: int = 1,
+                         per_halaman: int = 25) -> Dict[str, Any]:
+    """Riwayat unduhan (pkg_unduhan) tersaring & terurut, berhalaman. `cari` mencocokkan nama berkas/pengunduh."""
+    q: Dict[str, Any] = {k: v for k, v in {'periode_id': periode_id, 'jenis': jenis, 'format': format_berkas,
+                                           'mesin': mesin, 'guru_id': guru_id, 'aktor_id': aktor_id}.items() if v}
+    waktu = saring_waktu_wib(dari, sampai)
+    if waktu:
+        q['timestamp'] = waktu
+    teks = syarat_cari(cari, ('nama_berkas', 'aktor_nama'))
+    if teks:
+        q.update(teks)
+    return await daftar_berhalaman(db, KOLEKSI_UNDUHAN, q, urut, arah, halaman, per_halaman)
