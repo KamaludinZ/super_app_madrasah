@@ -156,3 +156,16 @@ def test_galat_validasi_pkg_berbahasa_indonesia(monkeypatch):
     r = k.post('/api/pkg/instrumen/impor/pratinjau', data={'sumber': 'lain'})
     assert r.status_code == 422 and r.json()['detail']['galat'][0]['lokasi'] == 'sumber'
     assert isinstance(k.get('/api/lain', params={'n': 'x'}).json()['detail'], list)
+
+
+def test_katalog_aksi_frontend_sama_dengan_backend():
+    import json
+    sumber = open(os.path.join(BACKEND, '..', 'frontend', 'src', 'lib', 'pkgAudit.js'), encoding='utf-8').read()
+    blok = re.search(r'export const AKSI_PER_KATEGORI = \{(.*?)\n\};', sumber, re.S).group(1)
+    frontend = {}
+    for kategori, isi in re.findall(r'^\s*(\w+): \{(.*)\},?$', blok, re.M):
+        pasangan = re.findall(r"(\w+): '((?:[^'\\]|\\.)*)'", isi)
+        frontend[kategori] = {kode: json.loads(f'"{label}"') for kode, label in pasangan}
+    backend = {k: {a: pkg_audit.LABEL_AKSI[a] for a, kat in pkg_audit.KATEGORI_AKSI.items() if kat == k}
+               for k in pkg_audit.KATEGORI_AUDIT}
+    assert frontend == backend
