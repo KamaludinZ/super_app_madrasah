@@ -120,7 +120,7 @@ async def terapkan_pratinjau(db, token: str, kepala: Dict[str, Any]) -> Dict[str
         'kompetensi': r['kompetensi'], 'sub': r['sub'], 'indikator': r['indikator'],
         'instrumen_sebelumnya': {k: sebelumnya.get(k) for k in ('id', 'versi_template', 'revisi')} if sebelumnya else None,
     }
-    return {'instrumen': baru, 'hasil': hasil}
+    return {'instrumen': baru, 'hasil': hasil, 'sebelumnya': sebelumnya}
 
 
 async def ambil_instrumen(db, instrumen_id: str) -> Dict[str, Any]:
@@ -170,7 +170,7 @@ def daftar_kompetensi(instrumen: Dict[str, Any], kode_kompetensi: Optional[str] 
 async def ubah_sub_instrumen(db, kode: str, data: UbahSubInstrumenRequest, kepala: Dict[str, Any]) -> Dict[str, Any]:
     """Ubah satu sub-kompetensi instrumen aktif. Bila instrumen sudah dipakai lembar penilaian, perubahan disimpan
     sebagai revisi baru (instrumen lama tetap utuh untuk lembar lama); selain itu diubah langsung.
-    Hasil: {'instrumen': dok, 'sebelum': sub lama, 'sesudah': sub baru, 'revisi_baru': bool}."""
+    Hasil: {'instrumen': dok, 'sebelumnya': instrumen lama, 'sebelum': sub lama, 'sesudah': sub baru, 'revisi_baru': bool}."""
     lama = await instrumen_aktif(db)
     if not lama:
         raise HTTPException(409, 'Belum ada instrumen aktif.')
@@ -197,7 +197,7 @@ async def ubah_sub_instrumen(db, kode: str, data: UbahSubInstrumenRequest, kepal
         perubahan = {'kompetensi': kompetensi, 'cocok_resmi': False, 'alasan_perubahan': data.alasan, 'updated_at': sekarang}
         await db[KOLEKSI_INSTRUMEN].update_one({'id': lama['id']}, {'$set': perubahan})
         baru = {**lama, **perubahan}
-    return {'instrumen': baru, 'sebelum': sub_lama, 'sesudah': sub_baru, 'revisi_baru': bool(dipakai)}
+    return {'instrumen': baru, 'sebelumnya': lama, 'sebelum': sub_lama, 'sesudah': sub_baru, 'revisi_baru': bool(dipakai)}
 
 
 async def aktifkan_instrumen(db, instrumen_id: str) -> Dict[str, Any]:
@@ -249,5 +249,8 @@ async def riwayat_instrumen(db, batas: int = 100) -> List[Dict[str, Any]]:
             'instrumen_id': m.get('instrumen_id'), 'versi_template': m.get('versi_template'), 'revisi': m.get('revisi'),
             'kode_sub': m.get('kode_sub'), 'alasan': m.get('alasan'), 'perubahan': m.get('perubahan') or [],
             'sumber': m.get('sumber'), 'nama_berkas': m.get('nama_berkas'),
+            'acuan_sebelumnya': {k: (m.get('acuan_sebelumnya') or {}).get(k) for k in ('id', 'versi_template', 'revisi')}
+            if m.get('acuan_sebelumnya') else None,
+            'beda': m.get('beda'), 'lembar_versi_sebelumnya': m.get('lembar_versi_sebelumnya'),
         })
     return hasil

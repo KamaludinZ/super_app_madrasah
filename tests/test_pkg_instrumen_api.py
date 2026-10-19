@@ -71,6 +71,13 @@ def test_impor_template_resmi_lalu_revisi(db):
     assert _api(api.instrumen_aktif_api, user=GURU, syarat='anggota')['revisi'] == 2
     assert [v['revisi'] for v in _api(api.daftar_versi_api, user=GURU, syarat='anggota')] == [2, 1]
     assert [d['aksi'] for d in db['pkg_audit_log'].docs] == ['instrumen_impor', 'instrumen_impor']
+    # Acuan versi: impor pertama tanpa pendahulu; impor kedua mencatat versi sebelumnya & sidik struktur yang sama.
+    m1, m2 = (d['metadata'] for d in db['pkg_audit_log'].docs)
+    assert m1['acuan_sebelumnya'] is None and m1['beda'] is None and m1['acuan']['revisi'] == 1
+    assert m2['acuan_sebelumnya']['id'] == i1['id'] and m2['acuan']['revisi_dari'] == i1['id']
+    assert m2['acuan']['checksum_struktur'] == m2['acuan_sebelumnya']['checksum_struktur']
+    assert m2['beda'] == {'sub_ditambah': [], 'sub_dihapus': [], 'sub_diubah': []}
+    assert m2['lembar_versi_sebelumnya'] == {'draf': 0, 'terkunci': 0}
 
 
 def test_pratinjau_unggah_dan_galat(db):
@@ -140,6 +147,11 @@ def test_ubah_sub_instrumen(db):
     log = db['pkg_audit_log'].docs[-1]
     assert log['aksi'] == 'instrumen_ubah' and log['metadata']['sebelum']['nama'] != 'Nama baru'
     assert log['metadata']['sesudah']['bobot'] == 2.5 and log['metadata']['revisi_baru'] is False
+    # Diubah di tempat: id acuan sama, sidik struktur berubah, hanya sub 1.2 yang berbeda.
+    acuan, sebelum = log['metadata']['acuan'], log['metadata']['acuan_sebelumnya']
+    assert acuan['id'] == sebelum['id'] == i1['id'] and acuan['checksum_struktur'] != sebelum['checksum_struktur']
+    assert log['metadata']['beda'] == {'sub_ditambah': [], 'sub_dihapus': [], 'sub_diubah': ['1.2']}
+    assert log['metadata']['lembar_versi_sebelumnya'] is None
 
     with pytest.raises(HTTPException) as e:  # tanpa perubahan
         _api(api.ubah_sub_api, _ubah(), Request(), kode='1.2')
@@ -154,7 +166,9 @@ def test_ubah_sub_instrumen(db):
     assert baru['id'] != i1['id'] and baru['revisi'] == 2 and baru['revisi_dari'] == i1['id']
     lama = next(d for d in db['pkg_instrumen'].docs if d['id'] == i1['id'])
     assert lama['is_active'] is False and lama['kompetensi'][0]['sub'][1]['nama'] == 'Nama baru'
-    assert db['pkg_audit_log'].docs[-1]['metadata']['revisi_baru'] is True
+    meta = db['pkg_audit_log'].docs[-1]['metadata']
+    assert meta['revisi_baru'] is True and meta['acuan_sebelumnya']['id'] == i1['id'] and meta['acuan']['revisi'] == 2
+    assert meta['lembar_versi_sebelumnya'] == {'draf': 0, 'terkunci': 0}  # lembar uji tanpa status
 
     with pytest.raises(HTTPException) as e:
         _api(api.ubah_sub_api, _ubah(), Request(), kode='1.1', user=GURU)
@@ -172,8 +186,18 @@ def test_aktifkan_instrumen_acuan(db):
     assert [d['id'] for d in db['pkg_instrumen'].docs if d['is_active']] == [ids[0]]
     meta = db['pkg_audit_log'].docs[-1]['metadata']
     assert db['pkg_audit_log'].docs[-1]['aksi'] == 'instrumen_aktifkan' and meta['sebelumnya']['id'] == ids[1]
+    assert meta['acuan']['id'] == ids[0] and meta['acuan_sebelumnya']['id'] == ids[1]
 
-    for iid, kode in ((ids[0], 400), ('tidak-ada', 404)):
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'instrumen_id': ids[0], 'status': 'terkunci'},
+                                   {'id': 'n2', 'instrumen_id': ids[0], 'status': 'draf'},
+                                   {'id': 'n3', 'instrumen_id': ids[0], 'status': 'terkunci'}])
+    _api(api.aktifkan_instrumen_api, AktifkanInstrumenRequest(alasan='pakai rev 2'), Request(), instrumen_id=ids[1])
+    assert db['pkg_audit_log'].docs[-1]['metadata']['lembar_versi_sebelumnya'] == {'draf': 1, 'terkunci': 2}
+    riwayat = _api(api.riwayat_instrumen_api)
+    assert riwayat[0]['acuan_sebelumnya'] == {'id': ids[0], 'versi_template': '2026', 'revisi': 1}
+    assert riwayat[0]['lembar_versi_sebelumnya'] == {'draf': 1, 'terkunci': 2}
+
+    for iid, kode in ((ids[1], 400), ('tidak-ada', 404)):
         with pytest.raises(HTTPException) as e:
             _api(api.aktifkan_instrumen_api, AktifkanInstrumenRequest(alasan='x'), Request(), instrumen_id=iid)
         assert e.value.status_code == kode

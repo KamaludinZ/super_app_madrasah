@@ -52,3 +52,14 @@ def test_migrasi_mengisi_entri_lama_dan_idempoten():
     assert (a2['kategori'], a2['penilaian_id'], a2['waktu_urut']) == ('penilaian', 'n9', '2026-10-18T03:00:00+00:00')
     assert 'guru_id' not in a3
     assert asyncio.run(migrate_pkg_audit.migrate(d)) == {'diperiksa': 0, 'diisi': 0}
+
+
+def test_beda_dan_sidik_instrumen():
+    def ins(*sub):
+        return {'kompetensi': [{'kode': '1', 'sub': [dict(s) for s in sub]}]}
+    a = ins({'kode': '1.1', 'nama': 'A'}, {'kode': '1.2', 'nama': 'B'}, {'kode': '1.10', 'nama': 'J'})
+    b = ins({'kode': '1.1', 'nama': 'A'}, {'kode': '1.2', 'nama': 'B2'}, {'kode': '1.3', 'nama': 'C'}, {'kode': '1.11', 'nama': 'K'})
+    assert pkg_audit.beda_instrumen(a, b) == {'sub_ditambah': ['1.3', '1.11'], 'sub_dihapus': ['1.10'], 'sub_diubah': ['1.2']}
+    assert pkg_audit.checksum_struktur(a) == pkg_audit.checksum_struktur(ins(*a['kompetensi'][0]['sub']))
+    assert pkg_audit.checksum_struktur(a) != pkg_audit.checksum_struktur(b) and pkg_audit.checksum_struktur(None) is None
+    assert pkg_audit.acuan_versi(None) is None

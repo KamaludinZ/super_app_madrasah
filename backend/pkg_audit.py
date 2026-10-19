@@ -197,6 +197,57 @@ async def catat_audit_kirim(db, aktor: Optional[Dict[str, Any]], lembar: Dict[st
     await catat_audit_pkg(db, 'penilaian_kirim', aktor, meta, penilaian_id=lembar.get('id'), request=request)
 
 
+def checksum_struktur(instrumen: Optional[Dict[str, Any]]) -> Optional[str]:
+    """SHA-256 struktur instrumen (kompetensi, sub, bobot, indikator; JSON kanonis) sebagai sidik versi acuan."""
+    if not instrumen:
+        return None
+    teks = json.dumps(instrumen.get('kompetensi') or [], sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(teks.encode()).hexdigest()
+
+
+def acuan_versi(instrumen: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Identitas versi instrumen acuan: id, versi template, revisi, revisi_dari, kecocokan resmi, sidik struktur."""
+    if not instrumen:
+        return None
+    return {**{k: instrumen.get(k) for k in ('id', 'versi_template', 'revisi', 'revisi_dari', 'cocok_resmi')},
+            'checksum_struktur': checksum_struktur(instrumen)}
+
+
+def beda_instrumen(lama: Optional[Dict[str, Any]], baru: Optional[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """Kode sub-kompetensi yang ditambah, dihapus, dan diubah (nama/bobot/indikator) dari `lama` ke `baru`."""
+    def per_sub(ins):
+        return {s.get('kode'): s for k in (ins or {}).get('kompetensi') or [] for s in k.get('sub') or []}
+    a, b = per_sub(lama), per_sub(baru)
+    urut = lambda kode: [int(x) if x.isdigit() else x for x in str(kode).split('.')]  # noqa: E731
+    return {'sub_ditambah': sorted(set(b) - set(a), key=urut), 'sub_dihapus': sorted(set(a) - set(b), key=urut),
+            'sub_diubah': sorted((k for k in set(a) & set(b) if a[k] != b[k]), key=urut)}
+
+
+async def _pemakaian_lembar(db, instrumen_id: Optional[str]) -> Optional[Dict[str, int]]:
+    if not instrumen_id:
+        return None
+    from pkg_skema import KOLEKSI_PENILAIAN
+    return {status: await db[KOLEKSI_PENILAIAN].count_documents({'instrumen_id': instrumen_id, 'status': status})
+            for status in ('draf', 'terkunci')}
+
+
+async def catat_audit_instrumen(db, aksi: str, aktor: Optional[Dict[str, Any]], baru: Dict[str, Any],
+                                sebelumnya: Optional[Dict[str, Any]], metadata: Optional[Dict[str, Any]] = None,
+                                request=None) -> None:
+    """Audit perubahan instrumen & acuan versi (impor, ubah sub, penetapan acuan): versi acuan baru dan sebelumnya
+    beserta sidik strukturnya, perbedaan sub-kompetensi, serta jumlah lembar (draf/terkunci) yang tetap memakai
+    versi sebelumnya — lembar lama tidak ikut berubah."""
+    ganti_versi = bool(sebelumnya) and sebelumnya.get('id') != baru.get('id')
+    meta = {
+        'instrumen_id': baru.get('id'), 'versi_template': baru.get('versi_template'), 'revisi': baru.get('revisi'),
+        'acuan': acuan_versi(baru), 'acuan_sebelumnya': acuan_versi(sebelumnya),
+        'beda': beda_instrumen(sebelumnya, baru) if sebelumnya else None,
+        'lembar_versi_sebelumnya': await _pemakaian_lembar(db, sebelumnya.get('id')) if ganti_versi else None,
+        **(metadata or {}),
+    }
+    await catat_audit_pkg(db, aksi, aktor, meta, request=request)
+
+
 async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_template: str, format_berkas: str,
                                nama_berkas: str, versi_template: str, checksum_template: Optional[str],
                                periode_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None,

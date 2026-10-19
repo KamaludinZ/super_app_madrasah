@@ -63,7 +63,7 @@ def test_semua_aksi_audit_terdaftar():
             if nama.endswith('.py') and ('pkg' in nama or akar.endswith('routers')):
                 with open(os.path.join(akar, nama), encoding='utf-8') as f:
                     sumber += f.read()
-    aksi = set(re.findall(r"catat_audit_pkg(?:_harian)?\(db, '([a-z_]+)'", sumber))
+    aksi = set(re.findall(r"catat_audit_(?:pkg|pkg_harian|instrumen)\(db, '([a-z_]+)'", sumber))
     aksi |= {f'periode_{s}' for s in ('berjalan', 'ditutup')} if "f'periode_{data.status}'" in sumber else set()
     assert aksi, 'tidak ada aksi audit ditemukan'
     assert aksi <= set(pkg_audit.LABEL_AKSI), aksi - set(pkg_audit.LABEL_AKSI)

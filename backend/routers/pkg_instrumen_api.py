@@ -4,7 +4,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
 
 from core import db
-from pkg_audit import catat_audit_pkg
+from pkg_audit import catat_audit_instrumen
 from pkg_instrumen import (
     ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
     aktifkan_instrumen, ringkas_perubahan_sub, riwayat_instrumen, terapkan_pratinjau, ubah_sub_instrumen,
@@ -62,8 +62,7 @@ async def terapkan_impor_api(data: TerapkanImporRequest, request: Request, akses
     """Terapkan pratinjau sebagai instrumen aktif baru (revisi berikutnya); instrumen lama tetap tersimpan."""
     hasil = await terapkan_pratinjau(db, data.token, akses['user'])
     baru = hasil['instrumen']
-    await catat_audit_pkg(db, 'instrumen_impor', akses['user'], {
-        'instrumen_id': baru['id'], 'versi_template': baru['versi_template'], 'revisi': baru['revisi'],
+    await catat_audit_instrumen(db, 'instrumen_impor', akses['user'], baru, hasil['sebelumnya'], {
         'sumber': baru['sumber'], 'nama_berkas': baru['nama_berkas'], 'checksum': baru['checksum'],
         'cocok_resmi': baru['cocok_resmi'], 'instrumen_sebelumnya': hasil['hasil']['instrumen_sebelumnya'],
     }, request=request)
@@ -77,8 +76,7 @@ async def ubah_sub_api(data: UbahSubInstrumenRequest, request: Request, kode: st
     dipakai lembar penilaian disimpan sebagai revisi baru agar penilaian lama tetap utuh."""
     hasil = await ubah_sub_instrumen(db, kode, data, akses['user'])
     baru = hasil['instrumen']
-    await catat_audit_pkg(db, 'instrumen_ubah', akses['user'], {
-        'instrumen_id': baru['id'], 'versi_template': baru.get('versi_template'), 'revisi': baru['revisi'],
+    await catat_audit_instrumen(db, 'instrumen_ubah', akses['user'], baru, hasil['sebelumnya'], {
         'revisi_baru': hasil['revisi_baru'], 'kode_sub': kode,
         'alasan': data.alasan, 'perubahan': ringkas_perubahan_sub(hasil['sebelum'], hasil['sesudah']),
         'sebelum': hasil['sebelum'], 'sesudah': hasil['sesudah'],
@@ -118,8 +116,7 @@ async def aktifkan_instrumen_api(data: AktifkanInstrumenRequest, request: Reques
     Alasan wajib; lembar yang sudah ada tetap memakai versinya."""
     hasil = await aktifkan_instrumen(db, instrumen_id)
     baru, lama = hasil['instrumen'], hasil['sebelumnya']
-    await catat_audit_pkg(db, 'instrumen_aktifkan', akses['user'], {
-        'instrumen_id': baru['id'], 'versi_template': baru.get('versi_template'), 'revisi': baru.get('revisi'),
+    await catat_audit_instrumen(db, 'instrumen_aktifkan', akses['user'], baru, lama, {
         'alasan': data.alasan,
         'sebelumnya': {k: lama.get(k) for k in ('id', 'versi_template', 'revisi')} if lama else None,
     }, request=request)
