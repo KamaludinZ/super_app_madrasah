@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
 import ImporInstrumenDialog from '@/components/pkg/ImporInstrumenDialog';
+import HasilImporInstrumen from '@/components/pkg/HasilImporInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -48,6 +49,7 @@ function IsiHalamanInstrumen() {
   const [instrumen, setInstrumen] = useState(undefined); // undefined = memuat, null = belum ada instrumen
   const [galat, setGalat] = useState(false);
   const [impor, setImpor] = useState(false);
+  const [hasilImpor, setHasilImpor] = useState(null);
   const kepala = keanggotaan?.peran === 'kepala';
 
   const muat = useCallback(async () => {
@@ -74,7 +76,7 @@ function IsiHalamanInstrumen() {
   }
   if (instrumen === undefined) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
   const dialogImpor = (
-    <ImporInstrumenDialog open={impor} onClose={() => setImpor(false)} onTerapkan={(baru) => { setImpor(false); setInstrumen(baru); }} />
+    <ImporInstrumenDialog open={impor} onClose={() => setImpor(false)} onTerapkan={(baru, hasil) => { setImpor(false); setInstrumen(baru); setHasilImpor(hasil); }} />
   );
   if (!instrumen || !instrumen.kompetensi?.length) {
     return <><InstrumenKosong kepala={kepala} onImpor={() => setImpor(true)} />{dialogImpor}</>;
@@ -101,6 +103,8 @@ function IsiHalamanInstrumen() {
           )}
         </div>
       </div>
+
+      <HasilImporInstrumen hasil={hasilImpor} onTutup={() => setHasilImpor(null)} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KartuAngka icon={Layers} label="Kompetensi" value={r.kompetensi} />

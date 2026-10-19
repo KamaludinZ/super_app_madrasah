@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { FileSpreadsheet, Upload, Loader2, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FileSpreadsheet, Upload, Loader2, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUkuran } from '@/lib/pkgTemplate';
 import { BATAS_UKURAN_UNGGAH, pratinjauImpor, ringkasInstrumen, terapkanImpor } from '@/lib/pkgInstrumen';
@@ -14,6 +14,7 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
   const [sumber, setSumber] = useState('template');
   const [berkas, setBerkas] = useState(null);
   const [pratinjau, setPratinjau] = useState(null);
+  const [gagal, setGagal] = useState(null); // { pesan, galat: [{ lokasi, pesan }] }
   const [memproses, setMemproses] = useState(false);
   const inputRef = useRef(null);
 
@@ -22,6 +23,7 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
       setSumber('template');
       setBerkas(null);
       setPratinjau(null);
+      setGagal(null);
     }
   }, [open]);
 
@@ -34,14 +36,16 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
     }
     setBerkas(f);
     setPratinjau(null);
+    setGagal(null);
   };
 
   const baca = async () => {
     setMemproses(true);
+    setGagal(null);
     try {
       setPratinjau(await pratinjauImpor({ sumber, berkas }));
     } catch (e) {
-      toast.error(e.message || 'Gagal membaca instrumen');
+      setGagal({ pesan: e.message || 'Gagal membaca instrumen.', galat: e.galat || [] });
     } finally {
       setMemproses(false);
     }
@@ -50,11 +54,12 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
   const terapkan = async () => {
     setMemproses(true);
     try {
-      const instrumen = await terapkanImpor(pratinjau.token);
+      const { instrumen, hasil } = await terapkanImpor(pratinjau.token);
       toast.success('Instrumen PKG diterapkan');
-      onTerapkan?.(instrumen);
+      onTerapkan?.(instrumen, hasil);
     } catch (e) {
-      toast.error(e.message || 'Gagal menerapkan instrumen');
+      setPratinjau(null);
+      setGagal({ pesan: e.message || 'Gagal menerapkan instrumen.', galat: e.galat || [] });
     } finally {
       setMemproses(false);
     }
@@ -74,7 +79,7 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
 
         {!pratinjau ? (
           <div className="space-y-4">
-            <RadioGroup value={sumber} onValueChange={(v) => { setSumber(v); setPratinjau(null); }} className="space-y-2">
+            <RadioGroup value={sumber} onValueChange={(v) => { setSumber(v); setPratinjau(null); setGagal(null); }} className="space-y-2">
               <Label htmlFor="sumber-template" className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer has-[[data-state=checked]]:border-[#006837] has-[[data-state=checked]]:bg-emerald-50/50">
                 <RadioGroupItem value="template" id="sumber-template" className="mt-0.5" />
                 <span>
@@ -90,6 +95,22 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
                 </span>
               </Label>
             </RadioGroup>
+
+            {gagal && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert" data-testid="pkg-impor-gagal">
+                <p className="flex items-center gap-1.5 font-semibold"><XCircle className="h-4 w-4 shrink-0" /> {gagal.pesan}</p>
+                {gagal.galat.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {gagal.galat.map((g) => (
+                      <li key={`${g.lokasi}-${g.pesan}`} className="text-xs">
+                        {g.lokasi && <span className="mr-1 rounded bg-white/70 px-1 font-mono text-[11px]">{g.lokasi}</span>}{g.pesan}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2 text-xs text-rose-700">Perbaiki berkas lalu baca ulang, atau gunakan template resmi di server.</p>
+              </div>
+            )}
 
             {sumber === 'unggah' && (
               <div className="rounded-lg border border-dashed border-slate-300 p-4 text-center">

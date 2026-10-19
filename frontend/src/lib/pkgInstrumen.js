@@ -162,8 +162,18 @@ export const ambilInstrumenAktif = () => tunda(instrumenTiruanAktif());
 // Impor instrumen (khusus kepala madrasah), dua langkah:
 //   POST /pkg/instrumen/impor/pratinjau  multipart { sumber: 'template' | 'unggah', berkas? }
 //        -> pratinjau = { token, sumber, nama_berkas, versi_template, checksum, cocok_resmi, kompetensi, peringatan }
-//   POST /pkg/instrumen/impor  { token } -> instrumen aktif baru (instrumen lama tetap tersimpan untuk penilaian lama)
+//        gagal 422 -> detail { pesan, galat: [{ lokasi, pesan }] }   (lokasi = sheet!sel)
+//   POST /pkg/instrumen/impor  { token } -> { instrumen, hasil }   (instrumen lama tetap tersimpan untuk penilaian lama)
+//        hasil = { sumber, nama_berkas, cocok_resmi, kompetensi, sub, indikator, instrumen_sebelumnya: {id, versi_template} | null }
 export const BATAS_UKURAN_UNGGAH = 10 * 1024 * 1024;
+
+// Galat pembacaan instrumen dengan rincian per lokasi sel.
+export class GalatImpor extends Error {
+  constructor(pesan, galat = []) {
+    super(pesan);
+    this.galat = galat;
+  }
+}
 const CHECKSUM_RESMI = TIRUAN.checksum;
 let pratinjauTerakhir = null;
 
@@ -173,7 +183,15 @@ export async function pratinjauImpor({ sumber, berkas = null }) {
     if (!/\.xlsx$/i.test(berkas.name)) throw new Error('Berkas harus berformat .xlsx.');
     if (berkas.size > BATAS_UKURAN_UNGGAH) throw new Error('Ukuran berkas melebihi 10 MB.');
   }
-  // Tiruan: berkas unggahan dianggap berstruktur sama dengan template resmi namun checksum-nya berbeda.
+  // Tiruan: nama berkas memuat "rusak" mensimulasikan berkas yang strukturnya tidak sesuai.
+  if (sumber === 'unggah' && /rusak/i.test(berkas.name)) {
+    await tunda(null, 400);
+    throw new GalatImpor('Berkas tidak sesuai struktur instrumen PKG.', [
+      { lokasi: 'KOMP (2)!C9', pesan: 'Teks indikator Level 3 untuk sub-kompetensi 2.1 kosong.' },
+      { lokasi: 'KOMP (4)', pesan: 'Sub-kompetensi 4.3 tidak ditemukan.' },
+    ]);
+  }
+  // Tiruan: berkas unggahan lain dianggap berstruktur sama dengan template resmi namun checksum-nya berbeda.
   const dariTemplate = sumber !== 'unggah';
   pratinjauTerakhir = {
     token: `pratinjau-${Date.now()}`,
@@ -190,6 +208,7 @@ export async function pratinjauImpor({ sumber, berkas = null }) {
 
 export async function terapkanImpor(token) {
   if (!pratinjauTerakhir || pratinjauTerakhir.token !== token) throw new Error('Pratinjau kedaluwarsa. Ulangi impor.');
+  const sebelumnya = instrumenTiruanAktif();
   aktif = {
     ...TIRUAN,
     id: `instrumen-${Date.now()}`,
@@ -197,8 +216,18 @@ export async function terapkanImpor(token) {
     diimpor_pada: new Date().toISOString(),
     kompetensi: pratinjauTerakhir.kompetensi,
   };
+  const r = ringkasInstrumen(aktif);
+  const hasil = {
+    sumber: pratinjauTerakhir.sumber,
+    nama_berkas: pratinjauTerakhir.nama_berkas,
+    cocok_resmi: pratinjauTerakhir.cocok_resmi,
+    kompetensi: r.kompetensi,
+    sub: r.sub,
+    indikator: r.indikator,
+    instrumen_sebelumnya: sebelumnya ? { id: sebelumnya.id, versi_template: sebelumnya.versi_template } : null,
+  };
   pratinjauTerakhir = null;
-  return tunda(aktif);
+  return tunda({ instrumen: aktif, hasil });
 }
 
 // Ringkasan jumlah kompetensi, sub-kompetensi, indikator, dan skor maksimal (level tertinggi x jumlah sub).
