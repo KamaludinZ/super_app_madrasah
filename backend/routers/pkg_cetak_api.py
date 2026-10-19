@@ -15,7 +15,7 @@ from fastapi.responses import Response
 from core import db, get_current_user, logger
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
-from pkg_audit import URUT_UNDUHAN, catat_cetak_template, daftar_unduhan
+from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, catat_cetak_gagal, catat_cetak_template, daftar_unduhan
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
@@ -125,11 +125,18 @@ async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(g
     """Unduh dokumen resmi: rekap seluruh guru dalam cakupan (`jenis=rekap`) atau laporan satu guru (`jenis=guru`)
     sebagai Excel dari template resmi, atau PDF hasil konversi LibreOffice (rumus template dihitung ulang; laporan
     per guru hanya lembar rekapitulasi 04-RKAP-PKG). Tanpa LibreOffice: PDF cadangan ReportLab berpenanda.
-    403 di luar hak/cakupan, 409 bila belum ada lembar terkunci, 503 bila template tidak tersedia/berubah."""
+    403 di luar hak/cakupan, 409 bila belum ada lembar terkunci, 503 bila template tidak tersedia/berubah.
+    Unduhan berhasil tercatat di riwayat unduhan & jejak audit; percobaan yang ditolak/gagal dicatat sebagai cetak_gagal."""
+    meta = {'jenis_dokumen': data.jenis, 'format': data.format, 'periode_id': data.periode_id, 'guru_id': data.guru_id,
+            'endpoint': request.url.path}
     try:
-        siap = await siapkan_cetak(db, user, data)
-    except TemplateTidakTersedia as e:
-        raise HTTPException(503, str(e)) from e
+        try:
+            siap = await siapkan_cetak(db, user, data)
+        except TemplateTidakTersedia as e:
+            raise HTTPException(503, str(e)) from e
+    except HTTPException as e:
+        await catat_cetak_gagal(db, user, e.status_code, e.detail, meta, request=request)
+        raise
     if data.format == 'pdf':
         isi, mesin, alasan_cadangan = await buat_pdf(siap)
     else:
@@ -139,7 +146,8 @@ async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(g
     await catat_cetak_template(db, user, siap['jenis_template'], data.format, nama, info['versi'], info['checksum_resmi'],
                                periode_id=siap['periode']['id'], request=request, jenis_dokumen=data.jenis,
                                guru_id=siap['guru_id'], mesin=mesin, isi=isi,
-                               metadata={'tanggal_cetak': date.today().isoformat(), 'alasan_cadangan': alasan_cadangan})
+                               metadata={'tanggal_cetak': date.today().isoformat(), 'alasan_cadangan': alasan_cadangan,
+                                         'endpoint': meta['endpoint']})
     return respon_berkas(isi, nama, data.format, mesin, alasan_cadangan)
 
 
@@ -155,6 +163,7 @@ POLA_TANGGAL = r'^\d{4}-\d{2}-\d{2}$'
 
 @router.get("/pkg/cetak/unduhan")
 async def daftar_unduhan_api(
+    request: Request,
     periode_id: Optional[str] = Query(None, pattern=POLA_ID),
     jenis: Optional[str] = Query(None, pattern='^(' + '|'.join(JENIS_DOKUMEN) + ')$'),
     format: Optional[str] = Query(None, pattern='^(xlsx|pdf)$'),
@@ -185,6 +194,8 @@ async def daftar_unduhan_api(
         raise HTTPException(422, 'Tanggal saringan tidak valid.') from e
     if dari and sampai and dari > sampai:
         raise HTTPException(422, 'Tanggal awal melewati tanggal akhir.')
+    await catat_audit_pkg_harian(db, AKSI_LIHAT_UNDUHAN, user, kunci=request.url.path,
+                                 metadata={'periode_id': periode_id, 'endpoint': request.url.path}, request=request)
     return await daftar_unduhan(db, periode_id=periode_id, jenis=jenis, format_berkas=format, mesin=mesin,
                                 guru_id=guru_id, aktor_id=aktor_id, dari=dari, sampai=sampai, cari=cari, urut=urut,
                                 arah=arah, halaman=halaman, per_halaman=per_halaman)

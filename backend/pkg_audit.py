@@ -26,6 +26,8 @@ AKSI_TOLAK_AKSES = 'tolak_akses'
 AKSI_LIHAT_TEMPLATE = 'lihat_template'
 AKSI_PERIKSA_TEMPLATE = 'periksa_template'
 AKSI_CETAK_TEMPLATE = 'cetak_template'
+AKSI_CETAK_GAGAL = 'cetak_gagal'
+AKSI_LIHAT_UNDUHAN = 'lihat_unduhan'
 
 # Katalog kode aksi pkg_audit_log beserta labelnya (untuk halaman Jejak Audit PKG). Setiap aksi yang dicatat
 # router PKG wajib terdaftar di sini (diuji di tests/test_pkg_validasi.py).
@@ -58,6 +60,8 @@ LABEL_AKSI = {
     AKSI_LIHAT_TEMPLATE: 'Melihat info template',
     AKSI_PERIKSA_TEMPLATE: 'Memeriksa ulang berkas template',
     AKSI_CETAK_TEMPLATE: 'Mencetak dokumen dari template',
+    AKSI_CETAK_GAGAL: 'Gagal mencetak dokumen',
+    AKSI_LIHAT_UNDUHAN: 'Melihat riwayat unduhan',
 }
 
 
@@ -148,6 +152,17 @@ async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_templa
         })
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg_audit] gagal mencatat riwayat unduhan: {e}")
+
+
+async def catat_cetak_gagal(db, aktor: Optional[Dict[str, Any]], status: int, detail: Any, metadata: Dict[str, Any],
+                            request=None) -> None:
+    """Catat percobaan cetak/unduh yang ditolak atau gagal (403/409/422/503). Harian per aktor & kombinasi
+    dokumen-status agar percobaan berulang tidak membanjiri log; `jumlah` menghitung percobaannya."""
+    alasan = detail.get('alasan') if isinstance(detail, dict) else None
+    pesan = detail.get('pesan') if isinstance(detail, dict) else str(detail)
+    kunci = ':'.join(str(metadata.get(k) or '-') for k in ('jenis_dokumen', 'format', 'periode_id', 'guru_id')) + f':{status}'
+    await catat_audit_pkg_harian(db, AKSI_CETAK_GAGAL, aktor, kunci=kunci, request=request,
+                                 metadata={**metadata, 'status': status, 'alasan': alasan, 'pesan': (pesan or '')[:300]})
 
 
 # ---------------------------------------------------------------- daftar berhalaman (riwayat unduhan & jejak audit)

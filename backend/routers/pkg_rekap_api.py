@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
-from pkg_audit import AKSI_TOLAK_AKSES, catat_audit_pkg, catat_audit_pkg_harian
+from pkg_audit import AKSI_LIHAT_UNDUHAN, AKSI_TOLAK_AKSES, catat_audit_pkg, catat_audit_pkg_harian
 from pkg_rekap import (
     anggota_periode, bangun_ulang_rekap, boleh_lihat_guru, cakupan_rekap, riwayat_unduhan, daftar_periode_rekap, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru,
     statistik_lengkap,
@@ -123,4 +123,6 @@ async def hitung_ulang_api(request: Request, periode_id: str = Query(..., patter
 @router.get("/pkg/rekap/unduhan")
 async def riwayat_unduhan_api(periode_id: Optional[str] = Query(None, pattern=POLA_ID), akses: Dict = Depends(kepala)):
     """Riwayat unduhan & cetak dokumen PKG (siapa, kapan, berkas, format, versi template), terbaru dulu."""
+    await catat_audit_pkg_harian(db, AKSI_LIHAT_UNDUHAN, akses['user'], kunci='/pkg/rekap/unduhan',
+                                 metadata={'periode_id': periode_id, 'endpoint': '/pkg/rekap/unduhan'})
     return await riwayat_unduhan(db, periode_id)

@@ -47,7 +47,7 @@ export const AKSI_PER_KATEGORI = {
   penilaian: { penilaian_mulai: 'Memulai lembar penilaian', penilaian_buka: 'Membuka lembar penilaian', penilaian_draf: 'Menyimpan draf penilaian', penilaian_kirim: 'Mengirim & mengunci penilaian' },
   instrumen: { instrumen_impor: 'Mengimpor instrumen', instrumen_ubah: 'Mengubah instrumen', instrumen_aktifkan: 'Menetapkan instrumen acuan' },
   susunan: { periode_buat: 'Menetapkan periode', periode_berjalan: 'Memulai periode', periode_ditutup: 'Menutup periode', sk_buat: 'Menambah SK', sk_penilai: 'Mengubah tim penilai', sk_dinilai: 'Mengubah guru yang dinilai', penugasan_simpan: 'Menyimpan pembagian penilaian', supervisi_tandai: 'Menandai supervisi penilai', supervisi_batal: 'Membatalkan supervisi penilai' },
-  unduhan: { cetak_template: 'Mencetak dokumen dari template', lihat_template: 'Melihat info template' },
+  unduhan: { cetak_template: 'Mencetak dokumen dari template', cetak_gagal: 'Gagal mencetak dokumen', lihat_unduhan: 'Melihat riwayat unduhan', lihat_template: 'Melihat info template' },
   akses: { buka_beranda: 'Membuka Beranda PKG', tolak_akses: 'Akses ditolak', lihat_rekap: 'Melihat rekap' },
 };
 

@@ -193,3 +193,39 @@ def test_daftar_unduhan_saring_urut_halaman(klien, monkeypatch):
     pengguna['user'] = {'id': 'g1', 'roles': ['guru'], 'full_name': 'Guru g1'}
     r = ambil()
     assert r.status_code == 403 and r.json()['detail']['alasan'] == 'bukan_penilai'
+
+
+def test_audit_unduhan_berhasil_gagal_dan_lihat_riwayat(klien, monkeypatch):
+    import pkg_penjaga
+    import pkg_template
+    k, d, pengguna = klien
+    monkeypatch.setattr(pkg_penjaga, 'db', d)
+    audit = lambda aksi: [a for a in d['pkg_audit_log'].docs if a['aksi'] == aksi]  # noqa: E731
+
+    assert k.post('/api/pkg/cetak/pdf', json={'jenis': 'rekap', 'format': 'pdf'}).status_code == 200
+    berhasil = audit('cetak_template')[-1]['metadata']
+    assert berhasil['endpoint'] == '/api/pkg/cetak/pdf' and berhasil['checksum_berkas'] and berhasil['mesin'] == 'libreoffice'
+
+    # 409 (lembar belum terkunci) dua kali -> satu entri harian berjumlah 2.
+    for _ in range(2):
+        assert k.post('/api/pkg/cetak', json={'jenis': 'guru', 'format': 'xlsx', 'guru_id': 'g2'}).status_code == 409
+    gagal = audit('cetak_gagal')
+    assert len(gagal) == 1 and gagal[0]['jumlah'] == 2 and gagal[0]['metadata']['status'] == 409
+    assert gagal[0]['metadata']['guru_id'] == 'g2' and 'belum' in gagal[0]['metadata']['pesan']
+
+    # 503 template tidak tersedia & 403 di luar cakupan juga tercatat; riwayat unduhan tidak bertambah.
+    def tidak_ada(*a, **kw):
+        raise pkg_template.TemplateTidakTersedia('Berkas template tidak ditemukan.')
+    monkeypatch.setattr(api, 'rekap_excel', tidak_ada)
+    assert k.post('/api/pkg/cetak', json={'jenis': 'rekap', 'format': 'xlsx'}).status_code == 503
+    pengguna['user'] = {'id': 'pen', 'roles': ['guru'], 'full_name': 'Penilai Satu'}
+    assert k.post('/api/pkg/cetak', json={'jenis': 'guru', 'format': 'xlsx', 'guru_id': 'g3'}).status_code == 403
+    status = sorted(g['metadata']['status'] for g in audit('cetak_gagal'))
+    assert status == [403, 409, 503] and audit('cetak_gagal')[-1]['metadata']['alasan'] == 'bukan_penugasan'
+    assert len(d['pkg_unduhan'].docs) == 1
+
+    # Membuka riwayat unduhan dicatat harian.
+    k.get('/api/pkg/cetak/unduhan')
+    k.get('/api/pkg/cetak/unduhan', params={'format': 'pdf'})
+    lihat = audit('lihat_unduhan')
+    assert len(lihat) == 1 and lihat[0]['jumlah'] == 2 and lihat[0]['aktor_id'] == 'pen'
