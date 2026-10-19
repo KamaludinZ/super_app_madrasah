@@ -7,6 +7,7 @@ Aturan akses:
     - Penilai selain kepala wajib disupervisi kepala lebih dahulu (pkg_penugasan.supervisi_selesai).
 Penolakan dikirim sebagai HTTP 403 terstruktur: detail = {'alasan': <kode>, 'pesan': <teks>}.
 """
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -37,6 +38,14 @@ def periode_tampil(periode: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]
         return None
     kunci = ('id', 'nama_periode', 'tahun_pelajaran', 'semester', 'tanggal_buka', 'tanggal_tutup', 'status')
     return {k: periode.get(k) for k in kunci}
+
+
+def dalam_masa_penilaian(periode: Optional[Dict[str, Any]], hari_ini: Optional[str] = None) -> bool:
+    """True bila hari ini (WIB) berada di antara tanggal buka dan tutup periode (inklusif)."""
+    if not periode or not periode.get('tanggal_buka') or not periode.get('tanggal_tutup'):
+        return False
+    hari_ini = hari_ini or datetime.now(timezone(timedelta(hours=7))).strftime('%Y-%m-%d')
+    return str(periode['tanggal_buka'])[:10] <= hari_ini <= str(periode['tanggal_tutup'])[:10]
 
 
 async def sk_aktif(db) -> tuple:
@@ -74,13 +83,43 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
         'sebagai_penilai': sebagai_penilai,
         'sebagai_dinilai': sebagai_dinilai,
         'supervisi_selesai': supervisi_selesai,
+        'dalam_masa_penilaian': dalam_masa_penilaian(periode),
         'penolakan': None if anggota else {'alasan': 'bukan_anggota_sk', 'pesan': PESAN_TOLAK['bukan_anggota_sk']},
     }
 
 
+# Syarat akses fitur PKG:
+#   'anggota'   = semua anggota SK aktif (kepala selalu termasuk)
+#   'kepala'    = hanya akun kepala madrasah (periode, SK, pembagian, supervisi, jejak audit)
+#   'pengelola' = kepala atau penilai (mis. cetak dokumen)
+#   'penilai'   = penilai yang sudah disupervisi (kepala selalu lolos)
+SYARAT_AKSES = ('anggota', 'kepala', 'pengelola', 'penilai')
+
+
+def alasan_tolak(k: Dict[str, Any], syarat: str = 'anggota') -> Optional[str]:
+    """Kode alasan penolakan untuk keanggotaan `k` terhadap `syarat`, atau None bila diizinkan."""
+    if syarat not in SYARAT_AKSES:
+        raise ValueError(f'syarat akses tidak dikenal: {syarat}')
+    if not k.get('anggota'):
+        return 'bukan_anggota_sk'
+    if syarat == 'kepala':
+        return None if k.get('peran') == 'kepala' else 'bukan_kepala'
+    if syarat in ('penilai', 'pengelola') and not k.get('sebagai_penilai'):
+        return 'bukan_penilai'
+    if syarat == 'penilai' and not k.get('supervisi_selesai'):
+        return 'belum_disupervisi'
+    return None
+
+
+async def wajib_akses(db, user: Dict[str, Any], syarat: str = 'anggota') -> Dict[str, Any]:
+    """Keanggotaan SK aktif yang memenuhi `syarat`, atau HTTP 403 terstruktur dengan alasannya."""
+    k = await keanggotaan_sk(db, user)
+    alasan = alasan_tolak(k, syarat)
+    if alasan:
+        raise tolak(alasan)
+    return k
+
+
 async def wajib_anggota_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
     """Keanggotaan SK aktif, atau HTTP 403 'bukan_anggota_sk'."""
-    k = await keanggotaan_sk(db, user)
-    if not k['anggota']:
-        raise tolak('bukan_anggota_sk')
-    return k
+    return await wajib_akses(db, user, 'anggota')

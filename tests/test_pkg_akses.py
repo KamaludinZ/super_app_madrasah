@@ -265,3 +265,33 @@ async def test_audit_harian_mongodb(mongo_db):
     harian = [d for d in docs if d['aksi'] == 'buka_beranda']
     assert len(docs) == 2 and harian[0]['jumlah'] == 2 and harian[0]['id']
     assert next(d for d in docs if d['aksi'] == 'simpan_draf')['penilaian_id'] == 'n1'
+
+
+def test_wajib_akses_per_syarat(db):
+    def alasan(user, syarat):
+        try:
+            asyncio.run(pkg_akses.wajib_akses(db, user, syarat))
+            return None
+        except HTTPException as e:
+            assert e.status_code == 403
+            return e.detail['alasan']
+
+    tabel = {  # pengguna: (anggota, kepala, pengelola, penilai)
+        'kep': (None, None, None, None),
+        'pen': (None, 'bukan_kepala', None, None),
+        'rangkap': (None, 'bukan_kepala', None, 'belum_disupervisi'),
+        'gur': (None, 'bukan_kepala', 'bukan_penilai', 'bukan_penilai'),
+        'asing': ('bukan_anggota_sk',) * 4,
+    }
+    for uid, harapan in tabel.items():
+        user = KEPALA if uid == 'kep' else GURU(uid)
+        assert tuple(alasan(user, s) for s in pkg_akses.SYARAT_AKSES) == harapan, uid
+    with pytest.raises(ValueError):
+        pkg_akses.alasan_tolak({'anggota': True}, 'tidak-ada')
+
+
+def test_dalam_masa_penilaian():
+    p = {'tanggal_buka': '2026-10-01', 'tanggal_tutup': '2026-11-30'}
+    assert pkg_akses.dalam_masa_penilaian(p, '2026-10-01') and pkg_akses.dalam_masa_penilaian(p, '2026-11-30')
+    assert not pkg_akses.dalam_masa_penilaian(p, '2026-09-30') and not pkg_akses.dalam_masa_penilaian(p, '2026-12-01')
+    assert not pkg_akses.dalam_masa_penilaian(None) and not pkg_akses.dalam_masa_penilaian({'tanggal_buka': '2026-10-01'})

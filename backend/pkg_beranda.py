@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from pkg_akses import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PERAN_KEPALA
+from pkg_akses import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PERAN_KEPALA, alasan_tolak
 
 # Urutan kemajuan status penilaian; bila satu guru punya beberapa lembar, yang paling maju dipakai.
 URUTAN_STATUS = {'draf': 1, 'terkunci': 2}
@@ -95,11 +95,8 @@ async def tugas_penilaian_saya(db, user: Dict[str, Any], periode: Optional[Dict[
     return hasil
 
 
-# Sembilan sub-menu PKG beserta syarat aksesnya:
-#   'kepala'  = hanya akun kepala madrasah (penetapan periode, SK, pembagian, supervisi, jejak audit)
-#   'penilai' = anggota tim penilai yang sudah disupervisi (kepala selalu lolos)
-#   'pengelola' = kepala atau penilai (cetak dokumen)
-#   'anggota' = semua anggota SK aktif (instrumen dibaca, rekap dibatasi per peran di halamannya)
+# Sembilan sub-menu PKG beserta syarat aksesnya (lihat pkg_akses.SYARAT_AKSES). Instrumen dibaca semua anggota;
+# rekap dibatasi per peran di halamannya.
 MENU_PKG = [
     ('periode', 'Periode PKG', 'Tetapkan periode penilaian', '/pkg/periode', 'kepala'),
     ('sk', 'SK & Tim Penilai', 'Data SK dan anggota', '/pkg/sk', 'kepala'),
@@ -113,25 +110,11 @@ MENU_PKG = [
 ]
 
 
-def _alasan_tolak_menu(syarat: str, k: Dict[str, Any]) -> Optional[str]:
-    """Kode alasan penolakan (sama dengan detail 403) atau None bila menu boleh dibuka."""
-    if not k.get('anggota'):
-        return 'bukan_anggota_sk'
-    kepala = k.get('peran') == 'kepala'
-    if syarat == 'kepala':
-        return None if kepala else 'bukan_kepala'
-    if syarat in ('penilai', 'pengelola') and not k.get('sebagai_penilai'):
-        return 'bukan_penilai'
-    if syarat == 'penilai' and not k.get('supervisi_selesai'):
-        return 'belum_disupervisi'
-    return None
-
-
 def menu_pkg(keanggotaan: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Pintasan sembilan menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
     hasil = []
     for key, label, keterangan, to, syarat in MENU_PKG:
-        alasan = _alasan_tolak_menu(syarat, keanggotaan)
+        alasan = alasan_tolak(keanggotaan, syarat)
         hasil.append({
             'key': key, 'label': label, 'keterangan': keterangan, 'to': to,
             'khusus': 'kepala' if syarat == 'kepala' else None,
