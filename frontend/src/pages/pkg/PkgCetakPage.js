@@ -8,8 +8,9 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import RiwayatUnduhan from '@/components/pkg/RiwayatUnduhan';
+import DialogProsesCetak from '@/components/pkg/DialogProsesCetak';
 import { ambilRekap } from '@/lib/pkgRekap';
-import { JENIS_DOKUMEN, MESIN_LABEL, simpanBerkas, unduhDokumen } from '@/lib/pkgCetak';
+import { JENIS_DOKUMEN, simpanBerkas, unduhDokumen } from '@/lib/pkgCetak';
 
 // Tombol unduh Excel & PDF untuk satu dokumen. `kunci` membedakan proses unduh yang sedang berjalan.
 function TombolUnduh({ kunci, sedang, nonaktif, onUnduh }) {
@@ -32,6 +33,7 @@ function IsiHalamanCetak() {
   const [rekap, setRekap] = useState(null);
   const [sedang, setSedang] = useState(null);
   const [jumlahUnduh, setJumlahUnduh] = useState(0);
+  const [proses, setProses] = useState(null);
   const { keanggotaan } = useOutletContext() || {};
 
   const muat = useCallback(async () => {
@@ -47,14 +49,22 @@ function IsiHalamanCetak() {
   const unduh = async (jenis, format, guru = null) => {
     const kunci = `${jenis === 'guru' ? guru.guru_id : 'rekap'}:${format}`;
     setSedang(kunci);
-    const id = toast.loading('Menyiapkan berkas...');
+    setProses({ format, tahap: 'template', selesai: false });
     try {
-      const { blob, namaBerkas, mesin } = await unduhDokumen({ jenis, format, periode: rekap.periode, guru });
+      const { blob, namaBerkas, mesin } = await unduhDokumen({
+        jenis, format, periode: rekap.periode, guru, onTahap: (tahap) => setProses((p) => p && { ...p, tahap }),
+      });
       simpanBerkas(blob, namaBerkas);
-      toast.success(`${namaBerkas} diunduh`, { id, description: MESIN_LABEL[mesin] });
       setJumlahUnduh((n) => n + 1);
+      // PDF cadangan: dialog tetap terbuka dengan penanda; selain itu cukup notifikasi singkat.
+      if (mesin === 'reportlab') setProses((p) => ({ ...p, selesai: true, namaBerkas, mesin }));
+      else {
+        setProses(null);
+        toast.success(`${namaBerkas} diunduh`);
+      }
     } catch (e) {
-      toast.error(e.message || 'Gagal menyiapkan berkas', { id });
+      if (e.penolakan) setProses({ format, penolakan: e.penolakan });
+      else setProses((p) => ({ ...p, galat: e.message || 'Gagal menyiapkan berkas.' }));
     } finally {
       setSedang(null);
     }
@@ -105,6 +115,8 @@ function IsiHalamanCetak() {
           ))}
         </CardContent>
       </Card>
+
+      <DialogProsesCetak proses={proses} onTutup={() => setProses(null)} />
 
       {keanggotaan?.peran === 'kepala' && <RiwayatUnduhan periodeId={rekap.periode?.id} muatUlangKunci={jumlahUnduh} />}
     </div>
