@@ -8,13 +8,18 @@ Bentuk untuk API (kontrak frontend lib/pkgPenilaian):
 Aturan akses: guru harus dibagikan kepada penilai pada periode berjalan (pkg_penugasan); lembar milik penilai lain
 ditolak. Lembar yang sudah ada memakai instrumen versi saat lembar dibuat; lembar baru memakai instrumen aktif.
 """
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
 from pkg_akses import sk_aktif, tolak
 from pkg_instrumen import instrumen_aktif
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN
+from pymongo.errors import DuplicateKeyError
+
+from pkg_nilai import hitung_nilai, kode_sub
+from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest
 
 KUNCI_HASIL = ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat', 'terkunci_pada')
 
@@ -83,3 +88,54 @@ async def lembar_tampil(db, ktx: Dict[str, Any], guru_id: str) -> Dict[str, Any]
         'alasan_tidak_dapat_diisi': alasan,
         'updated_at': lembar.get('updated_at'),
     }
+
+
+def wajib_dapat_diisi(ktx: Dict[str, Any]) -> None:
+    alasan = alasan_tidak_dapat_diisi(ktx)
+    if alasan == 'terkunci':
+        raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
+    if alasan == 'di_luar_masa':
+        raise tolak('di_luar_masa')
+
+
+def wajib_kode_sub_sah(ktx: Dict[str, Any], data: DrafPenilaianRequest) -> None:
+    asing = sorted(set(data.isian) - set(kode_sub(ktx['instrumen'])))
+    if asing:
+        raise HTTPException(400, f"Sub-kompetensi tidak ada di instrumen lembar: {', '.join(asing[:5])}.")
+
+
+async def simpan_draf(db, ktx: Dict[str, Any], data: DrafPenilaianRequest) -> Dict[str, Any]:
+    """Simpan isian sebagai draf. Lembar dibuat saat draf pertama (instrumen aktif & snapshot guru disalin).
+    Hasil: dokumen lembar terbaru (+ '_baru': bool)."""
+    wajib_dapat_diisi(ktx)
+    wajib_kode_sub_sah(ktx, data)
+    isian = {k: v.model_dump() for k, v in data.isian.items()}
+    nilai = hitung_nilai(ktx['instrumen'], isian)
+    sekarang = datetime.now(timezone.utc).isoformat()
+    perubahan = {'isian': isian, 'catatan_umum': data.catatan_umum, 'skor_per_indikator': nilai['skor_per_indikator'],
+                 'progres': nilai['progres'], 'status': 'draf', 'updated_at': sekarang}
+    lembar = ktx['lembar']
+    baru = lembar is None
+    if baru:
+        guru = await identitas_guru(db, ktx, data.guru_id)
+        dok = {
+            'id': str(uuid.uuid4()), 'sk_id': ktx['sk']['id'], 'periode_id': ktx['periode']['id'],
+            'penilai_id': ktx['penugasan']['penilai_id'], 'guru_dinilai_id': data.guru_id,
+            'instrumen_id': ktx['instrumen']['id'],
+            'snapshot_guru': {k: guru[k] for k in ('nama', 'nip', 'mapel')},
+            'created_at': sekarang, **perubahan,
+        }
+        try:
+            await db[KOLEKSI_PENILAIAN].insert_one(dict(dok))
+            return {**dok, '_baru': True}
+        except DuplicateKeyError:
+            # Dua simpan bersamaan (mis. autosave ganda): lembar sudah dibuat permintaan lain -> perbarui saja.
+            lembar = await db[KOLEKSI_PENILAIAN].find_one({'sk_id': ktx['sk']['id'], 'guru_dinilai_id': data.guru_id}, {'_id': 0})
+            if not lembar or lembar.get('penilai_id') != ktx['penugasan']['penilai_id']:
+                raise tolak('bukan_penugasan', 'Lembar penilaian guru ini dipegang penilai lain.')
+            baru = False
+    # Filter status 'draf' mencegah menimpa lembar yang baru saja dikunci oleh permintaan lain.
+    hasil = await db[KOLEKSI_PENILAIAN].update_one({'id': lembar['id'], 'status': 'draf'}, {'$set': perubahan})
+    if getattr(hasil, 'matched_count', 1) == 0:
+        raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
+    return {**lembar, **perubahan, '_baru': baru}

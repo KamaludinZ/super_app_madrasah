@@ -4,15 +4,16 @@ Syarat akses 'penilai' (pkg_akses): anggota tim penilai yang sudah disupervisi k
 """
 from typing import Dict
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Request
 
 from core import db
 from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
-from pkg_lembar import konteks_lembar, lembar_tampil
+from pkg_audit import catat_audit_pkg, catat_audit_pkg_harian
+from pkg_lembar import konteks_lembar, lembar_tampil, simpan_draf
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import POLA_ID
+from pkg_skema import POLA_ID, DrafPenilaianRequest
 
 router = APIRouter()
 
@@ -50,3 +51,19 @@ async def buka_lembar_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict
     Lembar baru belum disimpan sampai draf pertama. 403 'bukan_penugasan' bila guru tidak dibagikan."""
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], guru_id)
     return await lembar_tampil(db, ktx, guru_id)
+
+
+@router.post("/pkg/penilaian/draft")
+async def simpan_draf_api(data: DrafPenilaianRequest, request: Request, akses: Dict = Depends(penilai)):
+    """Simpan draf lembar (otomatis/berkala). Lembar dibuat saat draf pertama dengan instrumen aktif.
+    Ditolak bila lembar terkunci (409) atau di luar masa penilaian (403 di_luar_masa)."""
+    ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
+    lembar = await simpan_draf(db, ktx, data)
+    meta = {'penilaian_id': lembar['id'], 'guru_id': data.guru_id, 'progres': lembar['progres']}
+    if lembar.pop('_baru'):
+        await catat_audit_pkg(db, 'penilaian_mulai', akses['user'], {**meta, 'instrumen_id': lembar['instrumen_id']},
+                              penilaian_id=lembar['id'], request=request)
+    # Draf tersimpan sangat sering (autosave): satu entri audit per lembar per hari, dengan jumlah simpan.
+    await catat_audit_pkg_harian(db, 'penilaian_draf', akses['user'], kunci=lembar['id'], metadata=meta, request=request,
+                                 penilaian_id=lembar['id'])
+    return {'id': lembar['id'], 'status': lembar['status'], 'progres': lembar['progres'], 'updated_at': lembar['updated_at']}

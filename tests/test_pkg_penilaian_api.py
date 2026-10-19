@@ -127,3 +127,46 @@ def test_buka_lembar_di_luar_masa(db):
     db['pkg_periode'].docs[0]['tanggal_buka'] = str(HARI_INI + timedelta(days=1))
     lembar = _lembar('g3')
     assert lembar['dapat_diisi'] is False and lembar['alasan_tidak_dapat_diisi'] == 'di_luar_masa'
+
+
+def _draf(guru, isian, user='pen', catatan=''):
+    from pkg_skema import DrafPenilaianRequest
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU(user))
+        return await api.simpan_draf_api(DrafPenilaianRequest(guru_id=guru, isian=isian, catatan_umum=catatan), Request(), akses=akses)
+    return asyncio.run(jalan())
+
+
+def test_simpan_draf(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP + [{'kode': '2', 'nama': 'K2', 'sub': [
+        {'kode': '2.1', 'nama': 'S', 'bobot': 1, 'indikator': [{'level': i, 'teks': f't{i}'} for i in range(1, 6)]}]}]
+    db['users'] = Koleksi([{'id': 'g3', 'full_name': 'Cici Akun'}])
+    hasil = _draf('g3', {'1.1': {'centang': [1, 2, 4], 'catatan_bukti': 'RPP'}}, catatan='awal')
+    assert hasil['status'] == 'draf' and hasil['progres'] == 50
+    dok = next(d for d in db['pkg_penilaian'].docs if d['guru_dinilai_id'] == 'g3')
+    assert (dok['instrumen_id'], dok['penilai_id'], dok['sk_id'], dok['snapshot_guru']['nama']) == ('i1', 'pen', 's1', 'Cici')
+    assert dok['skor_per_indikator'] == {'1.1': 3, '2.1': 0} and dok['isian']['1.1']['catatan_bukti'] == 'RPP'
+
+    lagi = _draf('g3', {'1.1': {'centang': [1]}, '2.1': {'centang': [1, 2, 3, 4, 5]}})
+    assert lagi['id'] == hasil['id'] and lagi['progres'] == 100
+    assert len([d for d in db['pkg_penilaian'].docs if d['guru_dinilai_id'] == 'g3']) == 1
+    audit = [(d['aksi'], d.get('jumlah')) for d in db['pkg_audit_log'].docs]
+    assert ('penilaian_mulai', None) in audit and ('penilaian_draf', 2) in audit
+    assert all(d['penilaian_id'] == hasil['id'] for d in db['pkg_audit_log'].docs if d['aksi'].startswith('penilaian_'))
+
+
+def test_simpan_draf_ditolak(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    with pytest.raises(HTTPException) as e:  # kode sub tidak ada di instrumen
+        _draf('g3', {'9.9': {'centang': [1]}})
+    assert e.value.status_code == 400
+    with pytest.raises(HTTPException) as e:  # lembar terkunci
+        _draf('g1', {'1.1': {'centang': [1]}})
+    assert e.value.status_code == 409
+    with pytest.raises(HTTPException) as e:  # bukan tugasnya
+        _draf('g3', {'1.1': {'centang': [1]}}, user='kep-palsu')
+    assert e.value.status_code == 403
+    db['pkg_periode'].docs[0]['tanggal_tutup'] = str(HARI_INI - timedelta(days=1))
+    with pytest.raises(HTTPException) as e:  # di luar masa
+        _draf('g3', {'1.1': {'centang': [1]}})
+    assert e.value.detail['alasan'] == 'di_luar_masa'

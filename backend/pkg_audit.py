@@ -46,6 +46,8 @@ LABEL_AKSI = {
     'instrumen_impor': 'Mengimpor instrumen',
     'instrumen_ubah': 'Mengubah instrumen',
     'instrumen_aktifkan': 'Menetapkan instrumen acuan',
+    'penilaian_mulai': 'Memulai lembar penilaian',
+    'penilaian_draf': 'Menyimpan draf penilaian',
     AKSI_LIHAT_TEMPLATE: 'Melihat info template',
     AKSI_PERIKSA_TEMPLATE: 'Memeriksa ulang berkas template',
     AKSI_CETAK_TEMPLATE: 'Mencetak dokumen dari template',
@@ -94,10 +96,11 @@ async def catat_audit_pkg(db, aksi: str, aktor: Optional[Dict[str, Any]], metada
 
 
 async def catat_audit_pkg_harian(db, aksi: str, aktor: Optional[Dict[str, Any]], kunci: str = '',
-                                 metadata: Optional[Dict[str, Any]] = None, request=None) -> None:
+                                 metadata: Optional[Dict[str, Any]] = None, request=None,
+                                 penilaian_id: Optional[str] = None) -> None:
     """Satu entri per (aktor, aksi, tanggal WIB, kunci); kunjungan berikutnya menaikkan `jumlah`."""
     try:
-        doc = _dasar(aksi, aktor, metadata, None, request)
+        doc = _dasar(aksi, aktor, metadata, penilaian_id, request)
         saring = {'aktor_id': doc['aktor_id'], 'aksi': aksi, 'tanggal': doc['tanggal'], 'kunci': kunci}
         await db[KOLEKSI_AUDIT].update_one(
             saring,
