@@ -7,7 +7,7 @@ import { levelCapaian, predikatJenjang } from '@/lib/pkgPenilaian';
 //   GET /pkg/rekap/guru/{guru_id}?periode_id= -> rincian  (hanya lembar dalam cakupan pengguna)
 // rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
 //             instrumen: { id, versi_template, revisi, kompetensi }, isian: { kode_sub: { centang, catatan_bukti, tanggapan } } }
-// rekap = { periode, cakupan: 'semua' | 'penilai' | 'pribadi', ringkasan: { total, terkunci, draf, belum, rata_capaian },
+// rekap = { periode, sk: { id, nomor_sk } | null, cakupan: 'semua' | 'penilai' | 'pribadi', ringkasan: { total, terkunci, draf, belum, rata_capaian },
 //           guru: [baris] }
 // baris = { guru_id, nama, nip, mapel, penilai_nama, status: 'belum'|'draf'|'terkunci', nilai_akhir, nilai_maks,
 //           capaian_persen, level_capaian, predikat, terkunci_pada, per_kompetensi: { kode: subtotal } }
@@ -42,6 +42,7 @@ export async function ambilRekap({ periodeId } = {}) {
   const terkunci = guru.filter((g) => g.status === 'terkunci');
   return tunda({
     periode: { id: periodeId || 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027', status: 'berjalan' },
+    sk: { id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026' },
     cakupan: 'semua',
     ringkasan: {
       total: guru.length,
@@ -92,4 +93,32 @@ export async function ambilRekapGuru(guruId) {
     instrumen: { id: 'instrumen-2026', versi_template: '2026', revisi: 1, kompetensi: KOMPETENSI_TIRUAN },
     isian: terkunci ? isianDariSubtotal(g.per_kompetensi) : {},
   });
+}
+
+// Urutan status untuk peringkat: terkunci (punya nilai) dulu, lalu draf, lalu belum.
+const URUT_STATUS = { terkunci: 0, draf: 1, belum: 2 };
+
+// Kelompokkan baris rekap per penilai (tim dalam satu SK) dan urutkan anggotanya.
+// urut: 'capaian' (tertinggi dulu) | 'nama'. Hasil: [{ penilai_nama, guru: [baris + peringkat], terkunci, rata_capaian }].
+export function kelompokkanPerTim(guru = [], urut = 'capaian') {
+  const tim = new Map();
+  guru.forEach((g) => {
+    const kunci = g.penilai_nama || 'Belum dibagikan';
+    if (!tim.has(kunci)) tim.set(kunci, []);
+    tim.get(kunci).push(g);
+  });
+  const banding = urut === 'nama'
+    ? (a, b) => a.nama.localeCompare(b.nama, 'id')
+    : (a, b) => (URUT_STATUS[a.status] - URUT_STATUS[b.status]) || ((b.capaian_persen ?? -1) - (a.capaian_persen ?? -1)) || a.nama.localeCompare(b.nama, 'id');
+  return [...tim.entries()].map(([penilai_nama, daftar]) => {
+    const terurut = [...daftar].sort(banding);
+    const dinilai = terurut.filter((g) => g.capaian_persen != null);
+    let peringkat = 0;
+    return {
+      penilai_nama,
+      guru: terurut.map((g) => ({ ...g, peringkat: g.capaian_persen != null ? (peringkat += 1) : null })),
+      terkunci: dinilai.length,
+      rata_capaian: dinilai.length ? Math.round((dinilai.reduce((n, g) => n + g.capaian_persen, 0) / dinilai.length) * 100) / 100 : null,
+    };
+  }).sort((a, b) => a.penilai_nama.localeCompare(b.penilai_nama, 'id'));
 }

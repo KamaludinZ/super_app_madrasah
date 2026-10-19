@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { BarChart3, Users, Lock, PencilLine, CircleDashed, Percent, Loader2, AlertTriangle, RotateCw } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
+import RekapPerTim from '@/components/pkg/RekapPerTim';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ambilRekap } from '@/lib/pkgRekap';
 
 const CAKUPAN = {
@@ -72,49 +74,62 @@ function IsiHalamanRekap() {
         <KartuAngka icon={Percent} label="Rata-rata Capaian" value={persen(r.rata_capaian)} color="bg-sky-50 border-sky-200 text-sky-700" />
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Nilai per Guru</CardTitle>
-          <p className="text-xs text-slate-500">Nilai, capaian, dan predikat hanya untuk lembar yang sudah dikirim &amp; dikunci.</p>
-        </CardHeader>
-        <CardContent>
-          {rekap.guru.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">Belum ada data penilaian pada periode ini.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Guru</TableHead>
-                    <TableHead>Penilai</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Nilai</TableHead>
-                    <TableHead className="text-right">Capaian</TableHead>
-                    <TableHead>Level</TableHead>
-                    <TableHead>Predikat</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rekap.guru.map((g) => (
-                      <TableRow key={g.guru_id} data-testid={`pkg-rekap-${g.guru_id}`}>
-                        <TableCell className="min-w-[180px]">
-                          <Link to={`/pkg/rekap/${g.guru_id}`} className="font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
-                          <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-600 whitespace-nowrap">{g.penilai_nama || '-'}</TableCell>
-                        <TableCell><BadgeStatusPenilaian status={g.status} /></TableCell>
-                        <TableCell className="text-right tabular-nums">{g.nilai_akhir == null ? '-' : `${g.nilai_akhir}/${g.nilai_maks}`}</TableCell>
-                        <TableCell className="text-right tabular-nums">{persen(g.capaian_persen)}</TableCell>
-                        <TableCell className="whitespace-nowrap">{g.level_capaian || '-'}</TableCell>
-                        <TableCell className="min-w-[200px] text-xs text-slate-600">{g.predikat || '-'}</TableCell>
+      <Tabs defaultValue="guru">
+        {rekap.cakupan !== 'pribadi' && (
+          <TabsList>
+            <TabsTrigger value="guru" data-testid="pkg-rekap-tab-guru">Per Guru</TabsTrigger>
+            <TabsTrigger value="tim" data-testid="pkg-rekap-tab-tim">Per Tim Penilai</TabsTrigger>
+          </TabsList>
+        )}
+        <TabsContent value="tim">
+          <RekapPerTim guru={rekap.guru} nomorSk={rekap.sk?.nomor_sk} />
+        </TabsContent>
+        <TabsContent value="guru">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Nilai per Guru</CardTitle>
+              <p className="text-xs text-slate-500">Nilai, capaian, dan predikat hanya untuk lembar yang sudah dikirim &amp; dikunci.</p>
+            </CardHeader>
+            <CardContent>
+              {rekap.guru.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-500">Belum ada data penilaian pada periode ini.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Guru</TableHead>
+                        <TableHead>Penilai</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Nilai</TableHead>
+                        <TableHead className="text-right">Capaian</TableHead>
+                        <TableHead>Level</TableHead>
+                        <TableHead>Predikat</TableHead>
                       </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {rekap.guru.map((g) => (
+                          <TableRow key={g.guru_id} data-testid={`pkg-rekap-${g.guru_id}`}>
+                            <TableCell className="min-w-[180px]">
+                              <Link to={`/pkg/rekap/${g.guru_id}`} className="font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
+                              <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-600 whitespace-nowrap">{g.penilai_nama || '-'}</TableCell>
+                            <TableCell><BadgeStatusPenilaian status={g.status} /></TableCell>
+                            <TableCell className="text-right tabular-nums">{g.nilai_akhir == null ? '-' : `${g.nilai_akhir}/${g.nilai_maks}`}</TableCell>
+                            <TableCell className="text-right tabular-nums">{persen(g.capaian_persen)}</TableCell>
+                            <TableCell className="whitespace-nowrap">{g.level_capaian || '-'}</TableCell>
+                            <TableCell className="min-w-[200px] text-xs text-slate-600">{g.predikat || '-'}</TableCell>
+                          </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
