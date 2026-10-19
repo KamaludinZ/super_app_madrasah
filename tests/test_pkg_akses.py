@@ -172,3 +172,27 @@ def test_tugas_penilaian_saya(db):
     assert asyncio.run(api.beranda_pkg(GURU('pen')))['tugas'] == tugas
     with pytest.raises(HTTPException):
         asyncio.run(api.tugas_saya(GURU('asing')))
+
+
+def test_menu_sesuai_akses(db):
+    def akses(user):
+        return {m['key']: m['alasan'] for m in asyncio.run(api.menu_beranda(user))}
+
+    kepala = akses(KEPALA)
+    assert len(kepala) == 9 and all(a is None for a in kepala.values())
+
+    pen = akses(GURU('pen'))  # penilai tersupervisi
+    assert pen['penilaian'] is None and pen['cetak'] is None and pen['rekap'] is None
+    assert {pen[k] for k in ('periode', 'sk', 'penugasan', 'supervisi', 'audit')} == {'bukan_kepala'}
+
+    rangkap = akses(GURU('rangkap'))  # penilai belum disupervisi
+    assert rangkap['penilaian'] == 'belum_disupervisi' and rangkap['cetak'] is None
+
+    gur = akses(GURU('gur'))  # hanya dinilai
+    assert gur['penilaian'] == 'bukan_penilai' and gur['cetak'] == 'bukan_penilai'
+    assert gur['instrumen'] is None and gur['rekap'] is None
+
+    menu = asyncio.run(api.beranda_pkg(GURU('pen')))['menu']
+    assert [m['key'] for m in menu][:2] == ['periode', 'sk'] and menu[0]['khusus'] == 'kepala' and menu[0]['akses'] is False
+    with pytest.raises(HTTPException):
+        asyncio.run(api.menu_beranda(GURU('asing')))

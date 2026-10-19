@@ -1,4 +1,4 @@
-"""Data Beranda PKG: ringkasan kinerja periode berjalan dan daftar tugas penilaian pengguna."""
+"""Data Beranda PKG: ringkasan kinerja periode berjalan, daftar tugas penilaian, dan pintasan menu sesuai akses."""
 from typing import Any, Dict, List, Optional
 
 from pkg_akses import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PERAN_KEPALA
@@ -90,4 +90,49 @@ async def tugas_penilaian_saya(db, user: Dict[str, Any], periode: Optional[Dict[
             'updated_at': (lembar or {}).get('updated_at'),
         })
     hasil.sort(key=lambda t: (URUTAN_TAMPIL_TUGAS[t['status']], (t['nama'] or '').lower()))
+    return hasil
+
+
+# Sembilan sub-menu PKG beserta syarat aksesnya:
+#   'kepala'  = hanya akun kepala madrasah (penetapan periode, SK, pembagian, supervisi, jejak audit)
+#   'penilai' = anggota tim penilai yang sudah disupervisi (kepala selalu lolos)
+#   'pengelola' = kepala atau penilai (cetak dokumen)
+#   'anggota' = semua anggota SK aktif (instrumen dibaca, rekap dibatasi per peran di halamannya)
+MENU_PKG = [
+    ('periode', 'Periode PKG', 'Tetapkan periode penilaian', '/pkg/periode', 'kepala'),
+    ('sk', 'SK & Tim Penilai', 'Data SK dan anggota', '/pkg/sk', 'kepala'),
+    ('penugasan', 'Pembagian Jatah', 'Penilai → guru dinilai', '/pkg/penugasan', 'kepala'),
+    ('supervisi', 'Supervisi Penilai', 'Tandai penilai tersupervisi', '/pkg/supervisi', 'kepala'),
+    ('instrumen', 'Master Instrumen', 'Kompetensi & indikator', '/pkg/instrumen', 'anggota'),
+    ('penilaian', 'Penilaian Kinerja', 'Isi lembar penilaian', '/pkg/penilaian', 'penilai'),
+    ('rekap', 'Rekap Hasil', 'Nilai akhir & predikat', '/pkg/rekap', 'anggota'),
+    ('cetak', 'Cetak Excel & PDF', 'Unduh dokumen resmi', '/pkg/cetak', 'pengelola'),
+    ('audit', 'Jejak Audit', 'Riwayat aksi PKG', '/pkg/audit', 'kepala'),
+]
+
+
+def _alasan_tolak_menu(syarat: str, k: Dict[str, Any]) -> Optional[str]:
+    """Kode alasan penolakan (sama dengan detail 403) atau None bila menu boleh dibuka."""
+    if not k.get('anggota'):
+        return 'bukan_anggota_sk'
+    kepala = k.get('peran') == 'kepala'
+    if syarat == 'kepala':
+        return None if kepala else 'bukan_kepala'
+    if syarat in ('penilai', 'pengelola') and not k.get('sebagai_penilai'):
+        return 'bukan_penilai'
+    if syarat == 'penilai' and not k.get('supervisi_selesai'):
+        return 'belum_disupervisi'
+    return None
+
+
+def menu_pkg(keanggotaan: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Pintasan sembilan menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
+    hasil = []
+    for key, label, keterangan, to, syarat in MENU_PKG:
+        alasan = _alasan_tolak_menu(syarat, keanggotaan)
+        hasil.append({
+            'key': key, 'label': label, 'keterangan': keterangan, 'to': to,
+            'khusus': 'kepala' if syarat == 'kepala' else None,
+            'akses': alasan is None, 'alasan': alasan,
+        })
     return hasil

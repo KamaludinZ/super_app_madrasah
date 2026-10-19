@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, sk_aktif, wajib_anggota_sk
-from pkg_beranda import ringkasan_kinerja, tugas_penilaian_saya
+from pkg_beranda import menu_pkg, ringkasan_kinerja, tugas_penilaian_saya
 
 router = APIRouter()
 
@@ -27,6 +27,7 @@ async def beranda_pkg(user: Dict = Depends(get_current_user)):
         'keanggotaan': {kunci: v for kunci, v in k.items() if kunci not in ('periode', 'penolakan')},
         'ringkasan': await ringkasan_kinerja(db, sk),
         'tugas': await tugas_penilaian_saya(db, user, periode, sk),
+        'menu': menu_pkg(k),
     }
 
 
@@ -45,3 +46,11 @@ async def tugas_saya(user: Dict = Depends(get_current_user)):
     await wajib_anggota_sk(db, user)
     periode, sk = await sk_aktif(db)
     return await tugas_penilaian_saya(db, user, periode, sk)
+
+
+@router.get("/pkg/beranda/menu")
+async def menu_beranda(user: Dict = Depends(get_current_user)):
+    """Pintasan sembilan menu PKG dengan status akses per pengguna (akses + alasan penolakan).
+    Penjaga di tiap endpoint tetap memvalidasi ulang; daftar ini hanya untuk tampilan."""
+    k = await wajib_anggota_sk(db, user)
+    return menu_pkg(k)
