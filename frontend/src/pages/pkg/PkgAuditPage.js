@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { History, Loader2, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
+import RiwayatPerubahanInstrumen from '@/components/pkg/RiwayatPerubahanInstrumen';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatWIBPanjang } from '@/lib/datetime';
@@ -138,9 +139,16 @@ export default function PkgAuditPage() {
         <TabsList>
           <TabsTrigger value="semua" data-testid="pkg-audit-tab-semua">Semua Aksi</TabsTrigger>
           <TabsTrigger value="guru" data-testid="pkg-audit-tab-guru">Per Guru</TabsTrigger>
+          <TabsTrigger value="instrumen" data-testid="pkg-audit-tab-instrumen">Instrumen</TabsTrigger>
         </TabsList>
         <TabsContent value="semua"><IsiHalamanAudit /></TabsContent>
         <TabsContent value="guru"><PanelPerGuru /></TabsContent>
+        <TabsContent value="instrumen">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Riwayat Perubahan Instrumen per Versi</CardTitle></CardHeader>
+            <CardContent><RiwayatPerubahanInstrumen /></CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </PenjagaMenuPkg>
   );

@@ -14,6 +14,7 @@ import UbahSubKompetensiDialog from '@/components/pkg/UbahSubKompetensiDialog';
 import DaftarVersiInstrumen from '@/components/pkg/DaftarVersiInstrumen';
 import PenandaInstrumenAktif from '@/components/pkg/PenandaInstrumenAktif';
 import PeringatanVersiTemplate from '@/components/pkg/PeringatanVersiTemplate';
+import RiwayatPerubahanInstrumen from '@/components/pkg/RiwayatPerubahanInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, labelVersi, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -122,6 +123,12 @@ function IsiHalamanInstrumen() {
 
       <HierarkiInstrumen kompetensi={instrumen.kompetensi} onUbah={kepala ? setUbahSub : undefined} />
       <DaftarVersiInstrumen muatUlangKunci={`${instrumen.id}:${instrumen.revisi}`} onAktifkan={kepala ? setInstrumen : undefined} />
+      {kepala && (
+        <details className="rounded-xl border border-slate-200 bg-white p-4" data-testid="pkg-instrumen-riwayat">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-900">Riwayat perubahan instrumen</summary>
+          <div className="mt-3"><RiwayatPerubahanInstrumen kunci={`${instrumen.id}:${instrumen.revisi}:${JSON.stringify(instrumen.kompetensi).length}`} /></div>
+        </details>
+      )}
       {dialogImpor}
       <UbahSubKompetensiDialog sub={ubahSub} onClose={() => setUbahSub(null)} onTersimpan={(baru) => { setUbahSub(null); setInstrumen(baru); }} />
     </div>

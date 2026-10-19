@@ -61,6 +61,10 @@ export function pratinjauImpor({ sumber, berkas = null }) {
   );
 }
 
+// Riwayat perubahan instrumen (kepala): GET /pkg/instrumen/riwayat -> [{ id, aksi, label, aktor_nama, timestamp,
+// instrumen_id, versi_template, revisi, kode_sub, alasan, perubahan: [teks], sumber, nama_berkas }] (terbaru dulu).
+export const riwayatInstrumen = () => panggil(() => api.get('/pkg/instrumen/riwayat'), 'Gagal memuat riwayat instrumen.');
+
 // Jadikan versi instrumen acuan aktif (kepala; alasan wajib): POST /pkg/instrumen/{id}/aktifkan -> instrumen.
 export const aktifkanInstrumen = (id, alasan) => panggil(
   () => api.post(`/pkg/instrumen/${id}/aktifkan`, { alasan }), 'Gagal menetapkan instrumen acuan.',

@@ -190,6 +190,7 @@ def test_riwayat_perubahan_instrumen(db):
     assert [r['aksi'] for r in riwayat] == ['instrumen_ubah', 'instrumen_impor']
     ubah = riwayat[0]
     assert ubah['label'] == 'Mengubah instrumen' and ubah['kode_sub'] == '2.1' and ubah['alasan'] == 'penyesuaian juknis'
+    assert (ubah['versi_template'], ubah['revisi']) == ('2026', 1)
     assert ubah['perubahan'][0].startswith('Nama: "Kematangan moral') and 'Bobot: 1.0 -> 3.0' in ubah['perubahan']
     assert ubah['perubahan'][-1] == 'Teks indikator diubah: Level 1, Level 2, Level 3, Level 4, Level 5'
     assert riwayat[1]['nama_berkas'] == 'pkg_template_v2026.xlsx'

@@ -80,7 +80,8 @@ async def ubah_sub_api(data: UbahSubInstrumenRequest, request: Request, kode: st
     hasil = await ubah_sub_instrumen(db, kode, data, akses['user'])
     baru = hasil['instrumen']
     await catat_audit_pkg(db, 'instrumen_ubah', akses['user'], {
-        'instrumen_id': baru['id'], 'revisi': baru['revisi'], 'revisi_baru': hasil['revisi_baru'], 'kode_sub': kode,
+        'instrumen_id': baru['id'], 'versi_template': baru.get('versi_template'), 'revisi': baru['revisi'],
+        'revisi_baru': hasil['revisi_baru'], 'kode_sub': kode,
         'alasan': data.alasan, 'perubahan': ringkas_perubahan_sub(hasil['sebelum'], hasil['sesudah']),
         'sebelum': hasil['sebelum'], 'sesudah': hasil['sesudah'],
     }, request=request)
