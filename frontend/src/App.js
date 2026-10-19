@@ -101,6 +101,7 @@ import PkgLembarPenilaianPage from '@/pages/pkg/PkgLembarPenilaianPage';
 import PkgRekapPage from '@/pages/pkg/PkgRekapPage';
 import PkgRekapGuruPage from '@/pages/pkg/PkgRekapGuruPage';
 import PkgCetakPage from '@/pages/pkg/PkgCetakPage';
+import PkgAuditPage from '@/pages/pkg/PkgAuditPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -415,6 +416,7 @@ function App() {
               <Route path="rekap" element={<PkgRekapPage />} />
               <Route path="rekap/:guruId" element={<PkgRekapGuruPage />} />
               <Route path="cetak" element={<PkgCetakPage />} />
+              <Route path="audit" element={<PkgAuditPage />} />
             </Route>
             <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
             <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
