@@ -12,6 +12,7 @@
 //   POST /pkg/sk/{id}/aktifkan           -> sk             (SK lain di periode yang sama dinonaktifkan)
 //   GET  /users/teachers                 -> [{ id, full_name, username, roles }]   (akun GTK aktif)
 //   PUT  /pkg/sk/{id}/penilai            -> sk             body: { penilai_ids }  (kepala selalu disertakan)
+//   PUT  /pkg/sk/{id}/dinilai            -> sk             body: { dinilai_ids }  (kepala ditolak)
 // periode = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
 //             status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
 // sk = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilai: [anggota], dinilai: [anggota] }
@@ -139,5 +140,17 @@ export async function simpanPenilaiSk(skId, penilaiIds = []) {
   const asing = ids.filter((id) => !GURU.some((g) => g.id === id));
   if (asing.length) throw new GalatValidasi('Sebagian penilai bukan akun guru aktif.');
   sk.penilai = ids.map(anggota);
+  return tunda(sk);
+}
+
+export async function simpanDinilaiSk(skId, dinilaiIds = []) {
+  const sk = store.sk.find((s) => s.id === skId);
+  if (!sk) throw new GalatValidasi('SK tidak ditemukan.');
+  const ids = [...new Set(dinilaiIds)];
+  if (ids.some((id) => GURU.find((g) => g.id === id)?.kepala)) {
+    throw new GalatValidasi('Kepala madrasah tidak dapat menjadi guru yang dinilai.');
+  }
+  if (ids.some((id) => !GURU.some((g) => g.id === id))) throw new GalatValidasi('Sebagian guru bukan akun guru aktif.');
+  sk.dinilai = ids.map(anggota);
   return tunda(sk);
 }

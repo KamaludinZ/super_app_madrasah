@@ -9,7 +9,9 @@ import FormSkDialog from '@/components/pkg/FormSkDialog';
 import CeklistGuruDialog from '@/components/pkg/CeklistGuruDialog';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { adalahKepala, aktifkanSk, daftarGuru, daftarPeriode, daftarSk, simpanPenilaiSk } from '@/lib/pkgKelola';
+import {
+  adalahKepala, aktifkanSk, daftarGuru, daftarPeriode, daftarSk, simpanDinilaiSk, simpanPenilaiSk,
+} from '@/lib/pkgKelola';
 
 function TabelAnggota({ judul, icon: Icon, anggota, testid, kosong, aksi }) {
   return (
@@ -56,7 +58,7 @@ function IsiHalamanSk() {
   const [form, setForm] = useState({ open: false, sk: null });
   const [mengaktifkan, setMengaktifkan] = useState(false);
   const [guru, setGuru] = useState([]);
-  const [ceklist, setCeklist] = useState(null); // 'penilai'
+  const [ceklist, setCeklist] = useState(null); // 'penilai' | 'dinilai'
 
   const muat = useCallback(async () => {
     const [p, s] = await Promise.all([daftarPeriode(), daftarSk()]);
@@ -76,10 +78,21 @@ function IsiHalamanSk() {
     () => Object.fromEntries(guru.filter(adalahKepala).map((g) => [g.id, 'Kepala madrasah'])), [guru],
   );
   const idPenilai = useMemo(() => (sk ? sk.penilai.map((a) => a.id) : []), [sk]);
+  // Kepala madrasah bukan objek penilaian, jadi tidak muncul di ceklist guru yang dinilai.
+  const guruBukanKepala = useMemo(() => guru.filter((g) => !adalahKepala(g)), [guru]);
+  const idDinilai = useMemo(() => (sk ? sk.dinilai.map((a) => a.id) : []), [sk]);
+  const tanpaKunci = useMemo(() => ({}), []);
 
   const simpanPenilai = async (ids) => {
     await simpanPenilaiSk(sk.id, ids);
     toast.success('Tim penilai disimpan');
+    setCeklist(null);
+    await muat();
+  };
+
+  const simpanDinilai = async (ids) => {
+    await simpanDinilaiSk(sk.id, ids);
+    toast.success('Guru yang dinilai disimpan');
     setCeklist(null);
     await muat();
   };
@@ -173,7 +186,18 @@ function IsiHalamanSk() {
                   </Button>
                 )}
               />
-              <TabelAnggota judul="Guru yang Dinilai" icon={Users} anggota={sk.dinilai} testid="pkg-sk-dinilai" kosong="Belum ada guru yang dinilai." />
+              <TabelAnggota
+                judul="Guru yang Dinilai"
+                icon={Users}
+                anggota={sk.dinilai}
+                testid="pkg-sk-dinilai"
+                kosong="Belum ada guru yang dinilai."
+                aksi={(
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setCeklist('dinilai')} data-testid="pkg-sk-atur-dinilai">
+                    <ListChecks className="h-3.5 w-3.5" /> Atur
+                  </Button>
+                )}
+              />
             </CardContent>
           </>
         )}
@@ -190,6 +214,19 @@ function IsiHalamanSk() {
         onClose={() => setCeklist(null)}
         onSimpan={simpanPenilai}
         testid="pkg-ceklist-penilai"
+      />
+
+      <CeklistGuruDialog
+        open={ceklist === 'dinilai' && !!sk}
+        judul="Pilih Guru yang Dinilai"
+        deskripsi="Centang guru yang dinilai pada periode SK ini. Kepala madrasah tidak menjadi objek penilaian. Anggota tim penilai boleh merangkap sebagai guru yang dinilai."
+        icon={Users}
+        guru={guruBukanKepala}
+        terpilih={idDinilai}
+        terkunci={tanpaKunci}
+        onClose={() => setCeklist(null)}
+        onSimpan={simpanDinilai}
+        testid="pkg-ceklist-dinilai"
       />
 
       <FormSkDialog
