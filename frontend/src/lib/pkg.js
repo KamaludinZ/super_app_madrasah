@@ -30,6 +30,9 @@ export const ambilKeanggotaan = () => panggil(() => api.get('/pkg/sk/my-membersh
 export const ambilMenuPkg = () => panggil(() => api.get('/pkg/beranda/menu'), 'Gagal memuat menu PKG.');
 export const ambilBeranda = () => panggil(() => api.get('/pkg/beranda'), 'Gagal memuat beranda PKG.');
 export const ambilTugasSaya = () => panggil(() => api.get('/pkg/beranda/tugas-saya'), 'Gagal memuat tugas penilaian.');
+// Tugas penilaian modul Penilaian Kinerja (penilai tersupervisi): { periode, instrumen, dapat_diisi,
+// alasan_tidak_dapat_diisi, ringkasan: { total, belum, draf, terkunci }, tugas: [...] }.
+export const ambilTugasPenilaian = () => panggil(() => api.get('/pkg/penilaian/tugas'), 'Gagal memuat tugas penilaian.');
 
 export const LABEL_PERAN_PKG = {
   kepala: 'Kepala Madrasah · Penilai',
