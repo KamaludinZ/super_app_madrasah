@@ -13,9 +13,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from pkg_skema import KOLEKSI_AUDIT
+
 logger = logging.getLogger('matsandatama')
 
-KOLEKSI_AUDIT = 'pkg_audit_log'
 WIB = timezone(timedelta(hours=7))
 
 AKSI_BUKA_BERANDA = 'buka_beranda'

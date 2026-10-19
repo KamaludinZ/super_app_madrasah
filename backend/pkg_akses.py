@@ -1,14 +1,4 @@
-"""Skema & akses modul PKG (Penilaian Kinerja Guru) berbasis keanggotaan SK aktif.
-
-Koleksi:
-    pkg_periode    {id, nama_periode, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
-                    status ('draf' | 'berjalan' | 'ditutup'), dibuat_oleh, created_at, updated_at}
-    pkg_sk         {id, nomor_sk, periode_id, ditetapkan_oleh, penilai_ids, dinilai_ids, is_active, ...}
-    pkg_penugasan  {id, periode_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
-                    supervisi_selesai, tanggal_supervisi, disupervisi_oleh,
-                    snapshot_guru {<guru_id>: {nama, nip, mapel}}}  (identitas disalin per periode)
-    pkg_penilaian  {id, sk_id, periode_id, penilai_id, guru_dinilai_id, instrumen_id, skor_per_indikator,
-                    progres (0–100), nilai_akhir, predikat, status ('draf' | 'terkunci'), created_at, updated_at}
+"""Akses modul PKG (Penilaian Kinerja Guru) berbasis keanggotaan SK aktif. Skema koleksi: lihat pkg_skema.
 
 Aturan akses:
     - Modul hanya untuk personil SK aktif (SK is_active pada periode berstatus 'berjalan').
@@ -21,10 +11,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
-KOLEKSI_PERIODE = 'pkg_periode'
-KOLEKSI_SK = 'pkg_sk'
-KOLEKSI_PENUGASAN = 'pkg_penugasan'
-KOLEKSI_PENILAIAN = 'pkg_penilaian'
+from pkg_skema import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, KOLEKSI_PERIODE, KOLEKSI_SK  # noqa: F401
 
 PERAN_KEPALA = 'kepala_sekolah'
 STATUS_BERJALAN = 'berjalan'

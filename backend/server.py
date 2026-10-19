@@ -314,14 +314,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to ensure notification indexes: {e}")
 
-    # Index jejak audit PKG (pkg_audit_log)
+    # Index koleksi PKG (periode, SK, penugasan, instrumen, penilaian, unduhan, template) & jejak audit PKG
     try:
         from pkg_audit import ensure_pkg_audit_indexes
-        gagal = await ensure_pkg_audit_indexes(db)
+        from pkg_skema import ensure_pkg_indexes
+        gagal = await ensure_pkg_indexes(db) + await ensure_pkg_audit_indexes(db)
         if gagal:
-            logger.error(f"Index audit PKG gagal: {gagal}")
+            logger.error(f"Index PKG gagal: {gagal}")
     except Exception as e:
-        logger.error(f"Failed to ensure PKG audit indexes: {e}")
+        logger.error(f"Failed to ensure PKG indexes: {e}")
 
     # Folder unggahan (volume /app/uploads): siapkan, salin berkas dari lokasi lama, uji tulis
     try:
