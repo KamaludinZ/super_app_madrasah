@@ -38,7 +38,8 @@ async function panggil(fn, cadangan) {
     const status = e?.response?.status;
     const d = e?.response?.data?.detail;
     if (status === 403 && d?.alasan) throw new GalatLembar(d.pesan || cadangan, d);
-    if (d && typeof d === 'object' && !Array.isArray(d)) throw new GalatLembar(d.pesan || cadangan, null, d.galat || null);
+    // galat per sub berbentuk objek {kode_sub: pesan}; galat validasi 422 berbentuk daftar {lokasi, pesan} -> cukup pesannya.
+    if (d && typeof d === 'object' && !Array.isArray(d)) throw new GalatLembar(d.pesan || cadangan, null, d.galat && !Array.isArray(d.galat) ? d.galat : null);
     if (typeof d === 'string') throw new GalatLembar(d);
     if (Array.isArray(d) && d[0]?.msg) throw new GalatLembar(`Isian tidak valid: ${d[0].msg}`);
     throw new GalatLembar(cadangan);

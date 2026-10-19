@@ -36,7 +36,7 @@ async def daftar_versi_api(akses: Dict = Depends(anggota_sk)):
 
 @router.post("/pkg/instrumen/impor/pratinjau")
 async def pratinjau_impor_api(
-    sumber: str = Form('template'),
+    sumber: str = Form('template', pattern='^(template|unggah)$'),
     berkas: Optional[UploadFile] = File(None),
     akses: Dict = Depends(kepala),
 ):
@@ -45,13 +45,11 @@ async def pratinjau_impor_api(
     try:
         if sumber == 'template':
             pratinjau = pratinjau_dari_template()
-        elif sumber == 'unggah':
+        else:
             if berkas is None or not (berkas.filename or '').lower().endswith('.xlsx'):
                 raise HTTPException(400, 'Unggah berkas Excel berformat .xlsx.')
             isi = await berkas.read(BATAS_UKURAN_BERKAS + 1)
             pratinjau = pratinjau_dari_bytes(isi, 'unggah', (berkas.filename or 'instrumen.xlsx')[-120:])
-        else:
-            raise HTTPException(400, "Sumber harus 'template' atau 'unggah'.")
     except GalatImporInstrumen as e:
         raise HTTPException(422, {'pesan': e.pesan, 'galat': e.galat[:50]}) from e
     except TemplateTidakTersedia as e:

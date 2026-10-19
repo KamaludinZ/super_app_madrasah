@@ -23,7 +23,7 @@ router = APIRouter()
 
 # Saringan bersama endpoint rekap: periode_id, atau tahun pelajaran (YYYY/YYYY) & semester -> periode terbaru cocok.
 TahunPelajaran = Query(None, pattern=r'^\d{4}/\d{4}$')
-Semester = Query(None, max_length=40)
+Semester = Query(None, max_length=40, pattern=r'^[\w ./-]+$')
 
 
 async def akses_rekap(

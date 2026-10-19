@@ -153,6 +153,10 @@ api_router.include_router(kelas_digital.router)
 
 app.include_router(api_router)
 
+# Galat validasi 422 endpoint PKG: detail {pesan, galat} berbahasa Indonesia (path lain tetap bawaan FastAPI).
+from pkg_validasi import pasang_penangan_validasi  # noqa: E402
+pasang_penangan_validasi(app)
+
 # ============================================================
 # MIDDLEWARE
 # ============================================================
