@@ -6,6 +6,7 @@ import { FileSpreadsheet, ShieldCheck, ShieldAlert, FileX2, Loader2, Copy, Tag }
 import { toast } from 'sonner';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInfoTemplate, formatUkuran } from '@/lib/pkgTemplate';
+import IndikatorChecksumTemplate, { ringkasKecocokan } from '@/components/pkg/IndikatorChecksumTemplate';
 
 const STATUS = {
   cocok: { label: 'Checksum cocok', kelas: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: ShieldCheck },
@@ -30,7 +31,7 @@ export default function PkgTemplatePage() {
 
   if (!info) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
 
-  const semuaCocok = info.berkas.every((b) => b.status === 'cocok');
+  const { cocok: semuaCocok } = ringkasKecocokan(info.berkas);
 
   return (
     <div className="space-y-4" data-testid="pkg-template">
@@ -68,9 +69,7 @@ export default function PkgTemplatePage() {
                     )}
                   </span>
                 </div>
-                {b.status === 'berbeda' && (
-                  <div className="flex justify-between gap-4"><span className="text-slate-500">Checksum resmi</span><span className="font-mono text-xs text-rose-700" title={b.checksum_resmi}>{ringkasChecksum(b.checksum_resmi)}</span></div>
-                )}
+                <IndikatorChecksumTemplate berkas={b} />
               </CardContent>
             </Card>
           );

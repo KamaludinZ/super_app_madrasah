@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Award, CalendarRange, Loader2, Lock, AlertTriangle, RotateCw } from 'lucide-react';
 import PesanTolakPkg from '@/components/pkg/PesanTolakPkg';
+import { LencanaTemplate } from '@/components/pkg/IndikatorChecksumTemplate';
 import { formatWIB } from '@/lib/datetime';
 import { RUTE_PKG_TERSEDIA, ambilKeanggotaan, ambilMenuPkg, labelPeranPkg } from '@/lib/pkg';
 
@@ -84,6 +85,7 @@ export default function PkgLayout() {
             </>
           )}
           {peran && <Badge variant="outline" data-testid="pkg-peran">{peran}</Badge>}
+          <LencanaTemplate />
         </div>
       </div>
 
