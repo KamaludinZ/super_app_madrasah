@@ -8,8 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
+import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
+import useAutosaveDraf from '@/hooks/useAutosaveDraf';
 import { labelVersi } from '@/lib/pkgInstrumen';
-import { BATAS_TEKS, ambilLembar, hitungNilai, validasiLembar } from '@/lib/pkgPenilaian';
+import { toast } from 'sonner';
+import { BATAS_TEKS, ambilLembar, hitungNilai, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
 
 const STATUS = {
   belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
@@ -44,6 +47,19 @@ function IsiLembar() {
 
   const nilai = useMemo(() => hitungNilai(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
   const validasi = useMemo(() => validasiLembar(lembar?.instrumen?.kompetensi, isian), [lembar, isian]);
+
+  const kompetensi = lembar?.instrumen?.kompetensi;
+  const simpan = useCallback(
+    (data) => simpanDraf(guruId, { isian: data.isian, catatanUmum: data.catatanUmum, kompetensi }),
+    [guruId, kompetensi],
+  );
+  const draf = useAutosaveDraf({
+    data: { isian, catatanUmum },
+    simpan,
+    aktif: !!lembar && lembar.status !== 'terkunci',
+    tersimpanAwal: lembar?.updated_at || null,
+  });
+  const simpanManual = () => draf.simpanSekarang().catch((e) => toast.error(e.message || 'Gagal menyimpan draf'));
 
   if (galat) {
     return (
@@ -89,9 +105,12 @@ function IsiLembar() {
           <span>Capaian <span className="font-bold tabular-nums text-[#006837]">{FORMAT_PERSEN.format(nilai.persen)}%</span></span>
           <span className="text-slate-600">Sub-kompetensi dinilai <span className="font-semibold tabular-nums">{nilai.terisi}/{nilai.jumlahSub}</span></span>
           {!terkunci && (
-            <Button type="button" size="sm" variant="outline" className="ml-auto h-7 bg-white text-xs" onClick={periksaKelengkapan} data-testid="pkg-lembar-periksa">
-              Periksa kelengkapan
-            </Button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <StatusSimpanDraf status={draf.status} tersimpanPada={draf.tersimpanPada} onSimpan={simpanManual} />
+              <Button type="button" size="sm" variant="outline" className="h-7 bg-white text-xs" onClick={periksaKelengkapan} data-testid="pkg-lembar-periksa">
+                Periksa kelengkapan
+              </Button>
+            </div>
           )}
         </div>
         <Progress value={nilai.jumlahSub ? (nilai.terisi / nilai.jumlahSub) * 100 : 0} className="mt-2 h-1.5" aria-label="Kelengkapan penilaian" />

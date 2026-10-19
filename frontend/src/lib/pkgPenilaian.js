@@ -4,6 +4,8 @@ import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
 //
 // TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
 //   GET /pkg/penilaian/lembar/{guru_id} -> lembar
+//   POST /pkg/penilaian/draft { guru_id, isian, catatan_umum } -> { id, status: 'draf', progres, updated_at }
+//        (lembar dibuat saat draf pertama disimpan; lembar terkunci ditolak 409)
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel }, periode,
 //            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, updated_at }
 // isianSub = { centang: [level...], catatan_bukti, tanggapan }   (catatan & tanggapan maks BATAS_TEKS karakter)
@@ -22,6 +24,7 @@ const GURU_TIRUAN = {
 const ISIAN_TIRUAN = {
   g1: { '1.1': { centang: [1, 2, 3, 4], catatan_bukti: 'RPP & foto kelas', tanggapan: '' }, '1.2': { centang: [1, 2, 3], catatan_bukti: '', tanggapan: '' } },
 };
+const DRAF_TIRUAN = {}; // guru_id -> { catatan_umum, updated_at }
 
 const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), ms); });
 
@@ -36,8 +39,8 @@ export async function ambilLembar(guruId) {
     periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027' },
     instrumen: { id: instrumen.id, versi_template: instrumen.versi_template, revisi: instrumen.revisi, kompetensi: instrumen.kompetensi },
     isian,
-    catatan_umum: '',
-    updated_at: null,
+    catatan_umum: DRAF_TIRUAN[guruId]?.catatan_umum || '',
+    updated_at: DRAF_TIRUAN[guruId]?.updated_at || null,
   });
 }
 
@@ -90,4 +93,15 @@ export function validasiLembar(kompetensi = [], isian = {}) {
     });
   });
   return { sah: Object.keys(galat).length === 0, kosong, lompat, galat };
+}
+
+export async function simpanDraf(guruId, { isian, catatanUmum, kompetensi }) {
+  const terlalu = Object.values(isian || {}).some((x) => (x.catatan_bukti || '').length > BATAS_TEKS || (x.tanggapan || '').length > BATAS_TEKS)
+    || (catatanUmum || '').length > BATAS_TEKS;
+  if (terlalu) throw new Error(`Teks melebihi ${BATAS_TEKS} karakter.`);
+  ISIAN_TIRUAN[guruId] = JSON.parse(JSON.stringify(isian || {}));
+  const updated = new Date().toISOString();
+  DRAF_TIRUAN[guruId] = { catatan_umum: catatanUmum || '', updated_at: updated };
+  const n = hitungNilai(kompetensi, isian);
+  return tunda({ id: `lembar-${guruId}`, status: 'draf', progres: n.jumlahSub ? Math.round((n.terisi / n.jumlahSub) * 100) : 0, updated_at: updated }, 300);
 }
