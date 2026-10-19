@@ -19,7 +19,7 @@ from pkg_instrumen import instrumen_aktif
 from pymongo.errors import DuplicateKeyError
 
 from pkg_nilai import hitung_nilai, kode_sub
-from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest
+from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest, KirimPenilaianRequest
 
 KUNCI_HASIL = ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat', 'terkunci_pada')
 
@@ -139,3 +139,33 @@ async def simpan_draf(db, ktx: Dict[str, Any], data: DrafPenilaianRequest) -> Di
     if getattr(hasil, 'matched_count', 1) == 0:
         raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
     return {**lembar, **perubahan, '_baru': baru}
+
+
+def galat_kelengkapan(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> Dict[str, str]:
+    """{kode_sub: pesan} untuk sub yang belum dinilai (aturan sama dengan validasiLembar di frontend)."""
+    skor = hitung_nilai(instrumen, isian)['skor_per_indikator']
+    return {kode: 'Belum dinilai: centang minimal satu indikator.' for kode, n in skor.items() if n == 0}
+
+
+async def kirim_dan_kunci(db, ktx: Dict[str, Any], data: KirimPenilaianRequest, penilai: Dict[str, Any]) -> Dict[str, Any]:
+    """Validasi kelengkapan, simpan isian terakhir, lalu kunci lembar permanen dengan nilai akhir resmi."""
+    wajib_dapat_diisi(ktx)
+    wajib_kode_sub_sah(ktx, data)
+    isian = {k: v.model_dump() for k, v in data.isian.items()}
+    galat = galat_kelengkapan(ktx['instrumen'], isian)
+    if galat:
+        raise HTTPException(400, {'pesan': f'{len(galat)} sub-kompetensi belum dinilai.', 'galat': galat})
+    lembar = await simpan_draf(db, ktx, data)
+    nilai = hitung_nilai(ktx['instrumen'], isian)
+    sekarang = datetime.now(timezone.utc).isoformat()
+    kunci = {
+        'status': 'terkunci', 'skor_per_indikator': nilai['skor_per_indikator'], 'progres': 100,
+        'nilai_akhir': nilai['nilai_akhir'], 'nilai_maks': nilai['nilai_maks'], 'capaian_persen': nilai['capaian_persen'],
+        'level_capaian': nilai['level_capaian'], 'predikat': nilai['predikat'],
+        'dikirim_pada': sekarang, 'terkunci_pada': sekarang, 'terkunci_oleh': penilai.get('id'), 'updated_at': sekarang,
+    }
+    hasil = await db[KOLEKSI_PENILAIAN].update_one({'id': lembar['id'], 'status': 'draf'}, {'$set': kunci})
+    if getattr(hasil, 'matched_count', 1) == 0:
+        raise HTTPException(409, 'Lembar penilaian ini sudah dikirim dan dikunci.')
+    lembar.pop('_baru', None)
+    return {**lembar, **kunci}

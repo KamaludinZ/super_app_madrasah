@@ -170,3 +170,36 @@ def test_simpan_draf_ditolak(db):
     with pytest.raises(HTTPException) as e:  # di luar masa
         _draf('g3', {'1.1': {'centang': [1]}})
     assert e.value.detail['alasan'] == 'di_luar_masa'
+
+
+def _kirim(guru, isian, user='pen'):
+    from pkg_skema import KirimPenilaianRequest
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU(user))
+        return await api.kirim_api(KirimPenilaianRequest(guru_id=guru, isian=isian), Request(), akses=akses)
+    return asyncio.run(jalan())
+
+
+def test_kirim_dan_kunci(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP + [{'kode': '2', 'nama': 'K2', 'sub': [
+        {'kode': '2.1', 'nama': 'S', 'bobot': 1, 'indikator': [{'level': i, 'teks': f't{i}'} for i in range(1, 6)]}]}]
+    with pytest.raises(HTTPException) as e:  # belum lengkap: tidak ada yang tersimpan sebagai terkunci
+        _kirim('g3', {'1.1': {'centang': [1, 2]}})
+    assert e.value.status_code == 400 and e.value.detail['galat'] == {'2.1': 'Belum dinilai: centang minimal satu indikator.'}
+    assert not any(d['guru_dinilai_id'] == 'g3' for d in db['pkg_penilaian'].docs)
+
+    hasil = _kirim('g3', {'1.1': {'centang': [1, 2, 3, 4]}, '2.1': {'centang': [1, 2, 3]}})
+    assert hasil['status'] == 'terkunci' and hasil['dapat_diisi'] is False
+    assert hasil['hasil']['nilai_akhir'] == 7 and hasil['hasil']['nilai_maks'] == 10 and hasil['hasil']['capaian_persen'] == 70.0
+    assert hasil['hasil']['level_capaian'] == 'Level 3' and hasil['hasil']['predikat'].endswith('Ahli Muda')
+    dok = next(d for d in db['pkg_penilaian'].docs if d['guru_dinilai_id'] == 'g3')
+    assert dok['terkunci_oleh'] == 'pen' and dok['skor_per_indikator'] == {'1.1': 4, '2.1': 3}
+    kirim = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'penilaian_kirim']
+    assert len(kirim) == 1 and kirim[0]['metadata']['nilai_akhir'] == 7 and kirim[0]['penilaian_id'] == dok['id']
+
+    with pytest.raises(HTTPException) as e:  # sudah terkunci: tidak bisa dikirim/diubah lagi
+        _kirim('g3', {'1.1': {'centang': [1]}, '2.1': {'centang': [1]}})
+    assert e.value.status_code == 409
+    with pytest.raises(HTTPException) as e:
+        _draf('g3', {'1.1': {'centang': [1]}})
+    assert e.value.status_code == 409

@@ -48,6 +48,7 @@ LABEL_AKSI = {
     'instrumen_aktifkan': 'Menetapkan instrumen acuan',
     'penilaian_mulai': 'Memulai lembar penilaian',
     'penilaian_draf': 'Menyimpan draf penilaian',
+    'penilaian_kirim': 'Mengirim & mengunci penilaian',
     AKSI_LIHAT_TEMPLATE: 'Melihat info template',
     AKSI_PERIKSA_TEMPLATE: 'Memeriksa ulang berkas template',
     AKSI_CETAK_TEMPLATE: 'Mencetak dokumen dari template',

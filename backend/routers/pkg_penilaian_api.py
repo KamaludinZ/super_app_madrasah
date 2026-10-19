@@ -11,9 +11,9 @@ from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
 from pkg_audit import catat_audit_pkg, catat_audit_pkg_harian
-from pkg_lembar import konteks_lembar, lembar_tampil, simpan_draf
+from pkg_lembar import kirim_dan_kunci, konteks_lembar, lembar_tampil, simpan_draf
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import POLA_ID, DrafPenilaianRequest
+from pkg_skema import POLA_ID, DrafPenilaianRequest, KirimPenilaianRequest
 
 router = APIRouter()
 
@@ -67,3 +67,18 @@ async def simpan_draf_api(data: DrafPenilaianRequest, request: Request, akses: D
     await catat_audit_pkg_harian(db, 'penilaian_draf', akses['user'], kunci=lembar['id'], metadata=meta, request=request,
                                  penilaian_id=lembar['id'])
     return {'id': lembar['id'], 'status': lembar['status'], 'progres': lembar['progres'], 'updated_at': lembar['updated_at']}
+
+
+@router.post("/pkg/penilaian/submit")
+async def kirim_api(data: KirimPenilaianRequest, request: Request, akses: Dict = Depends(penilai)):
+    """Kirim & kunci lembar: server memvalidasi ulang kelengkapan (400 {pesan, galat: {kode_sub: pesan}}), menyimpan
+    isian terakhir, menghitung nilai akhir resmi, lalu mengunci lembar permanen (terkunci 409)."""
+    ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
+    lembar = await kirim_dan_kunci(db, ktx, data, akses['user'])
+    await catat_audit_pkg(db, 'penilaian_kirim', akses['user'], {
+        'penilaian_id': lembar['id'], 'guru_id': data.guru_id, 'instrumen_id': lembar['instrumen_id'],
+        'nilai_akhir': lembar['nilai_akhir'], 'nilai_maks': lembar['nilai_maks'],
+        'capaian_persen': lembar['capaian_persen'], 'predikat': lembar['predikat'],
+    }, penilaian_id=lembar['id'], request=request)
+    ktx['lembar'] = lembar
+    return await lembar_tampil(db, ktx, data.guru_id)
