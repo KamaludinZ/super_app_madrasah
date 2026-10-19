@@ -252,3 +252,42 @@ export function porsiBobot(bobot, totalBobot) {
   const total = Number(totalBobot) || 0;
   return total > 0 ? ((Number(bobot) || 0) / total) * 100 : null;
 }
+
+// Ubah satu sub-kompetensi instrumen aktif (khusus kepala madrasah):
+//   PUT /pkg/instrumen/aktif/sub/{kode}  { nama, bobot, indikator: [{ level, teks }], alasan } -> instrumen
+// Bila instrumen sudah dipakai penilaian, backend menyimpan revisi baru agar penilaian lama tetap utuh.
+export const BATAS_INSTRUMEN = { nama: 200, teks: 500, alasan: 300, bobotMin: 0.01, bobotMaks: 100 };
+
+// Validasi isian ubah sub-kompetensi; mengembalikan { field: pesan } (kosong bila sah).
+export function validasiUbahSub(isian) {
+  const galat = {};
+  const nama = (isian.nama || '').trim();
+  if (!nama) galat.nama = 'Nama sub-kompetensi wajib diisi.';
+  else if (nama.length > BATAS_INSTRUMEN.nama) galat.nama = `Maksimal ${BATAS_INSTRUMEN.nama} karakter.`;
+  const bobotTeks = String(isian.bobot ?? '').replace(',', '.').trim();
+  const bobot = Number(bobotTeks);
+  if (!bobotTeks || !Number.isFinite(bobot)) galat.bobot = 'Bobot harus berupa angka.';
+  else if (bobot < BATAS_INSTRUMEN.bobotMin || bobot > BATAS_INSTRUMEN.bobotMaks) galat.bobot = 'Bobot antara 0,01 dan 100.';
+  else if (!/^\d+(\.\d{1,2})?$/.test(bobotTeks)) galat.bobot = 'Bobot maksimal dua angka desimal.';
+  (isian.indikator || []).forEach((i) => {
+    const teks = (i.teks || '').trim();
+    if (!teks) galat[`indikator_${i.level}`] = `Teks indikator Level ${i.level} wajib diisi.`;
+    else if (teks.length > BATAS_INSTRUMEN.teks) galat[`indikator_${i.level}`] = `Maksimal ${BATAS_INSTRUMEN.teks} karakter.`;
+  });
+  const alasan = (isian.alasan || '').trim();
+  if (!alasan) galat.alasan = 'Alasan perubahan wajib diisi (tercatat di jejak audit).';
+  else if (alasan.length > BATAS_INSTRUMEN.alasan) galat.alasan = `Maksimal ${BATAS_INSTRUMEN.alasan} karakter.`;
+  return galat;
+}
+
+export async function ubahSubKompetensi(kode, isian) {
+  const galat = validasiUbahSub(isian);
+  if (Object.keys(galat).length) throw new Error(Object.values(galat)[0]);
+  const instrumen = instrumenTiruanAktif();
+  const sub = instrumen?.kompetensi.flatMap((k) => k.sub).find((x) => x.kode === kode);
+  if (!sub) throw new Error('Sub-kompetensi tidak ditemukan.');
+  sub.nama = isian.nama.trim();
+  sub.bobot = Number(String(isian.bobot).replace(',', '.'));
+  sub.indikator = isian.indikator.map((i) => ({ level: i.level, teks: i.teks.trim() }));
+  return tunda(instrumen);
+}

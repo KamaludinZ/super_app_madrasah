@@ -10,6 +10,7 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
 import ImporInstrumenDialog from '@/components/pkg/ImporInstrumenDialog';
 import HasilImporInstrumen from '@/components/pkg/HasilImporInstrumen';
+import UbahSubKompetensiDialog from '@/components/pkg/UbahSubKompetensiDialog';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -50,6 +51,7 @@ function IsiHalamanInstrumen() {
   const [galat, setGalat] = useState(false);
   const [impor, setImpor] = useState(false);
   const [hasilImpor, setHasilImpor] = useState(null);
+  const [ubahSub, setUbahSub] = useState(null);
   const kepala = keanggotaan?.peran === 'kepala';
 
   const muat = useCallback(async () => {
@@ -113,8 +115,9 @@ function IsiHalamanInstrumen() {
         <KartuAngka icon={Target} label="Skor Maksimal" value={r.skorMaks} />
       </div>
 
-      <HierarkiInstrumen kompetensi={instrumen.kompetensi} />
+      <HierarkiInstrumen kompetensi={instrumen.kompetensi} onUbah={kepala ? setUbahSub : undefined} />
       {dialogImpor}
+      <UbahSubKompetensiDialog sub={ubahSub} onClose={() => setUbahSub(null)} onTersimpan={(baru) => { setUbahSub(null); setInstrumen(baru); }} />
     </div>
   );
 }

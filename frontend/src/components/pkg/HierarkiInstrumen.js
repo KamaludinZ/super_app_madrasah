@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatPersen, porsiBobot } from '@/lib/pkgInstrumen';
 
 // Warna penanda level 1–5 (dari "memahami" sampai "membimbing rekan sejawat").
@@ -45,7 +46,8 @@ function TeksSorot({ teks, kata }) {
 
 // Hierarki instrumen PKG: kompetensi -> sub-kompetensi (bobot & porsi terhadap total bobot) -> indikator perilaku
 // Level 1–5. `kompetensi` = [{ kode, nama, sub: [{ kode, nama, bobot, indikator: [{ level, teks }] }] }].
-export default function HierarkiInstrumen({ kompetensi = [] }) {
+// `onUbah(sub)` (opsional, untuk kepala) menampilkan tombol Ubah per sub-kompetensi.
+export default function HierarkiInstrumen({ kompetensi = [], onUbah }) {
   const [cari, setCari] = useState('');
   const kata = cari.trim().toLowerCase();
 
@@ -96,6 +98,16 @@ export default function HierarkiInstrumen({ kompetensi = [] }) {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
+                      {onUbah && (
+                        <div className="mb-2 flex justify-end">
+                          {/* Data asli (bukan hasil saring) yang diubah, agar indikator tersembunyi tidak hilang. */}
+                          <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs"
+                            onClick={() => onUbah(kompetensi.flatMap((x) => x.sub).find((x) => x.kode === s.kode))}
+                            data-testid={`pkg-ubah-${s.kode}`}>
+                            <Pencil className="h-3 w-3" /> Ubah
+                          </Button>
+                        </div>
+                      )}
                       <ol className="space-y-1.5 pb-1">
                         {s.indikator.map((i) => (
                           <li key={i.level} className="flex items-start gap-2 text-sm text-slate-700">
