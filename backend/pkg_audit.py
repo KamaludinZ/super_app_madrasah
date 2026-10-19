@@ -1,7 +1,10 @@
 """Jejak audit modul PKG (koleksi pkg_audit_log), terpisah dari audit_logs umum.
 
-    pkg_audit_log  {id, penilaian_id, aksi, aktor_id, aktor_nama, aktor_peran, metadata, ip_address,
-                    timestamp (UTC ISO), tanggal (WIB 'YYYY-MM-DD'), jumlah, terakhir}
+    pkg_audit_log  {id, penilaian_id, aksi, kategori, aktor_id, aktor_nama, aktor_peran, metadata, ip_address,
+                    guru_id, periode_id, timestamp (UTC ISO, saat pertama), tanggal (WIB 'YYYY-MM-DD'),
+                    waktu_urut (UTC ISO, aktivitas terakhir), entri harian: kunci, jumlah, terakhir}
+    `kategori` (KATEGORI_AKSI), `guru_id`/`periode_id` (disalin dari metadata) dan `waktu_urut` disimpan agar daftar
+    jejak audit dapat disaring & diurutkan lewat index. Data lama dilengkapi oleh migrations/migrate_pkg_audit.py.
 
 `catat_audit_pkg` menulis satu entri per aksi (penilaian, instrumen, unduhan). Aksi yang bisa berulang
 cepat (membuka beranda, penolakan akses) memakai `catat_audit_pkg_harian`: satu entri per aktor per
@@ -65,13 +68,41 @@ LABEL_AKSI = {
 }
 
 
+# Kategori aksi untuk saringan halaman Jejak Audit (warna penanda di frontend lib/pkgAudit.KATEGORI_AUDIT).
+KATEGORI_AUDIT = ('penilaian', 'instrumen', 'susunan', 'unduhan', 'akses')
+KATEGORI_AKSI = {
+    **{a: 'penilaian' for a in ('penilaian_mulai', 'penilaian_buka', 'penilaian_draf', 'penilaian_kirim', 'rekap_hitung_ulang')},
+    **{a: 'instrumen' for a in ('instrumen_impor', 'instrumen_ubah', 'instrumen_aktifkan')},
+    **{a: 'susunan' for a in ('periode_buat', 'periode_ubah', 'periode_berjalan', 'periode_ditutup', 'sk_buat', 'sk_ubah',
+                              'sk_aktifkan', 'sk_hapus', 'sk_penilai', 'sk_dinilai', 'penugasan_simpan',
+                              'supervisi_tandai', 'supervisi_batal')},
+    **{a: 'unduhan' for a in (AKSI_CETAK_TEMPLATE, AKSI_CETAK_GAGAL, AKSI_LIHAT_UNDUHAN, AKSI_LIHAT_TEMPLATE,
+                              AKSI_PERIKSA_TEMPLATE)},
+    **{a: 'akses' for a in (AKSI_BUKA_BERANDA, AKSI_TOLAK_AKSES, 'lihat_rekap', 'lihat_rekap_guru')},
+}
+
+
+def kategori_aksi(aksi: str) -> str:
+    return KATEGORI_AKSI.get(aksi, 'akses')
+
+
+INDEX_AUDIT = [
+    ([('id', 1)], {'name': 'id_unik', 'unique': True, 'partialFilterExpression': {'id': {'$exists': True}}}),
+    ([('timestamp', -1)], {'name': 'waktu'}),
+    ([('waktu_urut', -1)], {'name': 'waktu_urut'}),
+    ([('kategori', 1), ('waktu_urut', -1)], {'name': 'kategori_waktu'}),
+    ([('aksi', 1), ('waktu_urut', -1)], {'name': 'aksi_waktu_urut'}),
+    ([('aktor_id', 1), ('waktu_urut', -1)], {'name': 'aktor_waktu'}),
+    ([('guru_id', 1), ('waktu_urut', -1)], {'name': 'guru_waktu'}),
+    ([('periode_id', 1), ('waktu_urut', -1)], {'name': 'periode_waktu'}),
+    ([('penilaian_id', 1), ('timestamp', -1)], {'name': 'penilaian_waktu'}),
+    ([('aktor_id', 1), ('aksi', 1), ('tanggal', 1), ('kunci', 1)], {'name': 'harian'}),
+]
+
+
 async def ensure_pkg_audit_indexes(database) -> List[str]:
     gagal = []
-    for keys, kwargs in [
-        ([('timestamp', -1)], {'name': 'waktu'}),
-        ([('penilaian_id', 1), ('timestamp', -1)], {'name': 'penilaian_waktu'}),
-        ([('aktor_id', 1), ('aksi', 1), ('tanggal', 1), ('kunci', 1)], {'name': 'harian'}),
-    ]:
+    for keys, kwargs in INDEX_AUDIT:
         try:
             await database[KOLEKSI_AUDIT].create_index(keys, **kwargs)
         except Exception as e:  # noqa: BLE001
@@ -84,16 +115,21 @@ def _dasar(aksi: str, aktor: Optional[Dict[str, Any]], metadata: Optional[Dict[s
            penilaian_id: Optional[str], request) -> Dict[str, Any]:
     sekarang = datetime.now(timezone.utc)
     aktor = aktor or {}
+    metadata = metadata or {}
     return {
         'id': str(uuid.uuid4()),
-        'penilaian_id': penilaian_id,
+        'penilaian_id': penilaian_id or metadata.get('penilaian_id'),
         'aksi': aksi,
+        'kategori': kategori_aksi(aksi),
+        'guru_id': metadata.get('guru_id'),
+        'periode_id': metadata.get('periode_id'),
         'aktor_id': aktor.get('id'),
         'aktor_nama': aktor.get('full_name') or aktor.get('username'),
         'aktor_peran': aktor.get('active_role'),
-        'metadata': metadata or {},
+        'metadata': metadata,
         'ip_address': request.client.host if request is not None and getattr(request, 'client', None) else None,
         'timestamp': sekarang.isoformat(),
+        'waktu_urut': sekarang.isoformat(),
         'tanggal': sekarang.astimezone(WIB).strftime('%Y-%m-%d'),
     }
 
@@ -116,8 +152,8 @@ async def catat_audit_pkg_harian(db, aksi: str, aktor: Optional[Dict[str, Any]],
         await db[KOLEKSI_AUDIT].update_one(
             saring,
             {
-                '$setOnInsert': {k: v for k, v in doc.items() if k not in saring and k != 'ip_address'},
-                '$set': {'terakhir': doc['timestamp'], 'ip_address': doc['ip_address']},
+                '$setOnInsert': {k: v for k, v in doc.items() if k not in saring and k not in ('ip_address', 'waktu_urut')},
+                '$set': {'terakhir': doc['timestamp'], 'waktu_urut': doc['timestamp'], 'ip_address': doc['ip_address']},
                 '$inc': {'jumlah': 1},
             },
             upsert=True,

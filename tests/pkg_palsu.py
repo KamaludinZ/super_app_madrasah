@@ -78,6 +78,10 @@ class Koleksi:
     async def insert_one(self, doc):
         self.docs.append(dict(doc))
 
+    async def create_index(self, keys, **kwargs):
+        self.__dict__.setdefault('index', []).append((keys, kwargs))
+        return kwargs.get('name')
+
     @staticmethod
     def _terapkan(d, u):
         d.update(u.get('$set', {}))

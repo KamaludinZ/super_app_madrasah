@@ -67,3 +67,9 @@ def test_semua_aksi_audit_terdaftar():
     aksi |= {f'periode_{s}' for s in ('berjalan', 'ditutup')} if "f'periode_{data.status}'" in sumber else set()
     assert aksi, 'tidak ada aksi audit ditemukan'
     assert aksi <= set(pkg_audit.LABEL_AKSI), aksi - set(pkg_audit.LABEL_AKSI)
+
+
+def test_setiap_aksi_audit_berkategori():
+    import pkg_audit
+    assert set(pkg_audit.KATEGORI_AKSI) == set(pkg_audit.LABEL_AKSI)
+    assert set(pkg_audit.KATEGORI_AKSI.values()) == set(pkg_audit.KATEGORI_AUDIT)
