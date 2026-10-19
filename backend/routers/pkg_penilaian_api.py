@@ -1,16 +1,18 @@
-"""API penilaian kinerja oleh penilai: daftar tugas (dan lembar penilaian menyusul).
+"""API penilaian kinerja oleh penilai: daftar tugas dan lembar penilaian.
 
 Syarat akses 'penilai' (pkg_akses): anggota tim penilai yang sudah disupervisi kepala madrasah; kepala selalu lolos.
 """
 from typing import Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 
 from core import db
 from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
+from pkg_lembar import konteks_lembar, lembar_tampil
 from pkg_penjaga import penjaga_pkg
+from pkg_skema import POLA_ID
 
 router = APIRouter()
 
@@ -39,3 +41,12 @@ async def daftar_tugas_api(akses: Dict = Depends(penilai)):
         'ringkasan': ringkasan,
         'tugas': tugas,
     }
+
+
+@router.get("/pkg/penilaian/lembar/{guru_id}")
+async def buka_lembar_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(penilai)):
+    """Buka lembar penilaian guru yang dibagikan kepada penilai: isian tersimpan (bila ada), instrumen yang berlaku
+    (versi saat lembar dibuat, atau instrumen aktif untuk lembar baru), identitas guru, dan status dapat diisi.
+    Lembar baru belum disimpan sampai draf pertama. 403 'bukan_penugasan' bila guru tidak dibagikan."""
+    ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], guru_id)
+    return await lembar_tampil(db, ktx, guru_id)

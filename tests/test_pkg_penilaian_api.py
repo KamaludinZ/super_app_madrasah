@@ -73,3 +73,57 @@ def test_penilai_belum_disupervisi_ditolak(db):
     with pytest.raises(HTTPException) as e:
         _api(api.daftar_tugas_api, user=GURU('g3'))
     assert e.value.detail['alasan'] == 'bukan_penilai'
+
+
+INSTRUMEN_KOMP = [{'kode': '1', 'nama': 'Kompetensi Pedagogik', 'sub': [
+    {'kode': '1.1', 'nama': 'Sub', 'bobot': 1, 'indikator': [{'level': i, 'teks': f't{i}'} for i in range(1, 6)]}]}]
+
+
+def _lembar(guru, user='pen'):
+    return _api(api.buka_lembar_api, guru, user=GURU(user))
+
+
+def test_buka_lembar(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    db['pkg_instrumen'].docs.append({'id': 'i0', 'versi_template': '2025', 'revisi': 3, 'is_active': False, 'kompetensi': INSTRUMEN_KOMP})
+    db['pkg_penilaian'].docs[1].update({'instrumen_id': 'i0', 'isian': {'1.1': {'centang': [1, 2]}}, 'catatan_umum': 'ok',
+                                        'updated_at': '2026-10-10T00:00:00Z'})
+    db['users'] = Koleksi([{'id': 'g3', 'full_name': 'Cici Akun', 'nip_nuptk': '333', 'is_active': False}])
+    db['pkg_sk'].docs[0]['penilai_ids'].append('g3')
+
+    baru = _lembar('g3')  # belum ada lembar -> instrumen aktif, status belum
+    assert (baru['id'], baru['status'], baru['instrumen']['id'], baru['dapat_diisi']) == (None, 'belum', 'i1', True)
+    assert baru['guru'] == {'id': 'g3', 'nama': 'Cici', 'nip': '333', 'mapel': None, 'akun_aktif': False, 'juga_penilai': True}
+    assert baru['periode']['id'] == 'p1' and baru['instrumen']['kompetensi'][0]['kode'] == '1'
+
+    draf = _lembar('g2')  # lembar lama memakai instrumen versinya
+    assert (draf['status'], draf['instrumen']['id'], draf['instrumen']['revisi']) == ('draf', 'i0', 3)
+    assert draf['isian'] == {'1.1': {'centang': [1, 2]}} and draf['catatan_umum'] == 'ok' and draf['hasil'] is None
+
+    db['pkg_penilaian'].docs[0].update({'nilai_akhir': 40, 'nilai_maks': 60, 'capaian_persen': 66.67, 'level_capaian': 'Level 3',
+                                        'predikat': 'Terpenuhi pada Jenjang Jabatan Guru Ahli Muda', 'instrumen_id': 'i1'})
+    kunci = _lembar('g1')
+    assert kunci['status'] == 'terkunci' and kunci['dapat_diisi'] is False and kunci['alasan_tidak_dapat_diisi'] == 'terkunci'
+    assert kunci['hasil']['nilai_akhir'] == 40
+
+
+def test_buka_lembar_ditolak(db):
+    db['pkg_sk'].docs[0]['dinilai_ids'].append('lain')
+    for guru in ('lain', 'pen'):  # tidak dibagikan / diri sendiri
+        with pytest.raises(HTTPException) as e:
+            _lembar(guru)
+        assert e.value.status_code == 403 and e.value.detail['alasan'] == 'bukan_penugasan'
+    db['pkg_penilaian'].docs[1]['penilai_id'] = 'penilai-lain'
+    with pytest.raises(HTTPException) as e:
+        _lembar('g2')
+    assert 'penilai lain' in e.value.detail['pesan']
+    db['pkg_instrumen'] = Koleksi()
+    with pytest.raises(HTTPException) as e:
+        _lembar('g3')
+    assert e.value.status_code == 409
+
+
+def test_buka_lembar_di_luar_masa(db):
+    db['pkg_periode'].docs[0]['tanggal_buka'] = str(HARI_INI + timedelta(days=1))
+    lembar = _lembar('g3')
+    assert lembar['dapat_diisi'] is False and lembar['alasan_tidak_dapat_diisi'] == 'di_luar_masa'

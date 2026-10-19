@@ -22,6 +22,8 @@ PESAN_TOLAK = {
     'bukan_penilai': 'Halaman ini khusus anggota tim penilai pada periode berjalan.',
     'belum_disupervisi': 'Anda belum disupervisi kepala madrasah pada periode ini.',
     'bukan_kepala': 'Aksi ini hanya dapat dilakukan dari akun kepala madrasah.',
+    'bukan_penugasan': 'Guru ini tidak dibagikan kepada Anda pada periode berjalan.',
+    'di_luar_masa': 'Lembar penilaian hanya dapat diisi pada masa penilaian periode berjalan.',
 }
 
 
