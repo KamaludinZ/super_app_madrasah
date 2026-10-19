@@ -15,8 +15,10 @@ import hashlib
 import io
 import logging
 import os
+import re
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, Optional
 
@@ -100,6 +102,12 @@ async def periksa_template_startup(db) -> Dict[str, Any]:
     simpan di memori. Kegagalan menyimpan ke basis data hanya dicatat; pemeriksaan berkas tetap berjalan."""
     from pkg_skema import KOLEKSI_TEMPLATE
     hasil = periksa_template()
+    try:
+        dihapus = bersihkan_sementara_lama()
+        if dihapus:
+            logger.info(f"[pkg] {dihapus} folder salinan sementara cetak lama dibersihkan.")
+    except OSError as e:
+        logger.warning(f"[pkg] Gagal membersihkan salinan sementara lama: {e}")
     HASIL_TERAKHIR.clear()
     HASIL_TERAKHIR.update(hasil)
     try:
@@ -153,11 +161,27 @@ def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib
     return keluaran.getvalue()
 
 
+# Folder induk salinan sementara hasil cetak (bawaan: folder temp sistem). Tiap cetak memakai subfolder pkg_*.
+PREFIKS_SEMENTARA = 'pkg_'
+
+
+def folder_sementara() -> str:
+    folder = os.environ.get('PKG_FOLDER_SEMENTARA') or tempfile.gettempdir()
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def nama_berkas_cetak(dasar: str, ekstensi: str) -> str:
+    """Nama berkas unduhan aman: huruf/angka/garis bawah/tanda hubung, maks 80 karakter + ekstensi."""
+    bersih = re.sub(r'[^A-Za-z0-9_-]+', '_', dasar or '').strip('_')[:80] or 'pkg'
+    return f"{bersih}.{re.sub(r'[^a-z0-9]', '', ekstensi.lower()) or 'xlsx'}"
+
+
 @contextlib.contextmanager
 def salinan_sementara(isi: bytes, nama_berkas: str = 'pkg.xlsx') -> Iterator[str]:
     """Tulis `isi` ke berkas di folder sementara khusus (mis. untuk konversi PDF LibreOffice), lalu hapus
     seluruh folder setelah blok selesai. Nama berkas disaring agar tetap di dalam folder sementara."""
-    folder = tempfile.mkdtemp(prefix='pkg_')
+    folder = tempfile.mkdtemp(prefix=PREFIKS_SEMENTARA, dir=folder_sementara())
     try:
         path = os.path.join(folder, os.path.basename(nama_berkas) or 'pkg.xlsx')
         with open(path, 'wb') as f:
@@ -165,3 +189,25 @@ def salinan_sementara(isi: bytes, nama_berkas: str = 'pkg.xlsx') -> Iterator[str
         yield path
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+@contextlib.contextmanager
+def cetak_ke_salinan_sementara(jenis: str, pengisi: Callable[[Workbook], None], nama_berkas: str) -> Iterator[str]:
+    """Isi template `jenis` lalu tulis hasilnya ke salinan sementara; yield path .xlsx hasil (template asli utuh).
+    Dipakai mesin cetak PDF yang membutuhkan berkas di disk; folder dihapus setelah blok selesai."""
+    isi = isi_template_ke_bytes(jenis, pengisi)
+    with salinan_sementara(isi, nama_berkas) as path:
+        yield path
+
+
+def bersihkan_sementara_lama(maks_umur_detik: int = 6 * 3600) -> int:
+    """Hapus subfolder salinan sementara PKG yang tertinggal (mis. proses mati saat mencetak). Jumlah dihapus."""
+    induk = folder_sementara()
+    batas = time.time() - maks_umur_detik
+    dihapus = 0
+    for nama in os.listdir(induk):
+        path = os.path.join(induk, nama)
+        if nama.startswith(PREFIKS_SEMENTARA) and os.path.isdir(path) and os.path.getmtime(path) < batas:
+            shutil.rmtree(path, ignore_errors=True)
+            dihapus += 1
+    return dihapus

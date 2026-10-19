@@ -98,3 +98,31 @@ def test_template_tidak_tersedia_atau_berubah(tmp_path, monkeypatch):
     assert pkg_template.baca_bytes_template('instrumen') == b'bukan resmi'
     with pytest.raises(pkg_template.TemplateTidakTersedia):
         pkg_template.baca_bytes_template('instrumen', wajib_utuh=True)
+
+
+def test_cetak_ke_salinan_sementara_dan_pembersihan(tmp_path, monkeypatch):
+    monkeypatch.setenv('PKG_FOLDER_SEMENTARA', str(tmp_path))
+    asli = pkg_template.hitung_checksum(pkg_template.path_template('rekap'))
+
+    def pengisi(wb):
+        wb.active['A1'] = 'REKAP UJI'
+    with pkg_template.cetak_ke_salinan_sementara('rekap', pengisi, 'rekap periode.xlsx') as path:
+        assert path.startswith(str(tmp_path)) and os.path.isfile(path)
+        from openpyxl import load_workbook
+        assert load_workbook(path).active['A1'].value == 'REKAP UJI'
+    assert os.listdir(tmp_path) == []
+    assert pkg_template.hitung_checksum(pkg_template.path_template('rekap')) == asli
+
+    assert pkg_template.nama_berkas_cetak('Rekap PKG Ganjil 2026/2027', 'PDF') == 'Rekap_PKG_Ganjil_2026_2027.pdf'
+    assert pkg_template.nama_berkas_cetak('../../', 'xlsx') == 'pkg.xlsx'
+
+    lama = tmp_path / 'pkg_tertinggal'
+    lama.mkdir()
+    baru = tmp_path / 'pkg_berjalan'
+    baru.mkdir()
+    lain = tmp_path / 'bukan_pkg'
+    lain.mkdir()
+    os.utime(lama, (0, 0))
+    os.utime(lain, (0, 0))
+    assert pkg_template.bersihkan_sementara_lama() == 1
+    assert sorted(os.listdir(tmp_path)) == ['bukan_pkg', 'pkg_berjalan']
