@@ -24,7 +24,7 @@ import re
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger('matsandatama')
 
@@ -101,13 +101,26 @@ def _teks(nilai: Optional[str]) -> str:
 
 
 def _ids(nilai: List[str]) -> List[str]:
-    """Daftar id unik (urutan dipertahankan), tanpa string kosong."""
-    return list(dict.fromkeys(i.strip() for i in (nilai or []) if isinstance(i, str) and i.strip()))
+    """Daftar id unik (urutan dipertahankan), tanpa string kosong; id berformat salah ditolak."""
+    hasil = list(dict.fromkeys(i.strip() for i in (nilai or []) if isinstance(i, str) and i.strip()))
+    salah = [i for i in hasil if not _RE_ID.match(i)]
+    if salah:
+        raise ValueError(f'id tidak valid: {salah[0][:40]}')
+    return hasil
 
 
-class PeriodeRequest(BaseModel):
+POLA_ID = r'^[A-Za-z0-9_-]{1,64}$'
+_RE_ID = re.compile(POLA_ID)
+
+
+class IsianPkg(BaseModel):
+    """Dasar isian endpoint PKG: field tak dikenal ditolak (422) agar salah ketik tidak diam-diam diabaikan."""
+    model_config = ConfigDict(extra='forbid')
+
+
+class PeriodeRequest(IsianPkg):
     nama_periode: str = Field(..., max_length=120)
-    semester_id: Optional[str] = Field(None, max_length=64)
+    semester_id: Optional[str] = Field(None, pattern=POLA_ID)
     tahun_pelajaran: str = Field(..., max_length=20)
     semester: str = Field(..., max_length=40)
     tanggal_buka: str
@@ -133,7 +146,7 @@ class PeriodeRequest(BaseModel):
         return self
 
 
-class StatusPeriodeRequest(BaseModel):
+class StatusPeriodeRequest(IsianPkg):
     status: str
 
     @field_validator('status')
@@ -144,11 +157,11 @@ class StatusPeriodeRequest(BaseModel):
         return v
 
 
-class SkRequest(BaseModel):
+class SkRequest(IsianPkg):
     nomor_sk: str = Field(..., max_length=120)
     tanggal_sk: str
     tentang: str = Field('', max_length=300)
-    periode_id: str = Field(..., min_length=1, max_length=64)
+    periode_id: str = Field(..., pattern=POLA_ID)
 
     @field_validator('nomor_sk')
     @classmethod
@@ -169,7 +182,7 @@ class SkRequest(BaseModel):
         return _tanggal(v)
 
 
-class PenilaiSkRequest(BaseModel):
+class PenilaiSkRequest(IsianPkg):
     penilai_ids: List[str] = Field(default_factory=list, max_length=500)
     alasan_perubahan: str = Field('', max_length=300)  # wajib bila penilaian SK sudah berjalan
 
@@ -184,7 +197,7 @@ class PenilaiSkRequest(BaseModel):
         return _teks(v)
 
 
-class DinilaiSkRequest(BaseModel):
+class DinilaiSkRequest(IsianPkg):
     dinilai_ids: List[str] = Field(default_factory=list, max_length=500)
     alasan_perubahan: str = Field('', max_length=300)  # wajib bila penilaian SK sudah berjalan
 
@@ -199,7 +212,7 @@ class DinilaiSkRequest(BaseModel):
         return _teks(v)
 
 
-class PenugasanRequest(BaseModel):
+class PenugasanRequest(IsianPkg):
     penugasan: Dict[str, str] = Field(default_factory=dict)  # {guru_id: penilai_id}
     jatah: Dict[str, int] = Field(default_factory=dict)       # {penilai_id: n}
     alasan_perubahan: str = Field('', max_length=300)          # wajib bila penilaian SK sudah berjalan
@@ -209,11 +222,16 @@ class PenugasanRequest(BaseModel):
     def _penugasan(cls, v):
         if len(v) > 500:
             raise ValueError('terlalu banyak guru')
-        return {g.strip(): p.strip() for g, p in v.items() if g and g.strip() and p and p.strip()}
+        hasil = {g.strip(): p.strip() for g, p in v.items() if g and g.strip() and p and p.strip()}
+        if any(not _RE_ID.match(i) for pasangan in hasil.items() for i in pasangan):
+            raise ValueError('id guru/penilai tidak valid')
+        return hasil
 
     @field_validator('jatah')
     @classmethod
     def _jatah(cls, v):
+        if any(not _RE_ID.match(k) for k in v):
+            raise ValueError('id penilai tidak valid')
         for n in v.values():
             if n < 0 or n > 99:
                 raise ValueError('jatah harus 0–99')
@@ -225,7 +243,7 @@ class PenugasanRequest(BaseModel):
         return _teks(v)
 
 
-class SupervisiRequest(BaseModel):
+class SupervisiRequest(IsianPkg):
     tanggal_supervisi: str
     catatan: str = Field('', max_length=500)
 

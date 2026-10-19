@@ -22,6 +22,26 @@ WIB = timezone(timedelta(hours=7))
 AKSI_BUKA_BERANDA = 'buka_beranda'
 AKSI_TOLAK_AKSES = 'tolak_akses'
 
+# Katalog kode aksi pkg_audit_log beserta labelnya (untuk halaman Jejak Audit PKG). Setiap aksi yang dicatat
+# router PKG wajib terdaftar di sini (diuji di tests/test_pkg_validasi.py).
+LABEL_AKSI = {
+    AKSI_BUKA_BERANDA: 'Membuka Beranda PKG',
+    AKSI_TOLAK_AKSES: 'Akses ditolak',
+    'periode_buat': 'Menetapkan periode',
+    'periode_ubah': 'Mengubah periode',
+    'periode_berjalan': 'Memulai periode',
+    'periode_ditutup': 'Menutup periode',
+    'sk_buat': 'Menambah SK',
+    'sk_ubah': 'Mengubah SK',
+    'sk_aktifkan': 'Mengaktifkan SK',
+    'sk_hapus': 'Menghapus SK',
+    'sk_penilai': 'Mengubah tim penilai',
+    'sk_dinilai': 'Mengubah guru yang dinilai',
+    'penugasan_simpan': 'Menyimpan pembagian penilaian',
+    'supervisi_tandai': 'Menandai supervisi penilai',
+    'supervisi_batal': 'Membatalkan supervisi penilai',
+}
+
 
 async def ensure_pkg_audit_indexes(database) -> List[str]:
     gagal = []
