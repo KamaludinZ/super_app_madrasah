@@ -153,3 +153,17 @@ export function ringkasInstrumen(instrumen) {
   const levelMaks = Math.max(0, ...sub.flatMap((s) => (s.indikator || []).map((i) => i.level)));
   return { kompetensi: kompetensi.length, sub: sub.length, indikator, skorMaks: sub.length * levelMaks };
 }
+
+const FORMAT_DUA_DESIMAL = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Angka persen dua desimal berformat Indonesia, mis. 8.333 -> '8,33%'. Nilai tidak valid -> '-'.
+export function formatPersen(nilai) {
+  const n = Number(nilai);
+  return Number.isFinite(n) ? `${FORMAT_DUA_DESIMAL.format(n)}%` : '-';
+}
+
+// Porsi bobot terhadap total bobot (0–100). Total nol -> null.
+export function porsiBobot(bobot, totalBobot) {
+  const total = Number(totalBobot) || 0;
+  return total > 0 ? ((Number(bobot) || 0) / total) * 100 : null;
+}
