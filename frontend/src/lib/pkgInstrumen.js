@@ -2,7 +2,7 @@
 //
 // TIRUAN SEMENTARA: struktur & teks diambil dari berkas resmi pkg_template_v2026.xlsx (sheet KOMP-1..KOMP (4)),
 // meniru kontrak yang direncanakan. Saat endpoint backend tersedia, ganti isi fungsi dengan panggilan `api`:
-//   GET /pkg/instrumen/aktif -> instrumen
+//   GET /pkg/instrumen/aktif -> instrumen | null (belum ada instrumen aktif)
 // instrumen = { id, versi_template, checksum, is_active, diimpor_pada, kompetensi: [kompetensi] }
 // kompetensi = { kode, nama, sub: [{ kode, nama, bobot, indikator: [{ level, teks }] }] }
 // Penilaian: tingkat kompetensi tiap sub = level 1–5 (nilai rating), jumlah maksimal 12 x 5 = 60.
@@ -143,7 +143,13 @@ const TIRUAN = {
   kompetensi: KOMPETENSI,
 };
 
-export const ambilInstrumenAktif = () => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(TIRUAN))), 150); });
+// Mengembalikan null bila belum ada instrumen aktif (belum diimpor dari template).
+// Selama masih tiruan, mode development menerima ?instrumen=kosong untuk mencoba keadaan kosong.
+export const ambilInstrumenAktif = () => new Promise((r) => {
+  const kosong = process.env.NODE_ENV !== 'production'
+    && new URLSearchParams(window.location.search).get('instrumen') === 'kosong';
+  setTimeout(() => r(kosong ? null : JSON.parse(JSON.stringify(TIRUAN))), 150);
+});
 
 // Ringkasan jumlah kompetensi, sub-kompetensi, indikator, dan skor maksimal (level tertinggi x jumlah sub).
 export function ringkasInstrumen(instrumen) {

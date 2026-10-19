@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { ListTree, Layers, ListChecks, Target, Loader2, Tag } from 'lucide-react';
+import { ListTree, Layers, ListChecks, Target, Loader2, Tag, AlertTriangle, RotateCw } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
@@ -19,14 +23,53 @@ function KartuAngka({ icon: Icon, label, value }) {
   );
 }
 
-function IsiHalamanInstrumen() {
-  const [instrumen, setInstrumen] = useState(null);
+// Keadaan kosong: belum ada instrumen aktif. Kepala diarahkan mengimpor dari template resmi.
+function InstrumenKosong({ kepala }) {
+  return (
+    <Card data-testid="pkg-instrumen-kosong">
+      <CardContent className="p-0">
+        <EmptyState
+          illustration="quran"
+          size="sm"
+          title="Instrumen PKG belum dimuat"
+          description={kepala
+            ? 'Muat kompetensi, indikator, dan bobot dari berkas template resmi PKG agar penilai dapat mulai mengisi lembar penilaian.'
+            : 'Kepala madrasah belum memuat instrumen dari template resmi. Lembar penilaian dapat dibuka setelah instrumen tersedia.'}
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
-  useEffect(() => {
-    ambilInstrumenAktif().then(setInstrumen).catch(() => toast.error('Gagal memuat instrumen PKG'));
+function IsiHalamanInstrumen() {
+  const { keanggotaan } = useOutletContext() || {};
+  const [instrumen, setInstrumen] = useState(undefined); // undefined = memuat, null = belum ada instrumen
+  const [galat, setGalat] = useState(false);
+
+  const muat = useCallback(async () => {
+    setGalat(false);
+    setInstrumen(undefined);
+    try {
+      setInstrumen(await ambilInstrumenAktif());
+    } catch {
+      setGalat(true);
+      toast.error('Gagal memuat instrumen PKG');
+    }
   }, []);
 
-  if (!instrumen) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
+  useEffect(() => { muat(); }, [muat]);
+
+  if (galat) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-12 text-center" role="alert">
+        <AlertTriangle className="h-8 w-8 text-amber-600" />
+        <p className="text-sm text-slate-700">Instrumen PKG gagal dimuat.</p>
+        <Button variant="outline" size="sm" onClick={muat} className="gap-2"><RotateCw className="h-4 w-4" /> Coba lagi</Button>
+      </div>
+    );
+  }
+  if (instrumen === undefined) return <div className="p-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
+  if (!instrumen || !instrumen.kompetensi?.length) return <InstrumenKosong kepala={keanggotaan?.peran === 'kepala'} />;
 
   const r = ringkasInstrumen(instrumen);
 
