@@ -115,3 +115,10 @@ def test_rekap_tim(db):
     with pytest.raises(HTTPException) as e:
         _api_get(api.rekap_tim_api, 'g1')
     assert e.value.detail['alasan'] == 'bukan_penilai'
+
+
+def test_statistik_api(db):
+    st = _api_get(api.statistik_api, 'kep')
+    assert st['cakupan'] == 'semua' and st['statistik']['jumlah'] == 2 and st['statistik']['rata'] == 80.0
+    assert st['statistik']['rata_per_kompetensi'] == [{'kode': '1', 'rata': 4.0}]
+    assert _api_get(api.statistik_api, 'g3')['statistik']['jumlah'] == 0

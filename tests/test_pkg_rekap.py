@@ -93,3 +93,15 @@ def test_agregasi_cakupan():
     assert pribadi['guru'] == [] and pribadi['ringkasan']['total'] == 0
     tanpa_sk = asyncio.run(pkg_rekap.agregasi_rekap(db, {'id': 'p1'}, None))
     assert {b['guru_id'] for b in tanpa_sk['guru']} == {'g-n1', 'g-lama'}
+
+
+def test_statistik_lengkap():
+    baris = [{'status': 'terkunci', 'capaian_persen': c, 'predikat': None, 'level_capaian': None, 'per_kompetensi': {'1': p1, '2': p2}}
+             for c, p1, p2 in ((45.0, 4, 5), (76.67, 10, 13), (90.0, 12, 15), (100.0, 15, 15))] + [{'status': 'draf'}]
+    st = pkg_rekap.statistik_lengkap(baris)
+    assert [x['jumlah'] for x in st['sebaran_capaian']] == [1, 0, 0, 1, 0, 2]
+    assert st['sebaran_capaian'][-1]['rentang'] == '90–100%' and st['sebaran_capaian'][0]['rentang'] == '0–50%'
+    assert st['rata_per_kompetensi'] == [{'kode': '1', 'rata': 10.25}, {'kode': '2', 'rata': 12.0}]
+    assert st['jumlah'] == 4 and st['median'] == 83.34
+    kosong = pkg_rekap.statistik_lengkap([])
+    assert kosong['rata'] is None and kosong['rata_per_kompetensi'] == [] and sum(x['jumlah'] for x in kosong['sebaran_capaian']) == 0

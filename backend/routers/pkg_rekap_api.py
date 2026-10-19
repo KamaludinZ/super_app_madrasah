@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Path, Query
 from core import db
 from pkg_akses import tolak
 from pkg_penjaga import penjaga_pkg
-from pkg_rekap import boleh_lihat_guru, cakupan_rekap, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru
+from pkg_rekap import (
+    boleh_lihat_guru, cakupan_rekap, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru, statistik_lengkap,
+)
 from pkg_skema import POLA_ID
 
 router = APIRouter()
@@ -35,6 +37,14 @@ async def rekap_tim_api(periode_id: Optional[str] = Query(None, pattern=POLA_ID)
         'sk': {'id': sk['id'], 'nomor_sk': sk.get('nomor_sk')} if sk else None,
         'tim': await rekap_tim(db, periode, sk, penilai),
     }
+
+
+@router.get("/pkg/rekap/statistik")
+async def statistik_api(periode_id: Optional[str] = Query(None, pattern=POLA_ID), akses: Dict = Depends(anggota_sk)):
+    """Statistik capaian periode dalam cakupan pengguna: rata-rata, median, tertinggi, terendah, sebaran predikat &
+    level, sebaran capaian per rentang 10%, dan rata-rata subtotal per kompetensi (lembar terkunci saja)."""
+    rekap = await rekap_periode(db, akses['user'], akses['keanggotaan'], periode_id)
+    return {'periode': rekap['periode'], 'cakupan': rekap['cakupan'], 'statistik': statistik_lengkap(rekap['guru'])}
 
 
 @router.get("/pkg/rekap/guru/{guru_id}")

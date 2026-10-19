@@ -296,3 +296,21 @@ async def rekap_tim(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], p
         })
     hasil.sort(key=lambda t: (t['penilai_id'] is None, (t['penilai_nama'] or '').lower()))
     return hasil
+
+
+RENTANG_CAPAIAN = ((0, 50), (50, 60), (60, 70), (70, 80), (80, 90), (90, 100.01))
+
+
+def statistik_lengkap(baris: list) -> Dict[str, Any]:
+    """hitung_statistik + sebaran capaian per rentang 10% dan rata-rata subtotal per kompetensi (lembar terkunci)."""
+    st = hitung_statistik(baris)
+    nilai = [b for b in baris if b.get('status') == 'terkunci' and b.get('capaian_persen') is not None]
+    sebaran = []
+    for bawah, atas in RENTANG_CAPAIAN:
+        label = f"{bawah}–{min(atas, 100):g}%" if atas <= 100 else f"{bawah}–100%"
+        sebaran.append({'rentang': label, 'bawah': bawah, 'atas': min(atas, 100),
+                        'jumlah': sum(1 for b in nilai if bawah <= b['capaian_persen'] < atas)})
+    kode = sorted({k for b in nilai for k in (b.get('per_kompetensi') or {})})
+    per_kompetensi = [{'kode': k, 'rata': _bulat2(sum((b.get('per_kompetensi') or {}).get(k, 0) for b in nilai) / len(nilai))}
+                      for k in kode] if nilai else []
+    return {**st, 'sebaran_capaian': sebaran, 'rata_per_kompetensi': per_kompetensi}
