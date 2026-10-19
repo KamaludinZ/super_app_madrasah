@@ -1,10 +1,14 @@
+import { api } from '@/lib/api';
+
 // Cetak dokumen resmi PKG dari template (Excel) dan konversi PDF.
 //
 // TIRUAN SEMENTARA: meniru kontrak yang direncanakan; saat endpoint backend tersedia ganti dengan `api`:
 //   POST /pkg/cetak { jenis: 'rekap' | 'guru', format: 'xlsx' | 'pdf', periode_id, guru_id? } -> berkas (blob)
 //        header: Content-Disposition (nama berkas), X-PKG-Mesin: 'openpyxl' | 'libreoffice' | 'reportlab'
 //        (PDF memakai LibreOffice; bila tidak tersedia, cadangan ReportLab dengan penanda "bukan salinan identik")
-// Setiap unduhan tercatat di riwayat unduhan & jejak audit.
+// Setiap unduhan tercatat di riwayat unduhan & jejak audit:
+//   GET /pkg/rekap/unduhan?periode_id= -> [{ id, jenis, format, periode_id, nama_berkas, versi_template,
+//        checksum_template, aktor_id, aktor_nama, timestamp }]  (kepala madrasah, terbaru dulu)
 
 export const JENIS_DOKUMEN = {
   rekap: { judul: 'Rekap Hasil PKG', keterangan: 'Seluruh guru dalam cakupan Anda (format rekap_hasil_pkg_v2026)' },
@@ -38,4 +42,14 @@ export function simpanBerkas(blob, namaBerkas) {
   a.download = namaBerkas;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function riwayatUnduhan(periodeId) {
+  try {
+    const { data } = await api.get('/pkg/rekap/unduhan', { params: periodeId ? { periode_id: periodeId } : {} });
+    return data;
+  } catch (e) {
+    const d = e?.response?.data?.detail;
+    throw new Error(typeof d === 'string' ? d : d?.pesan || 'Gagal memuat riwayat unduhan.');
+  }
 }

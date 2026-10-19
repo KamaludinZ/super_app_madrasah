@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Printer, FileSpreadsheet, FileText, Loader2, Users, UserRound } from 'lucide-react';
@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
+import RiwayatUnduhan from '@/components/pkg/RiwayatUnduhan';
 import { ambilRekap } from '@/lib/pkgRekap';
 import { JENIS_DOKUMEN, MESIN_LABEL, simpanBerkas, unduhDokumen } from '@/lib/pkgCetak';
 
@@ -30,6 +31,8 @@ function IsiHalamanCetak() {
   const periodeId = searchParams.get('periode') || undefined;
   const [rekap, setRekap] = useState(null);
   const [sedang, setSedang] = useState(null);
+  const [jumlahUnduh, setJumlahUnduh] = useState(0);
+  const { keanggotaan } = useOutletContext() || {};
 
   const muat = useCallback(async () => {
     try {
@@ -49,6 +52,7 @@ function IsiHalamanCetak() {
       const { blob, namaBerkas, mesin } = await unduhDokumen({ jenis, format, periode: rekap.periode, guru });
       simpanBerkas(blob, namaBerkas);
       toast.success(`${namaBerkas} diunduh`, { id, description: MESIN_LABEL[mesin] });
+      setJumlahUnduh((n) => n + 1);
     } catch (e) {
       toast.error(e.message || 'Gagal menyiapkan berkas', { id });
     } finally {
@@ -101,6 +105,8 @@ function IsiHalamanCetak() {
           ))}
         </CardContent>
       </Card>
+
+      {keanggotaan?.peran === 'kepala' && <RiwayatUnduhan periodeId={rekap.periode?.id} muatUlangKunci={jumlahUnduh} />}
     </div>
   );
 }
