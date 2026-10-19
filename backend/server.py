@@ -45,6 +45,7 @@ from routers import (
     perpus,
     phase4,
     pkg,
+    pkg_cetak_api,
     pkg_instrumen_api,
     pkg_kelola,
     pkg_penilaian_api,
@@ -145,6 +146,7 @@ api_router.include_router(pkg_kelola.router)
 api_router.include_router(pkg_instrumen_api.router)
 api_router.include_router(pkg_penilaian_api.router)
 api_router.include_router(pkg_rekap_api.router)
+api_router.include_router(pkg_cetak_api.router)
 api_router.include_router(mobile.router)
 
 api_router.include_router(kelas_digital.router)

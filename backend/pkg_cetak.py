@@ -127,3 +127,59 @@ def rekap_excel(guru: List[Dict[str, Any]], periode: Dict[str, Any], kepala: Opt
     """Berkas .xlsx rekap hasil PKG dari template resmi (template harus utuh sesuai checksum resmi)."""
     sheet = PETA_CETAK['rekap']['sheet']
     return isi_template_ke_bytes('rekap', lambda wb: isi_rekap(wb[sheet], guru, periode, kepala, tanggal_cetak))
+
+
+# ---------------------------------------------------------------- laporan per guru (template instrumen)
+
+class StrukturTidakSesuai(Exception):
+    """Instrumen lembar tidak dapat dipetakan ke format cetak template resmi (4 kompetensi x 3 sub x 5 level)."""
+
+
+def _tanggal_teks(nilai: Optional[str]) -> str:
+    try:
+        return tanggal_indonesia(date.fromisoformat(str(nilai)[:10]))
+    except (TypeError, ValueError):
+        return '-'
+
+
+def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
+    """Isi workbook template instrumen untuk satu guru: identitas di '00-DATA' & centang 'v' indikator di KOMP-n
+    (rumus resmi 04-RKAP-PKG menghitung tingkat, jumlah, capaian, dan predikat).
+    `laporan` = {guru:{nama,nip}, periode, sk:{nomor_sk,tanggal_sk}, penilai:{nama,nip}, kepala:{nama,nip},
+                 nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada}."""
+    from pkg_template import SHEET_KOMPETENSI
+    peta = PETA_CETAK['instrumen']
+    kompetensi = (laporan.get('instrumen') or {}).get('kompetensi') or []
+    if len(kompetensi) != len(SHEET_KOMPETENSI) or any(
+            len(k.get('sub') or []) != len(peta['baris_sub']) or any(len(s.get('indikator') or []) != 5 for s in k['sub'])
+            for k in kompetensi):
+        raise StrukturTidakSesuai('Instrumen lembar tidak sesuai format cetak template resmi.')
+
+    data = wb[peta['sheet_data']]
+    p = laporan.get('periode') or {}
+    tahun = str((p.get('tanggal_tutup') or p.get('tanggal_buka') or '')[:4] or '-')
+    isian_sel = {
+        'nama_guru': (laporan.get('guru') or {}).get('nama'), 'nip_guru': (laporan.get('guru') or {}).get('nip'),
+        'tahun': tahun, 'nama_kepala': (laporan.get('kepala') or {}).get('nama'), 'nip_kepala': (laporan.get('kepala') or {}).get('nip'),
+        'nama_sekolah': laporan.get('nama_sekolah'),
+        'penilai': (laporan.get('penilai') or {}).get('nama'), 'nip_penilai': (laporan.get('penilai') or {}).get('nip'),
+        'nomor_sk': (laporan.get('sk') or {}).get('nomor_sk'), 'tanggal_sk': _tanggal_teks((laporan.get('sk') or {}).get('tanggal_sk')),
+        'periode_awal': _tanggal_teks(p.get('tanggal_buka')), 'periode_akhir': _tanggal_teks(p.get('tanggal_tutup')),
+        'tanggal_nilai': _tanggal_teks(laporan.get('terkunci_pada')),
+    }
+    for kunci, sel in peta['data'].items():
+        data[sel] = isian_sel.get(kunci) or '-'
+
+    isian = laporan.get('isian') or {}
+    kol = peta['kolom_centang']
+    for k, sheet in zip(kompetensi, SHEET_KOMPETENSI):
+        ws = wb[sheet]
+        for s, baris in zip(k['sub'], peta['baris_sub']):
+            centang = set((isian.get(s['kode']) or {}).get('centang') or [])
+            for level in range(1, 6):
+                ws[f'{kol}{baris + level - 1}'] = 'v' if level in centang else None
+
+
+def laporan_guru_excel(laporan: Dict[str, Any]) -> bytes:
+    """Berkas .xlsx laporan PKG satu guru dari template instrumen resmi (seluruh sheet resmi ikut)."""
+    return isi_template_ke_bytes('instrumen', lambda wb: isi_laporan_guru(wb, laporan))
