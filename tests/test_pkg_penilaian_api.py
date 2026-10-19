@@ -243,3 +243,15 @@ def test_isian_berbahaya_ditolak_lewat_api(db):
     assert k.post('/api/pkg/penilaian/draft', json={'guru_id': 'g3', 'isian': {}, 'status': 'terkunci'}).status_code == 422
     assert k.get('/api/pkg/penilaian/lembar/g3%24ne').status_code == 422
     assert k.post('/api/pkg/penilaian/draft', json={'guru_id': 'g3', 'isian': {'1.1': {'centang': [1]}}}).status_code == 200
+
+
+def test_periksa_penilaian_startup(db, caplog):
+    import logging
+    import pkg_lembar
+    db['pkg_periode'].docs.append({'id': 'p0', 'status': 'ditutup'})
+    db['pkg_penilaian'].docs += [{'id': 'n3', 'instrumen_id': 'hilang', 'periode_id': 'p1', 'status': 'draf'},
+                                 {'id': 'n4', 'instrumen_id': 'i1', 'periode_id': 'p0', 'status': 'draf'}]
+    with caplog.at_level(logging.INFO, logger='matsandatama'):
+        hasil = asyncio.run(pkg_lembar.periksa_penilaian_startup(db))
+    assert hasil == {'lembar': 4, 'instrumen_hilang': 1, 'draf_periode_ditutup': 1}
+    assert 'instrumen yang tidak ditemukan' in caplog.text and 'periode yang sudah ditutup' in caplog.text

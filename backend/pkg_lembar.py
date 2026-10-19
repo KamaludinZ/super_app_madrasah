@@ -10,6 +10,7 @@ ditolak. Lembar yang sudah ada memakai instrumen versi saat lembar dibuat; lemba
 """
 import uuid
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -22,6 +23,8 @@ from pkg_nilai import hitung_nilai, kode_sub
 from pkg_skema import (
     KOLEKSI_AUDIT, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, DrafPenilaianRequest, KirimPenilaianRequest,
 )
+
+logger = logging.getLogger('matsandatama')
 
 KUNCI_HASIL = ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat', 'terkunci_pada')
 
@@ -185,3 +188,23 @@ async def riwayat_lembar(db, penilaian_id: Optional[str]) -> list:
         'timestamp': d.get('timestamp'), 'terakhir': d.get('terakhir'), 'jumlah': d.get('jumlah'),
         'progres': (d.get('metadata') or {}).get('progres'), 'nilai_akhir': (d.get('metadata') or {}).get('nilai_akhir'),
     } for d in docs]
+
+
+async def periksa_penilaian_startup(db) -> Dict[str, int]:
+    """Saat startup: peringatkan lembar yang merujuk instrumen tidak ditemukan (tidak dapat dibuka/dicetak) dan
+    catat lembar draf yang tertinggal pada periode yang sudah ditutup."""
+    lembar = await db[KOLEKSI_PENILAIAN].find({}, {'_id': 0, 'instrumen_id': 1, 'periode_id': 1, 'status': 1}).to_list(100000)
+    ada = {d['id'] for d in await db[KOLEKSI_INSTRUMEN].find({}, {'_id': 0, 'id': 1}).to_list(1000)}
+    from pkg_skema import KOLEKSI_PERIODE
+    ditutup = {d['id'] for d in await db[KOLEKSI_PERIODE].find({'status': 'ditutup'}, {'_id': 0, 'id': 1}).to_list(1000)}
+    hasil = {
+        'lembar': len(lembar),
+        'instrumen_hilang': sum(1 for d in lembar if d.get('instrumen_id') and d['instrumen_id'] not in ada),
+        'draf_periode_ditutup': sum(1 for d in lembar if d.get('status') == 'draf' and d.get('periode_id') in ditutup),
+    }
+    if hasil['instrumen_hilang']:
+        logger.warning(f"[pkg] {hasil['instrumen_hilang']} lembar penilaian merujuk instrumen yang tidak ditemukan; "
+                       'lembar tersebut tidak dapat dibuka atau dicetak.')
+    if hasil['draf_periode_ditutup']:
+        logger.info(f"[pkg] {hasil['draf_periode_ditutup']} lembar masih draf pada periode yang sudah ditutup.")
+    return hasil
