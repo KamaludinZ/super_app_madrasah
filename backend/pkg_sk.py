@@ -207,3 +207,29 @@ async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str,
     perubahan = {'penilai_ids': baru, 'updated_at': _sekarang()}
     await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
     return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}
+
+
+async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str]) -> Dict[str, Any]:
+    """Tetapkan guru yang dinilai pada SK. Kepala madrasah ditolak (bukan objek penilaian); guru yang dilepas
+    dikeluarkan dari pembagian penilai, kecuali sudah memiliki lembar penilaian."""
+    sk = await ambil_sk(db, sk_id)
+    await _periode_terbuka(db, sk['periode_id'])
+    baru = list(dict.fromkeys(dinilai_ids))
+    akun = await validasi_akun_guru(db, baru)
+    kepala = [akun[i].get('full_name') or i for i in baru if 'kepala_sekolah' in (akun[i].get('roles') or [])]
+    if kepala:
+        raise HTTPException(400, 'Kepala madrasah tidak menjadi objek penilaian: ' + ', '.join(kepala) + '.')
+
+    lama = list(sk.get('dinilai_ids') or [])
+    dilepas = [i for i in lama if i not in baru]
+    if dilepas:
+        if await db[KOLEKSI_PENILAIAN].find_one({'sk_id': sk_id, 'guru_dinilai_id': {'$in': dilepas}}, {'_id': 0, 'id': 1}):
+            raise HTTPException(409, 'Guru yang sudah memiliki lembar penilaian tidak dapat dilepas dari SK.')
+        tugas = await db[KOLEKSI_PENUGASAN].find({'periode_id': sk['periode_id']}, {'_id': 0}).to_list(500)
+        for t in tugas:
+            sisa = [g for g in t.get('guru_dinilai_ids') or [] if g not in dilepas]
+            if len(sisa) != len(t.get('guru_dinilai_ids') or []):
+                await db[KOLEKSI_PENUGASAN].update_one({'id': t['id']}, {'$set': {'guru_dinilai_ids': sisa, 'updated_at': _sekarang()}})
+    perubahan = {'dinilai_ids': baru, 'updated_at': _sekarang()}
+    await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
+    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pkg_penjaga  # noqa: E402
-from pkg_skema import PenilaiSkRequest, SkRequest  # noqa: E402
+from pkg_skema import DinilaiSkRequest, PenilaiSkRequest, SkRequest  # noqa: E402
 from routers import pkg_kelola as api  # noqa: E402
 from tests.pkg_palsu import Db, Koleksi, Request  # noqa: E402
 
@@ -159,4 +159,29 @@ def test_atur_tim_penilai(db):
     db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'penilai_id': 'g1'}])
     with pytest.raises(HTTPException) as e:  # sudah mengisi lembar
         _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=[]), Request())
+    assert e.value.status_code == 409
+
+
+def test_atur_guru_dinilai(db):
+    _users_guru(db)
+    sk = _api(api.buat_sk_api, _sk(), Request())
+    _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=['g1']), Request())
+    # Penilai g1 boleh merangkap sebagai guru yang dinilai.
+    hasil = _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1', 'g2']), Request())
+    assert [a['id'] for a in hasil['dinilai']] == ['g1', 'g2']
+
+    for ids, kata in ((['kep'], 'Kepala madrasah tidak menjadi objek'), (['tu'], 'bukan akun guru'), (['off'], 'nonaktif')):
+        with pytest.raises(HTTPException) as e:
+            _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=ids), Request())
+        assert e.value.status_code == 400 and kata in e.value.detail
+
+    db['pkg_penugasan'] = Koleksi([{'id': 't1', 'periode_id': 'p1', 'penilai_id': 'g1', 'guru_dinilai_ids': ['g2']}])
+    hasil = _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1']), Request())
+    assert [a['id'] for a in hasil['dinilai']] == ['g1']
+    assert db['pkg_penugasan'].docs[0]['guru_dinilai_ids'] == []  # g2 keluar dari pembagian
+    assert db['pkg_audit_log'].docs[-1]['metadata']['dilepas'] == ['g2']
+
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'guru_dinilai_id': 'g1'}])
+    with pytest.raises(HTTPException) as e:
+        _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=[]), Request())
     assert e.value.status_code == 409
