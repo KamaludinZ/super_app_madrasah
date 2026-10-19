@@ -55,14 +55,18 @@ function guruPeriode(periodeId) {
     '2026-04-25T09:00:00+07:00'));
 }
 
+// Tiruan: ?rekap=kosong (tanpa guru) / ?rekap=pribadi (cakupan guru yang dinilai, belum dikunci) di development.
+const skenarioTiruan = () => (process.env.NODE_ENV !== 'production' ? new URLSearchParams(window.location.search).get('rekap') : null);
+
 export async function ambilRekap({ periodeId } = {}) {
   const periode = PERIODE_TIRUAN.find((p) => p.id === periodeId) || PERIODE_TIRUAN[0];
-  const guru = guruPeriode(periode.id);
+  const skenario = skenarioTiruan();
+  const guru = skenario === 'kosong' ? [] : skenario === 'pribadi' ? [] : guruPeriode(periode.id);
   const terkunci = guru.filter((g) => g.status === 'terkunci');
   return tunda({
     periode,
-    sk: { id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026' },
-    cakupan: 'semua',
+    sk: skenario === 'kosong' ? null : { id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026' },
+    cakupan: skenario === 'pribadi' ? 'pribadi' : 'semua',
     ringkasan: {
       total: guru.length,
       terkunci: terkunci.length,
