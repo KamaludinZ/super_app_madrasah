@@ -45,3 +45,24 @@ def test_checksum_resmi_cocok_dan_terdeteksi_berubah(monkeypatch, tmp_path, capl
     assert status == {'instrumen': 'berbeda', 'rekap': 'hilang'} and hasil['utuh'] is False
     assert 'berbeda dari checksum resmi' in caplog.text
     assert pkg_template.hitung_checksum(str(tmp_path / 'tidak-ada.xlsx')) is None
+
+
+def test_pemeriksaan_startup_tersimpan():
+    import asyncio
+    from tests.pkg_palsu import Db
+    db = Db()
+    hasil = asyncio.run(pkg_template.periksa_template_startup(db))
+    assert hasil['utuh'] is True and pkg_template.HASIL_TERAKHIR['diperiksa_pada'] == hasil['diperiksa_pada']
+    dok = {d['jenis']: d for d in db['pkg_template'].docs}
+    assert set(dok) == {'instrumen', 'rekap'} and dok['rekap']['status'] == 'cocok' and dok['rekap']['diperiksa_pada']
+    asyncio.run(pkg_template.periksa_template_startup(db))  # idempoten: tetap satu dokumen per jenis
+    assert len(db['pkg_template'].docs) == 2
+
+
+def test_pemeriksaan_startup_tetap_jalan_bila_db_gagal():
+    import asyncio
+
+    class DbRusak(dict):
+        def __getitem__(self, _):
+            raise RuntimeError('db mati')
+    assert asyncio.run(pkg_template.periksa_template_startup(DbRusak()))['lengkap'] is True

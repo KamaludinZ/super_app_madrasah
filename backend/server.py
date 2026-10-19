@@ -326,10 +326,10 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to ensure PKG indexes: {e}")
 
-    # Berkas template resmi PKG (backend/templates): peringatan di log bila ada yang hilang
+    # Berkas template resmi PKG (backend/templates): peringatan di log bila hilang/berubah; hasil disimpan
     try:
-        from pkg_template import periksa_template
-        periksa_template()
+        from pkg_template import periksa_template_startup
+        await periksa_template_startup(db)
     except Exception as e:
         logger.error(f"Failed to check PKG templates: {e}")
 

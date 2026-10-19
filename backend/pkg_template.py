@@ -83,3 +83,27 @@ def periksa_template() -> Dict[str, Any]:
     if hasil['utuh']:
         logger.info(f"[pkg] Berkas template PKG v{VERSI_TEMPLATE} lengkap & checksum cocok ({len(berkas)} berkas).")
     return hasil
+
+
+# Hasil pemeriksaan terakhir di proses ini (diisi saat startup; dipakai endpoint info tanpa membaca ulang berkas).
+HASIL_TERAKHIR: Dict[str, Any] = {}
+
+
+async def periksa_template_startup(db) -> Dict[str, Any]:
+    """Pemeriksaan saat startup: periksa berkas, simpan ke koleksi pkg_template (satu dokumen per jenis), dan
+    simpan di memori. Kegagalan menyimpan ke basis data hanya dicatat; pemeriksaan berkas tetap berjalan."""
+    from pkg_skema import KOLEKSI_TEMPLATE
+    hasil = periksa_template()
+    HASIL_TERAKHIR.clear()
+    HASIL_TERAKHIR.update(hasil)
+    try:
+        for b in hasil['berkas']:
+            await db[KOLEKSI_TEMPLATE].update_one(
+                {'jenis': b['jenis']},
+                {'$set': {**{k: b[k] for k in ('nama_berkas', 'versi', 'checksum', 'checksum_resmi', 'status', 'ukuran')},
+                          'diperiksa_pada': hasil['diperiksa_pada']}},
+                upsert=True,
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[pkg] Gagal menyimpan hasil pemeriksaan template: {e}")
+    return hasil
