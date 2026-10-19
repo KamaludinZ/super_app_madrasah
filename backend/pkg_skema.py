@@ -9,7 +9,11 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
     pkg_penugasan  {id, periode_id, sk_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
                     supervisi_selesai, tanggal_supervisi, catatan_supervisi, disupervisi_oleh,
                     snapshot_guru {<guru_id>: {nama, nip, mapel}}, updated_at}
-    pkg_instrumen  {id, versi_template, checksum, kompetensi [...], is_active, created_at, updated_at}
+    pkg_instrumen  {id, versi_template, revisi, checksum (berkas sumber), cocok_resmi, sumber ('template' | 'unggah'),
+                    nama_berkas, revisi_dari (id instrumen asal), alasan_perubahan, diimpor_oleh, diimpor_pada,
+                    is_active, kompetensi [{kode, nama, sub [{kode, nama, bobot, indikator [{level, teks}]}]}],
+                    created_at, updated_at}
+                   Satu instrumen aktif; versi lama tetap tersimpan karena lembar penilaian merujuk instrumen_id-nya.
     pkg_penilaian  {id, sk_id, periode_id, penilai_id, guru_dinilai_id, instrumen_id, skor_per_indikator,
                     progres (0–100), nilai_akhir, predikat, status ('draf' | 'terkunci'), created_at, updated_at}
     pkg_audit_log  lihat pkg_audit.py
@@ -55,6 +59,7 @@ INDEX_PKG = [
     (KOLEKSI_INSTRUMEN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_INSTRUMEN, [('is_active', 1)], {'unique': True, 'name': 'satu_instrumen_aktif',
                                              'partialFilterExpression': {'is_active': True}}),
+    (KOLEKSI_INSTRUMEN, [('versi_template', 1), ('revisi', -1)], {'name': 'versi_revisi'}),
     (KOLEKSI_PENILAIAN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_PENILAIAN, [('sk_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'lembar_per_guru'}),
     (KOLEKSI_PENILAIAN, [('sk_id', 1), ('penilai_id', 1)], {'name': 'lembar_per_penilai'}),
@@ -256,3 +261,137 @@ class SupervisiRequest(IsianPkg):
     @classmethod
     def _catatan(cls, v):
         return _teks(v)
+
+
+# ---------------------------------------------------------------- struktur instrumen (kompetensi -> sub -> indikator)
+
+LEVEL_INDIKATOR = (1, 2, 3, 4, 5)
+POLA_KODE_KOMPETENSI = r'^\d{1,2}$'
+POLA_KODE_SUB = r'^\d{1,2}\.\d{1,2}$'
+BATAS_TEKS_INSTRUMEN = 500
+BATAS_NAMA_INSTRUMEN = 200
+
+
+def _bobot(v) -> float:
+    try:
+        n = round(float(v), 2)
+    except (TypeError, ValueError) as e:
+        raise ValueError('bobot harus angka') from e
+    if abs(float(v) - n) > 1e-9:
+        raise ValueError('bobot maksimal dua angka desimal')
+    if n < 0.01 or n > 100:
+        raise ValueError('bobot antara 0,01 dan 100')
+    return n
+
+
+class IndikatorInstrumen(IsianPkg):
+    level: int = Field(..., ge=1, le=5)
+    teks: str = Field(..., max_length=BATAS_TEKS_INSTRUMEN)
+
+    @field_validator('teks')
+    @classmethod
+    def _teks_wajib(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('teks indikator wajib diisi')
+        return v
+
+
+def _cek_indikator(indikator: List['IndikatorInstrumen']) -> List['IndikatorInstrumen']:
+    if sorted(i.level for i in indikator) != list(LEVEL_INDIKATOR):
+        raise ValueError('indikator harus tepat Level 1 sampai 5, masing-masing satu')
+    return sorted(indikator, key=lambda i: i.level)
+
+
+class SubKompetensiInstrumen(IsianPkg):
+    kode: str = Field(..., pattern=POLA_KODE_SUB)
+    nama: str = Field(..., max_length=BATAS_NAMA_INSTRUMEN)
+    bobot: float = 1.0
+    indikator: List[IndikatorInstrumen]
+
+    @field_validator('nama')
+    @classmethod
+    def _nama(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('nama sub-kompetensi wajib diisi')
+        return v
+
+    @field_validator('bobot', mode='before')
+    @classmethod
+    def _cek_bobot(cls, v):
+        return _bobot(v)
+
+    @field_validator('indikator')
+    @classmethod
+    def _indikator(cls, v):
+        return _cek_indikator(v)
+
+
+class KompetensiInstrumen(IsianPkg):
+    kode: str = Field(..., pattern=POLA_KODE_KOMPETENSI)
+    nama: str = Field(..., max_length=BATAS_NAMA_INSTRUMEN)
+    sub: List[SubKompetensiInstrumen] = Field(..., min_length=1, max_length=20)
+
+    @field_validator('nama')
+    @classmethod
+    def _nama(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('nama kompetensi wajib diisi')
+        return v
+
+    @model_validator(mode='after')
+    def _sub_sesuai(self):
+        kode = [s.kode for s in self.sub]
+        if len(set(kode)) != len(kode):
+            raise ValueError(f'kode sub-kompetensi ganda pada kompetensi {self.kode}')
+        if any(not k.startswith(f'{self.kode}.') for k in kode):
+            raise ValueError(f'kode sub-kompetensi harus diawali "{self.kode}."')
+        return self
+
+
+class StrukturInstrumen(IsianPkg):
+    """Struktur lengkap instrumen hasil impor; divalidasi sebelum disimpan sebagai instrumen baru."""
+    kompetensi: List[KompetensiInstrumen] = Field(..., min_length=1, max_length=20)
+
+    @model_validator(mode='after')
+    def _kompetensi_unik(self):
+        kode = [k.kode for k in self.kompetensi]
+        if len(set(kode)) != len(kode):
+            raise ValueError('kode kompetensi ganda')
+        return self
+
+
+class UbahSubInstrumenRequest(IsianPkg):
+    """Ubah satu sub-kompetensi instrumen aktif (kepala madrasah); alasan wajib untuk jejak audit."""
+    nama: str = Field(..., max_length=BATAS_NAMA_INSTRUMEN)
+    bobot: float
+    indikator: List[IndikatorInstrumen]
+    alasan: str = Field(..., max_length=300)
+
+    @field_validator('nama')
+    @classmethod
+    def _nama(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('nama sub-kompetensi wajib diisi')
+        return v
+
+    @field_validator('bobot', mode='before')
+    @classmethod
+    def _cek_bobot(cls, v):
+        return _bobot(v)
+
+    @field_validator('indikator')
+    @classmethod
+    def _indikator(cls, v):
+        return _cek_indikator(v)
+
+    @field_validator('alasan')
+    @classmethod
+    def _alasan_wajib(cls, v):
+        v = _teks(v)
+        if not v:
+            raise ValueError('alasan perubahan wajib diisi')
+        return v
