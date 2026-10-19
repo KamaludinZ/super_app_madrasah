@@ -13,6 +13,10 @@
 //   GET  /users/teachers                 -> [{ id, full_name, username, roles }]   (akun GTK aktif)
 //   PUT  /pkg/sk/{id}/penilai            -> sk             body: { penilai_ids }  (kepala selalu disertakan)
 //   PUT  /pkg/sk/{id}/dinilai            -> sk             body: { dinilai_ids }  (kepala ditolak)
+//   GET  /pkg/penugasan                  -> pembagian      (SK aktif pada periode berjalan)
+//   PUT  /pkg/penugasan                  -> pembagian      body: { penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n} }
+// pembagian = { periode, sk, penilai: [anggota], dinilai: [anggota], penugasan: {guru_id: penilai_id},
+//               jatah: {penilai_id: n}, penilaian_dimulai: bool }
 // periode = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
 //             status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
 // sk = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilai: [anggota], dinilai: [anggota] }
@@ -46,6 +50,9 @@ const store = {
       id: 'sk-1', nomor_sk: 'B-123/Mts.10.05/KP.07.6/10/2026', tanggal_sk: '2026-09-28',
       tentang: 'Tim Penilai Kinerja Guru Semester Ganjil 2026/2027', periode_id: 'p-2026-ganjil', is_active: true,
       penilai: ['u-kepala', 'u-1', 'u-3'].map(anggota), dinilai: ['u-1', 'u-2', 'u-4', 'u-5', 'u-6'].map(anggota),
+      penugasan: { 'u-1': 'u-3', 'u-2': 'u-1', 'u-4': 'u-1', 'u-5': 'u-3' },
+      jatah: { 'u-kepala': 1, 'u-1': 2, 'u-3': 2 },
+      penilaian_dimulai: true,
     },
     {
       id: 'sk-0', nomor_sk: 'B-045/Mts.10.05/KP.07.6/02/2026', tanggal_sk: '2026-02-20',
@@ -153,4 +160,45 @@ export async function simpanDinilaiSk(skId, dinilaiIds = []) {
   if (ids.some((id) => !GURU.some((g) => g.id === id))) throw new GalatValidasi('Sebagian guru bukan akun guru aktif.');
   sk.dinilai = ids.map(anggota);
   return tunda(sk);
+}
+
+function skBerjalan() {
+  const periode = store.periode.find((p) => p.status === 'berjalan');
+  const sk = periode && store.sk.find((s) => s.periode_id === periode.id && s.is_active);
+  return { periode, sk };
+}
+
+export async function ambilPenugasan() {
+  const { periode, sk } = skBerjalan();
+  if (!sk) return tunda({ periode: periode || null, sk: null, penilai: [], dinilai: [], penugasan: {}, jatah: {}, penilaian_dimulai: false });
+  return tunda({
+    periode,
+    sk: { id: sk.id, nomor_sk: sk.nomor_sk },
+    penilai: sk.penilai,
+    dinilai: sk.dinilai,
+    penugasan: sk.penugasan || {},
+    jatah: sk.jatah || {},
+    penilaian_dimulai: !!sk.penilaian_dimulai,
+  });
+}
+
+// Validasi sama dengan backend: tiap guru dinilai punya tepat satu penilai anggota SK, bukan dirinya sendiri.
+export function cekPenugasan(dinilai, penilai, penugasan) {
+  const idPenilai = new Set(penilai.map((p) => p.id));
+  const tanpaPenilai = dinilai.filter((g) => !penugasan[g.id]).map((g) => g.id);
+  const diriSendiri = dinilai.filter((g) => penugasan[g.id] === g.id).map((g) => g.id);
+  const bukanPenilai = dinilai.filter((g) => penugasan[g.id] && !idPenilai.has(penugasan[g.id])).map((g) => g.id);
+  return { tanpaPenilai, diriSendiri, bukanPenilai, sah: !tanpaPenilai.length && !diriSendiri.length && !bukanPenilai.length };
+}
+
+export async function simpanPenugasan({ penugasan, jatah }) {
+  const { sk } = skBerjalan();
+  if (!sk) throw new GalatValidasi('Belum ada SK aktif pada periode berjalan.');
+  const cek = cekPenugasan(sk.dinilai, sk.penilai, penugasan);
+  if (cek.diriSendiri.length) throw new GalatValidasi('Penilai tidak boleh menilai dirinya sendiri.');
+  if (cek.bukanPenilai.length) throw new GalatValidasi('Sebagian penilai tidak tercantum di SK.');
+  if (cek.tanpaPenilai.length) throw new GalatValidasi(`${cek.tanpaPenilai.length} guru belum memiliki penilai.`);
+  sk.penugasan = { ...penugasan };
+  sk.jatah = { ...jatah };
+  return ambilPenugasan();
 }
