@@ -158,7 +158,7 @@ def test_atur_tim_penilai(db):
     db['pkg_penugasan'] = Koleksi()
     db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'penilai_id': 'g1'}])
     with pytest.raises(HTTPException) as e:  # sudah mengisi lembar
-        _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=[]), Request())
+        _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=[], alasan_perubahan='x'), Request())
     assert e.value.status_code == 409
 
 
@@ -183,7 +183,7 @@ def test_atur_guru_dinilai(db):
 
     db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'guru_dinilai_id': 'g1'}])
     with pytest.raises(HTTPException) as e:
-        _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=[]), Request())
+        _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=[], alasan_perubahan='x'), Request())
     assert e.value.status_code == 409
 
 
@@ -218,3 +218,19 @@ def test_snapshot_identitas_periode(db):
     db['users'].docs[1]['full_name'] = 'Budi Baru'
     tampil = _api(api.rincian_sk_api, sk['id'])
     assert [a['nama'] for a in tampil['dinilai']] == ['Budi', 'Ani'] and tampil['dinilai'][0]['mapel'] == 'IPA, Matematika'
+
+
+def test_kunci_susunan_sk_setelah_berjalan(db):
+    _users_guru(db)
+    sk = _api(api.buat_sk_api, _sk(), Request())
+    _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=['g1']), Request())
+    assert db['pkg_audit_log'].docs[-1]['metadata']['setelah_berjalan'] is False
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'penilai_id': 'kep', 'guru_dinilai_id': 'g1'}])
+    for fn, req in ((api.atur_penilai_api, PenilaiSkRequest(penilai_ids=['g1', 'g2'])),
+                    (api.atur_dinilai_api, DinilaiSkRequest(dinilai_ids=['g1', 'g2']))):
+        with pytest.raises(HTTPException) as e:
+            _api(fn, sk['id'], req, Request())
+        assert e.value.status_code == 400 and 'alasan' in e.value.detail
+    _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1', 'g2'], alasan_perubahan='guru baru'), Request())
+    meta = db['pkg_audit_log'].docs[-1]['metadata']
+    assert meta['setelah_berjalan'] is True and meta['alasan'] == 'guru baru' and meta['ditambah'] == ['g1', 'g2']

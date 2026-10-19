@@ -109,3 +109,28 @@ def test_validasi_akun_jatah_dan_ganda(db):
     db['users'].docs[3]['is_active'] = False
     peringatan = _api(api.pembagian_api)['peringatan']
     assert any('lebih dari satu penilai' in p for p in peringatan) and any('G3' in p for p in peringatan)
+
+
+def test_kunci_setelah_penilaian_berjalan(db):
+    _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'g1'})
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': 's1', 'guru_dinilai_id': 'g2', 'penilai_id': 'g1', 'status': 'draf'}])
+    sebelum = [dict(d) for d in db['pkg_penugasan'].docs]
+
+    with pytest.raises(HTTPException) as e:  # tanpa alasan: ditolak & tidak ada yang tertulis
+        _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'kep'})
+    assert e.value.status_code == 400 and 'alasan' in e.value.detail
+    assert db['pkg_penugasan'].docs == sebelum
+
+    with pytest.raises(HTTPException) as e:  # guru yang sudah punya lembar tidak dipindah
+        _api(api.simpan_pembagian_api, PenugasanRequest(penugasan={'g1': 'g1', 'g2': 'kep', 'g3': 'g1'},
+                                                        alasan_perubahan='rotasi'), Request())
+    assert e.value.status_code in (400, 409)
+
+    hasil = _api(api.simpan_pembagian_api, PenugasanRequest(penugasan={'g1': 'kep', 'g2': 'g1', 'g3': 'kep'},
+                                                            alasan_perubahan=' Guru g1 cuti '), Request())
+    assert hasil['penugasan']['g3'] == 'kep'
+    log = db['pkg_audit_log'].docs[-1]
+    assert log['metadata']['setelah_berjalan'] is True and log['metadata']['alasan'] == 'Guru g1 cuti'
+    assert len(db['pkg_audit_log'].docs) == 2
+    # Tanpa perubahan: tidak perlu alasan.
+    assert _simpan({'g1': 'kep', 'g2': 'g1', 'g3': 'kep'})['penilaian_dimulai'] is True

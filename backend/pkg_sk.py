@@ -11,6 +11,8 @@ Aturan:
     - SK aktif atau SK yang sudah punya lembar penilaian tidak dapat dihapus.
     - Anggota hanya akun guru aktif (PERAN_GURU_PKG); tenaga kependidikan & akun nonaktif ditolak.
     - Penilai yang sudah memiliki lembar penilaian atau masih memegang guru dalam pembagian tidak dapat dilepas.
+    - Setelah penilaian SK berjalan (sudah ada lembar), perubahan tim penilai/guru dinilai wajib disertai alasan
+      dan tercatat di audit sebagai perubahan setelah berjalan.
     - Snapshot identitas (nama, NIP/Peg ID, mapel dari jadwal semester periode) disalin ke `snapshot_anggota`
       setiap kali anggota ditetapkan selama periode belum ditutup, agar cetak periode lalu tetap utuh walau
       akun berubah atau dinonaktifkan.
@@ -221,6 +223,16 @@ async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
     return akun
 
 
+async def penilaian_berjalan(db, sk_id: str) -> bool:
+    """True bila SK sudah memiliki lembar penilaian (susunan dianggap terkunci)."""
+    return bool(await db[KOLEKSI_PENILAIAN].find_one({'sk_id': sk_id}, {'_id': 0, 'id': 1}))
+
+
+def wajib_alasan_bila_berjalan(berjalan: bool, alasan: str) -> None:
+    if berjalan and not (alasan or '').strip():
+        raise HTTPException(400, 'Penilaian SK ini sudah berjalan; perubahan susunan wajib disertai alasan perubahan.')
+
+
 async def _snapshot_anggota(db, sk: Dict[str, Any], penilai_ids: List[str], dinilai_ids: List[str],
                             periode: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """Snapshot terbaru seluruh anggota SK; anggota yang akunnya sudah tidak ada memakai snapshot lama."""
@@ -230,10 +242,12 @@ async def _snapshot_anggota(db, sk: Dict[str, Any], penilai_ids: List[str], dini
     return {i: baru.get(i) or lama[i] for i in ids if baru.get(i) or lama.get(i)}
 
 
-async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str, Any]) -> Dict[str, Any]:
+async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str, Any], alasan: str = '') -> Dict[str, Any]:
     """Tetapkan tim penilai SK. Kepala madrasah (pengubah & kepala yang sudah tercatat) selalu disertakan."""
     sk = await ambil_sk(db, sk_id)
     periode = await _periode_terbuka(db, sk['periode_id'])
+    berjalan = await penilaian_berjalan(db, sk_id)
+    wajib_alasan_bila_berjalan(berjalan, alasan)
     lama = list(sk.get('penilai_ids') or [])
     akun_lama = await db.users.find({'id': {'$in': lama}}, {'_id': 0, 'id': 1, 'roles': 1}).to_list(len(lama) or 1)
     kepala_ids = [kepala['id']] + [u['id'] for u in akun_lama if 'kepala_sekolah' in (u.get('roles') or [])]
@@ -251,14 +265,17 @@ async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str,
     perubahan = {'penilai_ids': baru, 'updated_at': _sekarang(),
                  'snapshot_anggota': await _snapshot_anggota(db, sk, baru, sk.get('dinilai_ids') or [], periode)}
     await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
-    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}
+    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas,
+            '_setelah_berjalan': berjalan}
 
 
-async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str]) -> Dict[str, Any]:
+async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str], alasan: str = '') -> Dict[str, Any]:
     """Tetapkan guru yang dinilai pada SK. Kepala madrasah ditolak (bukan objek penilaian); guru yang dilepas
     dikeluarkan dari pembagian penilai, kecuali sudah memiliki lembar penilaian."""
     sk = await ambil_sk(db, sk_id)
     periode = await _periode_terbuka(db, sk['periode_id'])
+    berjalan = await penilaian_berjalan(db, sk_id)
+    wajib_alasan_bila_berjalan(berjalan, alasan)
     baru = list(dict.fromkeys(dinilai_ids))
     akun = await validasi_akun_guru(db, baru)
     kepala = [akun[i].get('full_name') or i for i in baru if 'kepala_sekolah' in (akun[i].get('roles') or [])]
@@ -278,4 +295,5 @@ async def atur_dinilai(db, sk_id: str, dinilai_ids: List[str]) -> Dict[str, Any]
     perubahan = {'dinilai_ids': baru, 'updated_at': _sekarang(),
                  'snapshot_anggota': await _snapshot_anggota(db, sk, sk.get('penilai_ids') or [], baru, periode)}
     await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
-    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}
+    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas,
+            '_setelah_berjalan': berjalan}

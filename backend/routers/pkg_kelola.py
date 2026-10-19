@@ -21,6 +21,15 @@ router = APIRouter()
 kepala = penjaga_pkg('kepala')
 
 
+def _meta_susunan(sk: Dict, alasan: str) -> Dict:
+    """Metadata audit perubahan susunan SK; perubahan setelah penilaian berjalan menyertakan alasannya."""
+    meta = {**_ringkas_sk(sk), 'ditambah': sk.pop('_ditambah'), 'dilepas': sk.pop('_dilepas'),
+            'setelah_berjalan': sk.pop('_setelah_berjalan')}
+    if meta['setelah_berjalan']:
+        meta['alasan'] = alasan
+    return meta
+
+
 def _ringkas_periode(p: Dict) -> Dict:
     return {'periode_id': p['id'], 'nama_periode': p.get('nama_periode'), 'status': p.get('status')}
 
@@ -123,9 +132,8 @@ async def guru_aktif_api(akses: Dict = Depends(kepala)):
 @router.put("/pkg/sk/{sk_id}/penilai")
 async def atur_penilai_api(sk_id: str, data: PenilaiSkRequest, request: Request, akses: Dict = Depends(kepala)):
     """Tetapkan tim penilai SK dari ceklist guru aktif; kepala madrasah otomatis menjadi penilai."""
-    sk = await atur_penilai(db, sk_id, data.penilai_ids, akses['user'])
-    await catat_audit_pkg(db, 'sk_penilai', akses['user'],
-                          {**_ringkas_sk(sk), 'ditambah': sk.pop('_ditambah'), 'dilepas': sk.pop('_dilepas')}, request=request)
+    sk = await atur_penilai(db, sk_id, data.penilai_ids, akses['user'], data.alasan_perubahan)
+    await catat_audit_pkg(db, 'sk_penilai', akses['user'], _meta_susunan(sk, data.alasan_perubahan), request=request)
     return await sk_tampil(db, sk)
 
 
@@ -133,9 +141,8 @@ async def atur_penilai_api(sk_id: str, data: PenilaiSkRequest, request: Request,
 async def atur_dinilai_api(sk_id: str, data: DinilaiSkRequest, request: Request, akses: Dict = Depends(kepala)):
     """Tetapkan guru yang dinilai dari ceklist guru aktif; kepala madrasah tidak dapat dinilai.
     Penilai boleh merangkap sebagai guru yang dinilai."""
-    sk = await atur_dinilai(db, sk_id, data.dinilai_ids)
-    await catat_audit_pkg(db, 'sk_dinilai', akses['user'],
-                          {**_ringkas_sk(sk), 'ditambah': sk.pop('_ditambah'), 'dilepas': sk.pop('_dilepas')}, request=request)
+    sk = await atur_dinilai(db, sk_id, data.dinilai_ids, data.alasan_perubahan)
+    await catat_audit_pkg(db, 'sk_dinilai', akses['user'], _meta_susunan(sk, data.alasan_perubahan), request=request)
     return await sk_tampil(db, sk)
 
 
@@ -147,11 +154,15 @@ async def pembagian_api(akses: Dict = Depends(kepala)):
 
 @router.put("/pkg/penugasan")
 async def simpan_pembagian_api(data: PenugasanRequest, request: Request, akses: Dict = Depends(kepala)):
-    """Simpan pembagian: tiap guru dinilai tepat satu penilai anggota SK (bukan dirinya sendiri) + jatah per penilai."""
+    """Simpan pembagian: tiap guru dinilai tepat satu penilai anggota SK (bukan dirinya sendiri) + jatah per penilai.
+    Setelah penilaian berjalan wajib menyertakan alasan_perubahan; guru yang sudah memiliki lembar tidak dipindah."""
     hasil = await simpan_pembagian(db, data)
     perubahan = hasil.pop('_perubahan')
+    setelah_berjalan = hasil.pop('_setelah_berjalan')
     if perubahan:
-        await catat_audit_pkg(db, 'penugasan_simpan', akses['user'],
-                              {'sk_id': (hasil['sk'] or {}).get('id'), 'periode_id': (hasil['periode'] or {}).get('id'),
-                               'penilaian_dimulai': hasil['penilaian_dimulai'], 'perubahan': perubahan}, request=request)
+        meta = {'sk_id': (hasil['sk'] or {}).get('id'), 'periode_id': (hasil['periode'] or {}).get('id'),
+                'setelah_berjalan': setelah_berjalan, 'perubahan': perubahan}
+        if setelah_berjalan:
+            meta['alasan'] = data.alasan_perubahan
+        await catat_audit_pkg(db, 'penugasan_simpan', akses['user'], meta, request=request)
     return hasil

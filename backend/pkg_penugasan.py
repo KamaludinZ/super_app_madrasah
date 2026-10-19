@@ -10,6 +10,8 @@ Aturan simpan (validasi_pembagian, semua pesan dikumpulkan sekaligus):
       (rangkap penilai–dinilai tetap boleh untuk guru lain);
     - guru & penilai harus akun guru aktif (akun yang dinonaktifkan setelah SK ditetapkan ditolak);
     - jumlah guru per penilai tidak melebihi jatahnya bila jatah diisi (> 0).
+Setelah penilaian berjalan, perubahan wajib disertai alasan dan guru yang sudah memiliki lembar penilaian
+tidak dapat dipindah ke penilai lain.
 GET menyertakan `peringatan` untuk data tersimpan yang sudah tidak sah (mis. guru ganda antar penilai,
 akun dinonaktifkan) agar kepala dapat memperbaikinya.
 """
@@ -21,7 +23,7 @@ from fastapi import HTTPException
 
 from pkg_akses import sk_aktif
 from pkg_periode import periode_tampil
-from pkg_sk import masalah_akun_guru, sk_tampil
+from pkg_sk import masalah_akun_guru, penilaian_berjalan, sk_tampil, wajib_alasan_bila_berjalan
 from pkg_skema import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PenugasanRequest
 
 
@@ -104,29 +106,42 @@ async def simpan_pembagian(db, data: PenugasanRequest) -> Dict[str, Any]:
     pesan = await validasi_pembagian(db, sk, data.penugasan, data.jatah)
     if pesan:
         raise HTTPException(400, 'Pembagian tidak valid — ' + '; '.join(pesan) + '.')
+    berjalan = await penilaian_berjalan(db, sk['id'])
+    if berjalan:
+        lembar = await db[KOLEKSI_PENILAIAN].find({'sk_id': sk['id']}, {'_id': 0, 'guru_dinilai_id': 1, 'penilai_id': 1}).to_list(1000)
+        pindah = [p['guru_dinilai_id'] for p in lembar if data.penugasan.get(p['guru_dinilai_id']) not in (None, p.get('penilai_id'))]
+        if pindah:
+            nama = sk.get('snapshot_anggota') or {}
+            raise HTTPException(409, 'Guru yang sudah memiliki lembar penilaian tidak dapat dipindah ke penilai lain: '
+                                + ', '.join((nama.get(g) or {}).get('nama') or g for g in pindah) + '.')
 
     lama = {d['penilai_id']: d for d in await db[KOLEKSI_PENUGASAN].find({'periode_id': periode['id']}, {'_id': 0}).to_list(500)}
     sekarang = _sekarang()
     # Identitas guru disalin dari snapshot periode di SK (dipakai daftar tugas & cetak periode ini).
     snapshot = sk.get('snapshot_anggota') or {}
     perubahan = []
-    penilai_ids = list(dict.fromkeys([*(sk.get('penilai_ids') or []), *lama.keys()]))
-    for pid in penilai_ids:
-        guru = [g for g in sk.get('dinilai_ids') or [] if data.penugasan.get(g) == pid] if pid in (sk.get('penilai_ids') or []) else []
-        jatah = int(data.jatah.get(pid) or 0) if pid in (sk.get('penilai_ids') or []) else 0
+    penilai_sk = sk.get('penilai_ids') or []
+    for pid in dict.fromkeys([*penilai_sk, *lama.keys()]):
+        guru = [g for g in sk.get('dinilai_ids') or [] if data.penugasan.get(g) == pid] if pid in penilai_sk else []
+        jatah = int(data.jatah.get(pid) or 0) if pid in penilai_sk else 0
         sebelum = lama.get(pid) or {}
         if pid in lama and sebelum.get('guru_dinilai_ids') == guru and int(sebelum.get('jumlah_jatah') or 0) == jatah \
                 and sebelum.get('sk_id') == sk['id']:
             continue
+        perubahan.append({'penilai_id': pid, 'sebelum': sebelum.get('guru_dinilai_ids') or [], 'sesudah': guru,
+                          'jatah': jatah})
+    # Alasan diperiksa sebelum menulis apa pun.
+    if perubahan:
+        wajib_alasan_bila_berjalan(berjalan, data.alasan_perubahan)
+    for ub in perubahan:
         await db[KOLEKSI_PENUGASAN].update_one(
-            {'periode_id': periode['id'], 'penilai_id': pid},
-            {'$set': {'sk_id': sk['id'], 'guru_dinilai_ids': guru, 'jumlah_jatah': jatah, 'updated_at': sekarang,
-                      'snapshot_guru': {g: snapshot[g] for g in guru if g in snapshot}},
+            {'periode_id': periode['id'], 'penilai_id': ub['penilai_id']},
+            {'$set': {'sk_id': sk['id'], 'guru_dinilai_ids': ub['sesudah'], 'jumlah_jatah': ub['jatah'], 'updated_at': sekarang,
+                      'snapshot_guru': {g: snapshot[g] for g in ub['sesudah'] if g in snapshot}},
              '$setOnInsert': {'id': str(uuid.uuid4()), 'supervisi_selesai': False}},
             upsert=True,
         )
-        perubahan.append({'penilai_id': pid, 'sebelum': sebelum.get('guru_dinilai_ids') or [], 'sesudah': guru,
-                          'jatah': jatah})
     hasil = await ambil_pembagian(db)
     hasil['_perubahan'] = perubahan
+    hasil['_setelah_berjalan'] = berjalan
     return hasil

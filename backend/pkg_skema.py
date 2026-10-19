@@ -171,25 +171,38 @@ class SkRequest(BaseModel):
 
 class PenilaiSkRequest(BaseModel):
     penilai_ids: List[str] = Field(default_factory=list, max_length=500)
+    alasan_perubahan: str = Field('', max_length=300)  # wajib bila penilaian SK sudah berjalan
 
     @field_validator('penilai_ids')
     @classmethod
     def _unik(cls, v):
         return _ids(v)
 
+    @field_validator('alasan_perubahan')
+    @classmethod
+    def _alasan(cls, v):
+        return _teks(v)
+
 
 class DinilaiSkRequest(BaseModel):
     dinilai_ids: List[str] = Field(default_factory=list, max_length=500)
+    alasan_perubahan: str = Field('', max_length=300)  # wajib bila penilaian SK sudah berjalan
 
     @field_validator('dinilai_ids')
     @classmethod
     def _unik(cls, v):
         return _ids(v)
 
+    @field_validator('alasan_perubahan')
+    @classmethod
+    def _alasan(cls, v):
+        return _teks(v)
+
 
 class PenugasanRequest(BaseModel):
     penugasan: Dict[str, str] = Field(default_factory=dict)  # {guru_id: penilai_id}
     jatah: Dict[str, int] = Field(default_factory=dict)       # {penilai_id: n}
+    alasan_perubahan: str = Field('', max_length=300)          # wajib bila penilaian SK sudah berjalan
 
     @field_validator('penugasan')
     @classmethod
@@ -205,6 +218,11 @@ class PenugasanRequest(BaseModel):
             if n < 0 or n > 99:
                 raise ValueError('jatah harus 0–99')
         return v
+
+    @field_validator('alasan_perubahan')
+    @classmethod
+    def _alasan(cls, v):
+        return _teks(v)
 
 
 class SupervisiRequest(BaseModel):
