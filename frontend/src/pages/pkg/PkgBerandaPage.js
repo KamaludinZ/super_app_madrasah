@@ -1,19 +1,16 @@
-import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Award, CalendarRange, Bell, CalendarClock, UserCheck, Info,
-} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Bell, CalendarClock, UserCheck, Info, Loader2, AlertTriangle, RotateCw } from 'lucide-react';
 import KartuRingkasanKinerja from '@/components/pkg/KartuRingkasanKinerja';
 import DaftarTugasPenilaian from '@/components/pkg/DaftarTugasPenilaian';
 import GridPintasanPkg from '@/components/pkg/GridPintasanPkg';
 import PesanTolakPkg from '@/components/pkg/PesanTolakPkg';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useAuth } from '@/lib/AuthContext';
-import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
+import { formatWIBPanjang } from '@/lib/datetime';
 import { sisaHari } from '@/lib/pkgPengingat';
-import { MENU_PKG, SKENARIO_BERANDA, berandaTiruan } from '@/lib/pkgDataTiruan';
+import { ambilBeranda } from '@/lib/pkg';
 
 const IKON_PENGINGAT = { tenggat: CalendarClock, supervisi: UserCheck, info: Info };
 
@@ -53,52 +50,53 @@ function PengingatTenggat({ pengingat }) {
   );
 }
 
-// Beranda Modul PKG (Penilaian Kinerja Guru): ringkasan periode berjalan, tugas penilaian pengguna,
-// pengingat tenggat, dan pintasan ke sub-menu PKG. Sementara memakai data tiruan (lib/pkgDataTiruan);
-// keadaan lain bisa dicoba lewat ?skenario= (lihat SKENARIO_BERANDA).
+// Beranda Modul PKG (Penilaian Kinerja Guru) di dalam PkgLayout: ringkasan periode berjalan, tugas penilaian
+// pengguna, pengingat tenggat, dan pintasan sub-menu PKG sesuai akses (GET /pkg/beranda).
 export default function PkgBerandaPage() {
-  const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const skenario = SKENARIO_BERANDA[searchParams.get('skenario')] ? searchParams.get('skenario') : 'normal';
-  const { periode, ringkasan, keanggotaan, tugas, pengingat, penolakan } = berandaTiruan(skenario);
+  const { keanggotaan } = useOutletContext() || {};
+  const [data, setData] = useState(null);
+  const [galat, setGalat] = useState(null);
 
-  if (penolakan) return <PesanTolakPkg penolakan={penolakan} />;
+  const muat = useCallback(async () => {
+    setGalat(null);
+    try {
+      setData(await ambilBeranda());
+    } catch (e) {
+      setGalat(e);
+    }
+  }, []);
+
+  useEffect(() => { muat(); }, [muat]);
+
+  if (galat?.penolakan) return <PesanTolakPkg penolakan={galat.penolakan} />;
+  if (galat) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-12 text-center" role="alert">
+        <AlertTriangle className="h-8 w-8 text-amber-600" />
+        <p className="text-sm text-slate-700">{galat.message}</p>
+        <Button variant="outline" size="sm" onClick={muat} className="gap-2"><RotateCw className="h-4 w-4" /> Coba lagi</Button>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="p-12 text-center" data-testid="pkg-beranda-memuat">
+        <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="pkg-beranda">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <Award className="h-7 w-7 text-[#006837]" /> Penilaian Kinerja Guru
-          </h1>
-          <p className="text-sm text-slate-600 mt-1">
-            Beranda PKG{user?.full_name ? ` — ${user.full_name}` : ''}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="pkg-periode">
-          {periode && (
-            <>
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 gap-1">
-                <CalendarRange className="h-3 w-3" /> {periode.nama_periode}
-              </Badge>
-              <span className="text-slate-500">
-                {formatWIB(periode.tanggal_buka, 'Date', { day: 'numeric', month: 'short' })} – {formatWIB(periode.tanggal_tutup, 'Date', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            </>
-          )}
-          <Badge variant="outline" className="border-dashed text-slate-500" title={SKENARIO_BERANDA[skenario]}>Data tiruan</Badge>
-        </div>
-      </div>
-
-      {periode ? (
+      {data.periode ? (
         <>
-          <KartuRingkasanKinerja ringkasan={ringkasan} />
+          <KartuRingkasanKinerja ringkasan={data.ringkasan} />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <DaftarTugasPenilaian tugas={tugas} keanggotaan={keanggotaan} />
+              <DaftarTugasPenilaian tugas={data.tugas} keanggotaan={data.keanggotaan || keanggotaan} />
             </div>
-            <PengingatTenggat pengingat={pengingat} />
+            <PengingatTenggat pengingat={data.pengingat || []} />
           </div>
         </>
       ) : (
@@ -114,7 +112,7 @@ export default function PkgBerandaPage() {
         </Card>
       )}
 
-      <GridPintasanPkg menu={MENU_PKG} />
+      <GridPintasanPkg menu={data.menu || []} />
     </div>
   );
 }

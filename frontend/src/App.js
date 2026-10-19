@@ -88,6 +88,7 @@ import WaliKelasReportsPage from '@/pages/WaliKelasReportsPage';
 import WaliKelasPoinTatibPage from '@/pages/WaliKelasPoinTatibPage';
 import TatibRekapPage from '@/pages/TatibRekapPage';
 import PkgBerandaPage from '@/pages/pkg/PkgBerandaPage';
+import PkgLayout from '@/components/pkg/PkgLayout';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -388,7 +389,9 @@ function App() {
             <Route path="/admin/tatib/penanganan" element={<PenjagaTatib><AdminTatibPenangananPage /></PenjagaTatib>} />
             <Route path="/admin/tatib/data" element={<PenjagaTatib><AdminTatibDataPage /></PenjagaTatib>} />
             <Route path="/tatib/rekap" element={<TatibRekapPage />} />
-            <Route path="/pkg" element={<PkgBerandaPage />} />
+            <Route path="/pkg" element={<PkgLayout />}>
+              <Route index element={<PkgBerandaPage />} />
+            </Route>
             <Route path="/admin/bk/kunjungan" element={<AdminBKKunjunganPage />} />
             <Route path="/admin/bk/clkb" element={<AdminBKClkbPage />} />
             <Route path="/admin/bk/pcl" element={<AdminBKPclPage />} />
