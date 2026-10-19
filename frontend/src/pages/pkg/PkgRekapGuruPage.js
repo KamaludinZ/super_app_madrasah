@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,17 +13,19 @@ import { ambilRekapGuru } from '@/lib/pkgRekap';
 
 function IsiRekapGuru() {
   const { guruId } = useParams();
+  const [searchParams] = useSearchParams();
+  const periodeId = searchParams.get('periode') || undefined;
   const [data, setData] = useState(null);
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
     setGalat(null);
     try {
-      setData(await ambilRekapGuru(guruId));
+      setData(await ambilRekapGuru(guruId, periodeId));
     } catch (e) {
       setGalat(e);
     }
-  }, [guruId]);
+  }, [guruId, periodeId]);
 
   useEffect(() => { muat(); }, [muat]);
 
@@ -42,7 +44,7 @@ function IsiRekapGuru() {
 
   return (
     <div className="space-y-4" data-testid="pkg-rekap-guru">
-      <Link to="/pkg/rekap" className="inline-flex items-center gap-1 text-sm text-[#006837] hover:underline"><ArrowLeft className="h-4 w-4" /> Rekap</Link>
+      <Link to={periodeId ? `/pkg/rekap?periode=${periodeId}` : '/pkg/rekap'} className="inline-flex items-center gap-1 text-sm text-[#006837] hover:underline"><ArrowLeft className="h-4 w-4" /> Rekap</Link>
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#006837]"><UserRound className="h-6 w-6" /></div>
@@ -110,7 +112,7 @@ function IsiRekapGuru() {
 }
 
 // Rekap per guru: nilai akhir, capaian, predikat, rincian skor per sub-kompetensi, bukti & tanggapan, dan catatan
-// evaluasi (cakupan menurut peran). Data sementara dari lib/pkgRekap (tiruan).
+// evaluasi (cakupan menurut peran; lib/pkgRekap -> /pkg/rekap/guru/{id}).
 export default function PkgRekapGuruPage() {
   return (
     <PenjagaMenuPkg menuKey="rekap">

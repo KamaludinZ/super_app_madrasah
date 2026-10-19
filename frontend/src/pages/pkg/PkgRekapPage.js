@@ -100,7 +100,7 @@ function IsiHalamanRekap() {
               <StatistikRekap guru={rekap.guru} />
             </TabsContent>
             <TabsContent value="tim">
-              <RekapPerTim guru={rekap.guru} nomorSk={rekap.sk?.nomor_sk} />
+              <RekapPerTim guru={rekap.guru} nomorSk={rekap.sk?.nomor_sk} periodeId={rekap.periode?.id} />
             </TabsContent>
             <TabsContent value="guru">
               <Card>
@@ -129,7 +129,7 @@ function IsiHalamanRekap() {
                           {rekap.guru.map((g) => (
                               <TableRow key={g.guru_id} data-testid={`pkg-rekap-${g.guru_id}`}>
                                 <TableCell className="min-w-[180px]">
-                                  <Link to={`/pkg/rekap/${g.guru_id}`} className="font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
+                                  <Link to={`/pkg/rekap/${g.guru_id}?periode=${rekap.periode?.id || ''}`} className="font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
                                   <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
                                 </TableCell>
                                 <TableCell className="text-sm text-slate-600 whitespace-nowrap">{g.penilai_nama || '-'}</TableCell>
@@ -155,7 +155,7 @@ function IsiHalamanRekap() {
 }
 
 // Rekap hasil penilaian (anggota SK; cakupan data menurut peran ditentukan server): ringkasan status & rata-rata
-// capaian serta nilai per guru. Data sementara dari lib/pkgRekap (tiruan).
+// capaian serta nilai per guru (lib/pkgRekap -> /pkg/rekap*).
 export default function PkgRekapPage() {
   return (
     <PenjagaMenuPkg menuKey="rekap">

@@ -13,7 +13,7 @@ const persen = (n) => (n == null ? '-' : `${PERSEN.format(n)}%`);
 
 // Rekap tim per SK: guru dikelompokkan per penilai, terurut (capaian tertinggi atau nama) dengan peringkat,
 // ringkasan terkunci & rata-rata capaian per tim. `guru` = baris rekap; `nomorSk` untuk judul.
-export default function RekapPerTim({ guru = [], nomorSk }) {
+export default function RekapPerTim({ guru = [], nomorSk, periodeId }) {
   const [urut, setUrut] = useState('capaian');
   const tim = useMemo(() => kelompokkanPerTim(guru, urut), [guru, urut]);
 
@@ -50,7 +50,7 @@ export default function RekapPerTim({ guru = [], nomorSk }) {
                   <li key={g.guru_id} className="flex items-center gap-3 py-2">
                     <span className="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-slate-400">{g.peringkat ?? '–'}</span>
                     <div className="min-w-0 flex-1">
-                      <Link to={`/pkg/rekap/${g.guru_id}`} className="text-sm font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
+                      <Link to={`/pkg/rekap/${g.guru_id}?periode=${periodeId || ''}`} className="text-sm font-medium text-slate-900 hover:text-[#006837] hover:underline">{g.nama}</Link>
                       <div className="text-xs text-slate-500">{g.mapel || '-'}{g.level_capaian ? ` · ${g.level_capaian}` : ''}</div>
                     </div>
                     {g.capaian_persen != null
