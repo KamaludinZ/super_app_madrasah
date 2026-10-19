@@ -66,3 +66,16 @@ async def test_index_integritas_mongodb(mongo_db):
     await nilai.insert_one({'id': 'n1', 'sk_id': 's1', 'guru_dinilai_id': 'g1', 'penilai_id': 'a'})
     with pytest.raises(DuplicateKeyError):  # satu lembar per guru per SK
         await nilai.insert_one({'id': 'n2', 'sk_id': 's1', 'guru_dinilai_id': 'g1', 'penilai_id': 'b'})
+
+
+def test_validasi_isian_penilaian():
+    d = skema.DrafPenilaianRequest(guru_id='g1', isian={'1.1': {'centang': [3, 1, 1, 2], 'catatan_bukti': ' RPP '}},
+                                   catatan_umum=' baik ')
+    assert d.isian['1.1'].centang == [1, 2, 3] and d.isian['1.1'].catatan_bukti == 'RPP' and d.catatan_umum == 'baik'
+    for isian in ({'1.1': {'centang': [6]}}, {'1.1': {'centang': [0]}}, {'x': {'centang': [1]}},
+                  {'1.1': {'catatan_bukti': 'x' * 501}}, {'1.1': {'centang': [1], 'nilai': 5}}):
+        with pytest.raises(ValidationError):
+            skema.DrafPenilaianRequest(guru_id='g1', isian=isian)
+    with pytest.raises(ValidationError):
+        skema.DrafPenilaianRequest(guru_id='g 1')
+    assert isinstance(skema.KirimPenilaianRequest(guru_id='g1'), skema.DrafPenilaianRequest)

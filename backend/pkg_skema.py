@@ -14,8 +14,13 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     is_active, kompetensi [{kode, nama, sub [{kode, nama, bobot, indikator [{level, teks}]}]}],
                     created_at, updated_at}
                    Satu instrumen aktif; versi lama tetap tersimpan karena lembar penilaian merujuk instrumen_id-nya.
-    pkg_penilaian  {id, sk_id, periode_id, penilai_id, guru_dinilai_id, instrumen_id, skor_per_indikator,
-                    progres (0–100), nilai_akhir, predikat, status ('draf' | 'terkunci'), created_at, updated_at}
+    pkg_penilaian  {id, sk_id, periode_id, penilai_id, guru_dinilai_id, instrumen_id (versi saat lembar dibuat),
+                    isian {<kode_sub>: {centang [level], catatan_bukti, tanggapan}}, catatan_umum,
+                    skor_per_indikator {<kode_sub>: skor 0–5}, progres (0–100), nilai_akhir, nilai_maks,
+                    capaian_persen, level_capaian, predikat, status ('draf' | 'terkunci'),
+                    snapshot_guru {nama, nip, mapel}, dikirim_pada, terkunci_pada, terkunci_oleh, created_at, updated_at}
+                   Satu lembar per guru per SK; lembar terkunci tidak dapat diubah.
+    Tugas penilaian = pkg_penugasan.guru_dinilai_ids milik penilai pada periode berjalan (lihat pkg_beranda).
     pkg_audit_log  lihat pkg_audit.py
     pkg_unduhan    {id, jenis, format, periode_id, nama_berkas, aktor_id, aktor_nama, timestamp}
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
@@ -65,6 +70,8 @@ INDEX_PKG = [
     (KOLEKSI_PENILAIAN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_PENILAIAN, [('sk_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'lembar_per_guru'}),
     (KOLEKSI_PENILAIAN, [('sk_id', 1), ('penilai_id', 1)], {'name': 'lembar_per_penilai'}),
+    (KOLEKSI_PENILAIAN, [('periode_id', 1), ('status', 1)], {'name': 'periode_status'}),
+    (KOLEKSI_PENILAIAN, [('instrumen_id', 1)], {'name': 'instrumen'}),
     (KOLEKSI_UNDUHAN, [('timestamp', -1)], {'name': 'waktu'}),
     (KOLEKSI_UNDUHAN, [('aktor_id', 1), ('timestamp', -1)], {'name': 'aktor_waktu'}),
     (KOLEKSI_TEMPLATE, [('jenis', 1)], {'unique': True, 'name': 'jenis_unik'}),
@@ -415,3 +422,54 @@ class AktifkanInstrumenRequest(IsianPkg):
         if not v:
             raise ValueError('alasan wajib diisi')
         return v
+
+
+# ---------------------------------------------------------------- lembar penilaian
+
+BATAS_TEKS_PENILAIAN = 500
+STATUS_LEMBAR = ('belum', 'draf', 'terkunci')
+
+
+class IsianSubPenilaian(IsianPkg):
+    """Isian satu sub-kompetensi: level indikator yang dicentang, catatan bukti fisik, tanggapan penilai."""
+    centang: List[int] = Field(default_factory=list, max_length=5)
+    catatan_bukti: str = Field('', max_length=BATAS_TEKS_PENILAIAN)
+    tanggapan: str = Field('', max_length=BATAS_TEKS_PENILAIAN)
+
+    @field_validator('centang')
+    @classmethod
+    def _centang(cls, v):
+        if any(lv not in LEVEL_INDIKATOR for lv in v):
+            raise ValueError('level indikator harus 1–5')
+        return sorted(set(v))
+
+    @field_validator('catatan_bukti', 'tanggapan')
+    @classmethod
+    def _rapi(cls, v):
+        return (v or '').strip()
+
+
+class DrafPenilaianRequest(IsianPkg):
+    """Simpan draf lembar penilaian (otomatis/berkala). Kode sub harus ada di instrumen lembar."""
+    guru_id: str = Field(..., pattern=POLA_ID)
+    isian: Dict[str, IsianSubPenilaian] = Field(default_factory=dict)
+    catatan_umum: str = Field('', max_length=BATAS_TEKS_PENILAIAN)
+
+    @field_validator('isian')
+    @classmethod
+    def _kode_sub(cls, v):
+        if len(v) > 60:
+            raise ValueError('terlalu banyak sub-kompetensi')
+        salah = [k for k in v if not re.match(POLA_KODE_SUB, k)]
+        if salah:
+            raise ValueError(f'kode sub-kompetensi tidak valid: {salah[0][:20]}')
+        return v
+
+    @field_validator('catatan_umum')
+    @classmethod
+    def _catatan(cls, v):
+        return (v or '').strip()
+
+
+class KirimPenilaianRequest(DrafPenilaianRequest):
+    """Kirim & kunci lembar: isian terakhir ikut dikirim dan divalidasi kelengkapannya di server."""
