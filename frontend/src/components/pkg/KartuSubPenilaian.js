@@ -5,10 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { BATAS_TEKS, hitungTingkat } from '@/lib/pkgPenilaian';
 
-// Satu sub-kompetensi pada lembar penilaian: ceklist indikator perilaku Level 1–5 dan tingkat kompetensi yang
-// dihitung otomatis (level tertinggi berurutan dari Level 1), catatan bukti fisik, dan tanggapan penilai.
+// Satu sub-kompetensi pada lembar penilaian: ceklist indikator perilaku Level 1–5 dan skor otomatis
+// (jumlah indikator dicentang, rumus template resmi), catatan bukti fisik, dan tanggapan penilai.
 // `isian` = { centang: [level...], catatan_bukti, tanggapan }.
-export default function KartuSubPenilaian({ sub, isian, terkunci, onUbah, galat, tegas }) {
+export default function KartuSubPenilaian({ sub, isian, terkunci, onUbah, galat, peringatan, tegas }) {
   const centang = isian?.centang || [];
   const tingkat = hitungTingkat(centang);
   const alih = (level) => {
@@ -17,8 +17,6 @@ export default function KartuSubPenilaian({ sub, isian, terkunci, onUbah, galat,
     onUbah({ ...(isian || {}), centang: ada ? centang.filter((l) => l !== level) : [...centang, level].sort((a, b) => a - b) });
   };
   const ubahTeks = (kunci) => (e) => onUbah({ ...(isian || {}), centang, [kunci]: e.target.value.slice(0, BATAS_TEKS) });
-  // Level yang dicentang namun tidak berurutan dari Level 1 tidak dihitung; beri tanda agar penilai sadar.
-  const lompat = centang.filter((l) => l > tingkat + 1);
 
   return (
     // `galat` = pesan validasi; `tegas` = sudah mencoba mengirim, penanda dibuat lebih mencolok.
@@ -51,10 +49,8 @@ export default function KartuSubPenilaian({ sub, isian, terkunci, onUbah, galat,
       </ul>
       {galat && !terkunci ? (
         <p className={`mt-2 text-xs ${tegas ? 'text-rose-700 font-medium' : 'text-amber-700'}`} role={tegas ? 'alert' : undefined}>{galat}</p>
-      ) : lompat.length > 0 && (
-        <p className="mt-2 text-xs text-amber-700">
-          Level {lompat.join(', ')} dicentang tetapi level di bawahnya belum; tingkat dihitung berurutan dari Level 1.
-        </p>
+      ) : peringatan && !terkunci && (
+        <p className="mt-2 text-xs text-amber-700">{peringatan}</p>
       )}
       <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
         {[['catatan_bukti', 'Catatan bukti fisik', 'mis. RPP, foto kegiatan, laporan'], ['tanggapan', 'Tanggapan penilai', 'Umpan balik untuk guru']].map(([kunci, label, contoh]) => {

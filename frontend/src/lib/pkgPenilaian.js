@@ -6,13 +6,20 @@ import { ambilInstrumenAktif } from '@/lib/pkgInstrumen';
 //   GET /pkg/penilaian/lembar/{guru_id} -> lembar
 //   POST /pkg/penilaian/draft { guru_id, isian, catatan_umum } -> { id, status: 'draf', progres, updated_at }
 //        (lembar dibuat saat draf pertama disimpan; lembar terkunci ditolak 409)
+//   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci + hasil
+//        hasil = { nilai_akhir, nilai_maks, capaian_persen, level_capaian, predikat, terkunci_pada }
+//        (backend memvalidasi ulang kelengkapan; lembar terkunci permanen dan tercatat di jejak audit)
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel }, periode,
 //            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, updated_at }
 // isianSub = { centang: [level...], catatan_bukti, tanggapan }   (catatan & tanggapan maks BATAS_TEKS karakter)
 // lembar juga memuat catatan_umum (rekomendasi penilai untuk rekap per guru).
 //
-// Aturan nilai (template resmi PKG): indikator perilaku tiap sub-kompetensi dicentang per level; tingkat kompetensi
-// = level tertinggi L yang Level 1..L seluruhnya tercentang (0 bila Level 1 belum). Nilai rating = tingkat (1–5).
+// Aturan nilai mengikuti rumus template resmi pkg_template_v2026.xlsx:
+//   - skor sub-kompetensi = jumlah indikator perilaku yang dicentang (KOMP-n!K6 = COUNTA(centang)/5*5), 0–5,
+//     ditampilkan sebagai "Level <skor>" (04-RKAP-PKG kolom G);
+//   - jumlah = total skor 12 sub (maks 60); capaian % = jumlah/60*100 (04-RKAP-PKG!H45);
+//   - level capaian & predikat jenjang jabatan dari capaian % (04-RKAP-PKG!G45 & F45), lihat levelCapaian/predikatJenjang.
+// Centang yang tidak berurutan dari Level 1 tetap dihitung, namun diberi peringatan agar penilai memeriksanya.
 
 export const BATAS_TEKS = 500;
 
@@ -25,6 +32,7 @@ const ISIAN_TIRUAN = {
   g1: { '1.1': { centang: [1, 2, 3, 4], catatan_bukti: 'RPP & foto kelas', tanggapan: '' }, '1.2': { centang: [1, 2, 3], catatan_bukti: '', tanggapan: '' } },
 };
 const DRAF_TIRUAN = {}; // guru_id -> { catatan_umum, updated_at }
+const TERKUNCI_TIRUAN = {}; // guru_id -> hasil
 
 const tunda = (hasil, ms = 150) => new Promise((r) => { setTimeout(() => r(JSON.parse(JSON.stringify(hasil))), ms); });
 
@@ -32,9 +40,11 @@ export async function ambilLembar(guruId) {
   const instrumen = await ambilInstrumenAktif();
   if (!instrumen) throw new Error('Instrumen PKG belum dimuat. Hubungi kepala madrasah.');
   const isian = ISIAN_TIRUAN[guruId] || {};
+  const hasil = TERKUNCI_TIRUAN[guruId] || null;
   return tunda({
     id: Object.keys(isian).length ? `lembar-${guruId}` : null,
-    status: Object.keys(isian).length ? 'draf' : 'belum',
+    status: hasil ? 'terkunci' : Object.keys(isian).length ? 'draf' : 'belum',
+    hasil,
     guru: GURU_TIRUAN[guruId] || { id: guruId, nama: 'Guru yang dinilai', nip: null, mapel: null },
     periode: { id: 'p-2026-ganjil', nama_periode: 'PKG Semester Ganjil 2026/2027' },
     instrumen: { id: instrumen.id, versi_template: instrumen.versi_template, revisi: instrumen.revisi, kompetensi: instrumen.kompetensi },
@@ -44,12 +54,35 @@ export async function ambilLembar(guruId) {
   });
 }
 
-// Tingkat kompetensi dari level yang dicentang: level tertinggi berurutan mulai Level 1.
+// Skor sub-kompetensi = jumlah indikator (Level 1–5) yang dicentang.
 export function hitungTingkat(centang = []) {
+  return new Set((centang || []).filter((l) => Number.isInteger(l) && l >= 1 && l <= 5)).size;
+}
+
+// Level yang belum dicentang padahal ada level lebih tinggi yang dicentang (mis. [1, 3] -> [2]).
+export function levelBolong(centang = []) {
   const ada = new Set(centang);
-  let tingkat = 0;
-  while (ada.has(tingkat + 1)) tingkat += 1;
-  return tingkat;
+  const maks = Math.max(0, ...ada);
+  return Array.from({ length: maks }, (_, i) => i + 1).filter((l) => !ada.has(l));
+}
+
+// Level capaian dari persen capaian (04-RKAP-PKG!G45).
+export function levelCapaian(persen) {
+  if (!persen) return null;
+  if (persen < 55) return 'Level 1';
+  if (persen === 55) return 'Level 2';
+  if (persen <= 75) return 'Level 3';
+  if (persen <= 90) return 'Level 4';
+  return 'Level 5';
+}
+
+// Predikat ketercapaian jenjang jabatan dari persen capaian (04-RKAP-PKG!F45).
+export function predikatJenjang(persen) {
+  if (!persen) return null;
+  if (persen <= 55) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Pertama';
+  if (persen <= 75) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Muda';
+  if (persen <= 90) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Madya';
+  return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Utama';
 }
 
 // Ringkasan nilai lembar: per sub { kode, tingkat }, total, maksimal, persen capaian, dan jumlah sub terisi.
@@ -69,30 +102,28 @@ export function hitungNilai(kompetensi = [], isian = {}) {
 }
 
 // Validasi kelengkapan lembar (aturan sama dengan backend saat kirim & kunci):
-//   - setiap sub-kompetensi wajib dinilai (minimal Level 1 tercentang);
-//   - level dicentang berurutan dari Level 1 tanpa lompatan;
-//   - teks catatan/tanggapan tidak melebihi BATAS_TEKS.
-// Hasil: { sah, kosong: [kode], lompat: [kode], galat: { [kode]: pesan } }.
+//   - setiap sub-kompetensi wajib dinilai (minimal satu indikator dicentang) — memblokir kirim;
+//   - teks catatan/tanggapan tidak melebihi BATAS_TEKS — memblokir kirim;
+//   - centang tidak berurutan dari Level 1 — hanya peringatan.
+// Hasil: { sah, kosong: [kode], galat: { [kode]: pesan }, peringatan: { [kode]: pesan } }.
 export function validasiLembar(kompetensi = [], isian = {}) {
   const kosong = [];
-  const lompat = [];
   const galat = {};
+  const peringatan = {};
   kompetensi.flatMap((k) => k.sub || []).forEach((s) => {
     const isi = isian[s.kode] || {};
     const centang = isi.centang || [];
-    const tingkat = hitungTingkat(centang);
-    if (tingkat === 0) {
+    if (hitungTingkat(centang) === 0) {
       kosong.push(s.kode);
-      galat[s.kode] = centang.length ? 'Level 1 belum dicentang.' : 'Belum dinilai.';
-    } else if (centang.some((l) => l > tingkat)) {
-      lompat.push(s.kode);
-      galat[s.kode] = `Centang melompat setelah Level ${tingkat}; lengkapi level di antaranya atau lepas centang yang lebih tinggi.`;
+      galat[s.kode] = 'Belum dinilai: centang minimal satu indikator.';
+    } else if (levelBolong(centang).length) {
+      peringatan[s.kode] = `Level ${levelBolong(centang).join(', ')} belum dicentang padahal level di atasnya dicentang; periksa kembali.`;
     }
     ['catatan_bukti', 'tanggapan'].forEach((kunci) => {
       if ((isi[kunci] || '').length > BATAS_TEKS) galat[s.kode] = `Teks melebihi ${BATAS_TEKS} karakter.`;
     });
   });
-  return { sah: Object.keys(galat).length === 0, kosong, lompat, galat };
+  return { sah: Object.keys(galat).length === 0, kosong, galat, peringatan };
 }
 
 export async function simpanDraf(guruId, { isian, catatanUmum, kompetensi }) {
@@ -104,4 +135,26 @@ export async function simpanDraf(guruId, { isian, catatanUmum, kompetensi }) {
   DRAF_TIRUAN[guruId] = { catatan_umum: catatanUmum || '', updated_at: updated };
   const n = hitungNilai(kompetensi, isian);
   return tunda({ id: `lembar-${guruId}`, status: 'draf', progres: n.jumlahSub ? Math.round((n.terisi / n.jumlahSub) * 100) : 0, updated_at: updated }, 300);
+}
+
+// Hasil akhir lembar dari isian (dipakai pratinjau konfirmasi & tiruan submit).
+export function hitungHasilAkhir(kompetensi, isian) {
+  const n = hitungNilai(kompetensi, isian);
+  const persen = Math.round(n.persen * 100) / 100;
+  return {
+    nilai_akhir: n.total,
+    nilai_maks: n.maks,
+    capaian_persen: persen,
+    level_capaian: levelCapaian(persen),
+    predikat: predikatJenjang(persen),
+  };
+}
+
+export async function kirimLembar(guruId, { isian, catatanUmum, kompetensi }) {
+  if (TERKUNCI_TIRUAN[guruId]) throw new Error('Lembar penilaian ini sudah dikunci.');
+  const v = validasiLembar(kompetensi, isian);
+  if (!v.sah) throw new Error(`${Object.keys(v.galat).length} sub-kompetensi belum lengkap.`);
+  await simpanDraf(guruId, { isian, catatanUmum, kompetensi });
+  TERKUNCI_TIRUAN[guruId] = { ...hitungHasilAkhir(kompetensi, isian), terkunci_pada: new Date().toISOString() };
+  return ambilLembar(guruId);
 }

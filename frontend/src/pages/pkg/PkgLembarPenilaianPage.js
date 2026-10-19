@@ -5,14 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, Send } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
+import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import useAutosaveDraf from '@/hooks/useAutosaveDraf';
 import { labelVersi } from '@/lib/pkgInstrumen';
 import { toast } from 'sonner';
-import { BATAS_TEKS, ambilLembar, hitungNilai, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
+import { BATAS_TEKS, ambilLembar, hitungHasilAkhir, hitungNilai, kirimLembar, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
 
 const STATUS = {
   belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
@@ -29,6 +31,7 @@ function IsiLembar() {
   const [catatanUmum, setCatatanUmum] = useState('');
   // true setelah penilai mencoba mengirim: penanda isian kosong ditampilkan lebih tegas.
   const [tegas, setTegas] = useState(false);
+  const [mengirim, setMengirim] = useState(false);
   const [galat, setGalat] = useState(null);
 
   const muat = useCallback(async () => {
@@ -60,6 +63,35 @@ function IsiLembar() {
     tersimpanAwal: lembar?.updated_at || null,
   });
   const simpanManual = () => draf.simpanSekarang().catch((e) => toast.error(e.message || 'Gagal menyimpan draf'));
+
+  // Kirim & kunci: periksa kelengkapan -> simpan draf terakhir -> konfirmasi ringkasan -> kunci permanen.
+  const kirim = async () => {
+    setTegas(true);
+    if (!validasi.sah) {
+      const pertama = Object.keys(validasi.galat)[0];
+      document.getElementById(`sub-${pertama}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast.error(`${Object.keys(validasi.galat).length} sub-kompetensi belum dinilai.`);
+      return;
+    }
+    const h = hitungHasilAkhir(kompetensi, isian);
+    const ok = await confirmDialog(
+      `Kirim dan kunci penilaian ${lembar.guru.nama}? Nilai ${h.nilai_akhir}/${h.nilai_maks} (${h.capaian_persen.toLocaleString('id-ID')}%, ${h.level_capaian}). `
+      + 'Setelah dikunci, lembar tidak dapat diubah lagi.',
+      { title: 'Kirim & Kunci Penilaian', confirmText: 'Kirim & kunci' },
+    );
+    if (!ok) return;
+    setMengirim(true);
+    try {
+      const baru = await kirimLembar(guruId, { isian, catatanUmum, kompetensi });
+      setLembar(baru);
+      toast.success('Penilaian dikirim dan dikunci');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      toast.error(e.message || 'Gagal mengirim penilaian');
+    } finally {
+      setMengirim(false);
+    }
+  };
 
   if (galat) {
     return (
@@ -99,6 +131,8 @@ function IsiLembar() {
         <Badge variant="outline" className="shrink-0" title="Instrumen yang dipakai lembar ini">{labelVersi(lembar.instrumen)}</Badge>
       </div>
 
+      {terkunci && <HasilAkhirPenilaian hasil={lembar.hasil} kompetensi={lembar.instrumen.kompetensi} isian={isian} />}
+
       <div className="sticky top-0 z-10 rounded-xl border border-emerald-200 bg-emerald-50/95 p-3 backdrop-blur" data-testid="pkg-lembar-ringkasan">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>Nilai <span className="text-lg font-bold tabular-nums text-[#006837]">{nilai.total}</span><span className="text-slate-500">/{nilai.maks}</span></span>
@@ -109,6 +143,10 @@ function IsiLembar() {
               <StatusSimpanDraf status={draf.status} tersimpanPada={draf.tersimpanPada} onSimpan={simpanManual} />
               <Button type="button" size="sm" variant="outline" className="h-7 bg-white text-xs" onClick={periksaKelengkapan} data-testid="pkg-lembar-periksa">
                 Periksa kelengkapan
+              </Button>
+              <Button type="button" size="sm" className="h-7 gap-1 bg-[#006837] text-xs hover:bg-[#005830]" onClick={kirim}
+                disabled={mengirim || draf.status === 'menyimpan'} data-testid="pkg-lembar-kirim">
+                {mengirim ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Kirim &amp; Kunci
               </Button>
             </div>
           )}
@@ -135,7 +173,7 @@ function IsiLembar() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {k.sub.map((s) => (
               <KartuSubPenilaian key={s.kode} sub={s} isian={isian[s.kode]} terkunci={terkunci} onUbah={ubahSub(s.kode)}
-                galat={validasi.galat[s.kode]} tegas={tegas} />
+                galat={validasi.galat[s.kode]} peringatan={validasi.peringatan[s.kode]} tegas={tegas} />
             ))}
           </div>
         </section>
