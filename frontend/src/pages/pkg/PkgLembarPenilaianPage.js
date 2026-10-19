@@ -10,6 +10,7 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import PesanTolakPkg from '@/components/pkg/PesanTolakPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
 import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
+import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import useAutosaveDraf from '@/hooks/useAutosaveDraf';
@@ -17,12 +18,6 @@ import { labelVersi } from '@/lib/pkgInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { toast } from 'sonner';
 import { BATAS_TEKS, ambilLembar, hitungHasilAkhir, hitungNilai, kirimLembar, simpanDraf, validasiLembar } from '@/lib/pkgPenilaian';
-
-const STATUS = {
-  belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
-  draf: { label: 'Draf', kelas: 'bg-amber-100 text-amber-700 border-amber-200' },
-  terkunci: { label: 'Terkunci', kelas: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-};
 
 const FORMAT_PERSEN = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -111,7 +106,6 @@ function IsiLembar() {
   // Di luar masa penilaian lembar hanya dapat dibaca (server juga menolak penyimpanan).
   const diLuarMasa = keanggotaan?.dalam_masa_penilaian === false && lembar.status !== 'terkunci';
   const terkunci = lembar.status === 'terkunci' || diLuarMasa || lembar.dapat_diisi === false;
-  const status = STATUS[lembar.status] || STATUS.belum;
   const ubahSub = (kode) => (baru) => setIsian((x) => ({ ...x, [kode]: baru }));
   // Tegaskan penanda isian bermasalah dan gulir ke yang pertama; true bila lembar sudah lengkap.
   const periksaKelengkapan = () => {
@@ -130,7 +124,7 @@ function IsiLembar() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">{lembar.guru.nama}</h2>
-            <Badge className={status.kelas}>{status.label}</Badge>
+            <BadgeStatusPenilaian status={lembar.status} />
             {lembar.guru.akun_aktif === false && (
               <Badge variant="outline" className="gap-1 border-amber-300 text-amber-700" title="Identitas memakai snapshot periode"><UserX className="h-3 w-3" /> Akun nonaktif</Badge>
             )}

@@ -5,12 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye } from 'lucide-react';
 
-const STATUS_TUGAS = {
-  belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200', aksi: 'Mulai', ikon: Play },
-  draf: { label: 'Draf', kelas: 'bg-amber-100 text-amber-700 border-amber-200', aksi: 'Lanjutkan', ikon: PencilLine },
-  terkunci: { label: 'Terkunci', kelas: 'bg-emerald-100 text-emerald-700 border-emerald-200', aksi: 'Lihat', ikon: Eye },
+// Tombol aksi per status lembar (badge status: BadgeStatusPenilaian).
+const AKSI_TUGAS = {
+  belum: { aksi: 'Mulai', ikon: Play },
+  draf: { aksi: 'Lanjutkan', ikon: PencilLine },
+  terkunci: { aksi: 'Lihat', ikon: Eye },
 };
 
 const FILTER = [
@@ -108,7 +110,7 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
 
         <div className="space-y-2">
           {tampil.map((t) => {
-            const status = STATUS_TUGAS[t.status] || STATUS_TUGAS.belum;
+            const status = AKSI_TUGAS[t.status] || AKSI_TUGAS.belum;
             const IkonAksi = status.ikon;
             const terbuka = bolehMenilai || t.status === 'terkunci';
             return (
@@ -116,7 +118,7 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-slate-900">{t.nama}</span>
-                    <Badge className={status.kelas}>{status.label}</Badge>
+                    <BadgeStatusPenilaian status={t.status} />
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">{t.mapel} · NIP {t.nip || '-'}</div>
                   <div className="flex items-center gap-2 mt-2">

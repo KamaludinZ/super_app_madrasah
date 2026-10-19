@@ -1,17 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart3, Users, Lock, PencilLine, CircleDashed, Percent, Loader2, AlertTriangle, RotateCw } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import { ambilRekap } from '@/lib/pkgRekap';
-
-const STATUS = {
-  belum: { label: 'Belum dimulai', kelas: 'bg-slate-100 text-slate-700 border-slate-200' },
-  draf: { label: 'Draf', kelas: 'bg-amber-100 text-amber-700 border-amber-200' },
-  terkunci: { label: 'Terkunci', kelas: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-};
 
 const CAKUPAN = {
   semua: 'Seluruh guru yang dinilai pada SK periode ini',
@@ -100,23 +94,20 @@ function IsiHalamanRekap() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rekap.guru.map((g) => {
-                    const st = STATUS[g.status] || STATUS.belum;
-                    return (
+                  {rekap.guru.map((g) => (
                       <TableRow key={g.guru_id} data-testid={`pkg-rekap-${g.guru_id}`}>
                         <TableCell className="min-w-[180px]">
                           <div className="font-medium text-slate-900">{g.nama}</div>
                           <div className="text-xs text-slate-500">{g.mapel || '-'} · NIP {g.nip || '-'}</div>
                         </TableCell>
                         <TableCell className="text-sm text-slate-600 whitespace-nowrap">{g.penilai_nama || '-'}</TableCell>
-                        <TableCell><Badge className={st.kelas}>{st.label}</Badge></TableCell>
+                        <TableCell><BadgeStatusPenilaian status={g.status} /></TableCell>
                         <TableCell className="text-right tabular-nums">{g.nilai_akhir == null ? '-' : `${g.nilai_akhir}/${g.nilai_maks}`}</TableCell>
                         <TableCell className="text-right tabular-nums">{persen(g.capaian_persen)}</TableCell>
                         <TableCell className="whitespace-nowrap">{g.level_capaian || '-'}</TableCell>
                         <TableCell className="min-w-[200px] text-xs text-slate-600">{g.predikat || '-'}</TableCell>
                       </TableRow>
-                    );
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </div>
