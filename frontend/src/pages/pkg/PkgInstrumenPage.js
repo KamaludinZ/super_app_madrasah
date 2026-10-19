@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ListTree, Layers, ListChecks, Target, Loader2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import HierarkiInstrumen from '@/components/pkg/HierarkiInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { ambilInstrumenAktif, ringkasInstrumen } from '@/lib/pkgInstrumen';
 
@@ -52,27 +52,7 @@ function IsiHalamanInstrumen() {
         <KartuAngka icon={Target} label="Skor Maksimal" value={r.skorMaks} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {instrumen.kompetensi.map((k) => (
-          <Card key={k.kode} data-testid={`pkg-kompetensi-${k.kode}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-sm font-bold text-[#006837]">{k.kode}</span>
-                {k.nama}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {k.sub.map((s) => (
-                <div key={s.kode} className="flex items-start gap-3 rounded-lg border border-slate-200 p-2.5">
-                  <span className="shrink-0 font-mono text-xs font-semibold text-slate-500 mt-0.5">{s.kode}</span>
-                  <span className="min-w-0 flex-1 text-sm text-slate-800">{s.nama}</span>
-                  <Badge variant="outline" className="shrink-0 tabular-nums">{s.indikator.length} level</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <HierarkiInstrumen kompetensi={instrumen.kompetensi} />
     </div>
   );
 }
