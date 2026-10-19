@@ -10,18 +10,44 @@ from fastapi import HTTPException
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pkg_akses  # noqa: E402
+import pkg_beranda  # noqa: E402
 from routers import pkg as api  # noqa: E402
+
+
+class _Cursor:
+    def __init__(self, docs):
+        self.docs = docs
+
+    async def to_list(self, _n):
+        return [dict(d) for d in self.docs]
+
+
+def _cocok_nilai(nilai, syarat):
+    if isinstance(syarat, dict) and '$in' in syarat:
+        return nilai in syarat['$in']
+    if isinstance(nilai, list):  # field array cocok bila memuat nilai (seperti MongoDB)
+        return syarat in nilai
+    return nilai == syarat
 
 
 class _Koleksi:
     def __init__(self, docs=()):
         self.docs = [dict(d) for d in docs]
 
+    def _cocok(self, d, q):
+        return all(_cocok_nilai(d.get(k), v) for k, v in q.items())
+
+    def find(self, q=None, _proj=None):
+        return _Cursor([d for d in self.docs if self._cocok(d, q or {})])
+
     async def find_one(self, q, _proj=None):
-        return next((dict(d) for d in self.docs if all(d.get(k) == v for k, v in q.items())), None)
+        return next((dict(d) for d in self.docs if self._cocok(d, q)), None)
 
 
 class _Db(dict):
+    def __getattr__(self, nama):
+        return self[nama]
+
     def __getitem__(self, nama):
         return self.setdefault(nama, _Koleksi())
 
@@ -99,3 +125,23 @@ def test_endpoint_beranda_403_terstruktur(db):
 
     saya = asyncio.run(api.keanggotaan_saya(GURU('asing')))  # my-membership tidak melempar 403
     assert saya['anggota'] is False
+
+
+def test_ringkasan_kinerja(db):
+    db['users'] = _Koleksi([{'id': 'kep', 'roles': ['guru', 'kepala_sekolah']}, {'id': 'gur', 'roles': ['guru']}])
+    db['pkg_sk'].docs[1]['dinilai_ids'] = ['gur', 'rangkap', 'kep', 'g3', 'g4', 'gur']
+    db['pkg_penilaian'] = _Koleksi([
+        {'sk_id': 'sk1', 'guru_dinilai_id': 'gur', 'status': 'terkunci'},
+        {'sk_id': 'sk1', 'guru_dinilai_id': 'rangkap', 'status': 'draf'},
+        {'sk_id': 'sk1', 'guru_dinilai_id': 'g3', 'status': 'draf'},
+        {'sk_id': 'sk1', 'guru_dinilai_id': 'g3', 'status': 'terkunci'},  # status paling maju dipakai
+        {'sk_id': 'sk1', 'guru_dinilai_id': 'kep', 'status': 'terkunci'},  # kepala tidak dihitung
+        {'sk_id': 'sk-lama', 'guru_dinilai_id': 'g4', 'status': 'terkunci'},  # SK lain diabaikan
+    ])
+    hasil = {'total': 4, 'selesai': 2, 'sedang': 1, 'belum': 1}
+    assert asyncio.run(api.ringkasan_beranda(GURU('pen'))) == hasil
+    assert asyncio.run(api.beranda_pkg(GURU('gur')))['ringkasan'] == hasil
+    assert asyncio.run(pkg_beranda.ringkasan_kinerja(db, None)) == {'total': 0, 'selesai': 0, 'sedang': 0, 'belum': 0}
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(api.ringkasan_beranda(GURU('asing')))
+    assert e.value.status_code == 403
