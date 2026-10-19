@@ -9,6 +9,8 @@ Aturan:
     - SK pada periode yang sudah ditutup tidak dapat dibuat/diubah/diaktifkan.
     - Kepala madrasah pembuat SK otomatis tercatat sebagai penilai.
     - SK aktif atau SK yang sudah punya lembar penilaian tidak dapat dihapus.
+    - Anggota hanya akun guru aktif (PERAN_GURU_PKG); tenaga kependidikan & akun nonaktif ditolak.
+    - Penilai yang sudah memiliki lembar penilaian atau masih memegang guru dalam pembagian tidak dapat dilepas.
 """
 import uuid
 from datetime import datetime, timezone
@@ -16,7 +18,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
-from pkg_skema import KOLEKSI_PENILAIAN, KOLEKSI_PERIODE, KOLEKSI_SK, SkRequest
+from core import GURU_MAPEL_ROLES
+from pkg_skema import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, KOLEKSI_PERIODE, KOLEKSI_SK, SkRequest
+
+# Peran akun yang dihitung sebagai guru (boleh menjadi penilai / guru yang dinilai pada SK PKG).
+PERAN_GURU_PKG = (*GURU_MAPEL_ROLES, 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler',
+                  'kepala_sekolah', 'waka_kurikulum', 'waka_kesiswaan', 'waka_sarpras', 'waka_humas')
 
 
 def _sekarang() -> str:
@@ -143,3 +150,60 @@ async def hapus_sk(db, sk_id: str) -> Dict[str, Any]:
         raise HTTPException(409, 'SK sudah memiliki lembar penilaian dan tidak dapat dihapus.')
     await db[KOLEKSI_SK].delete_one({'id': sk_id})
     return sk
+
+
+async def guru_aktif(db) -> List[Dict[str, Any]]:
+    """Akun guru aktif untuk ceklist anggota SK: [{id, full_name, nip, roles}] urut nama."""
+    akun = await db.users.find(
+        {'roles': {'$in': list(PERAN_GURU_PKG)}, 'is_active': {'$ne': False}},
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, 'roles': 1},
+    ).to_list(2000)
+    hasil = [{'id': u['id'], 'full_name': u.get('full_name'), 'nip': u.get('nip_nuptk'), 'roles': u.get('roles') or []}
+             for u in akun if set(u.get('roles') or []) & set(PERAN_GURU_PKG)]
+    hasil.sort(key=lambda u: (u.get('full_name') or '').lower())
+    return hasil
+
+
+async def validasi_akun_guru(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Akun untuk `ids`; HTTP 400 bila ada yang tidak ditemukan, nonaktif, atau bukan guru."""
+    if not ids:
+        return {}
+    akun = {u['id']: u for u in await db.users.find(
+        {'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'roles': 1, 'is_active': 1}).to_list(len(ids))}
+    tidak_ada = [i for i in ids if i not in akun]
+    nonaktif = [akun[i].get('full_name') or i for i in ids if i in akun and akun[i].get('is_active') is False]
+    bukan_guru = [akun[i].get('full_name') or i for i in ids
+                  if i in akun and not set(akun[i].get('roles') or []) & set(PERAN_GURU_PKG)]
+    pesan = []
+    if tidak_ada:
+        pesan.append(f'{len(tidak_ada)} akun tidak ditemukan')
+    if nonaktif:
+        pesan.append('akun nonaktif: ' + ', '.join(nonaktif))
+    if bukan_guru:
+        pesan.append('bukan akun guru: ' + ', '.join(bukan_guru))
+    if pesan:
+        raise HTTPException(400, 'Anggota SK tidak valid — ' + '; '.join(pesan) + '.')
+    return akun
+
+
+async def atur_penilai(db, sk_id: str, penilai_ids: List[str], kepala: Dict[str, Any]) -> Dict[str, Any]:
+    """Tetapkan tim penilai SK. Kepala madrasah (pengubah & kepala yang sudah tercatat) selalu disertakan."""
+    sk = await ambil_sk(db, sk_id)
+    await _periode_terbuka(db, sk['periode_id'])
+    lama = list(sk.get('penilai_ids') or [])
+    akun_lama = await db.users.find({'id': {'$in': lama}}, {'_id': 0, 'id': 1, 'roles': 1}).to_list(len(lama) or 1)
+    kepala_ids = [kepala['id']] + [u['id'] for u in akun_lama if 'kepala_sekolah' in (u.get('roles') or [])]
+    baru = list(dict.fromkeys([*kepala_ids, *penilai_ids]))
+    await validasi_akun_guru(db, baru)
+
+    dilepas = [i for i in lama if i not in baru]
+    if dilepas:
+        if await db[KOLEKSI_PENILAIAN].find_one({'sk_id': sk_id, 'penilai_id': {'$in': dilepas}}, {'_id': 0, 'id': 1}):
+            raise HTTPException(409, 'Penilai yang sudah mengisi lembar penilaian tidak dapat dilepas dari SK.')
+        tugas = await db[KOLEKSI_PENUGASAN].find(
+            {'periode_id': sk['periode_id'], 'penilai_id': {'$in': dilepas}}, {'_id': 0, 'guru_dinilai_ids': 1}).to_list(len(dilepas))
+        if any(t.get('guru_dinilai_ids') for t in tugas):
+            raise HTTPException(409, 'Pindahkan dahulu guru yang dibagikan kepada penilai yang akan dilepas.')
+    perubahan = {'penilai_ids': baru, 'updated_at': _sekarang()}
+    await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': perubahan})
+    return {**sk, **perubahan, '_ditambah': [i for i in baru if i not in lama], '_dilepas': dilepas}

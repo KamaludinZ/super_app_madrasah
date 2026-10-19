@@ -14,7 +14,7 @@ class Cursor:
 def cocok_nilai(nilai, syarat):
     if isinstance(syarat, dict):
         for op, arg in syarat.items():
-            if op == '$in' and nilai not in arg:
+            if op == '$in' and not (set(nilai) & set(arg) if isinstance(nilai, list) else nilai in arg):
                 return False
             if op == '$ne' and nilai == arg:
                 return False

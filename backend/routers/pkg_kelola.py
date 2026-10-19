@@ -12,8 +12,8 @@ from core import db
 from pkg_audit import catat_audit_pkg
 from pkg_periode import ambil_periode, buat_periode, daftar_periode, periode_tampil, ubah_periode, ubah_status_periode
 from pkg_penjaga import penjaga_pkg
-from pkg_sk import aktifkan_sk, ambil_sk, buat_sk, daftar_sk, hapus_sk, sk_tampil, ubah_sk
-from pkg_skema import PeriodeRequest, SkRequest, StatusPeriodeRequest
+from pkg_sk import aktifkan_sk, ambil_sk, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_sk, sk_tampil, ubah_sk
+from pkg_skema import PenilaiSkRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest
 
 router = APIRouter()
 
@@ -111,3 +111,18 @@ async def hapus_sk_api(sk_id: str, request: Request, akses: Dict = Depends(kepal
     sk = await hapus_sk(db, sk_id)
     await catat_audit_pkg(db, 'sk_hapus', akses['user'], _ringkas_sk(sk), request=request)
     return {'id': sk_id, 'dihapus': True}
+
+
+@router.get("/pkg/guru")
+async def guru_aktif_api(akses: Dict = Depends(kepala)):
+    """Akun guru aktif untuk ceklist anggota SK: [{id, full_name, nip, roles}]."""
+    return await guru_aktif(db)
+
+
+@router.put("/pkg/sk/{sk_id}/penilai")
+async def atur_penilai_api(sk_id: str, data: PenilaiSkRequest, request: Request, akses: Dict = Depends(kepala)):
+    """Tetapkan tim penilai SK dari ceklist guru aktif; kepala madrasah otomatis menjadi penilai."""
+    sk = await atur_penilai(db, sk_id, data.penilai_ids, akses['user'])
+    await catat_audit_pkg(db, 'sk_penilai', akses['user'],
+                          {**_ringkas_sk(sk), 'ditambah': sk.pop('_ditambah'), 'dilepas': sk.pop('_dilepas')}, request=request)
+    return await sk_tampil(db, sk)

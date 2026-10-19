@@ -11,7 +11,7 @@ from pydantic import ValidationError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pkg_penjaga  # noqa: E402
-from pkg_skema import SkRequest  # noqa: E402
+from pkg_skema import PenilaiSkRequest, SkRequest  # noqa: E402
 from routers import pkg_kelola as api  # noqa: E402
 from tests.pkg_palsu import Db, Koleksi, Request  # noqa: E402
 
@@ -114,3 +114,49 @@ def test_non_kepala_ditolak(db):
 def test_validasi_isian_sk():
     with pytest.raises(ValidationError):
         SkRequest(nomor_sk='B-1', tanggal_sk='28/09/2026', periode_id='p1')
+
+
+def _users_guru(db):
+    db['users'] = Koleksi([
+        {'id': 'kep', 'full_name': 'Kepala', 'roles': ['kepala_sekolah'], 'nip_nuptk': '111'},
+        {'id': 'g1', 'full_name': 'Budi', 'roles': ['guru'], 'nip_nuptk': '222'},
+        {'id': 'g2', 'full_name': 'Ani', 'roles': ['wali_kelas', 'guru_ipa']},
+        {'id': 'tu', 'full_name': 'Staf TU', 'roles': ['tenaga_kependidikan']},
+        {'id': 'off', 'full_name': 'Pensiun', 'roles': ['guru'], 'is_active': False},
+        {'id': 'sis', 'full_name': 'Siswa', 'roles': ['siswa']},
+    ])
+
+
+def test_guru_aktif_untuk_ceklist(db):
+    _users_guru(db)
+    guru = _api(api.guru_aktif_api)
+    assert [g['id'] for g in guru] == ['g2', 'g1', 'kep']  # urut nama; TU, nonaktif, siswa tidak termasuk
+    assert guru[1]['nip'] == '222'
+
+
+def test_atur_tim_penilai(db):
+    _users_guru(db)
+    sk = _api(api.buat_sk_api, _sk(), Request())
+    hasil = _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=['g1', 'g2']), Request())
+    assert [a['id'] for a in hasil['penilai']] == ['kep', 'g1', 'g2']
+
+    # Kepala tetap disertakan walau tidak dicentang.
+    hasil = _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=['g1']), Request())
+    assert [a['id'] for a in hasil['penilai']] == ['kep', 'g1']
+    log = db['pkg_audit_log'].docs[-1]
+    assert log['aksi'] == 'sk_penilai' and log['metadata']['dilepas'] == ['g2']
+
+    for ids, kata in ((['tu'], 'bukan akun guru'), (['off'], 'nonaktif'), (['hantu'], 'tidak ditemukan')):
+        with pytest.raises(HTTPException) as e:
+            _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=ids), Request())
+        assert e.value.status_code == 400 and kata in e.value.detail
+
+    db['pkg_penugasan'] = Koleksi([{'periode_id': 'p1', 'penilai_id': 'g1', 'guru_dinilai_ids': ['g2']}])
+    with pytest.raises(HTTPException) as e:  # masih memegang guru dalam pembagian
+        _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=[]), Request())
+    assert e.value.status_code == 409
+    db['pkg_penugasan'] = Koleksi()
+    db['pkg_penilaian'] = Koleksi([{'id': 'n1', 'sk_id': sk['id'], 'penilai_id': 'g1'}])
+    with pytest.raises(HTTPException) as e:  # sudah mengisi lembar
+        _api(api.atur_penilai_api, sk['id'], PenilaiSkRequest(penilai_ids=[]), Request())
+    assert e.value.status_code == 409
