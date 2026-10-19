@@ -10,7 +10,7 @@ from core import db
 from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
-from pkg_audit import catat_audit_pkg, catat_audit_pkg_harian
+from pkg_audit import catat_audit_draf, catat_audit_kirim, catat_audit_pkg_harian
 from pkg_lembar import kirim_dan_kunci, konteks_lembar, lembar_tampil, riwayat_lembar, simpan_draf
 from pkg_penjaga import penjaga_pkg
 from pkg_skema import POLA_ID, DrafPenilaianRequest, KirimPenilaianRequest
@@ -71,13 +71,8 @@ async def simpan_draf_api(data: DrafPenilaianRequest, request: Request, akses: D
     Ditolak bila lembar terkunci (409) atau di luar masa penilaian (403 di_luar_masa)."""
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
     lembar = await simpan_draf(db, ktx, data)
-    meta = {'penilaian_id': lembar['id'], 'guru_id': data.guru_id, 'progres': lembar['progres']}
-    if lembar.pop('_baru'):
-        await catat_audit_pkg(db, 'penilaian_mulai', akses['user'], {**meta, 'instrumen_id': lembar['instrumen_id']},
-                              penilaian_id=lembar['id'], request=request)
     # Draf tersimpan sangat sering (autosave): satu entri audit per lembar per hari, dengan jumlah simpan.
-    await catat_audit_pkg_harian(db, 'penilaian_draf', akses['user'], kunci=lembar['id'], metadata=meta, request=request,
-                                 penilaian_id=lembar['id'])
+    await catat_audit_draf(db, akses['user'], lembar, lembar.pop('_baru'), request=request)
     return {'id': lembar['id'], 'status': lembar['status'], 'progres': lembar['progres'], 'updated_at': lembar['updated_at']}
 
 
@@ -87,10 +82,6 @@ async def kirim_api(data: KirimPenilaianRequest, request: Request, akses: Dict =
     isian terakhir, menghitung nilai akhir resmi, lalu mengunci lembar permanen (terkunci 409)."""
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
     lembar = await kirim_dan_kunci(db, ktx, data, akses['user'])
-    await catat_audit_pkg(db, 'penilaian_kirim', akses['user'], {
-        'penilaian_id': lembar['id'], 'guru_id': data.guru_id, 'instrumen_id': lembar['instrumen_id'],
-        'nilai_akhir': lembar['nilai_akhir'], 'nilai_maks': lembar['nilai_maks'],
-        'capaian_persen': lembar['capaian_persen'], 'predikat': lembar['predikat'],
-    }, penilaian_id=lembar['id'], request=request)
+    await catat_audit_kirim(db, akses['user'], lembar, request=request)
     ktx['lembar'] = lembar
     return await lembar_tampil(db, ktx, data.guru_id)

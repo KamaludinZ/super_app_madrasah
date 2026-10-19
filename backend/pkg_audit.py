@@ -12,6 +12,7 @@ hari per kunci, dengan `jumlah` dan `terakhir` diperbarui agar log tidak membanj
 Galat audit dicatat ke logger dan tidak pernah menggagalkan permintaan.
 """
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -144,22 +145,56 @@ async def catat_audit_pkg(db, aksi: str, aktor: Optional[Dict[str, Any]], metada
 
 async def catat_audit_pkg_harian(db, aksi: str, aktor: Optional[Dict[str, Any]], kunci: str = '',
                                  metadata: Optional[Dict[str, Any]] = None, request=None,
-                                 penilaian_id: Optional[str] = None) -> None:
-    """Satu entri per (aktor, aksi, tanggal WIB, kunci); kunjungan berikutnya menaikkan `jumlah`."""
+                                 penilaian_id: Optional[str] = None, perbarui_metadata: bool = False) -> None:
+    """Satu entri per (aktor, aksi, tanggal WIB, kunci); kunjungan berikutnya menaikkan `jumlah`.
+    `perbarui_metadata=True`: metadata diganti yang terbaru setiap kali (yang pertama disimpan di `metadata_awal`)."""
     try:
         doc = _dasar(aksi, aktor, metadata, penilaian_id, request)
         saring = {'aktor_id': doc['aktor_id'], 'aksi': aksi, 'tanggal': doc['tanggal'], 'kunci': kunci}
-        await db[KOLEKSI_AUDIT].update_one(
-            saring,
-            {
-                '$setOnInsert': {k: v for k, v in doc.items() if k not in saring and k not in ('ip_address', 'waktu_urut')},
-                '$set': {'terakhir': doc['timestamp'], 'waktu_urut': doc['timestamp'], 'ip_address': doc['ip_address']},
-                '$inc': {'jumlah': 1},
-            },
-            upsert=True,
-        )
+        selalu = {'terakhir': doc['timestamp'], 'waktu_urut': doc['timestamp'], 'ip_address': doc['ip_address']}
+        if perbarui_metadata:
+            selalu['metadata'] = doc['metadata']
+        sekali = {k: v for k, v in doc.items() if k not in saring and k not in selalu}
+        if perbarui_metadata:
+            sekali['metadata_awal'] = doc['metadata']
+        await db[KOLEKSI_AUDIT].update_one(saring, {'$setOnInsert': sekali, '$set': selalu, '$inc': {'jumlah': 1}},
+                                           upsert=True)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[pkg_audit] gagal mencatat {aksi}: {e}")
+
+
+def _identitas_lembar(lembar: Dict[str, Any]) -> Dict[str, Any]:
+    return {'penilaian_id': lembar.get('id'), 'guru_id': lembar.get('guru_dinilai_id'), 'periode_id': lembar.get('periode_id'),
+            'sk_id': lembar.get('sk_id'), 'penilai_id': lembar.get('penilai_id'), 'instrumen_id': lembar.get('instrumen_id')}
+
+
+def checksum_isian(isian: Optional[Dict[str, Any]]) -> str:
+    """SHA-256 isian lembar (JSON kanonis: kunci terurut, centang terurut) sebagai bukti isi yang dikunci."""
+    kanonis = {k: {**(v or {}), 'centang': sorted((v or {}).get('centang') or [])} for k, v in (isian or {}).items()}
+    return hashlib.sha256(json.dumps(kanonis, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+
+
+async def catat_audit_draf(db, aktor: Optional[Dict[str, Any]], lembar: Dict[str, Any], baru: bool,
+                           request=None) -> None:
+    """Audit simpan draf lembar penilaian. Draf pertama mencatat `penilaian_mulai` (instrumen yang dipakai);
+    autosave berikutnya digabung menjadi satu entri `penilaian_draf` per lembar per hari: `jumlah` simpan, progres
+    terakhir di `metadata` dan progres saat simpan pertama hari itu di `metadata_awal`."""
+    sub_diisi = sum(1 for v in (lembar.get('isian') or {}).values() if (v or {}).get('centang'))
+    meta = {**_identitas_lembar(lembar), 'progres': lembar.get('progres'), 'sub_diisi': sub_diisi}
+    if baru:
+        await catat_audit_pkg(db, 'penilaian_mulai', aktor, meta, penilaian_id=lembar.get('id'), request=request)
+    await catat_audit_pkg_harian(db, 'penilaian_draf', aktor, kunci=lembar.get('id') or '', metadata=meta, request=request,
+                                 penilaian_id=lembar.get('id'), perbarui_metadata=True)
+
+
+async def catat_audit_kirim(db, aktor: Optional[Dict[str, Any]], lembar: Dict[str, Any], request=None) -> None:
+    """Audit kirim & kunci lembar: nilai resmi (jumlah, maks, capaian, level, predikat), waktu kunci, dan checksum
+    isian yang dikunci sehingga perubahan data setelah penguncian dapat dideteksi."""
+    meta = {**_identitas_lembar(lembar), 'progres': lembar.get('progres'),
+            **{k: lembar.get(k) for k in ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat',
+                                          'terkunci_pada')},
+            'checksum_isian': checksum_isian(lembar.get('isian'))}
+    await catat_audit_pkg(db, 'penilaian_kirim', aktor, meta, penilaian_id=lembar.get('id'), request=request)
 
 
 async def catat_cetak_template(db, aktor: Optional[Dict[str, Any]], jenis_template: str, format_berkas: str,

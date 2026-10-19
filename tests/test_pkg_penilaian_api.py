@@ -156,6 +156,11 @@ def test_simpan_draf(db):
     audit = [(d['aksi'], d.get('jumlah')) for d in db['pkg_audit_log'].docs]
     assert ('penilaian_mulai', None) in audit and ('penilaian_draf', 2) in audit
     assert all(d['penilaian_id'] == hasil['id'] for d in db['pkg_audit_log'].docs if d['aksi'].startswith('penilaian_'))
+    # Entri draf harian memuat progres terbaru (metadata) & progres simpan pertama (metadata_awal), plus identitas lembar.
+    draf = next(d for d in db['pkg_audit_log'].docs if d['aksi'] == 'penilaian_draf')
+    assert (draf['metadata_awal']['progres'], draf['metadata']['progres'], draf['metadata']['sub_diisi']) == (50, 100, 2)
+    assert (draf['guru_id'], draf['periode_id'], draf['kategori']) == ('g3', dok['periode_id'], 'penilaian')
+    assert draf['metadata']['sk_id'] == 's1' and draf['metadata']['penilai_id'] == 'pen'
 
 
 def test_simpan_draf_ditolak(db):
@@ -201,6 +206,13 @@ def test_kirim_dan_kunci(db):
     assert len(rekap) == 1 and rekap[0]['id'] == dok['id'] and rekap[0]['nilai_akhir'] == 7 and rekap[0]['per_kompetensi'] == {'1': 4, '2': 3}
     kirim = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'penilaian_kirim']
     assert len(kirim) == 1 and kirim[0]['metadata']['nilai_akhir'] == 7 and kirim[0]['penilaian_id'] == dok['id']
+    import pkg_audit
+    meta = kirim[0]['metadata']
+    assert meta['level_capaian'] == 'Level 3' and meta['terkunci_pada'] == dok['terkunci_pada'] and meta['nilai_maks'] == 10
+    assert meta['checksum_isian'] == pkg_audit.checksum_isian(dok['isian']) and kirim[0]['guru_id'] == 'g3'
+    # Checksum kanonis: urutan centang/kunci tidak berpengaruh, perubahan isi terdeteksi.
+    assert pkg_audit.checksum_isian({'b': {'centang': [2, 1]}, 'a': {}}) == pkg_audit.checksum_isian({'a': {}, 'b': {'centang': [1, 2]}})
+    assert pkg_audit.checksum_isian(dok['isian']) != pkg_audit.checksum_isian({**dok['isian'], '2.1': {'centang': [1]}})
 
     with pytest.raises(HTTPException) as e:  # sudah terkunci: tidak bisa dikirim/diubah lagi
         _kirim('g3', {'1.1': {'centang': [1]}, '2.1': {'centang': [1]}})
