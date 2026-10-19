@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,11 +8,12 @@ import { History, Loader2, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } 
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
 import RiwayatPerubahanInstrumen from '@/components/pkg/RiwayatPerubahanInstrumen';
+import RiwayatUnduhan from '@/components/pkg/RiwayatUnduhan';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { KATEGORI_AUDIT, daftarAudit, riwayatAksiGuru } from '@/lib/pkgAudit';
-import { ambilRekap } from '@/lib/pkgRekap';
+import { ambilRekap, daftarPeriodeRekap } from '@/lib/pkgRekap';
 
 const PER_HALAMAN = 10;
 
@@ -40,6 +42,29 @@ function PanelPerGuru() {
         {pilih ? <RiwayatAksiPenilaian muat={muat} kunci={pilih} /> : <p className="py-4 text-center text-sm text-slate-500">Pilih guru untuk melihat riwayat aksi lembarnya.</p>}
       </CardContent>
     </Card>
+  );
+}
+
+const SEMUA_PERIODE = '__semua__';
+
+// Riwayat unduhan berkas (kepala): saringan semua periode atau periode tertentu.
+function PanelUnduhan() {
+  const [periode, setPeriode] = useState([]);
+  const [pilih, setPilih] = useState(SEMUA_PERIODE);
+
+  useEffect(() => { daftarPeriodeRekap().then(setPeriode).catch(() => setPeriode([])); }, []);
+
+  return (
+    <div className="space-y-3" data-testid="pkg-audit-unduhan">
+      <Select value={pilih} onValueChange={setPilih}>
+        <SelectTrigger className="h-9 bg-white sm:w-80" data-testid="pkg-audit-unduhan-periode"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value={SEMUA_PERIODE}>Semua periode</SelectItem>
+          {periode.map((p) => <SelectItem key={p.id} value={p.id}>{p.nama_periode}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <RiwayatUnduhan periodeId={pilih === SEMUA_PERIODE ? undefined : pilih} />
+    </div>
   );
 }
 
@@ -132,14 +157,22 @@ function IsiHalamanAudit() {
 
 // Jejak audit PKG (khusus kepala madrasah): daftar aksi terbaru dengan kategori, pelaku, dan ringkasan.
 // Data sementara dari lib/pkgAudit (tiruan).
+const TAB_AUDIT = ['semua', 'guru', 'instrumen', 'unduhan'];
+
 export default function PkgAuditPage() {
+  // Tab aktif disimpan di URL (?tab=) agar dapat ditautkan langsung, mis. /pkg/audit?tab=unduhan.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = TAB_AUDIT.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'semua';
+  const gantiTab = (t) => setSearchParams((sp) => { const baru = new URLSearchParams(sp); baru.set('tab', t); return baru; });
+
   return (
     <PenjagaMenuPkg menuKey="audit">
-      <Tabs defaultValue="semua">
+      <Tabs value={tab} onValueChange={gantiTab}>
         <TabsList>
           <TabsTrigger value="semua" data-testid="pkg-audit-tab-semua">Semua Aksi</TabsTrigger>
           <TabsTrigger value="guru" data-testid="pkg-audit-tab-guru">Per Guru</TabsTrigger>
           <TabsTrigger value="instrumen" data-testid="pkg-audit-tab-instrumen">Instrumen</TabsTrigger>
+          <TabsTrigger value="unduhan" data-testid="pkg-audit-tab-unduhan">Unduhan</TabsTrigger>
         </TabsList>
         <TabsContent value="semua"><IsiHalamanAudit /></TabsContent>
         <TabsContent value="guru"><PanelPerGuru /></TabsContent>
@@ -149,6 +182,7 @@ export default function PkgAuditPage() {
             <CardContent><RiwayatPerubahanInstrumen /></CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="unduhan"><PanelUnduhan /></TabsContent>
       </Tabs>
     </PenjagaMenuPkg>
   );
