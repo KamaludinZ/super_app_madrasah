@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 // Penolakan akses dikirim sebagai HTTP 403 dengan detail { alasan, pesan }.
 
 // Rute sub-menu PKG yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen', '/pkg/penilaian', '/pkg/rekap']);
+export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen', '/pkg/penilaian', '/pkg/rekap', '/pkg/cetak']);
 
 // Galat API PKG: menyimpan status & penolakan terstruktur (bila 403) untuk ditampilkan PesanTolakPkg.
 export class GalatPkg extends Error {
