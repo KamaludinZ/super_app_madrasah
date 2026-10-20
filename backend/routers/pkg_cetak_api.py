@@ -20,6 +20,7 @@ from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
 from pkg_kehadiran import kehadiran_guru
+from pkg_rekomendasi import rekomendasi_guru, rekomendasi_periode, teks_rekomendasi
 from pkg_nilai import hitung_nilai
 from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, nilai_akhir_guru, periode_dan_sk
 from pkg_skema import JENIS_DOKUMEN, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, POLA_ID, CetakRequest
@@ -51,6 +52,9 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
         agregat = await agregasi_rekap(db_, periode, sk, saring_guru=saring, hanya_terkunci=True)
         if not agregat['guru']:
             raise HTTPException(409, 'Belum ada lembar terkunci untuk dicetak pada periode ini.')
+        rek = await rekomendasi_periode(db_, periode['id'], [g['guru_id'] for g in agregat['guru']])
+        for g in agregat['guru']:
+            g['rekomendasi'] = teks_rekomendasi(rek.get(g['guru_id'])) or None
         isi = rekap_excel(agregat['guru'], periode, kepala=kepala)
         return {'jenis_template': 'rekap', 'dasar_nama': f"Rekap_Hasil_PKG_{periode.get('nama_periode') or ''}",
                 'xlsx': isi, 'periode': periode, 'guru_id': None,
@@ -78,6 +82,7 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
     }
     kehadiran = await kehadiran_guru(db_, periode, data.guru_id)
     laporan['kehadiran'] = kehadiran['bulan']
+    laporan['rekomendasi'] = teks_rekomendasi(await rekomendasi_guru(db_, periode['id'], data.guru_id)) or None
     laporan['nilai_akhir_360'] = await nilai_akhir_guru(db_, periode, data.guru_id, hitung_nilai(instrumen or {}, laporan['isian'])['capaian_persen'])
     try:
         isi = laporan_guru_excel(laporan, hanya_rekap=data.format == 'pdf')

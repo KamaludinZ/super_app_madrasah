@@ -13,6 +13,7 @@ from copy import copy
 from datetime import date
 from typing import Any, Dict, List, Optional
 
+from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
@@ -90,6 +91,9 @@ def isi_rekap(ws: Worksheet, guru: List[Dict[str, Any]], periode: Dict[str, Any]
         }
         for kunci, kol in k.items():
             ws[f'{kol}{i}'] = nilai[kunci]
+        if nilai['rekomendasi']:
+            sel = ws[f"{k['rekomendasi']}{i}"]
+            sel.alignment = Alignment(horizontal=sel.alignment.horizontal, vertical='center', wrap_text=True)
         ws[f"{k['nkg']}{i}"].number_format = '0.00'
 
     rentang = f"{k['nkg']}{awal}:{k['nkg']}{akhir}"
@@ -137,7 +141,8 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     """Isi workbook template instrumen untuk satu guru: identitas di '00-DATA' & centang 'v' indikator di KOMP-n
     (rumus resmi 04-RKAP-PKG menghitung tingkat, jumlah, capaian, dan predikat).
     `laporan` = {guru:{nama,nip}, periode, sk:{nomor_sk,tanggal_sk}, penilai:{nama,nip}, kepala:{nama,nip},
-                 nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada, kehadiran:[baris bulan pkg_kehadiran]}."""
+                 nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada, kehadiran:[baris bulan pkg_kehadiran],
+                 rekomendasi: teks rekomendasi PKB}."""
     from pkg_template import SHEET_KOMPETENSI
     peta = PETA_CETAK['instrumen']
     kompetensi = (laporan.get('instrumen') or {}).get('kompetensi') or []
@@ -162,6 +167,7 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
         data[sel] = isian_sel.get(kunci) or '-'
 
     isi_kehadiran(wb, laporan.get('kehadiran'))
+    isi_rekomendasi(wb, laporan.get('rekomendasi'))
 
     isian = laporan.get('isian') or {}
     kol = peta['kolom_centang']
@@ -188,6 +194,24 @@ def isi_kehadiran(wb, kehadiran: Optional[List[Dict[str, Any]]], tugas_pokok: st
         ws[f"{k['label']}{r}"] = (b.get('label') or b.get('bulan')) if b else None
         for kunci in ('terlambat_menit', 'pulang_cepat_menit', 'tanpa_keterangan'):
             ws[f'{k[kunci]}{r}'] = int((b or {}).get(kunci) or 0)
+
+
+def isi_rekomendasi(wb, teks: Optional[str]) -> None:
+    """Tulis rekomendasi PKB di baris kosong 01-LAPORN (di bawah Deskripsi Capaian) pada salinan cetak, dengan gaya
+    baris Deskripsi Capaian; tinggi baris menyesuaikan panjang teks. Berkas master tidak berubah."""
+    if not teks:
+        return
+    peta = PETA_CETAK['instrumen']['rekomendasi']
+    ws = wb[peta['sheet']]
+    r, asal = peta['baris'], peta['gaya_dari']
+    for kol, nilai in ((peta['label'], 'Rekomendasi PKB'), (peta['titik_dua'], ':'), (peta['isi'], teks)):
+        sel = ws[f'{kol}{r}']
+        sel.value = nilai
+        if ws[f'{kol}{asal}'].has_style:
+            sel._style = copy(ws[f'{kol}{asal}']._style)
+    ws.merge_cells(peta['gabung'])
+    baris_teks = max(1, -(-len(teks) // 48))
+    ws.row_dimensions[r].height = max(15.0, 13.0 * baris_teks + 2)
 
 
 def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False) -> bytes:

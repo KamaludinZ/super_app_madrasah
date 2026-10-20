@@ -70,18 +70,19 @@ def rekap_pdf_cadangan(guru: List[Dict[str, Any]], periode: Dict[str, Any], kepa
         Paragraph(f"Semester {periode.get('semester') or '-'} Tahun Pelajaran {periode.get('tahun_pelajaran') or '-'}", gaya['Normal']),
         Spacer(1, 0.4 * cm),
     ]
-    baris = [['No', 'Nama Guru', 'Pangkat / Gol', 'Guru Kelas/Mapel', 'Tugas Tambahan', 'Nilai Kompetensi Guru (NKG)', 'Predikat']]
+    baris = [['No', 'Nama Guru', 'Pangkat / Gol', 'Guru Kelas/Mapel', 'Tugas Tambahan', 'NKG', 'Predikat', 'Rekomendasi PKB']]
     nkg = []
     for i, g in enumerate(guru, 1):
         n = round(float(g['capaian_persen']), 2) if g.get('capaian_persen') is not None else None
         if n is not None:
             nkg.append(n)
         baris.append([str(i), Paragraph(g.get('nama') or '-', sel), g.get('pangkat') or '', Paragraph(g.get('mapel') or '', sel),
-                      g.get('tugas_tambahan') or '', f'{n:.2f}' if n is not None else '-', predikat_rekap(n)])
+                      g.get('tugas_tambahan') or '', f'{n:.2f}' if n is not None else '-', predikat_rekap(n),
+                      Paragraph(g.get('rekomendasi') or '', sel)])
     rata = round(sum(nkg) / len(nkg), 2) if nkg else None
-    baris.append(['', 'Jumlah', '', '', '', f'{sum(nkg):.2f}', ''])
-    baris.append(['', 'Rata-rata', '', '', '', f'{rata:.2f}' if rata is not None else '-', predikat_rekap(rata)])
-    tabel = Table(baris, colWidths=[1.2 * cm, 7 * cm, 3 * cm, 4.5 * cm, 3.5 * cm, 4 * cm, 3 * cm], repeatRows=1)
+    baris.append(['', 'Jumlah', '', '', '', f'{sum(nkg):.2f}', '', ''])
+    baris.append(['', 'Rata-rata', '', '', '', f'{rata:.2f}' if rata is not None else '-', predikat_rekap(rata), ''])
+    tabel = Table(baris, colWidths=[1 * cm, 5.5 * cm, 2.6 * cm, 3.6 * cm, 2.8 * cm, 1.8 * cm, 2.4 * cm, 6.9 * cm], repeatRows=1)
     gaya_tabel = _gaya_tabel()
     gaya_tabel.add('ALIGN', (0, 0), (0, -1), 'CENTER')
     gaya_tabel.add('ALIGN', (5, 0), (6, -1), 'CENTER')
@@ -156,6 +157,7 @@ def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     ringkas = Table([
         ['Capaian', f"{nilai['capaian_persen']:.2f}%"], ['Tingkat capaian', nilai['level_capaian'] or '-'],
         ['Predikat', Paragraph(nilai['predikat'] or '-', sel)],
+        *([['Rekomendasi PKB', Paragraph(laporan['rekomendasi'], sel)]] if laporan.get('rekomendasi') else []),
         *_baris_level_guru(laporan.get('level_guru') or level_guru(nilai['level_capaian'], (laporan.get('nilai_akhir_360') or {}).get('level_teks')), sel),
     ], colWidths=[4 * cm, 13.5 * cm])
     ringkas.setStyle(_gaya_tabel(header_baris=0))

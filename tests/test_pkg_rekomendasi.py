@@ -58,3 +58,20 @@ def test_simpan_rekomendasi(klien):
     ringkas = {g['guru_id']: g for g in c.get('/api/pkg/rekomendasi-pkb/ringkasan').json()['guru']}
     assert ringkas['g1']['rekomendasi']['teks'] == 'Catatan penilai' and 'g2' not in ringkas
     assert [a['aksi'] for a in d['pkg_audit_log'].docs].count('rekomendasi_simpan') == 2
+
+
+def test_rekomendasi_di_lembar_cetak():
+    import io
+    from openpyxl import load_workbook
+    import pkg_cetak
+    import pkg_template
+    teks = r.teks_rekomendasi({'pilihan_pkb': ['kolektif', 'ptk'], 'catatan': 'Didampingi kepala madrasah.'})
+    wb = load_workbook(io.BytesIO(pkg_template.isi_template_ke_bytes('instrumen', lambda w: pkg_cetak.isi_rekomendasi(w, teks))))
+    ws = wb['01-LAPORN']
+    assert (ws['C21'].value, ws['D21'].value, ws['E21'].value) == ('Rekomendasi PKB', ':', teks)
+    assert 'E21:H21' in [str(m) for m in ws.merged_cells.ranges] and ws.row_dimensions[21].height > 15
+    assert ws['E23'].value == 'PERSETUJUAN' and ws['E20'].value.startswith('=IF(F19')  # baris lain tidak bergeser
+    rekap = load_workbook(io.BytesIO(pkg_cetak.rekap_excel(
+        [{'nama': 'A', 'capaian_persen': 80, 'rekomendasi': teks}, {'nama': 'B', 'capaian_persen': 70}], {'tanggal_tutup': '2026-12-01'})))
+    ws = rekap['Rekap hasil PKG']
+    assert ws['H6'].value == teks and ws['H6'].alignment.wrap_text and ws['H7'].value is None
