@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 // Kategori aksi (sama dengan backend pkg_audit.KATEGORI_AUDIT) untuk saringan & warna penanda.
 export const KATEGORI_AUDIT = {
   penilaian: { label: 'Penilaian', kelas: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  komponen: { label: '360° & kehadiran', kelas: 'bg-teal-100 text-teal-800 border-teal-200' },
+  komponen: { label: '360°, kehadiran & PKB', kelas: 'bg-teal-100 text-teal-800 border-teal-200' },
   instrumen: { label: 'Instrumen', kelas: 'bg-violet-100 text-violet-800 border-violet-200' },
   susunan: { label: 'Periode & SK', kelas: 'bg-sky-100 text-sky-800 border-sky-200' },
   unduhan: { label: 'Cetak & unduh', kelas: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -24,7 +24,7 @@ export const KATEGORI_AUDIT = {
 // kesamaannya diuji di tests/test_pkg_validasi.py).
 export const AKSI_PER_KATEGORI = {
   penilaian: { penilaian_mulai: 'Memulai lembar penilaian', penilaian_buka: 'Membuka lembar penilaian', penilaian_draf: 'Menyimpan draf penilaian', penilaian_kirim: 'Mengirim & mengunci penilaian', rekap_hitung_ulang: 'Menghitung ulang rekap' },
-  komponen: { angket_simpan: 'Menginput jawaban angket 360°', angket_ubah: 'Mengubah jawaban angket 360°', angket_hapus: 'Menghapus jawaban angket 360°', kehadiran_simpan: 'Menyimpan rekap kehadiran guru' },
+  komponen: { angket_simpan: 'Menginput jawaban angket 360°', angket_ubah: 'Mengubah jawaban angket 360°', angket_hapus: 'Menghapus jawaban angket 360°', kehadiran_simpan: 'Menyimpan rekap kehadiran guru', rekomendasi_simpan: 'Menyimpan rekomendasi PKB' },
   instrumen: { instrumen_impor: 'Mengimpor instrumen', instrumen_ubah: 'Mengubah instrumen', instrumen_aktifkan: 'Menetapkan instrumen acuan' },
   susunan: { periode_buat: 'Menetapkan periode', periode_ubah: 'Mengubah periode', periode_berjalan: 'Memulai periode', periode_ditutup: 'Menutup periode', sk_buat: 'Menambah SK', sk_ubah: 'Mengubah SK', sk_aktifkan: 'Mengaktifkan SK', sk_hapus: 'Menghapus SK', sk_penilai: 'Mengubah tim penilai', sk_dinilai: 'Mengubah guru yang dinilai', penugasan_simpan: 'Menyimpan pembagian penilaian', supervisi_tandai: 'Menandai supervisi penilai', supervisi_batal: 'Membatalkan supervisi penilai' },
   unduhan: { cetak_template: 'Mencetak dokumen dari template', cetak_gagal: 'Gagal mencetak dokumen', lihat_unduhan: 'Melihat riwayat unduhan', lihat_template: 'Melihat info template', periksa_template: 'Memeriksa ulang berkas template' },

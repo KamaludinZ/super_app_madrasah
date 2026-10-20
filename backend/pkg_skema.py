@@ -34,6 +34,9 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
     pkg_kehadiran  {id, periode_id, guru_dinilai_id, bulan [{bulan (YYYY-MM), terlambat_menit, pulang_cepat_menit,
                     tanpa_keterangan, hadir, izin, sakit}], diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
                    Rekap kehadiran manual per guru per periode (sheet INDEK-HDIR; lihat pkg_kehadiran).
+    pkg_rekomendasi_pkb {id, periode_id, guru_dinilai_id, pilihan_pkb [kode opsi], fokus_kompetensi [pedagogik|
+                    kepribadian|sosial|profesional], catatan, disusun_oleh, disusun_oleh_nama, peran_penyusun
+                    ('kepala' | 'penilai'), tanggal, dibuat_pada}  Rekomendasi PKB per guru per periode (pkg_rekomendasi).
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
     pkg_rekap      {id (= penilaian_id), periode_id, sk_id, guru_id, penilai_id, nama, nip, mapel, penilai_nama,
@@ -66,6 +69,7 @@ KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
 KOLEKSI_REKAP = 'pkg_rekap'
 KOLEKSI_ANGKET = 'pkg_angket'
 KOLEKSI_KEHADIRAN = 'pkg_kehadiran'
+KOLEKSI_REKOMENDASI = 'pkg_rekomendasi_pkb'
 
 STATUS_PERIODE = ('draf', 'berjalan', 'ditutup')
 STATUS_PENILAIAN = ('draf', 'terkunci')
@@ -105,6 +109,8 @@ INDEX_PKG = [
     (KOLEKSI_ANGKET, [('periode_id', 1), ('guru_dinilai_id', 1), ('jenis', 1), ('urutan', 1)], {'name': 'periode_guru_jenis'}),
     (KOLEKSI_KEHADIRAN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_KEHADIRAN, [('periode_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'guru_per_periode'}),
+    (KOLEKSI_REKOMENDASI, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
+    (KOLEKSI_REKOMENDASI, [('periode_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'guru_per_periode'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('expire_at', 1)], {'expireAfterSeconds': 0, 'name': 'ttl_expire_at'}),
 ]
@@ -577,6 +583,37 @@ class KehadiranRequest(IsianPkg):
     """Rekap kehadiran manual satu guru pada periode (satu baris per bulan, format INDEK-HDIR)."""
     periode_id: Optional[str] = Field(None, pattern=POLA_ID)
     bulan: List[KehadiranBulan] = Field(..., max_length=12)
+
+
+class RekomendasiPkbRequest(IsianPkg):
+    """Rekomendasi PKB satu guru: opsi baku (kode pkg_rekomendasi.OPSI_PKB), fokus kompetensi, dan/atau catatan bebas."""
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    pilihan_pkb: List[str] = Field(default_factory=list, max_length=10)
+    fokus_kompetensi: List[str] = Field(default_factory=list, max_length=4)
+    catatan: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator('pilihan_pkb')
+    @classmethod
+    def _pilihan(cls, v):
+        from pkg_rekomendasi import OPSI_PKB
+        salah = [k for k in v if k not in OPSI_PKB]
+        if salah:
+            raise ValueError(f"opsi PKB tidak dikenal: {', '.join(salah)}")
+        return v
+
+    @field_validator('fokus_kompetensi')
+    @classmethod
+    def _fokus(cls, v):
+        from pkg_rekomendasi import FOKUS_KOMPETENSI
+        if any(k not in FOKUS_KOMPETENSI for k in v):
+            raise ValueError('fokus kompetensi harus pedagogik, kepribadian, sosial, atau profesional')
+        return v
+
+    @model_validator(mode='after')
+    def _ada_isi(self):
+        if not self.pilihan_pkb and not (self.catatan or '').strip():
+            raise ValueError('pilih minimal satu opsi PKB atau isi catatan rekomendasi')
+        return self
 
 
 class AngketCetakRequest(IsianPkg):

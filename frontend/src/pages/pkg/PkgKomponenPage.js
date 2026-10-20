@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
+import DaftarRekomendasiPkb from '@/components/pkg/RekomendasiPkb';
 import { simpanBerkas } from '@/lib/pkgCetak';
 import { JENIS_ANGKET, cetakAngket, daftarJenisAngket, ringkasanAngket } from '@/lib/pkgAngket';
 import { ringkasanKehadiran } from '@/lib/pkgKehadiran';
@@ -181,6 +182,7 @@ function IsiHalamanKomponen() {
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="angket" data-testid="pkg-komponen-tab-angket">Angket 360°</TabsTrigger>
           <TabsTrigger value="kehadiran" data-testid="pkg-komponen-tab-kehadiran">Kehadiran</TabsTrigger>
+          <TabsTrigger value="pkb" data-testid="pkg-komponen-tab-pkb">Rekomendasi PKB</TabsTrigger>
         </TabsList>
         <TabsContent value="angket" className="space-y-4">
           <KartuAngketKosong jenis={jenis} sedang={sedang} onCetak={cetak} />
@@ -189,13 +191,16 @@ function IsiHalamanKomponen() {
         <TabsContent value="kehadiran">
           <DaftarGuruKehadiran periodeId={rekap.periode?.id} />
         </TabsContent>
+        <TabsContent value="pkb">
+          <DaftarRekomendasiPkb periodeId={rekap.periode?.id} />
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-// Komponen penilaian di luar lembar kompetensi (kepala & tim penilai): angket 360° kertas & rekap jawabannya, serta
-// kehadiran guru. Guru & skor 360° dari GET /pkg/angket/ringkasan (cakupan peran); angket dari POST /pkg/angket/cetak.
+// Komponen penilaian di luar lembar kompetensi (kepala & tim penilai): angket 360° kertas & rekap jawabannya,
+// kehadiran guru, dan rekomendasi PKB. Guru & skor 360° dari GET /pkg/angket/ringkasan (cakupan peran); angket dari POST /pkg/angket/cetak.
 export default function PkgKomponenPage() {
   return (
     <PenjagaMenuPkg menuKey="komponen">
