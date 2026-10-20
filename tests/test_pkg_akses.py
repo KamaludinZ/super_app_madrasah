@@ -210,7 +210,7 @@ def test_menu_sesuai_akses(db):
         return {m['key']: m['alasan'] for m in _panggil(api.menu_beranda, user)}
 
     kepala = akses(KEPALA)
-    assert len(kepala) == 9 and all(a is None for a in kepala.values())
+    assert len(kepala) == 10 and all(a is None for a in kepala.values())
 
     pen = akses(GURU('pen'))  # penilai tersupervisi
     assert pen['penilaian'] is None and pen['cetak'] is None and pen['rekap'] is None
@@ -279,7 +279,7 @@ def test_penjaga_syarat_kepala(db):
     assert e.value.detail['alasan'] == 'bukan_kepala'
     log = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
     assert log[0]['metadata']['endpoint'] == '/pkg/periode' and log[0]['kunci'] == '/pkg/periode:bukan_kepala'
-    assert len(_panggil(api.menu_beranda, KEPALA, syarat='kepala')) == 9
+    assert len(_panggil(api.menu_beranda, KEPALA, syarat='kepala')) == 10
     with pytest.raises(ValueError):
         pkg_penjaga.penjaga_pkg('salah')
 
@@ -344,5 +344,5 @@ def test_dependency_lewat_fastapi(db):
 
     pengguna['user'] = GURU('pen')
     r = klien.get('/api/pkg/beranda/menu')
-    assert r.status_code == 200 and len(r.json()) == 9
+    assert r.status_code == 200 and len(r.json()) == 10
     assert klien.get('/api/pkg/sk/my-membership').json()['peran'] == 'penilai'

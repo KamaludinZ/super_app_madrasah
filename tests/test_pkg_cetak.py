@@ -51,3 +51,15 @@ def test_predikat_rekap():
     assert [pkg_cetak.predikat_rekap(n) for n in (95, 91, 80, 61, 60, 59.9, None)] == \
         ['Sangat Baik', 'Sangat Baik', 'Baik', 'Cukup', 'Sedang', 'Kurang', '']
     assert pkg_cetak.tanggal_indonesia(date(2026, 1, 9)) == '9 Januari 2026'
+
+
+def test_laporan_pdf_hanya_lembar_rekap_tanpa_area_cetak_sheet_lain():
+    # LibreOffice tetap mengekspor sheet tersembunyi yang punya area cetak; area cetaknya harus dihapus.
+    import pkg_instrumen_impor
+    instrumen = {'kompetensi': pkg_instrumen_impor.pratinjau_dari_template()['kompetensi']}
+    isian = {s['kode']: {'centang': [1, 2]} for k in instrumen['kompetensi'] for s in k['sub']}
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel({'instrumen': instrumen, 'isian': isian}, hanya_rekap=True)))
+    assert wb.active.title == '04-RKAP-PKG'
+    for ws in wb.worksheets:
+        if ws.title != '04-RKAP-PKG':
+            assert ws.sheet_state == 'hidden' and (not ws.print_area or ws.print_area.endswith('!')), ws.title

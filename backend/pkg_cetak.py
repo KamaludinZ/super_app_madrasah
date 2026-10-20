@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
-from pkg_template import PETA_CETAK, isi_template_ke_bytes
+from pkg_template import PETA_CETAK, isi_template_ke_bytes, tampilkan_hanya
 
 BULAN = ('Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November',
          'Desember')
@@ -178,9 +178,5 @@ def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False) -> by
     def pengisi(wb):
         isi_laporan_guru(wb, laporan)
         if hanya_rekap:
-            utama = wb[PETA_CETAK['instrumen']['sheet_rekap']]
-            wb.active = wb.worksheets.index(utama)
-            for ws in wb.worksheets:
-                ws.sheet_state = 'visible' if ws is utama else 'hidden'
-                ws.sheet_view.tabSelected = ws is utama
+            tampilkan_hanya(wb, [PETA_CETAK['instrumen']['sheet_rekap']])
     return isi_template_ke_bytes('instrumen', pengisi)

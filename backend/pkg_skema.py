@@ -494,7 +494,7 @@ class KirimPenilaianRequest(DrafPenilaianRequest):
 
 # ---------------------------------------------------------------- cetak dokumen
 
-JENIS_DOKUMEN = ('rekap', 'guru')
+JENIS_DOKUMEN = ('rekap', 'guru', 'angket')  # 'angket' = angket kertas 360° (POST /pkg/angket/cetak)
 FORMAT_CETAK = ('xlsx', 'pdf')
 
 
@@ -508,7 +508,7 @@ class CetakRequest(IsianPkg):
     @field_validator('jenis')
     @classmethod
     def _jenis(cls, v):
-        if v not in JENIS_DOKUMEN:
+        if v not in ('rekap', 'guru'):
             raise ValueError("jenis harus 'rekap' atau 'guru'")
         return v
 
@@ -525,3 +525,14 @@ class CetakRequest(IsianPkg):
         if self.jenis == 'guru' and not self.guru_id:
             raise ValueError('guru_id wajib untuk laporan per guru')
         return self
+
+
+JENIS_ANGKET = ('sejawat', 'siswa', 'ortu')  # DUDI tidak dipakai (khusus SMK)
+
+
+class AngketCetakRequest(IsianPkg):
+    """Cetak angket kertas 360° satu jenis; tanpa guru_id dicetak angket kosong (identitas diisi tangan)."""
+    jenis_angket: str = Field(..., pattern='^(' + '|'.join(JENIS_ANGKET) + ')$')
+    format: str = Field('pdf', pattern='^(xlsx|pdf)$')
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    guru_id: Optional[str] = Field(None, pattern=POLA_ID)

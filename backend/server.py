@@ -46,6 +46,7 @@ from routers import (
     phase4,
     pkg,
     pkg_audit_api,
+    pkg_angket_api,
     pkg_cetak_api,
     pkg_instrumen_api,
     pkg_kelola,
@@ -148,6 +149,7 @@ api_router.include_router(pkg_instrumen_api.router)
 api_router.include_router(pkg_penilaian_api.router)
 api_router.include_router(pkg_rekap_api.router)
 api_router.include_router(pkg_cetak_api.router)
+api_router.include_router(pkg_angket_api.router)
 api_router.include_router(pkg_audit_api.router)
 api_router.include_router(mobile.router)
 

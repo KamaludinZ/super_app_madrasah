@@ -104,6 +104,7 @@ MENU_PKG = [
     ('supervisi', 'Supervisi Penilai', 'Tandai penilai tersupervisi', '/pkg/supervisi', 'kepala'),
     ('instrumen', 'Master Instrumen', 'Kompetensi & indikator', '/pkg/instrumen', 'anggota'),
     ('penilaian', 'Penilaian Kinerja', 'Isi lembar penilaian', '/pkg/penilaian', 'penilai'),
+    ('komponen', 'Komponen 360° & Kehadiran', 'Angket 360°, kehadiran & rekomendasi PKB', '/pkg/komponen', 'pengelola'),
     ('rekap', 'Rekap Hasil', 'Nilai akhir & predikat', '/pkg/rekap', 'anggota'),
     ('cetak', 'Cetak Excel & PDF', 'Unduh dokumen resmi', '/pkg/cetak', 'pengelola'),
     ('audit', 'Jejak Audit', 'Riwayat aksi PKG', '/pkg/audit', 'kepala'),
@@ -111,7 +112,7 @@ MENU_PKG = [
 
 
 def menu_pkg(keanggotaan: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Pintasan sembilan menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
+    """Pintasan sepuluh menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
     hasil = []
     for key, label, keterangan, to, syarat in MENU_PKG:
         alasan = alasan_tolak(keanggotaan, syarat)

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RUTE_PKG_TERSEDIA } from '@/lib/pkg';
 import {
   LayoutGrid, Lock, CalendarCog, FileBadge, Split, ShieldCheck, ListTree, ClipboardPen, BarChart3, Printer, History,
+  UsersRound,
 } from 'lucide-react';
 
 const IKON_MENU = {
@@ -13,6 +14,7 @@ const IKON_MENU = {
   supervisi: ShieldCheck,
   instrumen: ListTree,
   penilaian: ClipboardPen,
+  komponen: UsersRound,
   rekap: BarChart3,
   cetak: Printer,
   audit: History,
@@ -48,7 +50,7 @@ const STATUS_ALASAN = {
   bukan_anggota_sk: 'Tanpa akses',
 };
 
-// Pintasan Menu PKG: akses cepat ke sembilan sub-menu modul PKG langsung dari beranda.
+// Pintasan Menu PKG: akses cepat ke sepuluh sub-menu modul PKG langsung dari beranda.
 // `menu` dari GET /pkg/beranda: [{ key, label, keterangan, to, khusus, akses, alasan }]. Sub-menu tanpa akses
 // atau yang halamannya belum dibangun (lib/pkg RUTE_PKG_TERSEDIA) tampil redup dan tidak dapat diklik.
 export default function GridPintasanPkg({ menu = [] }) {

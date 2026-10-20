@@ -144,3 +144,40 @@ def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     output = io.BytesIO()
     _dokumen(output, A4).build(isi, onFirstPage=_penanda_halaman, onLaterPages=_penanda_halaman)
     return output.getvalue()
+
+
+def angket_pdf_cadangan(jenis: str, guru: Optional[Dict[str, Any]] = None) -> bytes:
+    """PDF cadangan angket kertas 360° satu jenis (A4 tegak): identitas guru, tabel butir per komponen dengan kolom
+    skor 0/1/2 untuk dicentang responden, dan tempat tanda tangan responden."""
+    from pkg_angket import JENIS_ANGKET, butir_angket
+    gaya = getSampleStyleSheet()
+    sel = gaya['BodyText'].clone('sel', fontSize=8.5, leading=10)
+    g = guru or {}
+    titik = '.' * 60
+    isi = [
+        Paragraph('<b>INSTRUMEN PENILAIAN PERILAKU KINERJA GURU</b>', gaya['Title']),
+        Paragraph(f"<b>OLEH {JENIS_ANGKET[jenis]['label'].upper()}</b>", gaya['Normal'].clone('sub', alignment=1)),
+        Spacer(1, 0.4 * cm),
+    ]
+    t_id = Table([['Nama Guru', f": {g.get('nama') or titik}"], ['NIP', f": {g.get('nip') or titik}"],
+                  ['Tugas Tambahan', f": {g.get('tugas_tambahan') or titik}"]], colWidths=[3.5 * cm, 13.5 * cm])
+    t_id.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9)]))
+    baris = [['No', 'Pernyataan', 'Tidak ada bukti\n(0)', 'Sebagian\n(1)', 'Seluruhnya\n(2)']]
+    gaya_tabel = _gaya_tabel()
+    komponen = None
+    for b in butir_angket(jenis):
+        if b['komponen'] != komponen:
+            komponen = b['komponen']
+            baris.append(['', Paragraph(f'<b>{komponen}</b>', sel), '', '', ''])
+            gaya_tabel.add('BACKGROUND', (0, len(baris) - 1), (-1, len(baris) - 1), colors.HexColor('#ECFDF5'))
+        baris.append([str(b['nomor']), Paragraph(b['pernyataan'], sel), '', '', ''])
+    tabel = Table(baris, colWidths=[1 * cm, 10.5 * cm, 2 * cm, 2 * cm, 2 * cm], repeatRows=1)
+    gaya_tabel.add('ALIGN', (0, 0), (0, -1), 'CENTER')
+    gaya_tabel.add('ALIGN', (2, 0), (-1, 0), 'CENTER')
+    tabel.setStyle(gaya_tabel)
+    isi += [t_id, Spacer(1, 0.3 * cm), tabel, Spacer(1, 0.8 * cm),
+            Paragraph('.................., ........................ 20....<br/>Responden,<br/><br/><br/><br/>(.........................................)',
+                      gaya['Normal'].clone('ttd', leftIndent=11 * cm))]
+    output = io.BytesIO()
+    _dokumen(output, A4).build(isi, onFirstPage=_penanda_halaman, onLaterPages=_penanda_halaman)
+    return output.getvalue()

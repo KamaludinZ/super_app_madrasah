@@ -20,7 +20,7 @@ import shutil
 import tempfile
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional
 
 from openpyxl import Workbook, load_workbook
 
@@ -241,6 +241,22 @@ def buka_template(jenis: str, hanya_baca: bool = True, wajib_utuh: bool = False)
     if hanya_baca:
         return load_workbook(io.BytesIO(isi), read_only=True, data_only=True)
     return load_workbook(io.BytesIO(isi))
+
+
+def tampilkan_hanya(wb: Workbook, nama_sheet: Iterable[str]) -> None:
+    """Hanya sheet `nama_sheet` yang terlihat & tercetak (yang pertama jadi sheet aktif). Area cetak sheet lain dihapus
+    karena LibreOffice tetap mengekspor sheet tersembunyi yang memiliki area cetak ke PDF; rumus yang merujuk sheet
+    tersembunyi tetap dihitung."""
+    nama = list(nama_sheet)
+    utama = wb[nama[0]]
+    wb.active = wb.worksheets.index(utama)
+    for ws in wb.worksheets:
+        terlihat = ws.title in nama
+        ws.sheet_state = 'visible' if terlihat else 'hidden'
+        ws.sheet_view.tabSelected = ws is utama
+        if not terlihat:
+            ws.print_area = None
+            ws._print_rows = ws._print_cols = None
 
 
 def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True) -> bytes:

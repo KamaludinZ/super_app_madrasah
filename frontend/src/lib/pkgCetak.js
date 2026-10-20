@@ -36,7 +36,7 @@ export const TAHAP_CETAK = [
 ];
 
 // Nama berkas dari Content-Disposition (utamakan filename* UTF-8).
-function namaDariHeader(cd, cadangan) {
+export function namaDariHeader(cd, cadangan) {
   const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cd || '');
   if (utf8) {
     try { return decodeURIComponent(utf8[1]); } catch { /* pakai filename biasa */ }
@@ -46,7 +46,7 @@ function namaDariHeader(cd, cadangan) {
 }
 
 // Galat dari respons blob: detail JSON server dibaca dari isi blob.
-async function galatDariRespons(e) {
+export async function galatDariRespons(e) {
   let detail = e?.response?.data;
   if (detail instanceof Blob) {
     try { detail = JSON.parse(await detail.text())?.detail; } catch { detail = null; }
