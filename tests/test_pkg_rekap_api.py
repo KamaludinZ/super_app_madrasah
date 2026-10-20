@@ -216,3 +216,22 @@ def test_validasi_input_rekap_lewat_http(db):
                         ('/api/pkg/rekap/guru/g%241', {}), ('/api/pkg/rekap/statistik', {'tahun_pelajaran': '2026'})):
         assert k.get(url, params=params).status_code == 422, (url, params)
     assert k.post('/api/pkg/rekap/hitung-ulang').status_code == 422  # periode_id wajib
+
+
+def _kompetensi(user, guru):
+    async def jalan():
+        return await api.rekap_kompetensi_guru_api(guru, akses=await _akses(user))
+    return asyncio.run(jalan())
+
+
+def test_rekap_per_kompetensi(db):
+    r = _kompetensi('kep', 'g1')
+    m = r['model']
+    assert r['status'] == 'terkunci' and (m['total_skor'], m['skor_maks'], m['nkg']) == (4, 5, 80.0)
+    k = m['kompetensi'][0]
+    assert (k['label'], k['jumlah_skor'], k['skor_maks']) == ('KOMPETENSI 1', 4, 5)
+    assert k['sub'] == [{'no': 1, 'kode': '1.1', 'nama': None, 'nilai_rating': 4, 'tingkat': 'Level 4', 'skor_maks': 5}]
+    assert _kompetensi('kep', 'g3')['model'] is None  # draf
+    with pytest.raises(HTTPException) as e:
+        _kompetensi('pen', 'g2')
+    assert e.value.status_code == 403

@@ -7,7 +7,7 @@ dari skor_per_indikator lembar terhadap instrumen versi lembar.
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from pkg_nilai import hitung_nilai
+from pkg_nilai import hitung_nilai, rekap_model_kompetensi
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_REKAP, KOLEKSI_SK
 
 
@@ -259,6 +259,22 @@ async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]]
         'catatan_umum': (lembar or {}).get('catatan_umum') or '',
         'instrumen': {k: instrumen.get(k) for k in ('id', 'versi_template', 'revisi', 'kompetensi')} if instrumen else None,
         'isian': (lembar or {}).get('isian') or {},
+    }
+
+
+async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str) -> Optional[Dict[str, Any]]:
+    """Rekap nilai per kompetensi (KOMP-1..KOMP (4)) satu guru pada periode dari lembar terkunci, mengikuti
+    04-RKAP-PKG & format penghitungan 05-RKAP-PKGR. None bila guru tidak ada di periode; `model` None bila belum
+    terkunci."""
+    rincian = await rincian_guru(db, periode, sk, guru_id)
+    if not rincian:
+        return None
+    model = rekap_model_kompetensi(rincian['instrumen'], rincian['isian']) if rincian['status'] == 'terkunci' and rincian['instrumen'] else None
+    return {
+        'periode': rincian['periode'], 'guru': rincian['guru'], 'penilai_nama': rincian['penilai_nama'],
+        'status': rincian['status'],
+        'instrumen': {k: rincian['instrumen'].get(k) for k in ('id', 'versi_template', 'revisi')} if rincian['instrumen'] else None,
+        'model': model,
     }
 
 

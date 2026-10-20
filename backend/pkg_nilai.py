@@ -56,3 +56,32 @@ def hitung_nilai(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> Dict[str, 
         'level_capaian': level_capaian(persen), 'predikat': predikat_jenjang(persen),
         'terisi': terisi, 'jumlah_sub': len(sub), 'progres': round(terisi / len(sub) * 100) if sub else 0,
     }
+
+
+def tingkat_kompetensi(skor: int) -> Optional[str]:
+    """Tingkat kompetensi sub dari nilai rating 1–5 (04-RKAP-PKG!G29:G43); kosong bila belum ada centang."""
+    return f'Level {skor}' if 1 <= skor <= 5 else None
+
+
+def rekap_model_kompetensi(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> Dict[str, Any]:
+    """Rekapitulasi hasil penilaian model kompetensi guru (04-RKAP-PKG) dan format penghitungan NKG (05-RKAP-PKGR
+    baris 27–32): nilai rating & tingkat per sub, jumlah skor per kompetensi (KOMP-1..KOMP (4)), total, dan
+    NKG = total / skor maks x 100 beserta level & predikat jenjangnya."""
+    nilai = hitung_nilai(instrumen, isian)
+    skor = nilai['skor_per_indikator']
+    kompetensi, no = [], 0
+    for urut, k in enumerate(instrumen.get('kompetensi') or [], 1):
+        sub = []
+        for s in k.get('sub') or []:
+            no += 1
+            sub.append({'no': no, 'kode': s['kode'], 'nama': s.get('nama'), 'nilai_rating': skor.get(s['kode'], 0),
+                        'tingkat': tingkat_kompetensi(skor.get(s['kode'], 0)), 'skor_maks': len(s.get('indikator') or [])})
+        kompetensi.append({
+            'kode': k.get('kode'), 'nama': k.get('nama'), 'label': f'KOMPETENSI {urut}',
+            'jumlah_skor': sum(x['nilai_rating'] for x in sub), 'skor_maks': sum(x['skor_maks'] for x in sub), 'sub': sub,
+        })
+    return {
+        'kompetensi': kompetensi, 'total_skor': nilai['nilai_akhir'], 'skor_maks': nilai['nilai_maks'],
+        'nkg': nilai['capaian_persen'], 'level_capaian': nilai['level_capaian'], 'predikat': nilai['predikat'],
+        'terisi': nilai['terisi'], 'jumlah_sub': nilai['jumlah_sub'],
+    }
