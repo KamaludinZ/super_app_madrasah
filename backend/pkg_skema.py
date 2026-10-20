@@ -523,6 +523,8 @@ class CetakRequest(IsianPkg):
     format: str
     periode_id: Optional[str] = Field(None, pattern=POLA_ID)
     guru_id: Optional[str] = Field(None, pattern=POLA_ID)
+    # PDF laporan per guru: 'lengkap' (cover s.d. rubrik capaian) atau 'rekap' (lembar 04-RKAP-PKG saja).
+    lembar: str = Field('lengkap', pattern='^(lengkap|rekap)$')
 
     @field_validator('jenis')
     @classmethod

@@ -17,7 +17,7 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
-from pkg_template import PETA_CETAK, isi_template_ke_bytes, tampilkan_hanya
+from pkg_template import PETA_CETAK, isi_template_ke_bytes, muat_lebar_halaman, tampilkan_hanya
 
 BULAN = ('Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November',
          'Desember')
@@ -169,6 +169,7 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
         # Lampiran identitas lengkap (pkg_identitas): seluruh isian 00-DATA, contoh isian template ditimpa.
         from pkg_identitas import isi_data_identitas
         isi_data_identitas(wb, laporan['identitas'])
+        isi_cover(wb, laporan['identitas'])
 
     isi_kehadiran(wb, laporan.get('kehadiran'))
     isi_rekomendasi(wb, laporan.get('rekomendasi'))
@@ -181,6 +182,14 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
             centang = set((isian.get(s['kode']) or {}).get('centang') or [])
             for level in range(1, 6):
                 ws[f'{kol}{baris + level - 1}'] = 'v' if level in centang else None
+
+
+def isi_cover(wb, identitas: Dict[str, Any]) -> None:
+    """COVER: identitas, jangka waktu, dan tahun dibaca rumus dari 00-DATA; hanya nama kantor kementerian agama
+    (teks tetap di template) yang disesuaikan dengan kabupaten/kota madrasah."""
+    kota = ((identitas.get('sekolah') or {}).get('kota') or '').strip()
+    if kota:
+        wb[PETA_CETAK['instrumen']['cover']['sheet']][PETA_CETAK['instrumen']['cover']['kantor']] = f'kantor kementerian agama {kota.lower()}'
 
 
 def isi_kehadiran(wb, kehadiran: Optional[List[Dict[str, Any]]], tugas_pokok: str = 'Guru') -> None:
@@ -218,12 +227,22 @@ def isi_rekomendasi(wb, teks: Optional[str]) -> None:
     ws.row_dimensions[r].height = max(15.0, 13.0 * baris_teks + 2)
 
 
-def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False) -> bytes:
+# Lembar laporan lengkap untuk PDF, urut seperti berkas resmi. Tidak dicetak: 00-DATA (lembar isian), DUDI (khusus SMK),
+# FORM-360-GR (angket kosong; dicetak terpisah lewat Cetak Angket), FORM-INSTR (formulir instrumen kosong), dan
+# MODEL-GURU (halaman menu navigasi template: tombol tautan antarsheet & banner, tanpa data penilaian).
+LEMBAR_PDF_LENGKAP = ('COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG',
+                      '05-RKAP-PKGR', 'INDEK-HDIR', 'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN')
+
+
+def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False, lembar: Optional[List[str]] = None) -> bytes:
     """Berkas .xlsx laporan PKG satu guru dari template instrumen resmi (seluruh sheet resmi ikut).
-    `hanya_rekap=True` (untuk PDF): sheet selain 04-RKAP-PKG disembunyikan agar hanya lembar rekapitulasi yang
-    dicetak; rumusnya tetap menghitung dari sheet tersembunyi."""
+    Untuk PDF, `lembar` (mis. LEMBAR_PDF_LENGKAP) atau `hanya_rekap=True` (04-RKAP-PKG saja) menentukan sheet yang
+    terlihat & tercetak, masing-masing selebar 1 halaman; rumusnya tetap menghitung dari sheet tersembunyi."""
     def pengisi(wb):
         isi_laporan_guru(wb, laporan)
-        if hanya_rekap:
-            tampilkan_hanya(wb, [PETA_CETAK['instrumen']['sheet_rekap']])
+        tampil = [PETA_CETAK['instrumen']['sheet_rekap']] if hanya_rekap else list(lembar or [])
+        if tampil:
+            tampilkan_hanya(wb, tampil)
+            for nama in tampil:
+                muat_lebar_halaman(wb[nama])
     return isi_template_ke_bytes('instrumen', pengisi)

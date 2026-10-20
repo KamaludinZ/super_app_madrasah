@@ -63,3 +63,15 @@ def test_laporan_pdf_hanya_lembar_rekap_tanpa_area_cetak_sheet_lain():
     for ws in wb.worksheets:
         if ws.title != '04-RKAP-PKG':
             assert ws.sheet_state == 'hidden' and (not ws.print_area or ws.print_area.endswith('!')), ws.title
+
+
+def test_laporan_pdf_lengkap_dan_cover():
+    import pkg_instrumen_impor
+    instrumen = {'kompetensi': pkg_instrumen_impor.pratinjau_dari_template()['kompetensi']}
+    lap = {'instrumen': instrumen, 'isian': {}, 'identitas': {'sekolah': {'kota': 'Kabupaten Malang'}}}
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel(lap, lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP))))
+    terlihat = [ws.title for ws in wb.worksheets if ws.sheet_state == 'visible']
+    assert terlihat == list(pkg_cetak.LEMBAR_PDF_LENGKAP) and wb.active.title == 'COVER'
+    assert 'MODEL-GURU' not in terlihat and 'DUDI' not in terlihat and '00-DATA' not in terlihat
+    assert wb['COVER']['C43'].value == 'kantor kementerian agama kabupaten malang'
+    assert wb['04-RKAP-PKG'].page_setup.fitToHeight == 1 and wb['SISWA'].page_setup.fitToHeight == 0  # SISWA punya pemisah halaman

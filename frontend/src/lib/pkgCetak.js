@@ -1,7 +1,8 @@
 import { api } from '@/lib/api';
 
 // Cetak dokumen resmi PKG dari template (Excel) dan konversi PDF.
-//   POST /pkg/cetak { jenis: 'rekap' | 'guru', format: 'xlsx' | 'pdf', periode_id, guru_id? } -> berkas (blob)
+//   POST /pkg/cetak { jenis: 'rekap' | 'guru', format: 'xlsx' | 'pdf', periode_id, guru_id?, lembar?: 'lengkap' | 'rekap' }
+//        -> berkas (blob); `lembar` hanya untuk PDF laporan per guru (lengkap: COVER s.d. RUBRIK-CAPAIAN; rekap: 04-RKAP-PKG)
 //        header: Content-Disposition (nama berkas), X-PKG-Mesin: 'openpyxl' | 'libreoffice' | 'reportlab'
 //        (PDF memakai LibreOffice; bila tidak tersedia, cadangan ReportLab dengan penanda "bukan salinan identik"
 //        dan header X-PKG-Cadangan berisi alasannya). 403 {alasan, pesan} di luar cakupan, 409/503 pesan teks.
@@ -11,7 +12,7 @@ import { api } from '@/lib/api';
 
 export const JENIS_DOKUMEN = {
   rekap: { judul: 'Rekap Hasil PKG', keterangan: 'Seluruh guru dalam cakupan Anda (format rekap_hasil_pkg_v2026)' },
-  guru: { judul: 'Laporan PKG per Guru', keterangan: 'Rekapitulasi hasil penilaian satu guru (format 04-RKAP-PKG)' },
+  guru: { judul: 'Laporan PKG per Guru', keterangan: 'Berkas hasil PKG satu guru: cover, laporan, identitas, kompetensi, rekap, 360°, dan kehadiran' },
 };
 
 export const MESIN_LABEL = {
@@ -61,13 +62,14 @@ export async function galatDariRespons(e) {
 
 // `onTahap(kunci)` dipanggil setiap tahap dimulai (umpan balik proses). Server mengerjakan semuanya dalam satu
 // permintaan, jadi tahap berikutnya ditampilkan bertahap selama menunggu respons.
-export async function unduhDokumen({ jenis, format, periode, guru = null, onTahap = () => {} }) {
+export async function unduhDokumen({ jenis, format, periode, guru = null, lembar = 'lengkap', onTahap = () => {} }) {
   onTahap('template');
   const urutan = TAHAP_CETAK.filter((t) => !t.hanyaPdf || format === 'pdf').map((t) => t.kunci);
   const pewaktu = urutan.slice(1).map((kunci, i) => setTimeout(() => onTahap(kunci), 700 * (i + 1)));
   try {
     const res = await api.post('/pkg/cetak', {
       jenis, format, periode_id: periode?.id || undefined, guru_id: jenis === 'guru' ? guru?.guru_id : undefined,
+      lembar: jenis === 'guru' ? lembar : undefined,
     }, { responseType: 'blob' });
     const mesin = res.headers?.['x-pkg-mesin'] || (format === 'pdf' ? 'libreoffice' : 'openpyxl');
     return {

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from pkg_ambang import AMBANG_SEBUTAN_360, terapkan
 from pkg_skema import KOLEKSI_ANGKET
-from pkg_template import buka_template, isi_template_ke_bytes, tampilkan_hanya
+from pkg_template import buka_template, isi_template_ke_bytes, muat_lebar_halaman, tampilkan_hanya
 
 # form: rentang baris bagian FORM-360-GR (area cetak B:H); identitas: sel nama, NIP, tugas tambahan di bagian itu.
 # baris: rentang baris butir pada sheet isian; kolom penilai: 10 blok (0/1/2) mulai kolom F, label nomor di baris 7.
@@ -77,9 +77,7 @@ def isi_form_angket(wb, jenis: str, guru: Optional[Dict[str, Any]] = None) -> No
             ws[sel] = f": {nilai or '-'}"
     awal, akhir = cfg['form']
     ws.print_area = f'B{awal}:H{akhir}'
-    # Kolom skor terakhir (H) melewati lebar kertas pada setelan template; muatkan lebar ke 1 halaman, tinggi bebas.
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
+    muat_lebar_halaman(ws, satu_halaman=False)  # kolom skor terakhir (H) melewati lebar kertas pada setelan template
     tampilkan_hanya(wb, [SHEET_FORM])
 
 

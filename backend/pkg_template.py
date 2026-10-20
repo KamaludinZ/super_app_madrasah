@@ -89,6 +89,7 @@ PETA_CETAK = {
         # 01-LAPORN baris 21 (kosong di template, di antara Deskripsi Capaian & PERSETUJUAN): rekomendasi PKB.
         'rekomendasi': {'sheet': '01-LAPORN', 'baris': 21, 'label': 'C', 'titik_dua': 'D', 'isi': 'E', 'gabung': 'E21:H21',
                         'gaya_dari': 20},
+        'cover': {'sheet': 'COVER', 'kantor': 'C43'},
         # INDEK-HDIR: 12 baris bulan mulai baris 16; F/G/I/J/K serta jumlah (28) & indeks (K29) dihitung rumus template.
         'kehadiran': {'sheet': 'INDEK-HDIR', 'baris_awal': 16, 'baris_maks': 12, 'tugas_pokok': 'E9',
                       'kolom': {'label': 'C', 'terlambat_menit': 'D', 'pulang_cepat_menit': 'E', 'tanpa_keterangan': 'H'}},
@@ -96,7 +97,7 @@ PETA_CETAK = {
                     ('04-RKAP-PKG', 'B44'): 'Jumlah', ('04-RKAP-PKG', 'B45'): 'Cap. Tingkat Kompetensi',
                     ('INDEK-HDIR', 'C13'): 'Bulan dan Tahun', ('INDEK-HDIR', 'H13'): 'Tanpa Keterangan',
                     ('INDEK-HDIR', 'C28'): 'Jumlah', ('01-LAPORN', 'C20'): 'Deskripsi Capaian',
-                    ('01-LAPORN', 'E23'): 'PERSETUJUAN'},
+                    ('01-LAPORN', 'E23'): 'PERSETUJUAN', ('COVER', 'C43'): 'kantor kementerian agama'},
     },
 }
 
@@ -266,6 +267,16 @@ def tampilkan_hanya(wb: Workbook, nama_sheet: Iterable[str]) -> None:
         if not terlihat:
             ws.print_area = None
             ws._print_rows = ws._print_cols = None
+
+
+def muat_lebar_halaman(ws, satu_halaman: Optional[bool] = None) -> None:
+    """Muatkan lebar area cetak ke 1 halaman. Skala template disetel untuk Excel; LibreOffice merender huruf sedikit
+    lebih lebar sehingga kolom terakhir/tanda tangan dapat terpotong ke halaman baru. Sheet tanpa pemisah halaman
+    manual dimuatkan ke 1 halaman penuh (`satu_halaman` None = otomatis), selain itu tinggi bebas."""
+    if satu_halaman is None:
+        satu_halaman = not ws.row_breaks.brk
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, (1 if satu_halaman else 0)
 
 
 def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True) -> bytes:

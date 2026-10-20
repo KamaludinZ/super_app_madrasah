@@ -34,6 +34,7 @@ function IsiHalamanCetak() {
   const [sedang, setSedang] = useState(null);
   const [jumlahUnduh, setJumlahUnduh] = useState(0);
   const [proses, setProses] = useState(null);
+  const [lembarPdf, setLembarPdf] = useState('lengkap');
   const { keanggotaan } = useOutletContext() || {};
 
   const muat = useCallback(async () => {
@@ -52,7 +53,7 @@ function IsiHalamanCetak() {
     setProses({ format, tahap: 'template', selesai: false });
     try {
       const { blob, namaBerkas, mesin, alasanCadangan } = await unduhDokumen({
-        jenis, format, periode: rekap.periode, guru, onTahap: (tahap) => setProses((p) => p && { ...p, tahap }),
+        jenis, format, periode: rekap.periode, guru, lembar: lembarPdf, onTahap: (tahap) => setProses((p) => p && { ...p, tahap }),
       });
       simpanBerkas(blob, namaBerkas);
       setJumlahUnduh((n) => n + 1);
@@ -98,6 +99,16 @@ function IsiHalamanCetak() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2"><UserRound className="h-4 w-4 text-[#006837]" /> {JENIS_DOKUMEN.guru.judul}</CardTitle>
           <p className="text-xs text-slate-500">{JENIS_DOKUMEN.guru.keterangan}</p>
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-xs" role="radiogroup" aria-label="Isi PDF laporan per guru">
+            <span className="text-slate-500">Isi PDF:</span>
+            {[['lengkap', 'Laporan lengkap'], ['rekap', 'Rekapitulasi (04-RKAP-PKG) saja']].map(([nilai, label]) => (
+              <button key={nilai} type="button" role="radio" aria-checked={lembarPdf === nilai} onClick={() => setLembarPdf(nilai)}
+                data-testid={`pkg-lembar-pdf-${nilai}`}
+                className={`rounded-full border px-3 py-1 ${lembarPdf === nilai ? 'border-[#006837] bg-emerald-50 text-[#006837]' : 'border-slate-200 text-slate-600'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {rekap.guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}

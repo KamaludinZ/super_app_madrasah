@@ -16,7 +16,7 @@ from core import db, get_current_user, logger
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
 from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, catat_cetak_gagal, catat_cetak_template, daftar_unduhan
-from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
+from pkg_cetak import LEMBAR_PDF_LENGKAP, StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
 from pkg_identitas import lampiran_identitas
@@ -88,7 +88,9 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
     laporan['rekomendasi'] = teks_rekomendasi(await rekomendasi_guru(db_, periode['id'], data.guru_id)) or None
     laporan['nilai_akhir_360'] = await nilai_akhir_guru(db_, periode, data.guru_id, hitung_nilai(instrumen or {}, laporan['isian'])['capaian_persen'])
     try:
-        isi = laporan_guru_excel(laporan, hanya_rekap=data.format == 'pdf')
+        pdf = data.format == 'pdf'
+        isi = laporan_guru_excel(laporan, hanya_rekap=pdf and data.lembar == 'rekap',
+                                 lembar=list(LEMBAR_PDF_LENGKAP) if pdf and data.lembar == 'lengkap' else None)
     except StrukturTidakSesuai as e:
         raise HTTPException(409, str(e)) from e
     return {'jenis_template': 'instrumen', 'dasar_nama': f"Laporan_PKG_{guru.get('nama') or data.guru_id}_{periode.get('nama_periode') or ''}",
@@ -137,7 +139,8 @@ async def kemampuan_cetak_api(user: Dict = Depends(get_current_user)):
 async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(get_current_user)):
     """Unduh dokumen resmi: rekap seluruh guru dalam cakupan (`jenis=rekap`) atau laporan satu guru (`jenis=guru`)
     sebagai Excel dari template resmi, atau PDF hasil konversi LibreOffice (rumus template dihitung ulang; laporan
-    per guru hanya lembar rekapitulasi 04-RKAP-PKG). Tanpa LibreOffice: PDF cadangan ReportLab berpenanda.
+    per guru `lembar=lengkap` COVER s.d. RUBRIK-CAPAIAN, `lembar=rekap` 04-RKAP-PKG saja). Tanpa LibreOffice: PDF
+    cadangan ReportLab berpenanda.
     403 di luar hak/cakupan, 409 bila belum ada lembar terkunci, 503 bila template tidak tersedia/berubah.
     Unduhan berhasil tercatat di riwayat unduhan & jejak audit; percobaan yang ditolak/gagal dicatat sebagai cetak_gagal."""
     meta = {'jenis_dokumen': data.jenis, 'format': data.format, 'periode_id': data.periode_id, 'guru_id': data.guru_id,
