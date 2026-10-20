@@ -21,9 +21,9 @@ def test_rumus_indek_hdir():
     b = k.hitung_bulan({'terlambat_menit': 300, 'pulang_cepat_menit': 180, 'tanpa_keterangan': 2})
     assert (b['jumlah_menit'], b['konversi_hari'], b['jumlah_tidak_hadir']) == (480, 1.0, 3.0)  # F, G = F/480, I = G+H
     assert abs(b['persen_hadir'] - (1 - 3 / 46)) < 1e-12  # K = 1 - I/46
-    kosong = k.hitung_kehadiran(k.baris_lengkap(PERIODE, None))
+    kosong = k.hitung_kehadiran(k.baris_lengkap(k.bulan_periode(PERIODE), None))
     assert kosong['indeks'] == 1 and kosong['indeks_persen'] == 100.0  # template kosong -> 100%
-    h = k.hitung_kehadiran(k.baris_lengkap(PERIODE, [{'bulan': '2026-08', 'tanpa_keterangan': 1, 'izin': 2},
+    h = k.hitung_kehadiran(k.baris_lengkap(k.bulan_periode(PERIODE), [{'bulan': '2026-08', 'tanpa_keterangan': 1, 'izin': 2},
                                                     {'bulan': '2026-09', 'terlambat_menit': 240}]))
     assert h['jumlah']['jumlah_tidak_hadir'] == 1.5 and h['jumlah']['izin'] == 2  # izin tidak masuk rumus
     assert h['indeks_persen'] == round((1 - 1.5 / 46) * 100, 2)
@@ -89,10 +89,32 @@ def test_isi_sheet_indek_hdir():
     from openpyxl import load_workbook
     import pkg_cetak
     import pkg_template
-    baris = k.baris_lengkap(PERIODE, [{'bulan': '2026-08', 'terlambat_menit': 30, 'pulang_cepat_menit': 15, 'tanpa_keterangan': 1}])
+    baris = k.baris_lengkap(k.bulan_periode(PERIODE), [{'bulan': '2026-08', 'terlambat_menit': 30, 'pulang_cepat_menit': 15, 'tanpa_keterangan': 1}])
     wb = load_workbook(io.BytesIO(pkg_template.isi_template_ke_bytes('instrumen', lambda w: pkg_cetak.isi_kehadiran(w, baris))))
     ws = wb['INDEK-HDIR']
     assert ws['E9'].value == 'Guru' and ws['C16'].value == 'Juli 2026' and ws['C21'].value == 'Desember 2026'
     assert (ws['D17'].value, ws['E17'].value, ws['H17'].value) == (30, 15, 1)
     assert ws['C22'].value is None and ws['D27'].value == 0 and ws['H27'].value == 0  # baris bulan sisa dikosongkan
     assert ws['K29'].value == '=K28' and ws['G17'].value == '=F17/(8*60)'  # rumus template utuh
+
+
+def test_bulan_kehadiran_mengikuti_semester():
+    import asyncio
+    sebulan = {'id': 'p2', 'tanggal_buka': '2026-10-01', 'tanggal_tutup': '2026-10-31', 'tahun_pelajaran': '2026/2027'}
+    semester = ['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']
+    db = Db({'semesters': Koleksi([{'id': 'sm1', 'name': 'Ganjil', 'start_date': '2026-07-13', 'end_date': '2026-12-19'},
+                                   {'id': 'sm2', 'name': 'Genap'}])})
+    # 1) tanggal semester terkait; 2) nama semester + tahun pelajaran; 3) tanggal buka-tutup periode
+    assert asyncio.run(k.bulan_kehadiran(db, {**sebulan, 'semester_id': 'sm1'})) == semester
+    assert asyncio.run(k.bulan_kehadiran(db, {**sebulan, 'semester_id': 'sm2'})) == ['2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06']
+    assert asyncio.run(k.bulan_kehadiran(db, {**sebulan, 'semester': 'Ganjil'})) == semester
+    assert asyncio.run(k.bulan_kehadiran(db, sebulan)) == ['2026-10']
+
+
+def test_input_kehadiran_periode_sebulan(klien):
+    c, d, _ = klien
+    d['pkg_periode'].docs[0].update({'tanggal_buka': '2026-10-01', 'tanggal_tutup': '2026-10-31', 'semester': 'Ganjil',
+                                     'tahun_pelajaran': '2026/2027'})
+    data = c.get('/api/pkg/kehadiran/g1').json()
+    assert [b['bulan'] for b in data['bulan']] == ['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']
+    assert c.put('/api/pkg/kehadiran/g1', json={'bulan': [{'bulan': '2026-07', 'tanpa_keterangan': 1}]}).status_code == 200

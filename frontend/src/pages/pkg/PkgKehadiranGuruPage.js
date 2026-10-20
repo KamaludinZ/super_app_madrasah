@@ -125,7 +125,7 @@ function IsiKehadiranGuru() {
               </tr>
             </tfoot>
           </table>
-          {bulan.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Tanggal buka/tutup periode belum lengkap.</p>}
+          {bulan.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Rentang semester periode belum diketahui (atur tanggal semester atau tanggal buka/tutup periode).</p>}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <span className="text-xs text-slate-500 sm:mr-auto">
               {data.terisi ? `Terakhir disimpan ${data.diinput_oleh_nama || '-'} · ${data.diubah_pada ? formatWIBPanjang(data.diubah_pada) : '-'}` : 'Belum pernah diinput — tanpa data, indeks kehadiran dihitung 100%.'}
