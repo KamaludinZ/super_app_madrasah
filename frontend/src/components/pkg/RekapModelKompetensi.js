@@ -142,3 +142,71 @@ export function KartuLevelGuru({ levelGuru }) {
     </Card>
   );
 }
+
+// Lanjutan format penghitungan (05-RKAP-PKGR baris 34–44): komponen atasan & rerata kuesioner 360° x proporsi,
+// nilai kompetensi guru, indeks kehadiran, dan nilai akhir PK Guru. `akhir` dari backend pkg_nilai_akhir.
+export function NilaiAkhir360({ akhir, tautanKomponen }) {
+  if (!akhir) return null;
+  return (
+    <div className="space-y-3" data-testid="pkg-nilai-akhir-360">
+      <div className="text-sm font-semibold text-slate-900">Penilaian 360 derajat &amp; kehadiran</div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[480px] text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+              <th className="w-8 py-1.5 font-medium">No</th>
+              <th className="py-1.5 pr-3 font-medium">Penilaian</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Hasil penilaian</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Proporsi</th>
+              <th className="py-1.5 text-right font-medium">Nilai</th>
+            </tr>
+          </thead>
+          <tbody>
+            {akhir.komponen.map((k, i) => (
+              <tr key={k.kunci} className="border-b border-slate-100">
+                <td className="py-1.5">{i + 1}.</td>
+                <td className="py-1.5 pr-3 text-slate-800">
+                  {k.label}
+                  {k.kunci !== 'atasan' && <span className="ml-1 text-xs text-slate-500">({k.jumlah_responden || 0} responden)</span>}
+                </td>
+                <td className={`py-1.5 pr-3 text-right tabular-nums ${k.hasil == null ? 'text-amber-700' : ''}`}>{k.hasil != null ? FORMAT.format(k.hasil) : 'belum ada'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{Math.round(k.proporsi * 100)}%</td>
+                <td className="py-1.5 text-right tabular-nums">{FORMAT.format(k.nilai)}</td>
+              </tr>
+            ))}
+            <tr className="font-semibold">
+              <td />
+              <td className="py-1.5 pr-3">Nilai Kompetensi Guru</td>
+              <td />
+              <td className="py-1.5 pr-3 text-right tabular-nums">{Math.round(akhir.jumlah_proporsi * 100)}%</td>
+              <td className="py-1.5 text-right tabular-nums">{FORMAT.format(akhir.nilai_kompetensi)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+        <div className="rounded-lg bg-slate-50 p-3">
+          <dt className="text-xs text-slate-500">Ketidakhadiran (hari, termasuk konversi menit)</dt>
+          <dd className="font-semibold tabular-nums">{FORMAT.format(akhir.tidak_hadir_hari || 0)}</dd>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-3">
+          <dt className="text-xs text-slate-500">Persentase nilai dari kehadiran</dt>
+          <dd className="font-semibold tabular-nums">{FORMAT.format(akhir.indeks_kehadiran_persen)}%</dd>
+        </div>
+        <div className="rounded-lg bg-[#006837] p-3 text-white">
+          <dt className="text-xs text-emerald-100">Nilai Akhir PK Guru</dt>
+          <dd className="text-xl font-bold tabular-nums">{FORMAT.format(akhir.nilai_akhir)}</dd>
+          <dd className="text-xs text-emerald-100">{akhir.level_teks || '-'}</dd>
+        </div>
+      </dl>
+      <p className="text-xs text-slate-600">Tingkat capaian: {akhir.predikat || '-'} {akhir.level_teks || ''}</p>
+      {!akhir.lengkap && (
+        <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+          {akhir.angket_kurang?.length > 0 && <>Angket {akhir.angket_kurang.join(', ')} belum memiliki responden (dihitung 0). </>}
+          {!akhir.kehadiran_terisi && <>Rekap kehadiran belum diinput (dihitung 100%). </>}
+          {tautanKomponen}
+        </p>
+      )}
+    </div>
+  );
+}

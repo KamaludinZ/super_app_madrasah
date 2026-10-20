@@ -11,7 +11,7 @@ import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import { labelVersi } from '@/lib/pkgInstrumen';
 import { hitungTingkat } from '@/lib/pkgPenilaian';
 import { ambilModelKompetensi, ambilRekapGuru } from '@/lib/pkgRekap';
-import { FormatPenghitungan, KartuLevelGuru, TabelModelKompetensi } from '@/components/pkg/RekapModelKompetensi';
+import { FormatPenghitungan, KartuLevelGuru, NilaiAkhir360, TabelModelKompetensi } from '@/components/pkg/RekapModelKompetensi';
 
 // Tab "Model Kompetensi": rekap per kompetensi (04-RKAP-PKG) + format penghitungan NKG (05-RKAP-PKGR); dimuat saat dibuka.
 function TabModelKompetensi({ guruId, periodeId }) {
@@ -41,7 +41,11 @@ function TabModelKompetensi({ guruId, periodeId }) {
     <div className="space-y-4">
       <KartuLevelGuru levelGuru={data.level_guru} />
       <TabelModelKompetensi model={data.model} />
-      <FormatPenghitungan model={data.model} />
+      <FormatPenghitungan model={data.model} tambahan={(
+        <NilaiAkhir360 akhir={data.nilai_akhir_360} tautanKomponen={(
+          <Link to={`/pkg/komponen${periodeId ? `?periode=${periodeId}` : ''}`} className="font-semibold underline">Lengkapi di menu Komponen 360° &amp; Kehadiran</Link>
+        )} />
+      )} />
     </div>
   );
 }

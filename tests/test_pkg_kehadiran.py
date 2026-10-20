@@ -70,3 +70,29 @@ def test_input_kehadiran(klien):
     assert c.put('/api/pkg/kehadiran/g2', json={'bulan': []}).status_code == 403
     d['pkg_periode'].docs[0]['status'] = 'ditutup'
     assert c.put('/api/pkg/kehadiran/g1', json={'periode_id': 'p1', 'bulan': []}).status_code == 409
+
+
+def test_nilai_akhir_05_rkap_pkgr():
+    from pkg_nilai_akhir import hitung_nilai_akhir
+    skor = {'per_jenis': {'sejawat': {'nilai_tepat': 90.0}, 'siswa': {'nilai_tepat': 85.0}, 'ortu': {'nilai_tepat': 100.0}}}
+    hadir = {'indeks': 1 - 1.5 / 46, 'terisi': True, 'jumlah': {'jumlah_tidak_hadir': 1.5}}
+    r = hitung_nilai_akhir(80.0, skor, hadir, jenjang='MTs')
+    assert [k['nilai'] for k in r['komponen']] == [56.0, 9.0, 8.5, 10.0]  # F35:F38
+    assert r['nilai_kompetensi'] == 83.5 and r['nilai_akhir'] == round(83.5 * (1 - 1.5 / 46), 2)  # F40, E43
+    assert r['level_teks'] == 'pada Level 4' and r['predikat'].endswith('Ahli Madya') and r['lengkap']
+    tanpa = hitung_nilai_akhir(80.0, {'per_jenis': {}}, None)
+    assert tanpa['nilai_akhir'] == 56.0 and tanpa['indeks_kehadiran'] == 1.0 and not tanpa['kehadiran_terisi']
+
+
+def test_isi_sheet_indek_hdir():
+    import io
+    from openpyxl import load_workbook
+    import pkg_cetak
+    import pkg_template
+    baris = k.baris_lengkap(PERIODE, [{'bulan': '2026-08', 'terlambat_menit': 30, 'pulang_cepat_menit': 15, 'tanpa_keterangan': 1}])
+    wb = load_workbook(io.BytesIO(pkg_template.isi_template_ke_bytes('instrumen', lambda w: pkg_cetak.isi_kehadiran(w, baris))))
+    ws = wb['INDEK-HDIR']
+    assert ws['E9'].value == 'Guru' and ws['C16'].value == 'Juli 2026' and ws['C21'].value == 'Desember 2026'
+    assert (ws['D17'].value, ws['E17'].value, ws['H17'].value) == (30, 15, 1)
+    assert ws['C22'].value is None and ws['D27'].value == 0 and ws['H27'].value == 0  # baris bulan sisa dikosongkan
+    assert ws['K29'].value == '=K28' and ws['G17'].value == '=F17/(8*60)'  # rumus template utuh

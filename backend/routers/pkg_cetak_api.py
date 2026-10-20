@@ -19,7 +19,9 @@ from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, 
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
-from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, periode_dan_sk
+from pkg_kehadiran import kehadiran_guru
+from pkg_nilai import hitung_nilai
+from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, nilai_akhir_guru, periode_dan_sk
 from pkg_skema import JENIS_DOKUMEN, KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, POLA_ID, CetakRequest
 from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, info_template, nama_berkas_cetak
 
@@ -74,6 +76,9 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
         'nama_sekolah': pengaturan.get('school_name'), 'instrumen': instrumen or {}, 'isian': lembar.get('isian') or {},
         'terkunci_pada': lembar.get('terkunci_pada'),
     }
+    kehadiran = await kehadiran_guru(db_, periode, data.guru_id)
+    laporan['kehadiran'] = kehadiran['bulan']
+    laporan['nilai_akhir_360'] = await nilai_akhir_guru(db_, periode, data.guru_id, hitung_nilai(instrumen or {}, laporan['isian'])['capaian_persen'])
     try:
         isi = laporan_guru_excel(laporan, hanya_rekap=data.format == 'pdf')
     except StrukturTidakSesuai as e:

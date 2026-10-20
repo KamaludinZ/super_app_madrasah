@@ -137,7 +137,7 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     """Isi workbook template instrumen untuk satu guru: identitas di '00-DATA' & centang 'v' indikator di KOMP-n
     (rumus resmi 04-RKAP-PKG menghitung tingkat, jumlah, capaian, dan predikat).
     `laporan` = {guru:{nama,nip}, periode, sk:{nomor_sk,tanggal_sk}, penilai:{nama,nip}, kepala:{nama,nip},
-                 nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada}."""
+                 nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada, kehadiran:[baris bulan pkg_kehadiran]}."""
     from pkg_template import SHEET_KOMPETENSI
     peta = PETA_CETAK['instrumen']
     kompetensi = (laporan.get('instrumen') or {}).get('kompetensi') or []
@@ -161,6 +161,8 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     for kunci, sel in peta['data'].items():
         data[sel] = isian_sel.get(kunci) or '-'
 
+    isi_kehadiran(wb, laporan.get('kehadiran'))
+
     isian = laporan.get('isian') or {}
     kol = peta['kolom_centang']
     for k, sheet in zip(kompetensi, SHEET_KOMPETENSI):
@@ -169,6 +171,23 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
             centang = set((isian.get(s['kode']) or {}).get('centang') or [])
             for level in range(1, 6):
                 ws[f'{kol}{baris + level - 1}'] = 'v' if level in centang else None
+
+
+def isi_kehadiran(wb, kehadiran: Optional[List[Dict[str, Any]]], tugas_pokok: str = 'Guru') -> None:
+    """Isi sheet INDEK-HDIR: label bulan periode & nilai terlambat/pulang cepat (menit) serta tanpa keterangan (hari)
+    per bulan; baris bulan sisa dikosongkan (nilai 0). Contoh isian template ditimpa seluruhnya; rumus konversi,
+    jumlah, dan indeks kehadiran tetap dari template. Tugas pokok diisi 'Guru' (template berisi contoh kepala sekolah)."""
+    peta = PETA_CETAK['instrumen']['kehadiran']
+    ws = wb[peta['sheet']]
+    k = peta['kolom']
+    ws[peta['tugas_pokok']] = tugas_pokok
+    baris = list(kehadiran or [])[:peta['baris_maks']]
+    for i in range(peta['baris_maks']):
+        r = peta['baris_awal'] + i
+        b = baris[i] if i < len(baris) else None
+        ws[f"{k['label']}{r}"] = (b.get('label') or b.get('bulan')) if b else None
+        for kunci in ('terlambat_menit', 'pulang_cepat_menit', 'tanpa_keterangan'):
+            ws[f'{k[kunci]}{r}'] = int((b or {}).get(kunci) or 0)
 
 
 def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False) -> bytes:

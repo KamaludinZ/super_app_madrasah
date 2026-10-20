@@ -12,6 +12,8 @@ import { api } from '@/lib/api';
 // rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
 //             instrumen: { id, versi_template, revisi, kompetensi } | null, isian }
 // modelKompetensi = { periode, guru, penilai_nama, status, instrumen | null, model | null, level_guru | null }
+// nilai_akhir_360 = { komponen: [{ kunci, label, hasil, proporsi, nilai, jumlah_responden }], nilai_kompetensi,
+//   tidak_hadir_hari, indeks_kehadiran_persen, nilai_akhir, predikat, level_teks, lengkap, angket_kurang, kehadiran_terisi }
 // level_guru = { normal, plus_360, rata, simpulan, deskripsi: { pedagogik, kepribadian, sosial, profesional, umum } | null }
 // model = { kompetensi: [{ kode, nama, label, jumlah_skor, skor_maks, sub: [{ no, kode, nama, nilai_rating, tingkat,
 //           skor_maks }] }], total_skor, skor_maks, nkg, level_capaian, predikat, terisi, jumlah_sub }

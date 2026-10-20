@@ -262,6 +262,14 @@ async def rincian_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]]
     }
 
 
+async def nilai_akhir_guru(db, periode: Dict[str, Any], guru_id: str, nkg: Optional[float]) -> Dict[str, Any]:
+    """Nilai akhir PK Guru dengan 360° & kehadiran (05-RKAP-PKGR) dari NKG lembar terkunci, angket, dan kehadiran."""
+    from pkg_angket import skor_360
+    from pkg_kehadiran import kehadiran_guru
+    from pkg_nilai_akhir import hitung_nilai_akhir
+    return hitung_nilai_akhir(nkg, await skor_360(db, periode['id'], guru_id), await kehadiran_guru(db, periode, guru_id))
+
+
 async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str) -> Optional[Dict[str, Any]]:
     """Rekap nilai per kompetensi (KOMP-1..KOMP (4)) satu guru pada periode dari lembar terkunci, mengikuti
     04-RKAP-PKG & format penghitungan 05-RKAP-PKGR. None bila guru tidak ada di periode; `model` None bila belum
@@ -270,12 +278,14 @@ async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[s
     if not rincian:
         return None
     model = rekap_model_kompetensi(rincian['instrumen'], rincian['isian']) if rincian['status'] == 'terkunci' and rincian['instrumen'] else None
+    akhir = await nilai_akhir_guru(db, periode, guru_id, model['nkg']) if model else None
     return {
         'periode': rincian['periode'], 'guru': rincian['guru'], 'penilai_nama': rincian['penilai_nama'],
         'status': rincian['status'],
         'instrumen': {k: rincian['instrumen'].get(k) for k in ('id', 'versi_template', 'revisi')} if rincian['instrumen'] else None,
         'model': model,
-        'level_guru': level_guru(model['level_capaian']) if model else None,
+        'nilai_akhir_360': akhir,
+        'level_guru': level_guru(model['level_capaian'], akhir['level_teks']) if model else None,
     }
 
 

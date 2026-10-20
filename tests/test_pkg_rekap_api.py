@@ -231,7 +231,12 @@ def test_rekap_per_kompetensi(db):
     k = m['kompetensi'][0]
     assert (k['label'], k['jumlah_skor'], k['skor_maks']) == ('KOMPETENSI 1', 4, 5)
     assert k['sub'] == [{'no': 1, 'kode': '1.1', 'nama': None, 'nilai_rating': 4, 'tingkat': 'Level 4', 'skor_maks': 5}]
-    assert r['level_guru']['normal'] == 'Level 4' and r['level_guru']['deskripsi']['umum'].startswith('Berkolaborasi')
+    # Tanpa angket 360° & kehadiran: nilai kompetensi = 80 x 70% = 56 (Level 3), indeks kehadiran 100%.
+    akhir = r['nilai_akhir_360']
+    assert (akhir['nilai_kompetensi'], akhir['nilai_akhir'], akhir['level_teks']) == (56.0, 56.0, 'pada Level 3')
+    assert akhir['lengkap'] is False and akhir['angket_kurang'] == ['sejawat', 'siswa', 'ortu']
+    lv = r['level_guru']
+    assert (lv['normal'], lv['plus_360'], lv['rata'], lv['simpulan']) == ('Level 4', 'Level 3', 3.5, None)
     assert _kompetensi('kep', 'g3')['model'] is None  # draf
     with pytest.raises(HTTPException) as e:
         _kompetensi('pen', 'g2')

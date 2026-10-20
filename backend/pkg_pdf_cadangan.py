@@ -103,6 +103,26 @@ def _baris_level_guru(lv: Dict[str, Any], sel) -> List[list]:
     return baris
 
 
+def _tabel_nilai_akhir(akhir: Dict[str, Any], sel) -> list:
+    """Format penghitungan 05-RKAP-PKGR: komponen x proporsi, nilai kompetensi guru, indeks kehadiran, nilai akhir."""
+    baris = [['No', 'Penilaian', 'Hasil penilaian', 'Proporsi', 'Nilai']]
+    for i, k in enumerate(akhir['komponen'], 1):
+        baris.append([str(i), k['label'], f"{k['hasil']:.2f}" if k['hasil'] is not None else '- (belum ada)',
+                      f"{k['proporsi'] * 100:g}%", f"{k['nilai']:.2f}"])
+    baris += [['', 'Nilai Kompetensi Guru', '', f"{akhir['jumlah_proporsi'] * 100:g}%", f"{akhir['nilai_kompetensi']:.2f}"],
+              ['', 'Ketidakhadiran tanpa keterangan (hari)', f"{akhir['tidak_hadir_hari']:.2f}", '', ''],
+              ['', 'Persentase nilai PK Guru dari kehadiran', f"{akhir['indeks_kehadiran_persen']:.2f}%", '', ''],
+              ['', 'Nilai Akhir PK Guru', '', '', f"{akhir['nilai_akhir']:.2f}"],
+              ['', 'Tingkat capaian', Paragraph(f"{akhir['predikat'] or '-'} {akhir['level_teks'] or ''}", sel), '', '']]
+    tabel = Table(baris, colWidths=[1 * cm, 6.5 * cm, 5 * cm, 2 * cm, 3 * cm])
+    gaya_tabel = _gaya_tabel()
+    gaya_tabel.add('ALIGN', (2, 1), (-1, -1), 'RIGHT')
+    gaya_tabel.add('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold')
+    gaya_tabel.add('SPAN', (2, -1), (-1, -1))
+    tabel.setStyle(gaya_tabel)
+    return [Paragraph('<b>FORMAT PENGHITUNGAN DENGAN PENILAIAN 360 DERAJAT DAN KEHADIRAN</b>', sel), Spacer(1, 0.2 * cm), tabel]
+
+
 def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     """PDF cadangan rekapitulasi hasil PKG satu guru (A4 tegak): identitas, tingkat per sub-kompetensi, jumlah,
     capaian, level, predikat jenjang (rumus template resmi), serta level guru & deskripsi capaian (01-LAPORN)."""
@@ -136,11 +156,13 @@ def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     ringkas = Table([
         ['Capaian', f"{nilai['capaian_persen']:.2f}%"], ['Tingkat capaian', nilai['level_capaian'] or '-'],
         ['Predikat', Paragraph(nilai['predikat'] or '-', sel)],
-        *_baris_level_guru(laporan.get('level_guru') or level_guru(nilai['level_capaian']), sel),
+        *_baris_level_guru(laporan.get('level_guru') or level_guru(nilai['level_capaian'], (laporan.get('nilai_akhir_360') or {}).get('level_teks')), sel),
     ], colWidths=[4 * cm, 13.5 * cm])
     ringkas.setStyle(_gaya_tabel(header_baris=0))
     isi = [Paragraph('<b>REKAPITULASI HASIL PENILAIAN KINERJA GURU</b>', gaya['Title']), t_id, Spacer(1, 0.4 * cm), tabel,
            Spacer(1, 0.3 * cm), ringkas]
+    if laporan.get('nilai_akhir_360'):
+        isi += [Spacer(1, 0.4 * cm), *_tabel_nilai_akhir(laporan['nilai_akhir_360'], sel)]
     output = io.BytesIO()
     _dokumen(output, A4).build(isi, onFirstPage=_penanda_halaman, onLaterPages=_penanda_halaman)
     return output.getvalue()

@@ -86,8 +86,13 @@ PETA_CETAK = {
                  'nama_sekolah': 'E26', 'penilai': 'E33', 'nip_penilai': 'E34', 'nomor_sk': 'E36', 'tanggal_sk': 'E37',
                  'periode_awal': 'C41', 'periode_akhir': 'E41', 'tanggal_nilai': 'H41'},
         'kolom_centang': 'B', 'baris_sub': (7, 20, 33),
+        # INDEK-HDIR: 12 baris bulan mulai baris 16; F/G/I/J/K serta jumlah (28) & indeks (K29) dihitung rumus template.
+        'kehadiran': {'sheet': 'INDEK-HDIR', 'baris_awal': 16, 'baris_maks': 12, 'tugas_pokok': 'E9',
+                      'kolom': {'label': 'C', 'terlambat_menit': 'D', 'pulang_cepat_menit': 'E', 'tanpa_keterangan': 'H'}},
         'jangkar': {('00-DATA', 'C5'): 'Nama Guru', ('00-DATA', 'C33'): 'Penilai', ('00-DATA', 'C17'): 'Nama Kepsek',
-                    ('04-RKAP-PKG', 'B44'): 'Jumlah', ('04-RKAP-PKG', 'B45'): 'Cap. Tingkat Kompetensi'},
+                    ('04-RKAP-PKG', 'B44'): 'Jumlah', ('04-RKAP-PKG', 'B45'): 'Cap. Tingkat Kompetensi',
+                    ('INDEK-HDIR', 'C13'): 'Bulan dan Tahun', ('INDEK-HDIR', 'H13'): 'Tanpa Keterangan',
+                    ('INDEK-HDIR', 'C28'): 'Jumlah'},
     },
 }
 
