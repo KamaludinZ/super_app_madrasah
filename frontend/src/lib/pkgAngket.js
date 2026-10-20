@@ -40,3 +40,34 @@ export async function cetakAngket({ jenis, format = 'pdf', periodeId, guruId }) 
     throw await galatDariRespons(e);
   }
 }
+
+//   GET    /pkg/angket/ringkasan?periode_id= -> { periode, guru: [{ guru_id, nama, mapel, penilai_nama, status,
+//          per_jenis: { sejawat|siswa|ortu: { jumlah_responden, maks_responden, nilai, sebutan } }, lengkap }] }
+//   GET    /pkg/angket/guru/{guru_id}?periode_id= -> { periode, guru, lengkap, jenis: [{ jenis, label, jumlah_responden,
+//          maks_responden, nilai, sebutan, butir: [{ no, komponen, nomor, pernyataan }], responden: [{ id, urutan,
+//          nama_responden, jawaban, skor, skor_maks, nilai, diinput_oleh_nama, diubah_pada }] }] }
+//   POST   /pkg/angket/guru/{guru_id}/jawaban { jenis_angket, periode_id?, nama_responden?, jawaban: [0|1|2] } -> responden
+//   PUT    /pkg/angket/jawaban/{id} { jenis_angket, nama_responden?, jawaban } -> responden
+//   DELETE /pkg/angket/jawaban/{id}
+// Nilai responden = jumlah skor / (jumlah butir x 2) x 100; nilai jenis = rata-rata responden (sel Hasil Nilai sheet
+// SEJAWAT/SISWA/ORTU). Maks. 10 responden per jenis (kolom penilai template). Hanya periode berjalan yang dapat diubah.
+
+const params = (periodeId) => ({ params: periodeId ? { periode_id: periodeId } : {} });
+
+export const ringkasanAngket = (periodeId) => panggil(() => api.get('/pkg/angket/ringkasan', params(periodeId)), 'Gagal memuat ringkasan angket.');
+export const ambilAngketGuru = (guruId, periodeId) => panggil(() => api.get(`/pkg/angket/guru/${guruId}`, params(periodeId)), 'Gagal memuat angket guru.');
+export const tambahJawaban = (guruId, { jenis, periodeId, nama, jawaban }) => panggil(
+  () => api.post(`/pkg/angket/guru/${guruId}/jawaban`, { jenis_angket: jenis, periode_id: periodeId || undefined, nama_responden: nama || null, jawaban }),
+  'Gagal menyimpan jawaban angket.',
+);
+export const ubahJawaban = (id, { jenis, nama, jawaban }) => panggil(
+  () => api.put(`/pkg/angket/jawaban/${id}`, { jenis_angket: jenis, nama_responden: nama || null, jawaban }), 'Gagal mengubah jawaban angket.',
+);
+export const hapusJawaban = (id) => panggil(() => api.delete(`/pkg/angket/jawaban/${id}`), 'Gagal menghapus jawaban angket.');
+
+// Nilai responden di layar (sama dengan backend pkg_angket.nilai_responden); jawaban kosong (null) belum dihitung.
+export function hitungNilaiResponden(jawaban = []) {
+  const maks = jawaban.length * 2;
+  const skor = jawaban.reduce((a, b) => a + (b || 0), 0);
+  return { skor, maks, nilai: maks ? Math.round((skor / maks) * 10000) / 100 : 0, terisi: jawaban.filter((n) => n != null).length };
+}

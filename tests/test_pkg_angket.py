@@ -83,3 +83,43 @@ def test_cetak_angket_otorisasi(klien):
     assert r.status_code == 403 and r.json()['detail']['alasan'] == 'bukan_penilai'
     assert k.post('/api/pkg/angket/cetak', json={'jenis_angket': 'dudi'}).status_code == 422  # DUDI tidak dipakai
     assert any(a['aksi'] == 'cetak_gagal' for a in d['pkg_audit_log'].docs)
+
+
+def test_nilai_responden_dan_hasil_rata_rata():
+    n = pkg_angket.nilai_responden([2] * 27 + [1])  # sejawat: 55 / 56 x 100
+    assert (n['skor'], n['skor_maks'], n['nilai'], n['sebutan']) == (55, 56, 98.21, 'Amat Baik')
+    assert pkg_angket.nilai_responden([1] * 8)['sebutan'] == 'Kurang'  # 50 -> <= 50 Kurang
+    r = pkg_angket.ringkas_jenis('ortu', [{'nilai': 93.75}, {'nilai': 100.0}])
+    assert (r['jumlah_responden'], r['nilai'], r['sebutan']) == (2, 96.88, 'Amat Baik')
+    assert pkg_angket.ringkas_jenis('siswa', [])['nilai'] is None
+
+
+def test_input_jawaban_angket(klien):
+    k, d, pengguna = klien
+    d['pkg_periode'].docs[0]['status'] = 'berjalan'
+    url = '/api/pkg/angket/guru/g1/jawaban'
+    r = k.post(url, json={'jenis_angket': 'ortu', 'nama_responden': ' Ibu Ani ', 'jawaban': [2, 2, 2, 2, 2, 2, 1, 1]})
+    assert r.status_code == 200 and (r.json()['urutan'], r.json()['nilai'], r.json()['nama_responden']) == (1, 87.5, 'Ibu Ani')
+    assert k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [2] * 7}).status_code == 422  # jumlah butir salah
+    assert k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [3] * 8}).status_code == 422  # skor di luar 0/1/2
+    kedua = k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [2] * 8}).json()
+    data = k.get('/api/pkg/angket/guru/g1').json()
+    ortu = next(j for j in data['jenis'] if j['jenis'] == 'ortu')
+    assert (ortu['jumlah_responden'], ortu['nilai'], len(ortu['butir'])) == (2, 93.75, 8) and data['lengkap'] is False
+    assert k.put(f"/api/pkg/angket/jawaban/{kedua['id']}", json={'jenis_angket': 'ortu', 'jawaban': [0] * 8}).json()['nilai'] == 0
+    assert k.put(f"/api/pkg/angket/jawaban/{kedua['id']}", json={'jenis_angket': 'siswa', 'jawaban': [0] * 40}).status_code == 422
+    assert k.delete(f"/api/pkg/angket/jawaban/{kedua['id']}").status_code == 200
+    ketiga = k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [1] * 8}).json()
+    assert ketiga['urutan'] == 2  # kolom penilai kosong dipakai lagi
+    for _ in range(8):
+        k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [1] * 8})
+    assert k.post(url, json={'jenis_angket': 'ortu', 'jawaban': [1] * 8}).status_code == 409  # maks 10 responden
+    ringkas = k.get('/api/pkg/angket/ringkasan').json()['guru']
+    g1 = next(g for g in ringkas if g['guru_id'] == 'g1')
+    assert g1['per_jenis']['ortu']['jumlah_responden'] == 10 and g1['per_jenis']['sejawat']['nilai'] is None
+    assert [a['aksi'] for a in d['pkg_audit_log'].docs].count('angket_simpan') == 11
+    pengguna['user'] = {'id': 'pen', 'roles': ['guru']}
+    assert k.get('/api/pkg/angket/guru/g2').status_code == 403
+    d['pkg_periode'].docs[0]['status'] = 'ditutup'
+    pengguna['user'] = {'id': 'kep', 'roles': ['kepala_sekolah']}
+    assert k.post(url, json={'jenis_angket': 'ortu', 'periode_id': 'p1', 'jawaban': [1] * 8}).status_code == 409

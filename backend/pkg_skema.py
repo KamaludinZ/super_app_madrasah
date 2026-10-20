@@ -27,6 +27,10 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     ukuran, checksum_berkas (SHA-256 hasil), versi_template, checksum_template, aktor_id, aktor_nama,
                     aktor_peran, ip_address, endpoint, timestamp, tanggal (WIB)}
                    Riwayat unduhan & cetak dokumen resmi (pasangan jejak audit aksi cetak_template).
+    pkg_angket     {id, periode_id, guru_dinilai_id, jenis ('sejawat' | 'siswa' | 'ortu'), urutan (1–10 = kolom penilai
+                    sheet SEJAWAT/SISWA/ORTU), nama_responden, jawaban [skor 0/1/2 per butir sesuai urutan sheet], skor,
+                    skor_maks, nilai (skor / skor_maks x 100), diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
+                   Rekap jawaban angket kertas 360° per responden (responden tidak memiliki akun).
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
     pkg_rekap      {id (= penilaian_id), periode_id, sk_id, guru_id, penilai_id, nama, nip, mapel, penilai_nama,
@@ -57,6 +61,7 @@ KOLEKSI_UNDUHAN = 'pkg_unduhan'
 KOLEKSI_TEMPLATE = 'pkg_template'
 KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
 KOLEKSI_REKAP = 'pkg_rekap'
+KOLEKSI_ANGKET = 'pkg_angket'
 
 STATUS_PERIODE = ('draf', 'berjalan', 'ditutup')
 STATUS_PENILAIAN = ('draf', 'terkunci')
@@ -92,6 +97,8 @@ INDEX_PKG = [
     (KOLEKSI_REKAP, [('periode_id', 1), ('capaian_persen', -1)], {'name': 'periode_capaian'}),
     (KOLEKSI_REKAP, [('guru_id', 1), ('periode_id', 1)], {'name': 'guru_periode'}),
     (KOLEKSI_REKAP, [('periode_id', 1), ('penilai_id', 1)], {'name': 'periode_penilai'}),
+    (KOLEKSI_ANGKET, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
+    (KOLEKSI_ANGKET, [('periode_id', 1), ('guru_dinilai_id', 1), ('jenis', 1), ('urutan', 1)], {'name': 'periode_guru_jenis'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('expire_at', 1)], {'expireAfterSeconds': 0, 'name': 'ttl_expire_at'}),
 ]
@@ -528,6 +535,26 @@ class CetakRequest(IsianPkg):
 
 
 JENIS_ANGKET = ('sejawat', 'siswa', 'ortu')  # DUDI tidak dipakai (khusus SMK)
+
+
+class AngketJawabanRequest(IsianPkg):
+    """Rekap jawaban angket kertas satu responden: skor 0/1/2 untuk setiap butir sesuai urutan sheet template."""
+    jenis_angket: str = Field(..., pattern='^(' + '|'.join(JENIS_ANGKET) + ')$')
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    nama_responden: Optional[str] = Field(None, max_length=120)
+    jawaban: List[int] = Field(..., min_length=1, max_length=60)
+
+    @field_validator('jawaban')
+    @classmethod
+    def _skor(cls, v):
+        if any(n not in (0, 1, 2) for n in v):
+            raise ValueError('skor setiap butir harus 0, 1, atau 2')
+        return v
+
+    @field_validator('nama_responden')
+    @classmethod
+    def _nama(cls, v):
+        return (v or '').strip() or None
 
 
 class AngketCetakRequest(IsianPkg):

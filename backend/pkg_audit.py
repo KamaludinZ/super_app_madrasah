@@ -37,6 +37,9 @@ AKSI_LIHAT_AUDIT = 'lihat_audit'
 # Katalog kode aksi pkg_audit_log beserta labelnya (untuk halaman Jejak Audit PKG). Setiap aksi yang dicatat
 # router PKG wajib terdaftar di sini (diuji di tests/test_pkg_validasi.py).
 LABEL_AKSI = {
+    'angket_simpan': 'Menginput jawaban angket 360°',
+    'angket_ubah': 'Mengubah jawaban angket 360°',
+    'angket_hapus': 'Menghapus jawaban angket 360°',
     AKSI_BUKA_BERANDA: 'Membuka Beranda PKG',
     AKSI_TOLAK_AKSES: 'Akses ditolak',
     'periode_buat': 'Menetapkan periode',
@@ -72,9 +75,10 @@ LABEL_AKSI = {
 
 
 # Kategori aksi untuk saringan halaman Jejak Audit (warna penanda di frontend lib/pkgAudit.KATEGORI_AUDIT).
-KATEGORI_AUDIT = ('penilaian', 'instrumen', 'susunan', 'unduhan', 'akses')
+KATEGORI_AUDIT = ('penilaian', 'komponen', 'instrumen', 'susunan', 'unduhan', 'akses')
 KATEGORI_AKSI = {
     **{a: 'penilaian' for a in ('penilaian_mulai', 'penilaian_buka', 'penilaian_draf', 'penilaian_kirim', 'rekap_hitung_ulang')},
+    **{a: 'komponen' for a in ('angket_simpan', 'angket_ubah', 'angket_hapus')},
     **{a: 'instrumen' for a in ('instrumen_impor', 'instrumen_ubah', 'instrumen_aktifkan')},
     **{a: 'susunan' for a in ('periode_buat', 'periode_ubah', 'periode_berjalan', 'periode_ditutup', 'sk_buat', 'sk_ubah',
                               'sk_aktifkan', 'sk_hapus', 'sk_penilai', 'sk_dinilai', 'penugasan_simpan',

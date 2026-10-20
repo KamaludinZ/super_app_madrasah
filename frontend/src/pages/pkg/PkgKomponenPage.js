@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileSpreadsheet, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
+import { ClipboardList, FileSpreadsheet, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
-import { ambilRekap } from '@/lib/pkgRekap';
 import { simpanBerkas } from '@/lib/pkgCetak';
-import { JENIS_ANGKET, cetakAngket, daftarJenisAngket } from '@/lib/pkgAngket';
+import { JENIS_ANGKET, cetakAngket, daftarJenisAngket, ringkasanAngket } from '@/lib/pkgAngket';
+
+const FORMAT = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Cetak angket kertas: `guru` null = angket kosong. Hasil cadangan (ReportLab) diberi tahu lewat notifikasi.
 function useCetakAngket(periodeId) {
@@ -60,12 +61,12 @@ function KartuAngketKosong({ jenis, sedang, onCetak }) {
   );
 }
 
-function DaftarGuruAngket({ guru, jenis, sedang, onCetak }) {
+function DaftarGuruAngket({ guru, jenis, periodeId, sedang, onCetak }) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Angket per Guru</CardTitle>
-        <p className="text-xs text-slate-500">Angket PDF dengan identitas guru sudah terisi, siap dibagikan ke responden.</p>
+        <p className="text-xs text-slate-500">Cetak angket PDF beridentitas guru untuk dibagikan, lalu input rekap jawabannya per responden.</p>
       </CardHeader>
       <CardContent className="space-y-2">
         {guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}
@@ -77,8 +78,21 @@ function DaftarGuruAngket({ guru, jenis, sedang, onCetak }) {
                 <BadgeStatusPenilaian status={g.status} />
               </div>
               <div className="text-xs text-slate-500">{g.mapel || '-'} · Penilai: {g.penilai_nama || '-'}</div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                {jenis.map((j) => {
+                  const p = g.per_jenis?.[j.jenis] || {};
+                  return (
+                    <span key={j.jenis} className={p.jumlah_responden ? '' : 'text-amber-700'}>
+                      {j.label}: {p.jumlah_responden || 0} resp. · {p.nilai != null ? FORMAT.format(p.nilai) : '-'}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" className="h-8 gap-1 bg-[#006837] hover:bg-[#005830]" data-testid={`pkg-input-angket-${g.guru_id}`}>
+                <Link to={`/pkg/komponen/angket/${g.guru_id}${periodeId ? `?periode=${periodeId}` : ''}`}><ClipboardList className="h-3.5 w-3.5" /> Input jawaban</Link>
+              </Button>
               {jenis.map((j) => (
                 <Button key={j.jenis} size="sm" variant="outline" className="h-8 gap-1" disabled={!!sedang}
                   onClick={() => onCetak(j.jenis, 'pdf', g)} data-testid={`pkg-cetak-angket-${g.guru_id}-${j.jenis}`}>
@@ -103,7 +117,7 @@ function IsiHalamanKomponen() {
 
   const muat = useCallback(async () => {
     try {
-      const [r, j] = await Promise.all([ambilRekap({ periodeId }), daftarJenisAngket()]);
+      const [r, j] = await Promise.all([ringkasanAngket(periodeId), daftarJenisAngket()]);
       setRekap(r);
       setJenis(j);
     } catch (e) {
@@ -131,7 +145,7 @@ function IsiHalamanKomponen() {
         </TabsList>
         <TabsContent value="angket" className="space-y-4">
           <KartuAngketKosong jenis={jenis} sedang={sedang} onCetak={cetak} />
-          <DaftarGuruAngket guru={rekap.guru} jenis={jenis} sedang={sedang} onCetak={cetak} />
+          <DaftarGuruAngket guru={rekap.guru} jenis={jenis} periodeId={periodeId} sedang={sedang} onCetak={cetak} />
         </TabsContent>
       </Tabs>
     </div>
@@ -139,7 +153,7 @@ function IsiHalamanKomponen() {
 }
 
 // Komponen penilaian di luar lembar kompetensi (kepala & tim penilai): angket 360° kertas & rekap jawabannya, serta
-// kehadiran guru. Guru dari rekap periode (cakupan peran); angket dari POST /pkg/angket/cetak (lib/pkgAngket).
+// kehadiran guru. Guru & skor 360° dari GET /pkg/angket/ringkasan (cakupan peran); angket dari POST /pkg/angket/cetak.
 export default function PkgKomponenPage() {
   return (
     <PenjagaMenuPkg menuKey="komponen">
