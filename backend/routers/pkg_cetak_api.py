@@ -19,6 +19,7 @@ from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, 
 from pkg_cetak import StrukturTidakSesuai, laporan_guru_excel, rekap_excel
 from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
+from pkg_identitas import lampiran_identitas
 from pkg_kehadiran import kehadiran_guru
 from pkg_rekomendasi import rekomendasi_guru, rekomendasi_periode, teks_rekomendasi
 from pkg_nilai import hitung_nilai
@@ -82,6 +83,8 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
     }
     kehadiran = await kehadiran_guru(db_, periode, data.guru_id)
     laporan['kehadiran'] = kehadiran['bulan']
+    laporan['identitas'] = await lampiran_identitas(db_, periode, sk, data.guru_id, lembar.get('penilai_id'), pengaturan,
+                                                    lembar.get('terkunci_pada'), lembar.get('snapshot_guru'))
     laporan['rekomendasi'] = teks_rekomendasi(await rekomendasi_guru(db_, periode['id'], data.guru_id)) or None
     laporan['nilai_akhir_360'] = await nilai_akhir_guru(db_, periode, data.guru_id, hitung_nilai(instrumen or {}, laporan['isian'])['capaian_persen'])
     try:

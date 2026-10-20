@@ -142,7 +142,7 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     (rumus resmi 04-RKAP-PKG menghitung tingkat, jumlah, capaian, dan predikat).
     `laporan` = {guru:{nama,nip}, periode, sk:{nomor_sk,tanggal_sk}, penilai:{nama,nip}, kepala:{nama,nip},
                  nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada, kehadiran:[baris bulan pkg_kehadiran],
-                 rekomendasi: teks rekomendasi PKB}."""
+                 rekomendasi: teks rekomendasi PKB, identitas: pkg_identitas.lampiran_identitas}."""
     from pkg_template import SHEET_KOMPETENSI
     peta = PETA_CETAK['instrumen']
     kompetensi = (laporan.get('instrumen') or {}).get('kompetensi') or []
@@ -165,6 +165,10 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     }
     for kunci, sel in peta['data'].items():
         data[sel] = isian_sel.get(kunci) or '-'
+    if laporan.get('identitas'):
+        # Lampiran identitas lengkap (pkg_identitas): seluruh isian 00-DATA, contoh isian template ditimpa.
+        from pkg_identitas import isi_data_identitas
+        isi_data_identitas(wb, laporan['identitas'])
 
     isi_kehadiran(wb, laporan.get('kehadiran'))
     isi_rekomendasi(wb, laporan.get('rekomendasi'))

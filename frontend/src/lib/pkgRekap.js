@@ -44,6 +44,13 @@ export const ambilModelKompetensi = (guruId, periodeId) => panggil(
   'Gagal memuat rekap model kompetensi.',
 );
 
+//   GET /pkg/rekap/guru/{guru_id}/identitas?periode_id= -> { status, guru, penilai, kepala, sekolah, sk, periode,
+//        tim_penilai: [{ id, nama, nip, mapel, peran, penilai_lembar }] }  (lampiran identitas berkas hasil PKG)
+export const ambilIdentitasGuru = (guruId, periodeId) => panggil(
+  () => api.get(`/pkg/rekap/guru/${guruId}/identitas`, { params: periodeId ? { periode_id: periodeId } : {} }),
+  'Gagal memuat lampiran identitas.',
+);
+
 // Urutan status untuk peringkat: terkunci (punya nilai) dulu, lalu draf, lalu belum.
 const URUT_STATUS = { terkunci: 0, draf: 1, belum: 2 };
 

@@ -14,7 +14,7 @@ from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
 from pkg_audit import AKSI_LIHAT_UNDUHAN, AKSI_TOLAK_AKSES, catat_audit_pkg, catat_audit_pkg_harian
 from pkg_rekap import (
-    anggota_periode, bangun_ulang_rekap, boleh_lihat_guru, cakupan_rekap, riwayat_unduhan, daftar_periode_rekap, model_kompetensi_guru, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru,
+    anggota_periode, bangun_ulang_rekap, boleh_lihat_guru, cakupan_rekap, riwayat_unduhan, daftar_periode_rekap, identitas_guru, model_kompetensi_guru, periode_dan_sk, rekap_periode, rekap_tim, rincian_guru,
     statistik_lengkap,
 )
 from pkg_skema import POLA_ID
@@ -117,6 +117,18 @@ async def rekap_kompetensi_guru_api(guru_id: str = Path(..., pattern=POLA_ID), a
     periode, sk = akses['periode'], akses['sk']
     cakupan = await cakupan_rekap(db, akses['user'], akses['keanggotaan'], periode)
     hasil = await model_kompetensi_guru(db, periode, sk, guru_id)
+    if not hasil or not boleh_lihat_guru(cakupan, guru_id, hasil['status'] == 'terkunci'):
+        raise tolak('bukan_penugasan', 'Rekap guru ini tidak termasuk dalam cakupan Anda.')
+    return hasil
+
+
+@router.get("/pkg/rekap/guru/{guru_id}/identitas")
+async def identitas_guru_api(guru_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(akses_rekap)):
+    """Lampiran identitas guru yang dinilai, penilai lembar, kepala madrasah, madrasah, SK penugasan, periode, dan tim
+    penilai beserta perannya (sumber: snapshot periode, data GTK, pengaturan). Cakupan sama dengan rincian guru."""
+    periode, sk = akses['periode'], akses['sk']
+    cakupan = await cakupan_rekap(db, akses['user'], akses['keanggotaan'], periode)
+    hasil = await identitas_guru(db, periode, sk, guru_id)
     if not hasil or not boleh_lihat_guru(cakupan, guru_id, hasil['status'] == 'terkunci'):
         raise tolak('bukan_penugasan', 'Rekap guru ini tidak termasuk dalam cakupan Anda.')
     return hasil

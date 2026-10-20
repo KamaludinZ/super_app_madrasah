@@ -36,13 +36,16 @@ def _sekarang() -> str:
 
 
 async def identitas_akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
-    """{user_id: {nama, nip, mapel}} dari akun pengguna saat ini (NIP, atau Peg ID bila NIP kosong; tanpa mapel)."""
+    """{user_id: {nama, nip, mapel, ...identitas GTK}} dari akun pengguna saat ini (NIP, atau Peg ID bila NIP kosong;
+    tanpa mapel). Identitas GTK (pkg_identitas.FIELD_GTK) ikut disalin ke snapshot periode untuk lampiran cetak."""
+    from pkg_identitas import FIELD_GTK
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
     akun = await db.users.find({'id': {'$in': ids}},
-                               {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, 'peg_id': 1}).to_list(len(ids))
-    return {u['id']: {'nama': u.get('full_name'), 'nip': u.get('nip_nuptk') or u.get('peg_id'), 'mapel': None} for u in akun}
+                               {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in FIELD_GTK}}).to_list(len(ids))
+    return {u['id']: {**{f: u[f] for f in FIELD_GTK if u.get(f) and f not in ('nip', 'peg_id')},
+                      'nama': u.get('full_name'), 'nip': u.get('nip_nuptk') or u.get('peg_id'), 'mapel': None} for u in akun}
 
 
 async def mapel_diampu(db, ids: List[str], semester_id: Optional[str]) -> Dict[str, str]:

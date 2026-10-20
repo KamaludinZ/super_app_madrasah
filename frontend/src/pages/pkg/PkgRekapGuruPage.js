@@ -10,8 +10,21 @@ import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import { labelVersi } from '@/lib/pkgInstrumen';
 import { hitungTingkat } from '@/lib/pkgPenilaian';
-import { ambilModelKompetensi, ambilRekapGuru } from '@/lib/pkgRekap';
+import { ambilIdentitasGuru, ambilModelKompetensi, ambilRekapGuru } from '@/lib/pkgRekap';
+import LampiranIdentitas from '@/components/pkg/LampiranIdentitas';
 import { FormatPenghitungan, KartuLevelGuru, NilaiAkhir360, TabelModelKompetensi } from '@/components/pkg/RekapModelKompetensi';
+
+// Tab "Identitas": lampiran identitas guru & tim penilai (dimuat saat dibuka).
+function TabIdentitas({ guruId, periodeId }) {
+  const [data, setData] = useState(null);
+  const [galat, setGalat] = useState(null);
+  useEffect(() => {
+    ambilIdentitasGuru(guruId, periodeId).then(setData).catch(setGalat);
+  }, [guruId, periodeId]);
+  if (galat) return <p className="py-10 text-center text-sm text-slate-700" role="alert">{galat.message}</p>;
+  if (!data) return <div className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
+  return <LampiranIdentitas data={data} />;
+}
 
 // Tab "Model Kompetensi": rekap per kompetensi (04-RKAP-PKG) + format penghitungan NKG (05-RKAP-PKGR); dimuat saat dibuka.
 function TabModelKompetensi({ guruId, periodeId }) {
@@ -110,6 +123,7 @@ function IsiRekapGuru() {
           <TabsList className="flex h-auto flex-wrap justify-start">
             <TabsTrigger value="ringkasan" data-testid="pkg-rekap-guru-tab-ringkasan">Ringkasan</TabsTrigger>
             <TabsTrigger value="model" data-testid="pkg-rekap-guru-tab-model">Model Kompetensi</TabsTrigger>
+            <TabsTrigger value="identitas" data-testid="pkg-rekap-guru-tab-identitas">Identitas</TabsTrigger>
           </TabsList>
           <TabsContent value="ringkasan" className="space-y-4">
             <HasilAkhirPenilaian hasil={data.hasil} kompetensi={kompetensi} isian={data.isian} />
@@ -152,6 +166,9 @@ function IsiRekapGuru() {
           </TabsContent>
           <TabsContent value="model">
             <TabModelKompetensi guruId={guruId} periodeId={periodeId} />
+          </TabsContent>
+          <TabsContent value="identitas">
+            <TabIdentitas guruId={guruId} periodeId={periodeId} />
           </TabsContent>
         </Tabs>
       )}

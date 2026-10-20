@@ -270,6 +270,19 @@ async def nilai_akhir_guru(db, periode: Dict[str, Any], guru_id: str, nkg: Optio
     return hitung_nilai_akhir(nkg, await skor_360(db, periode['id'], guru_id), await kehadiran_guru(db, periode, guru_id))
 
 
+async def identitas_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str) -> Optional[Dict[str, Any]]:
+    """Lampiran identitas guru & tim penilai pada periode (pkg_identitas); None bila guru tidak ada di periode."""
+    from pkg_identitas import lampiran_identitas
+    rincian = await agregasi_rekap(db, periode, sk, saring_guru={guru_id})
+    if not rincian['guru']:
+        return None
+    b = rincian['guru'][0]
+    pengaturan = await db.settings.find_one({'id': 'global_config'}, {'_id': 0}) or {}
+    lembar = await db[KOLEKSI_PENILAIAN].find_one({'periode_id': periode['id'], 'guru_dinilai_id': guru_id}, {'_id': 0, 'snapshot_guru': 1}) or {}
+    return {'status': b['status'], **await lampiran_identitas(db, periode, sk, guru_id, b.get('penilai_id'), pengaturan,
+                                                              b.get('terkunci_pada'), lembar.get('snapshot_guru'))}
+
+
 async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str) -> Optional[Dict[str, Any]]:
     """Rekap nilai per kompetensi (KOMP-1..KOMP (4)) satu guru pada periode dari lembar terkunci, mengikuti
     04-RKAP-PKG & format penghitungan 05-RKAP-PKGR. None bila guru tidak ada di periode; `model` None bila belum
