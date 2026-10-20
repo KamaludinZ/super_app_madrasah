@@ -3,13 +3,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ClipboardList, FileSpreadsheet, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
+import { CalendarCheck, ClipboardList, FileSpreadsheet, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import { simpanBerkas } from '@/lib/pkgCetak';
 import { JENIS_ANGKET, cetakAngket, daftarJenisAngket, ringkasanAngket } from '@/lib/pkgAngket';
+import { ringkasanKehadiran } from '@/lib/pkgKehadiran';
 
 const FORMAT = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -108,9 +109,46 @@ function DaftarGuruAngket({ guru, jenis, periodeId, sedang, onCetak }) {
   );
 }
 
+const PERSEN = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Tab kehadiran: indeks persentase kehadiran per guru (INDEK-HDIR) dan tautan input rekap manual per bulan.
+function DaftarGuruKehadiran({ periodeId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    ringkasanKehadiran(periodeId).then(setData).catch((e) => { toast.error(e.message); setData({ guru: [] }); });
+  }, [periodeId]);
+  if (!data) return <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-[#006837]" /></div>;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base"><CalendarCheck className="h-4 w-4 text-[#006837]" /> Rekap Kehadiran Guru</CardTitle>
+        <p className="text-xs text-slate-500">Input manual per bulan: menit terlambat & pulang cepat serta hari tanpa keterangan (format INDEK-HDIR). Indeks kehadiran menjadi pengali nilai akhir PK Guru.</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {data.guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}
+        {data.guru.map((g) => (
+          <div key={g.guru_id} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center" data-testid={`pkg-kehadiran-guru-${g.guru_id}`}>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-900">{g.nama}</div>
+              <div className={`text-xs ${g.terisi ? 'text-slate-500' : 'text-amber-700'}`}>
+                {g.terisi ? `Tidak hadir ${PERSEN.format(g.jumlah?.jumlah_tidak_hadir || 0)} hari (termasuk konversi menit)` : 'Belum diinput'}
+              </div>
+            </div>
+            <div className="text-right text-sm tabular-nums"><span className="text-xs text-slate-500">Indeks </span><span className="font-semibold text-[#006837]">{PERSEN.format(g.indeks_persen)}%</span></div>
+            <Button asChild size="sm" variant={g.terisi ? 'outline' : 'default'} className={`h-8 gap-1 ${g.terisi ? '' : 'bg-[#006837] hover:bg-[#005830]'}`}>
+              <Link to={`/pkg/komponen/kehadiran/${g.guru_id}${periodeId ? `?periode=${periodeId}` : ''}`}>{g.terisi ? 'Ubah' : 'Input'} kehadiran</Link>
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function IsiHalamanKomponen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const periodeId = searchParams.get('periode') || undefined;
+  const tab = searchParams.get('tab') || 'angket';
   const [rekap, setRekap] = useState(null);
   const [jenis, setJenis] = useState([]);
   const { sedang, cetak } = useCetakAngket(rekap?.periode?.id);
@@ -139,13 +177,17 @@ function IsiHalamanKomponen() {
       <SaringanPeriodeRekap nilai={rekap.periode?.id}
         onUbah={(id) => setSearchParams((sp) => { const baru = new URLSearchParams(sp); baru.set('periode', id); return baru; })} />
 
-      <Tabs defaultValue="angket" className="space-y-4">
+      <Tabs value={tab} onValueChange={(t) => setSearchParams((sp) => { const baru = new URLSearchParams(sp); baru.set('tab', t); return baru; })} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="angket" data-testid="pkg-komponen-tab-angket">Angket 360°</TabsTrigger>
+          <TabsTrigger value="kehadiran" data-testid="pkg-komponen-tab-kehadiran">Kehadiran</TabsTrigger>
         </TabsList>
         <TabsContent value="angket" className="space-y-4">
           <KartuAngketKosong jenis={jenis} sedang={sedang} onCetak={cetak} />
           <DaftarGuruAngket guru={rekap.guru} jenis={jenis} periodeId={periodeId} sedang={sedang} onCetak={cetak} />
+        </TabsContent>
+        <TabsContent value="kehadiran">
+          <DaftarGuruKehadiran periodeId={rekap.periode?.id} />
         </TabsContent>
       </Tabs>
     </div>

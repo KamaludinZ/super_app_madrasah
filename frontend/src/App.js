@@ -103,6 +103,7 @@ import PkgRekapGuruPage from '@/pages/pkg/PkgRekapGuruPage';
 import PkgCetakPage from '@/pages/pkg/PkgCetakPage';
 import PkgKomponenPage from '@/pages/pkg/PkgKomponenPage';
 import PkgAngketGuruPage from '@/pages/pkg/PkgAngketGuruPage';
+import PkgKehadiranGuruPage from '@/pages/pkg/PkgKehadiranGuruPage';
 import PkgAuditPage from '@/pages/pkg/PkgAuditPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
@@ -417,6 +418,7 @@ function App() {
               <Route path="penilaian/:guruId" element={<PkgLembarPenilaianPage />} />
               <Route path="komponen" element={<PkgKomponenPage />} />
               <Route path="komponen/angket/:guruId" element={<PkgAngketGuruPage />} />
+              <Route path="komponen/kehadiran/:guruId" element={<PkgKehadiranGuruPage />} />
               <Route path="rekap" element={<PkgRekapPage />} />
               <Route path="rekap/:guruId" element={<PkgRekapGuruPage />} />
               <Route path="cetak" element={<PkgCetakPage />} />

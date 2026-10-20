@@ -31,6 +31,9 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     sheet SEJAWAT/SISWA/ORTU), nama_responden, jawaban [skor 0/1/2 per butir sesuai urutan sheet], skor,
                     skor_maks, nilai (skor / skor_maks x 100), diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
                    Rekap jawaban angket kertas 360° per responden (responden tidak memiliki akun).
+    pkg_kehadiran  {id, periode_id, guru_dinilai_id, bulan [{bulan (YYYY-MM), terlambat_menit, pulang_cepat_menit,
+                    tanpa_keterangan, hadir, izin, sakit}], diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
+                   Rekap kehadiran manual per guru per periode (sheet INDEK-HDIR; lihat pkg_kehadiran).
     pkg_template   {jenis, nama_berkas, versi, checksum, ukuran, diperiksa_pada}  (hasil pemeriksaan startup)
     pkg_impor_pratinjau {token, pembuat_id, pratinjau, expire_at}  (pratinjau impor instrumen, kedaluwarsa 30 menit)
     pkg_rekap      {id (= penilaian_id), periode_id, sk_id, guru_id, penilai_id, nama, nip, mapel, penilai_nama,
@@ -62,6 +65,7 @@ KOLEKSI_TEMPLATE = 'pkg_template'
 KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
 KOLEKSI_REKAP = 'pkg_rekap'
 KOLEKSI_ANGKET = 'pkg_angket'
+KOLEKSI_KEHADIRAN = 'pkg_kehadiran'
 
 STATUS_PERIODE = ('draf', 'berjalan', 'ditutup')
 STATUS_PENILAIAN = ('draf', 'terkunci')
@@ -99,6 +103,8 @@ INDEX_PKG = [
     (KOLEKSI_REKAP, [('periode_id', 1), ('penilai_id', 1)], {'name': 'periode_penilai'}),
     (KOLEKSI_ANGKET, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_ANGKET, [('periode_id', 1), ('guru_dinilai_id', 1), ('jenis', 1), ('urutan', 1)], {'name': 'periode_guru_jenis'}),
+    (KOLEKSI_KEHADIRAN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
+    (KOLEKSI_KEHADIRAN, [('periode_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'guru_per_periode'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
     (KOLEKSI_PRATINJAU_IMPOR, [('expire_at', 1)], {'expireAfterSeconds': 0, 'name': 'ttl_expire_at'}),
 ]
@@ -555,6 +561,22 @@ class AngketJawabanRequest(IsianPkg):
     @classmethod
     def _nama(cls, v):
         return (v or '').strip() or None
+
+
+class KehadiranBulan(IsianPkg):
+    bulan: str = Field(..., pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
+    terlambat_menit: int = Field(0, ge=0, le=20000)
+    pulang_cepat_menit: int = Field(0, ge=0, le=20000)
+    tanpa_keterangan: int = Field(0, ge=0, le=31)
+    hadir: int = Field(0, ge=0, le=31)
+    izin: int = Field(0, ge=0, le=31)
+    sakit: int = Field(0, ge=0, le=31)
+
+
+class KehadiranRequest(IsianPkg):
+    """Rekap kehadiran manual satu guru pada periode (satu baris per bulan, format INDEK-HDIR)."""
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    bulan: List[KehadiranBulan] = Field(..., max_length=12)
 
 
 class AngketCetakRequest(IsianPkg):
