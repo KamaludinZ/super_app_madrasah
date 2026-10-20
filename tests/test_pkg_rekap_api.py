@@ -231,6 +231,7 @@ def test_rekap_per_kompetensi(db):
     k = m['kompetensi'][0]
     assert (k['label'], k['jumlah_skor'], k['skor_maks']) == ('KOMPETENSI 1', 4, 5)
     assert k['sub'] == [{'no': 1, 'kode': '1.1', 'nama': None, 'nilai_rating': 4, 'tingkat': 'Level 4', 'skor_maks': 5}]
+    assert r['level_guru']['normal'] == 'Level 4' and r['level_guru']['deskripsi']['umum'].startswith('Berkolaborasi')
     assert _kompetensi('kep', 'g3')['model'] is None  # draf
     with pytest.raises(HTTPException) as e:
         _kompetensi('pen', 'g2')

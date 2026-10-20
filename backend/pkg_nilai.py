@@ -9,7 +9,7 @@ Ambang diambil dari pkg_ambang (satu sumber dengan cetak & frontend).
 """
 from typing import Any, Dict, Iterable, List, Optional
 
-from pkg_ambang import AMBANG_LEVEL, AMBANG_PREDIKAT_JENJANG, terapkan
+from pkg_ambang import AMBANG_LEVEL, AMBANG_PREDIKAT_JENJANG, level_dari_label, simpulan_level, terapkan
 
 
 def skor_sub(centang: Optional[Iterable[int]]) -> int:
@@ -69,4 +69,41 @@ def rekap_model_kompetensi(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> 
         'kompetensi': kompetensi, 'total_skor': nilai['nilai_akhir'], 'skor_maks': nilai['nilai_maks'],
         'nkg': nilai['capaian_persen'], 'level_capaian': nilai['level_capaian'], 'predikat': nilai['predikat'],
         'terisi': nilai['terisi'], 'jumlah_sub': nilai['jumlah_sub'],
+    }
+
+
+# ---------------------------------------------------------------- level guru & deskripsi capaian (RUBRIK-CAPAIAN)
+
+KOLOM_RUBRIK = {'pedagogik': 'D', 'kepribadian': 'E', 'sosial': 'F', 'profesional': 'G', 'umum': 'H'}
+_RUBRIK: Dict[int, Dict[str, str]] = {}
+
+
+def rubrik_capaian() -> Dict[int, Dict[str, str]]:
+    """Deskripsi simpulan hasil evaluasi per level (sheet RUBRIK-CAPAIAN B4:H8 template resmi, dibaca sekali)."""
+    if not _RUBRIK:
+        from pkg_template import TemplateTidakTersedia, buka_template
+        try:
+            wb = buka_template('instrumen')
+        except TemplateTidakTersedia:
+            return {}
+        try:
+            ws = wb['RUBRIK-CAPAIAN']
+            for baris in range(4, 9):
+                kode = ws[f'B{baris}'].value
+                if isinstance(kode, (int, float)):
+                    _RUBRIK[int(kode)] = {k: str(ws[f'{kol}{baris}'].value or '').strip() for k, kol in KOLOM_RUBRIK.items()}
+        finally:
+            wb.close()
+    return _RUBRIK
+
+
+def level_guru(level_normal: Optional[str], level_plus: Optional[str] = None) -> Dict[str, Any]:
+    """Level guru seperti lembar 01-LAPORN: Normal (04-RKAP-PKG!G45), Plus 360 (05-RKAP-PKGR!F44), simpulan rata-rata
+    keduanya (kosong bila pecahan), dan deskripsi capaian umum dari RUBRIK-CAPAIAN untuk level simpulan."""
+    normal, plus = level_dari_label(level_normal), level_dari_label(level_plus)
+    simpulan = simpulan_level(normal, plus)
+    deskripsi = rubrik_capaian().get(simpulan['angka']) if simpulan['angka'] else None
+    return {
+        'normal': f'Level {normal}' if normal else None, 'plus_360': f'Level {plus}' if plus else None,
+        'rata': simpulan['rata'], 'simpulan': simpulan['level'], 'deskripsi': deskripsi,
     }

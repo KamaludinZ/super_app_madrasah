@@ -15,7 +15,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from pkg_cetak import predikat_rekap, tanggal_indonesia
-from pkg_nilai import hitung_nilai, skor_sub
+from pkg_nilai import hitung_nilai, level_guru, skor_sub
 
 PENANDA = 'VERSI CADANGAN — bukan salinan identik berkas Excel resmi PKG'
 HIJAU = colors.HexColor('#006837')
@@ -94,9 +94,18 @@ def rekap_pdf_cadangan(guru: List[Dict[str, Any]], periode: Dict[str, Any], kepa
     return output.getvalue()
 
 
+def _baris_level_guru(lv: Dict[str, Any], sel) -> List[list]:
+    """Baris level guru seperti 01-LAPORN: Normal, Plus 360, simpulan, dan deskripsi capaian (RUBRIK-CAPAIAN)."""
+    baris = [['Level guru (Normal / Plus 360)', f"{lv.get('normal') or '-'} / {lv.get('plus_360') or '-'}"],
+             ['Hasil evaluasi (simpulan)', lv.get('simpulan') or '-']]
+    if (lv.get('deskripsi') or {}).get('umum'):
+        baris.append(['Deskripsi capaian', Paragraph(lv['deskripsi']['umum'], sel)])
+    return baris
+
+
 def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     """PDF cadangan rekapitulasi hasil PKG satu guru (A4 tegak): identitas, tingkat per sub-kompetensi, jumlah,
-    capaian, level, dan predikat jenjang (rumus template resmi)."""
+    capaian, level, predikat jenjang (rumus template resmi), serta level guru & deskripsi capaian (01-LAPORN)."""
     gaya = getSampleStyleSheet()
     sel = gaya['BodyText'].clone('sel', fontSize=8.5, leading=10)
     instrumen = laporan.get('instrumen') or {}
@@ -127,6 +136,7 @@ def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
     ringkas = Table([
         ['Capaian', f"{nilai['capaian_persen']:.2f}%"], ['Tingkat capaian', nilai['level_capaian'] or '-'],
         ['Predikat', Paragraph(nilai['predikat'] or '-', sel)],
+        *_baris_level_guru(laporan.get('level_guru') or level_guru(nilai['level_capaian']), sel),
     ], colWidths=[4 * cm, 13.5 * cm])
     ringkas.setStyle(_gaya_tabel(header_baris=0))
     isi = [Paragraph('<b>REKAPITULASI HASIL PENILAIAN KINERJA GURU</b>', gaya['Title']), t_id, Spacer(1, 0.4 * cm), tabel,

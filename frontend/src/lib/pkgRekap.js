@@ -11,7 +11,8 @@ import { api } from '@/lib/api';
 //           capaian_persen, level_capaian, predikat, terkunci_pada, per_kompetensi: { kode: subtotal } }
 // rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
 //             instrumen: { id, versi_template, revisi, kompetensi } | null, isian }
-// modelKompetensi = { periode, guru, penilai_nama, status, instrumen | null, model | null }  (format 04-RKAP-PKG)
+// modelKompetensi = { periode, guru, penilai_nama, status, instrumen | null, model | null, level_guru | null }
+// level_guru = { normal, plus_360, rata, simpulan, deskripsi: { pedagogik, kepribadian, sosial, profesional, umum } | null }
 // model = { kompetensi: [{ kode, nama, label, jumlah_skor, skor_maks, sub: [{ no, kode, nama, nilai_rating, tingkat,
 //           skor_maks }] }], total_skor, skor_maks, nkg, level_capaian, predikat, terisi, jumlah_sub }
 // Cakupan: kepala madrasah melihat semua guru; penilai melihat guru yang dinilainya; guru yang dinilai hanya

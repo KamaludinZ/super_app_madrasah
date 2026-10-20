@@ -49,3 +49,14 @@ def test_rekap_model_kompetensi_sesuai_template():
     assert (m['total_skor'], m['skor_maks'], m['nkg']) == (9, 60, 15.0)  # F31, NKG = 9/60 x 100
     assert [s['no'] for k in m['kompetensi'] for s in k['sub']] == list(range(1, 13))
     assert m['kompetensi'][0]['sub'][1]['tingkat'] == 'Level 5' and m['kompetensi'][1]['sub'][0]['tingkat'] is None
+
+
+def test_level_guru_dan_deskripsi_rubrik():
+    from pkg_nilai import level_guru, rubrik_capaian
+    rubrik = rubrik_capaian()
+    assert sorted(rubrik) == [1, 2, 3, 4, 5] and rubrik[5]['umum'].startswith('Membimbing rekan sejawat')
+    lv = level_guru('Level 3')
+    assert (lv['normal'], lv['plus_360'], lv['simpulan']) == ('Level 3', None, 'Level 3')
+    assert lv['deskripsi']['umum'].startswith('Mengevaluasi')
+    pecahan = level_guru('Level 3', 'pada Level 4')
+    assert pecahan['rata'] == 3.5 and pecahan['simpulan'] is None and pecahan['deskripsi'] is None

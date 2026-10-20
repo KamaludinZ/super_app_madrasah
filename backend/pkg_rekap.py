@@ -7,7 +7,7 @@ dari skor_per_indikator lembar terhadap instrumen versi lembar.
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from pkg_nilai import hitung_nilai, rekap_model_kompetensi
+from pkg_nilai import hitung_nilai, level_guru, rekap_model_kompetensi
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_REKAP, KOLEKSI_SK
 
 
@@ -275,6 +275,7 @@ async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[s
         'status': rincian['status'],
         'instrumen': {k: rincian['instrumen'].get(k) for k in ('id', 'versi_template', 'revisi')} if rincian['instrumen'] else None,
         'model': model,
+        'level_guru': level_guru(model['level_capaian']) if model else None,
     }
 
 

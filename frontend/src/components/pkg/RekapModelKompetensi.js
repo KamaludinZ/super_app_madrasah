@@ -102,3 +102,43 @@ export function FormatPenghitungan({ model, tambahan = null }) {
     </Card>
   );
 }
+
+// Level guru seperti lembar 01-LAPORN: Normal (04-RKAP-PKG), Plus 360 (05-RKAP-PKGR), simpulan rata-rata keduanya
+// (template mengosongkan simpulan bila rata-ratanya pecahan), dan deskripsi capaian dari RUBRIK-CAPAIAN.
+// `levelGuru` = { normal, plus_360, rata, simpulan, deskripsi: { umum, pedagogik, ... } | null }.
+export function KartuLevelGuru({ levelGuru }) {
+  if (!levelGuru) return null;
+  const sel = [
+    ['Normal', levelGuru.normal, 'Dari capaian kompetensi (04-RKAP-PKG)'],
+    ['Plus 360', levelGuru.plus_360, 'Dari nilai akhir dengan 360° & kehadiran (05-RKAP-PKGR)'],
+    ['Simpulan', levelGuru.simpulan, levelGuru.rata != null ? `Rata-rata ${String(levelGuru.rata).replace('.', ',')}` : 'Rata-rata level'],
+  ];
+  return (
+    <Card data-testid="pkg-level-guru">
+      <CardHeader className="pb-3"><CardTitle className="text-base">Tingkat Kompetensi &amp; Level Guru</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {sel.map(([label, nilai, ket]) => (
+            <div key={label} className="rounded-lg border border-slate-200 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+              <div className="text-xl font-bold text-[#006837]">{nilai || '-'}</div>
+              <div className="text-xs text-slate-500">{ket}</div>
+            </div>
+          ))}
+        </div>
+        {!levelGuru.plus_360 && (
+          <p className="text-xs text-slate-500">Level Plus 360 tersedia setelah data angket 360° dan kehadiran guru diinput.</p>
+        )}
+        {levelGuru.rata != null && !levelGuru.simpulan && (
+          <p className="text-xs text-amber-700">Rata-rata level berupa pecahan; sesuai template resmi, hasil evaluasi dikosongkan.</p>
+        )}
+        {levelGuru.deskripsi?.umum && (
+          <div className="rounded-lg bg-emerald-50 p-3 text-sm text-slate-700">
+            <div className="mb-1 text-xs font-semibold text-emerald-800">Deskripsi capaian ({levelGuru.simpulan})</div>
+            {levelGuru.deskripsi.umum}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
