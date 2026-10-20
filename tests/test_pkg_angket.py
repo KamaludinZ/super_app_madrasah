@@ -123,3 +123,26 @@ def test_input_jawaban_angket(klien):
     d['pkg_periode'].docs[0]['status'] = 'ditutup'
     pengguna['user'] = {'id': 'kep', 'roles': ['kepala_sekolah']}
     assert k.post(url, json={'jenis_angket': 'ortu', 'periode_id': 'p1', 'jawaban': [1] * 8}).status_code == 409
+
+
+def test_isi_lembar_360_dan_form():
+    import pkg_cetak
+    import pkg_template
+    jw = [2] * 27 + [0]
+    responden = {'sejawat': [{'urutan': 1, 'jawaban': jw}, {'urutan': 3, 'jawaban': [1] * 28}], 'siswa': [], 'ortu': []}
+    wb = load_workbook(io.BytesIO(pkg_template.isi_template_ke_bytes('instrumen', lambda w: (
+        pkg_angket.isi_lembar_360(w, responden), pkg_angket.isi_identitas_form_360(w, {'nama': 'Guru A', 'nip': '1'})))))
+    ws = wb['SEJAWAT']
+    assert (ws['H7'].value, ws['K7'].value, ws['N7'].value) == (1, None, 3)  # nomor penilai per blok kolom
+    assert (ws['H9'].value, ws['F36'].value, ws['H36'].value) == ('v', 'v', None)  # responden 1: butir terakhir skor 0
+    assert ws['M9'].value == 'v' and ws['G9'].value is None  # responden 3 skor 1 di blok L/M/N
+    assert ws['AL40'].value.startswith('=SUM(') and ws['AB6'].value == '=AL40'  # rumus template utuh
+    assert wb['ORTU']['H9'].value is None and wb['ORTU']['AL20'].value.startswith('=IFERROR(')  # tanpa responden
+    assert wb['DUDI']['AL22'].value.startswith('=SUM(')  # DUDI tidak disentuh
+    form = wb['FORM-360-GR']
+    assert (form['E6'].value, form['E56'].value, form['E159'].value) == (': Guru A', ': Guru A', ': Guru A')
+    assert form['E204'].value is None or str(form['E204'].value).startswith(':')  # bagian DUDI dibiarkan
+    instr = load_workbook(io.BytesIO(pkg_template.isi_template_ke_bytes('instrumen', lambda w: pkg_cetak.isi_form_instr(
+        w, {'guru': {'nama': 'Guru A', 'nip': '1'}, 'penilai': {'nama': 'P'}, 'sekolah': {'kota': 'Kota Malang'},
+            'periode': {'tanggal_penilaian': '2 November 2026'}}))))['FORM-INSTR']
+    assert (instr['E4'].value, instr['E7'].value, instr['E9'].value) == (': Guru A', ': P', ': Kota Malang, 2 November 2026')

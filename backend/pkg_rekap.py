@@ -291,7 +291,7 @@ async def model_kompetensi_guru(db, periode: Dict[str, Any], sk: Optional[Dict[s
     if not rincian:
         return None
     model = rekap_model_kompetensi(rincian['instrumen'], rincian['isian']) if rincian['status'] == 'terkunci' and rincian['instrumen'] else None
-    akhir = await nilai_akhir_guru(db, periode, guru_id, model['nkg']) if model else None
+    akhir = await nilai_akhir_guru(db, periode, guru_id, model['nkg_tepat']) if model else None
     return {
         'periode': rincian['periode'], 'guru': rincian['guru'], 'penilai_nama': rincian['penilai_nama'],
         'status': rincian['status'],

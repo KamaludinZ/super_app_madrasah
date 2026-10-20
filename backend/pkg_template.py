@@ -90,6 +90,8 @@ PETA_CETAK = {
         'rekomendasi': {'sheet': '01-LAPORN', 'baris': 21, 'label': 'C', 'titik_dua': 'D', 'isi': 'E', 'gabung': 'E21:H21',
                         'gaya_dari': 20},
         'cover': {'sheet': 'COVER', 'kantor': 'C43'},
+        'form_instr': {'sheet': 'FORM-INSTR', 'sel': {'nama': 'E4', 'nip': 'E5', 'pangkat': 'E6', 'penilai': 'E7',
+                                                      'nip_penilai': 'E8', 'tempat_tanggal': 'E9'}},
         # INDEK-HDIR: 12 baris bulan mulai baris 16; F/G/I/J/K serta jumlah (28) & indeks (K29) dihitung rumus template.
         'kehadiran': {'sheet': 'INDEK-HDIR', 'baris_awal': 16, 'baris_maks': 12, 'tugas_pokok': 'E9',
                       'kolom': {'label': 'C', 'terlambat_menit': 'D', 'pulang_cepat_menit': 'E', 'tanpa_keterangan': 'H'}},
@@ -97,7 +99,9 @@ PETA_CETAK = {
                     ('04-RKAP-PKG', 'B44'): 'Jumlah', ('04-RKAP-PKG', 'B45'): 'Cap. Tingkat Kompetensi',
                     ('INDEK-HDIR', 'C13'): 'Bulan dan Tahun', ('INDEK-HDIR', 'H13'): 'Tanpa Keterangan',
                     ('INDEK-HDIR', 'C28'): 'Jumlah', ('01-LAPORN', 'C20'): 'Deskripsi Capaian',
-                    ('01-LAPORN', 'E23'): 'PERSETUJUAN', ('COVER', 'C43'): 'kantor kementerian agama'},
+                    ('01-LAPORN', 'E23'): 'PERSETUJUAN', ('COVER', 'C43'): 'kantor kementerian agama',
+                    ('FORM-INSTR', 'D4'): 'Nama Guru', ('FORM-INSTR', 'D9'): 'Tempat dan Tanggal',
+                    ('SEJAWAT', 'X6'): 'Hasil Nilai', ('SISWA', 'X6'): 'Hasil Nilai', ('ORTU', 'X6'): 'Hasil Nilai'},
     },
 }
 

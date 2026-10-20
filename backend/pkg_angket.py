@@ -175,3 +175,45 @@ async def ubah_responden(db, doc: Dict[str, Any], jawaban: List[int], nama: Opti
     perubahan = {**_dokumen_jawaban(jawaban), 'nama_responden': nama, 'diubah_pada': datetime.now(timezone.utc).isoformat()}
     await db[KOLEKSI_ANGKET].update_one({'id': doc['id']}, {'$set': perubahan})
     return {**doc, **perubahan}
+
+
+# ---------------------------------------------------------------- isi sheet SEJAWAT/SISWA/ORTU & FORM-360-GR pada laporan
+
+KOLOM_PENILAI_AWAL = 6  # kolom F: blok penilai ke-1 (skor 0/1/2 di F/G/H, nomor penilai di H7)
+
+
+def isi_lembar_360(wb, responden: Dict[str, List[Dict[str, Any]]]) -> None:
+    """Isi sheet SEJAWAT, SISWA, ORTU dari rekap jawaban: contoh isian template dihapus, lalu tiap responden menempati
+    blok kolom penilai sesuai `urutan` (tanda 'v' pada kolom skor 0/1/2 setiap butir dan nomor penilai di baris 7).
+    Rumus jumlah per skor, nilai kinerja, sebutan, dan Hasil Nilai (AB6) tetap dari template. Jenis tanpa responden:
+    Hasil Nilai dibungkus IFERROR(...;0) agar tidak #DIV/0! — sama dengan aplikasi yang menghitungnya 0. DUDI tidak
+    disentuh."""
+    for jenis, cfg in JENIS_ANGKET.items():
+        ws = wb[cfg['sheet']]
+        awal, akhir = cfg['baris']
+        for kolom in range(KOLOM_PENILAI_AWAL, KOLOM_PENILAI_AWAL + MAKS_RESPONDEN * 3):
+            for baris in range(awal, akhir + 1):
+                ws.cell(baris, kolom).value = None
+        for n in range(MAKS_RESPONDEN):
+            ws.cell(7, KOLOM_PENILAI_AWAL + n * 3 + 2).value = None
+        daftar = [r for r in responden.get(jenis) or [] if 1 <= int(r.get('urutan') or 0) <= MAKS_RESPONDEN]
+        for r in daftar:
+            blok = KOLOM_PENILAI_AWAL + (int(r['urutan']) - 1) * 3
+            ws.cell(7, blok + 2).value = int(r['urutan'])
+            for i, skor in enumerate((r.get('jawaban') or [])[:akhir - awal + 1]):
+                if skor in SKOR_ANGKET:
+                    ws.cell(awal + i, blok + skor).value = 'v'
+        if not daftar:
+            sel_hasil = str(ws['AB6'].value or '').lstrip('=')
+            if sel_hasil and str(ws[sel_hasil].value or '').startswith('='):
+                ws[sel_hasil] = f'=IFERROR({ws[sel_hasil].value[1:]},0)'
+
+
+def isi_identitas_form_360(wb, guru: Optional[Dict[str, Any]]) -> None:
+    """Identitas guru pada ketiga bagian angket FORM-360-GR (sejawat, siswa, ortu); bagian DUDI dibiarkan."""
+    if not guru:
+        return
+    ws = wb[SHEET_FORM]
+    for cfg in JENIS_ANGKET.values():
+        for sel, nilai in zip(cfg['identitas'], (guru.get('nama'), guru.get('nip'), guru.get('tugas_tambahan'))):
+            ws[sel] = f": {nilai or '-'}"

@@ -142,7 +142,8 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
     (rumus resmi 04-RKAP-PKG menghitung tingkat, jumlah, capaian, dan predikat).
     `laporan` = {guru:{nama,nip}, periode, sk:{nomor_sk,tanggal_sk}, penilai:{nama,nip}, kepala:{nama,nip},
                  nama_sekolah, instrumen:{kompetensi}, isian, terkunci_pada, kehadiran:[baris bulan pkg_kehadiran],
-                 rekomendasi: teks rekomendasi PKB, identitas: pkg_identitas.lampiran_identitas}."""
+                 rekomendasi: teks rekomendasi PKB, identitas: pkg_identitas.lampiran_identitas,
+                 angket: {jenis: [responden pkg_angket]}}."""
     from pkg_template import SHEET_KOMPETENSI
     peta = PETA_CETAK['instrumen']
     kompetensi = (laporan.get('instrumen') or {}).get('kompetensi') or []
@@ -170,6 +171,12 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
         from pkg_identitas import isi_data_identitas
         isi_data_identitas(wb, laporan['identitas'])
         isi_cover(wb, laporan['identitas'])
+        isi_form_instr(wb, laporan['identitas'])
+    if 'angket' in laporan:
+        from pkg_angket import isi_identitas_form_360, isi_lembar_360
+        isi_lembar_360(wb, laporan['angket'] or {})
+        isi_identitas_form_360(wb, {**(laporan.get('guru') or {}),
+                                    'tugas_tambahan': ((laporan.get('identitas') or {}).get('guru') or {}).get('tugas_tambahan')})
 
     isi_kehadiran(wb, laporan.get('kehadiran'))
     isi_rekomendasi(wb, laporan.get('rekomendasi'))
@@ -190,6 +197,19 @@ def isi_cover(wb, identitas: Dict[str, Any]) -> None:
     kota = ((identitas.get('sekolah') or {}).get('kota') or '').strip()
     if kota:
         wb[PETA_CETAK['instrumen']['cover']['sheet']][PETA_CETAK['instrumen']['cover']['kantor']] = f'kantor kementerian agama {kota.lower()}'
+
+
+def isi_form_instr(wb, identitas: Dict[str, Any]) -> None:
+    """Kepala lembar FORM-INSTR (nama, NIP, pangkat/gol. guru; penilai & NIP; tempat dan tanggal). Daftar centang
+    FORM-INSTR memakai model 4 tingkat (Berkembang–Mahir) yang berbeda dari instrumen KOMP 5 level aplikasi, sehingga
+    dibiarkan kosong."""
+    ws = wb[PETA_CETAK['instrumen']['form_instr']['sheet']]
+    g, p = identitas.get('guru') or {}, identitas.get('penilai') or {}
+    tempat = ', '.join(x for x in ((identitas.get('sekolah') or {}).get('kota'), (identitas.get('periode') or {}).get('tanggal_penilaian')) if x)
+    nilai = {'nama': g.get('nama'), 'nip': g.get('nip'), 'pangkat': ' / '.join(x for x in (g.get('pangkat'), g.get('golongan')) if x),
+             'penilai': p.get('nama'), 'nip_penilai': p.get('nip'), 'tempat_tanggal': tempat}
+    for kunci, sel in PETA_CETAK['instrumen']['form_instr']['sel'].items():
+        ws[sel] = f": {nilai.get(kunci) or '-'}"
 
 
 def isi_kehadiran(wb, kehadiran: Optional[List[Dict[str, Any]]], tugas_pokok: str = 'Guru') -> None:

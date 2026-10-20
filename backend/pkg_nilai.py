@@ -34,10 +34,11 @@ def hitung_nilai(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> Dict[str, 
     skor = {s['kode']: skor_sub(((isian or {}).get(s['kode']) or {}).get('centang')) for s in sub}
     total = sum(skor.values())
     maks = sum(len(s.get('indikator') or []) for s in sub)
-    persen = round(total / maks * 100, 2) if maks else 0.0
+    tepat = total / maks * 100 if maks else 0.0
+    persen = round(tepat, 2)
     terisi = sum(1 for v in skor.values() if v > 0)
     return {
-        'skor_per_indikator': skor, 'nilai_akhir': total, 'nilai_maks': maks, 'capaian_persen': persen,
+        'skor_per_indikator': skor, 'nilai_akhir': total, 'nilai_maks': maks, 'capaian_persen': persen, 'capaian_tepat': tepat,
         'level_capaian': level_capaian(persen), 'predikat': predikat_jenjang(persen),
         'terisi': terisi, 'jumlah_sub': len(sub), 'progres': round(terisi / len(sub) * 100) if sub else 0,
     }
@@ -67,7 +68,7 @@ def rekap_model_kompetensi(instrumen: Dict[str, Any], isian: Dict[str, Any]) -> 
         })
     return {
         'kompetensi': kompetensi, 'total_skor': nilai['nilai_akhir'], 'skor_maks': nilai['nilai_maks'],
-        'nkg': nilai['capaian_persen'], 'level_capaian': nilai['level_capaian'], 'predikat': nilai['predikat'],
+        'nkg': nilai['capaian_persen'], 'nkg_tepat': nilai['capaian_tepat'], 'level_capaian': nilai['level_capaian'], 'predikat': nilai['predikat'],
         'terisi': nilai['terisi'], 'jumlah_sub': nilai['jumlah_sub'],
     }
 
