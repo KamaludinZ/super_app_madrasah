@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { levelCapaian, predikatJenjang } from '@/lib/pkgAmbang';
 
 // Lembar penilaian kinerja satu guru oleh penilai yang ditugaskan (backend/routers/pkg_penilaian_api.py).
 //   GET  /pkg/penilaian/lembar/{guru_id} -> lembar
@@ -82,24 +83,8 @@ export function levelBolong(centang = []) {
   return Array.from({ length: maks }, (_, i) => i + 1).filter((l) => !ada.has(l));
 }
 
-// Level capaian dari persen capaian (04-RKAP-PKG!G45).
-export function levelCapaian(persen) {
-  if (!persen) return null;
-  if (persen < 55) return 'Level 1';
-  if (persen === 55) return 'Level 2';
-  if (persen <= 75) return 'Level 3';
-  if (persen <= 90) return 'Level 4';
-  return 'Level 5';
-}
-
-// Predikat ketercapaian jenjang jabatan dari persen capaian (04-RKAP-PKG!F45).
-export function predikatJenjang(persen) {
-  if (!persen) return null;
-  if (persen <= 55) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Pertama';
-  if (persen <= 75) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Muda';
-  if (persen <= 90) return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Madya';
-  return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Utama';
-}
+// Level capaian (04-RKAP-PKG!G45) & predikat jenjang jabatan (04-RKAP-PKG!F45) dari persen capaian — ambang di lib/pkgAmbang.
+export { levelCapaian, predikatJenjang };
 
 // Ringkasan nilai lembar: per sub { kode, tingkat }, total, maksimal, persen capaian, dan jumlah sub terisi.
 export function hitungNilai(kompetensi = [], isian = {}) {

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from core import db, get_current_user
 from pkg_akses import keanggotaan_sk, sk_aktif
+from pkg_ambang import konfigurasi as konfigurasi_ambang
 from pkg_audit import (
     AKSI_BUKA_BERANDA, AKSI_LIHAT_TEMPLATE, AKSI_PERIKSA_TEMPLATE, catat_audit_pkg, catat_audit_pkg_harian,
 )
@@ -86,3 +87,10 @@ async def info_template_api(request: Request, periksa_ulang: bool = Query(False)
         await catat_audit_pkg_harian(db, AKSI_LIHAT_TEMPLATE, akses['user'], metadata={'versi_template': info['versi_template']},
                                      request=request)
     return info
+
+
+@router.get("/pkg/ambang")
+async def ambang_api(akses: Dict = Depends(anggota_sk)):
+    """Ambang tingkat kompetensi/level, predikat jenjang & rekap, sebutan angket 360°, proporsi nilai per jenjang,
+    dan konstanta kehadiran — baca saja, disalin dari rumus template resmi (pkg_ambang)."""
+    return konfigurasi_ambang()

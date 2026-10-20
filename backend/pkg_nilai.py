@@ -5,8 +5,11 @@
     capaian %           = nilai akhir / nilai maks x 100                          (04-RKAP-PKG!H45)
     level capaian       = <55 L1, =55 L2, <=75 L3, <=90 L4, <=100 L5              (04-RKAP-PKG!G45)
     predikat            = <=55 Ahli Pertama, <=75 Ahli Muda, <=90 Ahli Madya, <=100 Ahli Utama (04-RKAP-PKG!F45)
+Ambang diambil dari pkg_ambang (satu sumber dengan cetak & frontend).
 """
 from typing import Any, Dict, Iterable, List, Optional
+
+from pkg_ambang import AMBANG_LEVEL, AMBANG_PREDIKAT_JENJANG, terapkan
 
 
 def skor_sub(centang: Optional[Iterable[int]]) -> int:
@@ -14,29 +17,11 @@ def skor_sub(centang: Optional[Iterable[int]]) -> int:
 
 
 def level_capaian(persen: float) -> Optional[str]:
-    if not persen:
-        return None
-    if persen < 55:
-        return 'Level 1'
-    if persen == 55:
-        return 'Level 2'
-    if persen <= 75:
-        return 'Level 3'
-    if persen <= 90:
-        return 'Level 4'
-    return 'Level 5'
+    return terapkan(AMBANG_LEVEL, persen)
 
 
 def predikat_jenjang(persen: float) -> Optional[str]:
-    if not persen:
-        return None
-    if persen <= 55:
-        return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Pertama'
-    if persen <= 75:
-        return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Muda'
-    if persen <= 90:
-        return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Madya'
-    return 'Terpenuhi pada Jenjang Jabatan Guru Ahli Utama'
+    return terapkan(AMBANG_PREDIKAT_JENJANG, persen)
 
 
 def kode_sub(instrumen: Dict[str, Any]) -> List[str]:

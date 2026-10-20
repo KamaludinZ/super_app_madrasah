@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from openpyxl.worksheet.worksheet import Worksheet
 
+from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
 from pkg_template import PETA_CETAK, isi_template_ke_bytes
 
 BULAN = ('Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November',
@@ -27,17 +28,7 @@ def tanggal_indonesia(tgl: date) -> str:
 
 def predikat_rekap(nkg: Optional[float]) -> str:
     """Predikat skala rekap (rumus kolom G template rekap); dipakai juga oleh PDF cadangan."""
-    if nkg is None:
-        return ''
-    if nkg >= 91:
-        return 'Sangat Baik'
-    if nkg >= 76:
-        return 'Baik'
-    if nkg >= 61:
-        return 'Cukup'
-    if nkg >= 60:
-        return 'Sedang'
-    return 'Kurang'
+    return '' if nkg is None else terapkan(AMBANG_PREDIKAT_REKAP, nkg, kosong_bila_nol=False) or ''
 
 
 def _rumus_predikat(sel: str) -> str:
