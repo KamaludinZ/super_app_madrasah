@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 // Rekap hasil penilaian kinerja per periode (backend/routers/pkg_rekap_api.py).
 //   GET /pkg/rekap?periode_id= -> rekap   (periode bawaan: periode berjalan)
 //   GET /pkg/rekap/guru/{guru_id}?periode_id= -> rincian  (hanya lembar dalam cakupan pengguna; di luar cakupan 403)
+//   GET /pkg/rekap/guru/{guru_id}/kompetensi?periode_id= -> modelKompetensi  (cakupan sama dengan rincian)
 //   GET /pkg/rekap/periode -> [{ id, nama_periode, tahun_pelajaran, semester, status }]  (periode tempat pengguna personil)
 // rekap = { periode, sk: { id, nomor_sk } | null, cakupan: 'semua' | 'penilai' | 'pribadi',
 //           ringkasan: { total, terkunci, draf, belum, rata_capaian }, statistik, guru: [baris] }
@@ -10,6 +11,9 @@ import { api } from '@/lib/api';
 //           capaian_persen, level_capaian, predikat, terkunci_pada, per_kompetensi: { kode: subtotal } }
 // rincian = { periode, guru: { id, nama, nip, mapel }, penilai_nama, status, hasil | null, catatan_umum,
 //             instrumen: { id, versi_template, revisi, kompetensi } | null, isian }
+// modelKompetensi = { periode, guru, penilai_nama, status, instrumen | null, model | null }  (format 04-RKAP-PKG)
+// model = { kompetensi: [{ kode, nama, label, jumlah_skor, skor_maks, sub: [{ no, kode, nama, nilai_rating, tingkat,
+//           skor_maks }] }], total_skor, skor_maks, nkg, level_capaian, predikat, terisi, jumlah_sub }
 // Cakupan: kepala madrasah melihat semua guru; penilai melihat guru yang dinilainya; guru yang dinilai hanya
 // melihat hasilnya sendiri setelah lembar dikunci. Nilai hanya dihitung untuk lembar terkunci.
 
@@ -30,6 +34,11 @@ export const daftarPeriodeRekap = () => panggil(() => api.get('/pkg/rekap/period
 
 export const ambilRekapGuru = (guruId, periodeId) => panggil(
   () => api.get(`/pkg/rekap/guru/${guruId}`, { params: periodeId ? { periode_id: periodeId } : {} }), 'Gagal memuat rekap guru.',
+);
+
+export const ambilModelKompetensi = (guruId, periodeId) => panggil(
+  () => api.get(`/pkg/rekap/guru/${guruId}/kompetensi`, { params: periodeId ? { periode_id: periodeId } : {} }),
+  'Gagal memuat rekap model kompetensi.',
 );
 
 // Urutan status untuk peringkat: terkunci (punya nilai) dulu, lalu draf, lalu belum.
