@@ -1,6 +1,7 @@
 # Multi-stage Dockerfile for Super Apps MATSANDATAMA
 # Stage 1: Build Frontend
-FROM node:18-alpine AS frontend-builder
+# Node 22 LTS (dapat patch keamanan; Node 18/20 sudah EOL). Hanya dipakai saat build.
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
