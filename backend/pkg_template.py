@@ -293,14 +293,18 @@ def buka_proteksi(wb: Workbook) -> None:
     wb.security = None
 
 
-def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True) -> bytes:
-    """Muat template, jalankan `pengisi(wb)`, dan kembalikan hasilnya sebagai bytes .xlsx baru (template asli utuh)."""
+def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True,
+                         ubah_drawing: Optional[Callable[[str, str], str]] = None) -> bytes:
+    """Muat template, jalankan `pengisi(wb)`, dan kembalikan hasilnya sebagai bytes .xlsx baru (template asli utuh).
+    openpyxl membuang shape (kotak teks/label/garis); drawing template dipulihkan setelah simpan (pkg_drawing) dan
+    teksnya dapat disesuaikan lewat `ubah_drawing(judul_lembar, xml_drawing)`."""
+    from pkg_drawing import pulihkan_drawing
     wb = buka_template(jenis, hanya_baca=False, wajib_utuh=wajib_utuh)
     pengisi(wb)
     buka_proteksi(wb)
     keluaran = io.BytesIO()
     wb.save(keluaran)
-    return keluaran.getvalue()
+    return pulihkan_drawing(keluaran.getvalue(), path_template(jenis), ubah_drawing)
 
 
 # Folder induk salinan sementara hasil cetak (bawaan: folder temp sistem). Tiap cetak memakai subfolder pkg_*.

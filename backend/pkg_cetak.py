@@ -136,15 +136,37 @@ def atur_halaman_rekap(ws: Worksheet, jumlah_guru: int) -> None:
     muat_lebar_halaman(ws, satu_halaman=jumlah_guru <= peta['baris_tersedia'])
 
 
+def isi_kotak_identitas(xml: str, madrasah: Dict[str, Any]) -> str:
+    """Isi kotak teks "IDENTITAS RA / MADRASAH" pada drawing rekap: nilai ditulis setelah titik dua tiap baris label
+    (nama lembaga, alamat, NSM, NPSN, status akreditasi, nama kepala); data yang tidak ada dibiarkan kosong. Teks
+    di-escape XML."""
+    def esc(t):
+        return str(t or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    akreditasi = str(madrasah.get('akreditasi') or '').strip()
+    if akreditasi and not akreditasi.lower().startswith('terakreditasi'):
+        akreditasi = f'Terakreditasi {akreditasi}'
+    isian = [('Lembaga', madrasah.get('nama')), ('Alamat', madrasah.get('alamat')), ('N S M', madrasah.get('nsm')),
+             ('N P S N', madrasah.get('npsn')), ('Status Akreditasi', akreditasi), ('Nama Kepala RA/Madrasah', madrasah.get('kepala'))]
+
+    def ganti(m):
+        isi = m.group(1)
+        for label, nilai in isian:
+            if label in isi and ':' in isi:
+                return f"<a:t>{isi[:isi.index(':') + 1]} {esc(nilai)}</a:t>"
+        return m.group(0)
+    return re.sub(r'<a:t>([^<]*)</a:t>', ganti, xml)
+
+
 def rekap_excel(guru: List[Dict[str, Any]], periode: Dict[str, Any], kepala: Optional[str] = None,
-                tanggal_cetak: Optional[date] = None) -> bytes:
+                tanggal_cetak: Optional[date] = None, madrasah: Optional[Dict[str, Any]] = None) -> bytes:
     """Berkas .xlsx rekap hasil PKG dari template resmi (template harus utuh sesuai checksum resmi)."""
     sheet = PETA_CETAK['rekap']['sheet']
 
     def pengisi(wb):
         isi_rekap(wb[sheet], guru, periode, kepala, tanggal_cetak)
         atur_halaman_rekap(wb[sheet], len(guru))
-    return isi_template_ke_bytes('rekap', pengisi)
+    ubah = (lambda judul, xml: isi_kotak_identitas(xml, {**madrasah, 'kepala': madrasah.get('kepala') or kepala})) if madrasah is not None else None
+    return isi_template_ke_bytes('rekap', pengisi, ubah_drawing=ubah)
 
 
 # ---------------------------------------------------------------- laporan per guru (template instrumen)
