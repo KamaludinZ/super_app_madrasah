@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import shutil
+from pathlib import Path
 from typing import Optional
 
 from pkg_template import salinan_sementara
@@ -16,7 +17,8 @@ from pkg_template import salinan_sementara
 logger = logging.getLogger('matsandatama')
 
 KANDIDAT_SOFFICE = ('soffice', 'libreoffice', '/usr/lib/libreoffice/program/soffice',
-                    '/Applications/LibreOffice.app/Contents/MacOS/soffice')
+                    '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+                    r'C:\Program Files\LibreOffice\program\soffice.exe', r'C:\Program Files (x86)\LibreOffice\program\soffice.exe')
 
 
 class LibreOfficeTidakTersedia(Exception):
@@ -57,7 +59,7 @@ async def xlsx_ke_pdf(isi_xlsx: bytes, nama_berkas: str = 'pkg.xlsx', batas_deti
         folder = os.path.dirname(path)
         profil = os.path.join(folder, 'profil_lo')
         proses = await asyncio.create_subprocess_exec(
-            soffice, f'-env:UserInstallation=file://{profil}', '--headless', '--norestore', '--nolockcheck',
+            soffice, f'-env:UserInstallation={Path(profil).resolve().as_uri()}', '--headless', '--norestore', '--nolockcheck',
             '--nodefault', '--nologo', '--convert-to', 'pdf', '--outdir', folder, path,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
