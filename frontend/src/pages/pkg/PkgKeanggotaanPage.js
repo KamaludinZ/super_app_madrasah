@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  IdCard, FileBadge, CalendarRange, UserCheck, ClipboardCheck, ShieldCheck, ShieldAlert, CheckCircle2, Lock, RotateCw,
+  IdCard, FileBadge, ContactRound, CalendarRange, UserCheck, ClipboardCheck, ShieldCheck, ShieldAlert, CheckCircle2, Lock, RotateCw,
 } from 'lucide-react';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { labelPeranPkg } from '@/lib/pkg';
+import PanelIdentitasPkg from '@/components/pkg/PanelIdentitasPkg';
 
 // Penjelasan alasan sub-menu tidak dapat dibuka (kode sama dengan detail 403 backend).
 const ALASAN_MENU = {
@@ -114,6 +115,20 @@ export default function PkgKeanggotaanPage() {
           )}
         </CardContent>
       </Card>
+
+      {k.anggota && (
+        <Card className="lg:col-span-2" data-testid="pkg-kartu-identitas">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ContactRound className="h-4 w-4 text-[#006837]" /> Identitas untuk Laporan PKG
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              Identitas Anda seperti yang tercetak pada lampiran laporan PKG. Lengkapi isian yang masih kosong agar laporan tidak memuat tanda &quot;-&quot;.
+            </p>
+          </CardHeader>
+          <CardContent><PanelIdentitasPkg /></CardContent>
+        </Card>
+      )}
     </div>
   );
 }

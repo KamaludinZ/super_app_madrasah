@@ -38,12 +38,14 @@ def _sekarang() -> str:
 async def identitas_akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
     """{user_id: {nama, nip, mapel, ...identitas GTK}} dari akun pengguna saat ini (NIP, atau Peg ID bila NIP kosong;
     tanpa mapel). Identitas GTK (pkg_identitas.FIELD_GTK) ikut disalin ke snapshot periode untuk lampiran cetak."""
-    from pkg_identitas import FIELD_GTK
+    from pkg_identitas import FIELD_CADANGAN, FIELD_GTK, lengkapi_akun
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
     akun = await db.users.find({'id': {'$in': ids}},
-                               {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in FIELD_GTK}}).to_list(len(ids))
+                               {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1,
+                                **{f: 1 for f in (*FIELD_GTK, *FIELD_CADANGAN)}}).to_list(len(ids))
+    akun = [lengkapi_akun(u) for u in akun]  # cadangan pangkat/golongan & pendidikan ikut tersalin ke snapshot
     return {u['id']: {**{f: u[f] for f in FIELD_GTK if u.get(f) and f not in ('nip', 'peg_id')},
                       'nama': u.get('full_name'), 'nip': u.get('nip_nuptk') or u.get('peg_id'), 'mapel': None} for u in akun}
 

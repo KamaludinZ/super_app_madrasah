@@ -640,3 +640,44 @@ class FormKosongRequest(IsianPkg):
         if self.guru_id and self.semua_guru:
             raise ValueError('guru_id dan semua_guru tidak dapat dipakai bersamaan')
         return self
+
+
+class IdentitasPkgRequest(IsianPkg):
+    """Isian identitas khusus PKG (lampiran identitas cetak). Field yang tidak dikirim tidak diubah; string kosong
+    mengosongkan isian."""
+    pangkat: Optional[str] = Field(None, max_length=80)
+    golongan: Optional[str] = Field(None, max_length=20)
+    tmt_golongan: Optional[str] = None
+    jabatan_fungsional: Optional[str] = Field(None, max_length=100)
+    pendidikan_terakhir: Optional[str] = Field(None, max_length=150)
+    spesialisasi: Optional[str] = Field(None, max_length=150)
+
+    @field_validator('pangkat', 'jabatan_fungsional', 'pendidikan_terakhir', 'spesialisasi')
+    @classmethod
+    def _teks_bebas(cls, v):
+        if v is None:
+            return v
+        v = _teks(v)
+        if re.search(r'[<>]', v):
+            raise ValueError('tidak boleh memuat karakter < atau >')
+        return v
+
+    @field_validator('golongan')
+    @classmethod
+    def _golongan(cls, v):
+        if v is None:
+            return v
+        v = _teks(v)
+        if v and not re.match(r'^[A-Za-z0-9][A-Za-z0-9 /.\-]{0,19}$', v):
+            raise ValueError('golongan hanya boleh huruf, angka, spasi, "/", "." dan "-" (contoh: III/a)')
+        return v
+
+    @field_validator('tmt_golongan')
+    @classmethod
+    def _tmt(cls, v):
+        if v is None:
+            return v
+        v = _tanggal(v, wajib=False) or ''
+        if v and not '1950-01-01' <= v <= date.today().isoformat():
+            raise ValueError('TMT golongan harus antara 1950 dan hari ini')
+        return v

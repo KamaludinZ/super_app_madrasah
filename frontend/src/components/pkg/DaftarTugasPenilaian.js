@@ -8,7 +8,8 @@ import { Progress } from '@/components/ui/progress';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
 import { cetakFormKosong } from '@/lib/pkgCetak';
-import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye } from 'lucide-react';
+import DialogLengkapiIdentitas from '@/components/pkg/DialogLengkapiIdentitas';
+import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye, ContactRound } from 'lucide-react';
 
 // Tombol aksi per status lembar (badge status: BadgeStatusPenilaian).
 const AKSI_TUGAS = {
@@ -30,6 +31,7 @@ const FILTER = [
 export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
   const [cari, setCari] = useState('');
   const [filter, setFilter] = useState('semua');
+  const [identitasGuru, setIdentitasGuru] = useState(null);
   const penilai = keanggotaan?.peran !== 'dinilai';
   const bolehMenilai = !!keanggotaan?.supervisi_selesai;
 
@@ -129,6 +131,9 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="shrink-0" onClick={() => setIdentitasGuru(t)} data-testid={`pkg-tugas-identitas-${t.id}`}>
+                    <ContactRound className="h-3.5 w-3.5 mr-1" /> Lengkapi identitas
+                  </Button>
                   <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'paket', guruId: t.id })} testId={`pkg-tugas-cetak-form-${t.id}`}>Cetak form</TombolCetakOffline>
                   {terbuka ? (
                     <Button asChild size="sm" variant={t.status === 'terkunci' ? 'outline' : 'default'} className={t.status === 'terkunci' ? 'shrink-0' : 'shrink-0 bg-[#006837] hover:bg-[#005830]'}>
@@ -147,6 +152,8 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
           })}
         </div>
       </CardContent>
+      <DialogLengkapiIdentitas open={!!identitasGuru} onOpenChange={(v) => !v && setIdentitasGuru(null)}
+        guruId={identitasGuru?.id} nama={identitasGuru?.nama} />
     </Card>
   );
 }
