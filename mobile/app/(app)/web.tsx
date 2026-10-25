@@ -36,7 +36,9 @@ export default function WebModuleScreen() {
   const { colors } = useTheme();
   const { token, user, activeRole } = useAuth();
   const { online } = useNetwork();
-  const ref = useRef<WebView>(null);
+  // react-native-webview 14 mendeklarasikan `WebView<P = undefined>` (props `WebViewProps & undefined` = never
+  // di TypeScript 6), maka argumen tipe ditulis eksplisit `WebView<object>`.
+  const ref = useRef<WebView<object>>(null);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -130,7 +132,7 @@ export default function WebModuleScreen() {
         const file = new File(Paths.cache, safeName(msg.name));
         if (file.exists) file.delete();
         file.create();
-        file.write(msg.data, { encoding: 'base64' });
+        await file.write(msg.data, { encoding: 'base64' });
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(file.uri, { mimeType: msg.mime, dialogTitle: msg.name });
         } else {
@@ -181,7 +183,7 @@ export default function WebModuleScreen() {
           />
         </View>
       ) : (
-        <WebView
+        <WebView<object>
           ref={ref}
           source={{ uri: startUrl }}
           style={{ flex: 1, backgroundColor: 'transparent' }}
@@ -207,6 +209,9 @@ export default function WebModuleScreen() {
           originWhitelist={['https://*', 'http://*', 'about:*', 'blob:*', 'data:*']}
           applicationNameForUserAgent="MatsandatamaApp/1.0"
           webviewDebuggingEnabled={__DEV__}
+          // Android menskalakan teks WebView mengikuti ukuran font sistem; tata letak web (isian & tab bertinggi
+          // tetap) jadi bertumpuk di HP ber-font besar. Ukuran tetap diatur web; layar native tetap mengikuti font HP.
+          textZoom={100}
         />
       )}
       {!failed && !appReady ? (

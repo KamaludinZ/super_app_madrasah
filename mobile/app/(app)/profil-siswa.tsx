@@ -24,6 +24,7 @@ import { T } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { InfoRow } from '@/components/ui/InfoRow';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
 
@@ -94,7 +95,7 @@ export default function ProfilSiswa() {
   };
   const Rows = ({ src, fields }: { src: Obj; fields: Field[] }) => {
     const rows = fields.map(([key, label, sens]) => [label, val(src?.[key], sens)] as const).filter(([, v]) => v);
-    return rows.length ? <>{rows.map(([l, v]) => <Row key={l} label={l} value={v!} />)}</> : <T variant="caption" tone="muted">Belum diisi.</T>;
+    return rows.length ? <>{rows.map(([l, v]) => <InfoRow key={l} label={l} value={v!} />)}</> : <T variant="caption" tone="muted">Belum diisi.</T>;
   };
 
   if (!res.data) {
@@ -153,7 +154,7 @@ export default function ProfilSiswa() {
 
         <Section id="siswa" title="Data siswa" icon="person-outline">
           <Rows src={s} fields={[['full_name', 'Nama lengkap'], ['nisn', 'NISN'], ['nis', 'NIS'], ['birth_place', 'Tempat lahir'], ['birth_date', 'Tanggal lahir']]} />
-          {s.gender ? <Row label="Jenis kelamin" value={s.gender === 'L' ? 'Laki-laki' : s.gender === 'P' ? 'Perempuan' : String(s.gender)} /> : null}
+          {s.gender ? <InfoRow label="Jenis kelamin" value={s.gender === 'L' ? 'Laki-laki' : s.gender === 'P' ? 'Perempuan' : String(s.gender)} /> : null}
           <Rows src={d} fields={[
             ['citizenship', 'Kewarganegaraan'], ['nik', 'NIK', true], ['asal_negara', 'Asal negara'], ['agama', 'Agama'],
             ['jumlah_saudara', 'Jumlah saudara'], ['anak_ke', 'Anak ke'], ['cita_cita', 'Cita-cita'], ['hobi', 'Hobi'],
@@ -244,15 +245,6 @@ export default function ProfilSiswa() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.kv}>
-      <T variant="caption" tone="muted" style={styles.kvLabel}>{label}</T>
-      <T style={{ flex: 1 }} selectable>{value}</T>
-    </View>
-  );
-}
-
 function Item({ title, lines, file }: { title: string; lines: (string | null | undefined)[]; file?: string | null }) {
   const { colors } = useTheme();
   return (
@@ -275,8 +267,6 @@ const styles = StyleSheet.create({
   bar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, minHeight: 52 },
   secBody: { gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
-  kv: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
-  kvLabel: { width: 128, paddingTop: 2 },
   item: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing.sm, gap: 2 },
   dot: { width: 10, height: 10, borderRadius: 5 },
 });

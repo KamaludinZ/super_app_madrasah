@@ -48,6 +48,7 @@ export const CacheKeys = {
   unread: 'notifications.unread',
   students: (classId: string) => `students.${classId}`,
   gpConfig: 'gp.config',
+  pkgMenu: 'pkg.menu',
   gpPeriod: 'gp.period',
   gpAssignments: 'gp.assignments',
   piketToday: 'piket.today',

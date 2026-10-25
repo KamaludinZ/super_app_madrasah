@@ -62,7 +62,7 @@ export function SelectField({ label, value, options, onChange, placeholder = 'Pi
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={allowNone ? (
               <Row label={noneLabel} selected={!value} onPress={() => pick(null)} muted />
-            ) : null}
+            ) : undefined}
             renderItem={({ item }) => <Row label={item.label} description={item.description} selected={item.value === value} onPress={() => pick(item.value)} />}
             ListEmptyComponent={<T tone="muted" center style={{ padding: spacing.lg }}>Tidak ada pilihan yang cocok.</T>}
             style={{ maxHeight: 420 }}

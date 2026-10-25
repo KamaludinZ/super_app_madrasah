@@ -3,7 +3,7 @@
     "name": "Super Apps MATSANDATAMA",
     "slug": "matsandatama-dev",
     "owner": "mtsn-2-kota-malang",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "matsandatama",
@@ -11,7 +11,7 @@
     "backgroundColor": "#006837",
     "android": {
       "package": "id.sch.mtsn2kotamalang.superapps",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-icon-adaptive.png",
         "backgroundColor": "#FFFFFF"
@@ -110,7 +110,22 @@
             "./assets/fonts/PlusJakartaSans-Bold.ttf"
           ]
         }
-      ]
+      ],
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# Kelas yang dibuat lewat refleksi (lihat plugins/withR8KeepRulesCompat.js).\n-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep class * extends androidx.work.InputMerger { <init>(); }\n-keep class * extends androidx.work.ListenableWorker { <init>(...); }\n-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }"
+          }
+        }
+      ],
+      "./plugins/withR8KeepRulesCompat"
     ],
     "experiments": {
       "typedRoutes": false

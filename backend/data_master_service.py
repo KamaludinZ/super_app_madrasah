@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from core import PERAN_GURU_GTK, PERAN_TENDIK_GTK, jenis_gtk_peran
+
 SEMUA = ('', 'all', 'semua', 'keseluruhan')
 
 
@@ -89,9 +91,10 @@ async def jumlah_siswa_per_tingkat(db) -> Dict[str, int]:
 # ------------------------------------------------------------
 # GTK (guru & tenaga kependidikan)
 # ------------------------------------------------------------
-# Sama dengan pengelompokan menu Data GTK (frontend AdminGTKPage / dataGtkKolom.js).
-GURU_ROLES = ('guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler')
-TENDIK_ROLES = ('tenaga_kependidikan',)
+# Sama dengan pengelompokan menu Data GTK (frontend lib/jenisGtk.js): kepala madrasah termasuk guru,
+# Kepala TU termasuk tendik (lihat core.PERAN_GURU_GTK / PERAN_TENDIK_GTK).
+GURU_ROLES = PERAN_GURU_GTK
+TENDIK_ROLES = PERAN_TENDIK_GTK
 JENIS_GTK = {'guru': 'Guru', 'tendik': 'Tenaga Kependidikan'}
 
 
@@ -108,12 +111,7 @@ def normalisasi_jenis_gtk(jenis: Optional[str]) -> Optional[str]:
 
 def jenis_gtk(user: Dict[str, Any]) -> Optional[str]:
     """'guru' | 'tendik' | None — guru didahulukan bila punya kedua peran."""
-    roles = user.get('roles') or []
-    if any(r in GURU_ROLES for r in roles):
-        return 'guru'
-    if any(r in TENDIK_ROLES for r in roles):
-        return 'tendik'
-    return None
+    return jenis_gtk_peran(user.get('roles'))
 
 
 async def gtk_per_jenis(db, jenis: Optional[str]) -> List[Dict[str, Any]]:

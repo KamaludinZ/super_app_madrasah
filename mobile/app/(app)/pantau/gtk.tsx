@@ -7,6 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { request } from '@/api/client';
+import { jenisGtk } from '@/utils/gtk';
 import { cocok, SearchBox } from '@/pantau/ui';
 import { useCached } from '@/hooks/useCached';
 import { spacing, useTheme } from '@/theme';
@@ -20,9 +21,6 @@ import { EmptyState, ErrorState } from '@/components/ui/States';
 
 type Gtk = { id: string; full_name?: string; username?: string; roles?: string[]; gender?: string | null; nip_nuptk?: string | null; peg_id?: string | null; status_kepegawaian?: string | null; employee_status?: string | null; jabatan?: string | null };
 type Tab = 'guru' | 'tendik';
-// Sama dengan GURU_ROLES/TENDIK_ROLES web (frontend/src/lib/dataGtkKolom.js).
-const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
-const TENDIK_ROLES = ['tenaga_kependidikan'];
 
 /** Status kepegawaian ternormalisasi (sama dengan labelKepegawaian web). */
 function labelKepegawaian(u: Gtk): string | null {
@@ -43,9 +41,9 @@ export default function PantauGtk() {
 
   const { guru, tendik } = useMemo(() => {
     const all = (res.data ?? []).filter((u) => u.full_name);
-    const isGuru = (u: Gtk) => (u.roles ?? []).some((r) => GURU_ROLES.includes(r));
-    const g = all.filter(isGuru);
-    const t = all.filter((u) => !isGuru(u) && (u.roles ?? []).some((r) => TENDIK_ROLES.includes(r)));
+    // Kepala madrasah termasuk guru, Kepala TU termasuk tendik (sama dengan Data GTK web).
+    const g = all.filter((u) => jenisGtk(u.roles) === 'guru');
+    const t = all.filter((u) => jenisGtk(u.roles) === 'tendik');
     const urut = (a: Gtk, b: Gtk) => (a.full_name ?? '').localeCompare(b.full_name ?? '');
     return { guru: g.sort(urut), tendik: t.sort(urut) };
   }, [res.data]);

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY_FORM = {
@@ -118,7 +119,7 @@ export default function AdminAgendaTendikPage() {
     try {
       // Load tenaga kependidikan
       const { data: usersData } = await api.get('/users');
-      const tendikList = usersData.filter(u => u.roles?.includes('tenaga_kependidikan'));
+      const tendikList = usersData.filter(u => jenisGtk(u.roles) === 'tendik');
       setStaff(tendikList);
 
       // Load jabatan master data
@@ -133,7 +134,7 @@ export default function AdminAgendaTendikPage() {
       // Filter only tendik events
       const tendikAgendas = agendasData.filter(a => {
         const user = usersData.find(u => u.id === a.user_id);
-        return user && user.roles?.includes('tenaga_kependidikan');
+        return user && jenisGtk(user.roles) === 'tendik';
       });
       setAgendas(tendikAgendas);
     } catch (e) {

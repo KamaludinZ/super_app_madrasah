@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -35,7 +35,7 @@ export function Screen({ title, subtitle, back, right, children, scroll = true, 
   const brandHeader = headerTone === 'brand';
   const headerBg = brandHeader ? colors.brand : colors.surface;
   const headerFg = brandHeader ? colors.onBrand : colors.onSurface;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const kb = useKeyboardAwareScroll(scrollRef);
 
   const content = scroll ? (

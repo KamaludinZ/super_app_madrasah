@@ -4,7 +4,7 @@
  * (useKeyboardAwareScroll) dan aman untuk area notch.
  */
 import React, { useRef } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -25,7 +25,7 @@ export function AuthLayout({ children, back, logoSize = 104, footer }: {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const kb = useKeyboardAwareScroll(scrollRef);
 
   return (

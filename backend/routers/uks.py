@@ -22,7 +22,7 @@ from xml.sax.saxutils import escape as xml_escape
 
 from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
 from ckg_kolom import KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, kolom_template_ckg, lengkapi_identitas_ckg, pemeriksaan_lain
-from core import db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
+from core import PERAN_GURU_GTK, PERAN_TENDIK_GTK, db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
 from journal_core import now_wib
 from routers._shared import sembunyikan_siswa_nonaktif
@@ -686,7 +686,11 @@ async def list_warga_madrasah(search: Optional[str] = None, role: Optional[str] 
     """Minimal lookup of active users for the patient picker, optionally filtered by role
     (e.g. role=guru or role=tenaga_kependidikan for the GTK patient-type selector)."""
     query = {'is_active': {'$ne': False}, 'mutation_type': {'$ne': 'keluar'}}
-    if role:
+    # role=guru / role=tenaga_kependidikan berarti kelompok GTK (kepala madrasah termasuk guru, Kepala TU tendik).
+    kelompok = {'guru': PERAN_GURU_GTK, 'tenaga_kependidikan': PERAN_TENDIK_GTK}.get(role or '')
+    if kelompok:
+        query['roles'] = {'$in': list(kelompok)}
+    elif role:
         query['roles'] = role
     if search:
         query['full_name'] = {'$regex': re.escape(search), '$options': 'i'}

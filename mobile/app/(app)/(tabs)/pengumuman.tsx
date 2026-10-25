@@ -95,7 +95,7 @@ export default function NotifikasiScreen() {
             <View style={styles.headerRow}>
               <Button title="Tandai semua dibaca" icon="checkmark-done" variant="ghost" size="sm" loading={marking} disabled={!online} onPress={markAll} />
             </View>
-          ) : null}
+          ) : undefined}
           renderItem={({ item }) => <NotifRow n={item} onPress={() => open(item)} />}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           ListEmptyComponent={<Card><EmptyState icon="notifications-off-outline" title="Belum ada notifikasi" message="Pengumuman madrasah akan muncul di sini." compact /></Card>}

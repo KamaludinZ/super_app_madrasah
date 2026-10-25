@@ -10,9 +10,10 @@ import { Briefcase, Search, Eye, Loader2 } from 'lucide-react';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { toast } from 'sonner';
 import StaffDetailDialog from '@/components/staff/StaffDetailDialog';
+import { PERAN_GURU_GTK, PERAN_TENDIK_GTK, jenisGtk } from '@/lib/jenisGtk';
 
-const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
-const TENDIK_ROLES = ['tenaga_kependidikan'];
+const GURU_ROLES = PERAN_GURU_GTK;
+const TENDIK_ROLES = PERAN_TENDIK_GTK;
 
 export default function AdminUKSDataGtkPage() {
   const [tab, setTab] = useState('guru');
@@ -38,8 +39,8 @@ export default function AdminUKSDataGtkPage() {
 
   const filtered = users.filter((u) => {
     const roles = u.roles || [];
-    const isGuru = roles.some((r) => GURU_ROLES.includes(r));
-    const isTendik = roles.some((r) => TENDIK_ROLES.includes(r)) && !isGuru;
+    const isGuru = jenisGtk(roles) === 'guru';
+    const isTendik = jenisGtk(roles) === 'tendik';
     if (tab === 'guru' && !isGuru) return false;
     if (tab === 'tendik' && !isTendik) return false;
     if (roleFilter !== 'all' && !roles.includes(roleFilter)) return false;
@@ -53,8 +54,8 @@ export default function AdminUKSDataGtkPage() {
   });
 
   const counts = {
-    guru: users.filter((u) => (u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
-    tendik: users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
+    guru: users.filter((u) => jenisGtk(u.roles) === 'guru').length,
+    tendik: users.filter((u) => jenisGtk(u.roles) === 'tendik').length,
   };
 
   return (

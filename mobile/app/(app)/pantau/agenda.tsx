@@ -11,6 +11,7 @@ import type { User } from '@/api/types';
 import { pantau, AgendaItem } from '@/pantau/api';
 import { bulanIni, cocok, MonthBar, pecahBulan, SearchBox } from '@/pantau/ui';
 import { useCached } from '@/hooks/useCached';
+import { jenisGtk } from '@/utils/gtk';
 import { formatDateLong, formatDateShort } from '@/utils/time';
 import { spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
@@ -22,7 +23,6 @@ import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 
 type Jenis = 'guru' | 'tendik' | 'madrasah';
-const ROLE: Record<Exclude<Jenis, 'madrasah'>, string> = { guru: 'guru', tendik: 'tenaga_kependidikan' };
 
 export default function PantauAgenda() {
   const { colors } = useTheme();
@@ -34,18 +34,19 @@ export default function PantauAgenda() {
   const pegawai = jenis !== 'madrasah';
   const staff = useCached<AgendaItem[]>(`pantau.agenda.staff.${month}`, () => pantau.staffEvents(y, m), { enabled: pegawai });
   const madrasah = useCached<AgendaItem[]>(`pantau.agenda.madrasah.${month}`, () => pantau.madrasahEvents(y, m), { enabled: !pegawai });
-  const users = useCached<User[]>(`pantau.users.${pegawai ? ROLE[jenis as 'guru'] : 'guru'}`, () => pantau.users(ROLE[jenis as 'guru']), { enabled: pegawai, staleTime: 60 * 60_000 });
+  const users = useCached<User[]>('pantau.users.aktif', pantau.usersAktif, { enabled: pegawai, staleTime: 60 * 60_000 });
   const res = pegawai ? staff : madrasah;
 
   const groups = useMemo(() => {
-    const ids = new Set((users.data ?? []).map((u) => u.id));
+    // Agenda Guru memuat kepala madrasah, Agenda Tendik memuat Kepala TU (pengelompokan GTK bersama).
+    const ids = new Set((users.data ?? []).filter((u) => jenisGtk(u.roles) === jenis).map((u) => u.id));
     const src = pegawai ? (staff.data ?? []).filter((a) => a.user_id && ids.has(a.user_id)) : (madrasah.data ?? []);
     const map = new Map<string, AgendaItem[]>();
     src.filter((a) => cocok(`${a.event_name ?? a.name} ${a.user_name} ${a.location}`, q))
       .sort((a, b) => b.date.localeCompare(a.date) || (a.start_time ?? '').localeCompare(b.start_time ?? ''))
       .forEach((a) => map.set(a.date, [...(map.get(a.date) ?? []), a]));
     return [...map.entries()];
-  }, [pegawai, staff.data, madrasah.data, users.data, q]);
+  }, [pegawai, jenis, staff.data, madrasah.data, users.data, q]);
   const total = groups.reduce((n, [, l]) => n + l.length, 0);
   const loading = res.loading || (pegawai && users.loading);
 

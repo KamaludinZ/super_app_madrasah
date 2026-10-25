@@ -22,7 +22,7 @@ const SEVERITIES = [
 ];
 
 const ALL_ROLES = [
-  'admin', 'guru', 'wali_kelas', 'siswa', 'tenaga_kependidikan',
+  'admin', 'kepala_sekolah', 'kepala_tata_usaha', 'guru', 'wali_kelas', 'siswa', 'tenaga_kependidikan',
   'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler',
 ];
 

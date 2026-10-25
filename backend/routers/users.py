@@ -11,6 +11,7 @@ import io
 
 from auth_utils import hash_password
 from core import (
+    PERAN_GTK,
     bump_token_version,
     db,
     get_active_academic_year,
@@ -33,15 +34,9 @@ from models import ROLES, UserCreateRequest, UserModel, UserUpdateRequest, Mutat
 
 router = APIRouter()
 
-GTK_ACCOUNT_ROLES = {
-    'guru',
-    'wali_kelas',
-    'tenaga_kependidikan',
-    'guru_piket',
-    'guru_bk',
-    'guru_tata_tertib',
-    'guru_ekstrakurikuler',
-}
+# Peran akun GTK (impor GTK, cek duplikat NIP, daftar /users/teachers): seluruh guru termasuk kepala madrasah,
+# seluruh tendik termasuk Kepala TU (core.PERAN_GTK).
+GTK_ACCOUNT_ROLES = set(PERAN_GTK)
 
 def _norm_name(name: Optional[str]) -> str:
     if not name:
@@ -827,9 +822,7 @@ async def list_mutations(mutation_type: str, role_group: str = 'siswa',
     if role_group == 'siswa':
         q['roles'] = 'siswa'
     else:
-        staff_roles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
-                       'guru_ekstrakurikuler', 'tenaga_kependidikan']
-        q['roles'] = {'$in': staff_roles}
+        q['roles'] = {'$in': list(PERAN_GTK)}
     items = await db.users.find(q, {'_id': 0, 'password_hash': 0}).sort('mutation_date', -1).to_list(500)
     enriched = []
     for u in items:
@@ -1036,9 +1029,7 @@ async def get_eligible_users_for_keluar(role_group: str = 'siswa',
     if role_group == 'siswa':
         q['roles'] = 'siswa'
     else:
-        staff_roles = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
-                       'guru_ekstrakurikuler', 'tenaga_kependidikan']
-        q['roles'] = {'$in': staff_roles}
+        q['roles'] = {'$in': list(PERAN_GTK)}
 
     items = await db.users.find(q, {'_id': 0, 'id': 1, 'full_name': 1, 'nisn': 1, 'nip_nuptk': 1,
                                       'student_class_id': 1, 'roles': 1}).sort('full_name', 1).to_list(None)

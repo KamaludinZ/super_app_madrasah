@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { toast } from 'sonner';
 import { formatWIB } from '@/lib/datetime';
 
@@ -372,7 +373,7 @@ export default function StudentDetailDialog({ student, open, onClose, autoEdit =
       } else {
         const userType = (studentData?.roles || student?.roles || []).includes('siswa')
           ? 'siswa'
-          : (studentData?.roles || student?.roles || []).includes('tenaga_kependidikan')
+          : jenisGtk(studentData?.roles || student?.roles) === 'tendik'
             ? 'tenaga_kependidikan'
             : 'guru';
 

@@ -3,7 +3,7 @@
 Mobile app native (Android/iOS) untuk Super Apps MATSANDATAMA dibuat sebagai project Expo terpisah yang me-reuse backend API yang sudah ada. **Backend tidak perlu perubahan apapun** - aplikasi mobile cukup mengonsumsi REST API yang sudah dibuat.
 
 ## Prerequisite
-- Node.js 18+ & yarn
+- Node.js 22 LTS (minimal 22.13 — syarat Expo SDK 58) & yarn 1 (`corepack yarn`)
 - Expo CLI: `npm install -g expo-cli`
 - Expo Go app di HP untuk testing (Play Store / App Store)
 - Backend Super Apps MATSANDATAMA sudah deploy & accessible publik (HTTPS wajib untuk camera & GPS)

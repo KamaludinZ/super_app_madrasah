@@ -1,3 +1,5 @@
+import { jenisGtk } from '@/lib/jenisGtk';
+
 /**
  * Definisi & hitungan % kelengkapan data wajib GTK per bagian (sejajar dengan
  * compute_completeness siswa). Backend memakai aturan yang sama
@@ -45,6 +47,11 @@ export const BAGIAN_KELENGKAPAN_GTK = [
   },
 ];
 
+// Varian tendik: label "Data Tendik" dan NUPTK tidak diwajibkan (sama dengan BAGIAN_KELENGKAPAN_TENDIK di backend).
+export const BAGIAN_KELENGKAPAN_TENDIK = BAGIAN_KELENGKAPAN_GTK.map((b) => (b.key === 'data_guru'
+  ? { ...b, label: 'Data Tendik', syarat: b.syarat.filter((s) => s.field !== 'nuptk') }
+  : b));
+
 const FALLBACK = { nuptk: 'nip_nuptk' };
 
 const terisi = (v) => !(v == null || v === '' || (Array.isArray(v) && v.length === 0) || (typeof v === 'string' && !v.trim()));
@@ -58,10 +65,11 @@ function cekSyarat(s, u) {
  * Hitung kelengkapan satu GTK: { persen, terisi, total, bagian: [{ key, label, persen, terisi, total, kurang: [label] }] }.
  * Persen keseluruhan = total syarat terpenuhi / total syarat (bobot per syarat).
  */
-export function hitungKelengkapanGtk(user) {
+export function hitungKelengkapanGtk(user, jenis = jenisGtk(user?.roles)) {
   let isi = 0;
   let total = 0;
-  const bagian = BAGIAN_KELENGKAPAN_GTK.map((b) => {
+  const daftar = jenis === 'tendik' ? BAGIAN_KELENGKAPAN_TENDIK : BAGIAN_KELENGKAPAN_GTK;
+  const bagian = daftar.map((b) => {
     const kurang = b.syarat.filter((s) => !cekSyarat(s, user)).map((s) => s.label);
     const t = b.syarat.length;
     const f = t - kurang.length;

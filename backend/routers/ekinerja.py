@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import io
 
-from core import db, get_current_user, log_audit, require_role, serialize_doc
+from core import PERAN_GTK, db, get_current_user, log_audit, require_role, serialize_doc
 from excel_io import rhk_template, rhk_filled_template, parse_rhk_rows
 from journal_core import now_wib
 
@@ -265,9 +265,7 @@ async def unlock_rhk(rhk_id: str, user: Dict = Depends(_require_ekinerja_author(
 @router.put("/ekinerja/rhk/{rhk_id}/claim")
 async def claim_rhk(rhk_id: str, user: Dict = Depends(get_current_user)):
     """Guru/tenaga kependidikan claims an open RHK for themselves."""
-    if not any(r in user.get('roles', []) for r in ('guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
-                                                       'guru_ekstrakurikuler', 'guru_ipa', 'guru_ips', 'guru_bahasa',
-                                                       'guru_seni', 'guru_agama', 'guru_tik', 'tenaga_kependidikan')):
+    if not any(r in user.get('roles', []) for r in PERAN_GTK):
         raise HTTPException(403, "Hanya guru dan tenaga kependidikan yang dapat mengambil RHK")
 
     existing = await db.ekinerja_rhk.find_one({'id': rhk_id})

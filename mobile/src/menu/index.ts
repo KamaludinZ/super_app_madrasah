@@ -2,7 +2,8 @@
  * Menu per peran = menu web (src/menu/webMenu.json, disinkron dari navForRole web lewat
  * `node scripts/sync-web-menu.mjs`). Item yang sudah punya layar native diarahkan ke layar
  * aplikasi (scan QR, riwayat jurnal, guru pengganti, tugas piket); sisanya dibuka di modul web
- * (/web?path=…) dalam keadaan sudah masuk.
+ * (/web?path=…) dalam keadaan sudah masuk. Grup "Penilaian Kinerja" (PKG) ditambahkan dinamis dari keanggotaan
+ * SK aktif di server (src/menu/pkg.ts), sama dengan sidebar web.
  */
 import { api } from '@/api/endpoints';
 import { CacheKeys } from '@/db/cache';
@@ -12,6 +13,7 @@ import type { IconName } from '@/components/ui/Icon';
 import { menuIcon } from './icons';
 import webMenu from './webMenu.json';
 import { nativeRoute, webHref } from './routes';
+import { ambilMenuPkg, grupPkg, perluMenuPkg, tambahGrupPkg } from './pkg';
 
 export { webHref } from './routes';
 
@@ -56,12 +58,14 @@ export function menuForRole(role: string | null | undefined, opts: { canManageGP
     .filter((g) => g.items.length > 0);
 }
 
-/** Menu peran aktif (memperhitungkan izin Guru Pengganti dari server). */
+/** Menu peran aktif (memperhitungkan izin Guru Pengganti dan keanggotaan PKG dari server). */
 export function useRoleMenu(): MenuGroup[] {
   const { activeRole } = useAuth();
   const gp = useCached(`${CacheKeys.gpConfig}.${activeRole}`, api.gp.config, { staleTime: 5 * 60_000 });
   const canManageGP = gp.data?.can_manage ?? ['admin', 'waka_kurikulum', 'guru_piket'].includes(activeRole ?? '');
-  return menuForRole(activeRole, { canManageGP });
+  const adaPkg = perluMenuPkg(activeRole);
+  const pkg = useCached(`${CacheKeys.pkgMenu}.${activeRole}`, ambilMenuPkg, { enabled: adaPkg, staleTime: 10 * 60_000 });
+  return tambahGrupPkg(menuForRole(activeRole, { canManageGP }), adaPkg ? grupPkg(pkg.data) : null);
 }
 
 /** Pintasan Beranda: item pertama menu peran (tanpa Dashboard & Profil), maksimal `n`. */

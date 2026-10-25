@@ -96,5 +96,5 @@ export const pantau = {
   alumniStats: () => request<AlumniStat[]>('/alumni/stats'),
   alumni: (search?: string) => request<Alumni[]>('/alumni', { query: { search: search || undefined } }),
   rkam: (fiscal_year: string) => request<RkamItem[]>('/rkam/budget-items', { query: { fiscal_year } }),
-  users: (role: string) => request<User[]>('/users', { query: { role, is_active: true } }),
+  usersAktif: () => request<User[]>('/users', { query: { is_active: true } }),
 };

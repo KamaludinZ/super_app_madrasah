@@ -17,6 +17,7 @@ import {
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { jenisGtk } from '@/lib/jenisGtk';
 
 const TABS = [
   { value: 'siswa_masuk', label: 'Siswa Masuk', icon: UserPlus, role_group: 'siswa', mutation_type: 'masuk', color: 'text-blue-700' },
@@ -153,10 +154,9 @@ export default function AdminMutationsPage() {
   );
   const keluarSiswaOptions = eligibleUsers.filter((u) => u.student_class_id === keluarKelasId);
 
-  const GURU_ROLES_FOR_MUTASI = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
   const keluarStaffOptions = eligibleUsers.filter((u) => {
-    if (keluarStaffJenis === 'guru') return (u.roles || []).some((r) => GURU_ROLES_FOR_MUTASI.includes(r));
-    if (keluarStaffJenis === 'tenaga_kependidikan') return (u.roles || []).includes('tenaga_kependidikan');
+    if (keluarStaffJenis === 'guru') return jenisGtk(u.roles) === 'guru';
+    if (keluarStaffJenis === 'tenaga_kependidikan') return jenisGtk(u.roles) === 'tendik';
     return false;
   });
 
