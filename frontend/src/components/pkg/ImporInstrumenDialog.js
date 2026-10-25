@@ -8,10 +8,10 @@ import { toast } from 'sonner';
 import { formatUkuran } from '@/lib/pkgTemplate';
 import { BATAS_UKURAN_UNGGAH, pratinjauImpor, ringkasInstrumen, terapkanImpor } from '@/lib/pkgInstrumen';
 
-// Impor instrumen PKG (khusus kepala madrasah): pilih sumber (template resmi di server atau unggah .xlsx),
+// Impor instrumen PKG (khusus kepala madrasah): pilih sumber (unggah template master madrasah / .xlsx, atau template resmi lama di server),
 // tinjau hasil pembacaan, lalu terapkan sebagai instrumen aktif. Penilaian lama tetap memakai instrumen lamanya.
 export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
-  const [sumber, setSumber] = useState('template');
+  const [sumber, setSumber] = useState('unggah');
   const [berkas, setBerkas] = useState(null);
   const [pratinjau, setPratinjau] = useState(null);
   const [gagal, setGagal] = useState(null); // { pesan, galat: [{ lokasi, pesan }] }
@@ -80,18 +80,18 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
         {!pratinjau ? (
           <div className="space-y-4">
             <RadioGroup value={sumber} onValueChange={(v) => { setSumber(v); setPratinjau(null); setGagal(null); }} className="space-y-2">
-              <Label htmlFor="sumber-template" className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer has-[[data-state=checked]]:border-[#006837] has-[[data-state=checked]]:bg-emerald-50/50">
-                <RadioGroupItem value="template" id="sumber-template" className="mt-0.5" />
-                <span>
-                  <span className="block text-sm font-semibold text-slate-900">Template resmi di server (disarankan)</span>
-                  <span className="block text-xs font-normal text-slate-500">pkg_template_v2026.xlsx — checksum diverifikasi</span>
-                </span>
-              </Label>
               <Label htmlFor="sumber-unggah" className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer has-[[data-state=checked]]:border-[#006837] has-[[data-state=checked]]:bg-emerald-50/50">
                 <RadioGroupItem value="unggah" id="sumber-unggah" className="mt-0.5" />
                 <span>
-                  <span className="block text-sm font-semibold text-slate-900">Unggah berkas .xlsx</span>
-                  <span className="block text-xs font-normal text-slate-500">Struktur sama dengan template resmi, maks 10 MB</span>
+                  <span className="block text-sm font-semibold text-slate-900">Unggah template master madrasah (disarankan)</span>
+                  <span className="block text-xs font-normal text-slate-500">Berkas dari tombol "Unduh Template Master" yang sudah diedit; format template resmi lama juga diterima. Maks 10 MB</span>
+                </span>
+              </Label>
+              <Label htmlFor="sumber-template" className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer has-[[data-state=checked]]:border-[#006837] has-[[data-state=checked]]:bg-emerald-50/50">
+                <RadioGroupItem value="template" id="sumber-template" className="mt-0.5" />
+                <span>
+                  <span className="block text-sm font-semibold text-slate-900">Template resmi lama di server</span>
+                  <span className="block text-xs font-normal text-slate-500">pkg_template_v2026.xlsx — checksum diverifikasi</span>
                 </span>
               </Label>
             </RadioGroup>
@@ -108,7 +108,7 @@ export default function ImporInstrumenDialog({ open, onClose, onTerapkan }) {
                     ))}
                   </ul>
                 )}
-                <p className="mt-2 text-xs text-rose-700">Perbaiki berkas lalu baca ulang, atau gunakan template resmi di server.</p>
+                <p className="mt-2 text-xs text-rose-700">Perbaiki berkas lalu baca ulang (lokasi baris tercantum di atas).</p>
               </div>
             )}
 

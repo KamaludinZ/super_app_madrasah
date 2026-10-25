@@ -1,9 +1,12 @@
-"""API instrumen PKG: baca instrumen aktif & daftar versi (anggota SK), impor dari template/unggahan (kepala)."""
+"""API instrumen PKG: baca instrumen aktif & daftar versi (anggota SK), impor dari template/unggahan (kepala),
+unduh template master instrumen milik madrasah."""
 from typing import Dict, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, Response, UploadFile
 
 from core import db
+from journal_core import now_wib
 from pkg_audit import catat_audit_instrumen
 from pkg_instrumen import (
     ambil_instrumen, daftar_kompetensi, daftar_versi, instrumen_aktif, instrumen_tampil, simpan_pratinjau,
@@ -15,6 +18,7 @@ from pkg_skema import (
     POLA_ID, POLA_KODE_SUB, AktifkanInstrumenRequest, TerapkanImporRequest, UbahSubInstrumenRequest,
 )
 from pkg_template import TemplateTidakTersedia
+from pkg_template_master import buat_template_master
 
 router = APIRouter()
 
@@ -90,7 +94,31 @@ async def riwayat_instrumen_api(akses: Dict = Depends(kepala)):
     return await riwayat_instrumen(db)
 
 
-# Rute literal (/aktif, /riwayat, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap parameter {instrumen_id}.
+@router.get("/pkg/instrumen/template-master")
+async def unduh_template_master_api(akses: Dict = Depends(anggota_sk)):
+    """Template master instrumen (.xlsx) buatan aplikasi dengan identitas madrasah dari pengaturan, berisi instrumen
+    aktif (bila belum ada: isi template resmi, atau tabel kosong). Dapat diedit lalu diimpor kembali oleh kepala."""
+    aktif = await instrumen_aktif(db)
+    if aktif:
+        kompetensi, sumber = aktif.get('kompetensi') or [], f"instrumen aktif revisi {aktif.get('revisi', '-')}"
+    else:
+        try:
+            kompetensi, sumber = pratinjau_dari_template()['kompetensi'], 'template resmi'
+        except (TemplateTidakTersedia, GalatImporInstrumen):
+            kompetensi, sumber = [], 'kosong'
+    pengaturan = await db.settings.find_one({'id': 'global_config'}, {'_id': 0}) or {}
+    madrasah = {'nama': pengaturan.get('school_name'), 'nsm': pengaturan.get('nsm'), 'npsn': pengaturan.get('npsn'),
+                'alamat': pengaturan.get('address'), 'kepala': pengaturan.get('headmaster_name')}
+    isi = buat_template_master(kompetensi, madrasah, sumber, sekarang=now_wib())
+    nama = f"Template_Master_Instrumen_PKG_{(madrasah['nama'] or 'Madrasah').replace(' ', '_')}.xlsx"
+    return Response(isi, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={
+        'Content-Disposition': f"attachment; filename=\"{nama}\"; filename*=UTF-8''{quote(nama)}",
+        'Access-Control-Expose-Headers': 'Content-Disposition',
+    })
+
+
+# Rute literal (/aktif, /riwayat, /template-master, /impor/...) didaftarkan lebih dahulu sehingga tidak tertangkap
+# parameter {instrumen_id}.
 @router.get("/pkg/instrumen/{instrumen_id}")
 async def rincian_instrumen_api(instrumen_id: str = Path(..., pattern=POLA_ID), akses: Dict = Depends(anggota_sk)):
     """Instrumen versi tertentu (mis. yang dirujuk lembar penilaian lama)."""

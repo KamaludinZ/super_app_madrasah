@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { galatDariRespons, namaDariHeader } from '@/lib/pkgCetak';
 
 // Master instrumen PKG (backend/routers/pkg_instrumen_api.py): kompetensi -> sub-kompetensi -> indikator Level 1–5.
 //   GET  /pkg/instrumen/aktif                 -> instrumen | null (belum diimpor)
@@ -72,6 +73,16 @@ export const aktifkanInstrumen = (id, alasan) => panggil(
 
 export const terapkanImpor = (token) => panggil(() => api.post('/pkg/instrumen/impor', { token }), 'Gagal menerapkan instrumen.');
 
+// Template master instrumen (.xlsx) buatan aplikasi dengan identitas madrasah; diedit lalu diimpor kembali (sumber 'master').
+export async function unduhTemplateMaster() {
+  try {
+    const res = await api.get('/pkg/instrumen/template-master', { responseType: 'blob' });
+    return { blob: res.data, namaBerkas: namaDariHeader(res.headers?.['content-disposition'], 'Template_Master_Instrumen_PKG.xlsx') };
+  } catch (e) {
+    throw await galatDariRespons(e);
+  }
+}
+
 // Ringkasan jumlah kompetensi, sub-kompetensi, indikator, dan skor maksimal (level tertinggi x jumlah sub).
 export function ringkasInstrumen(instrumen) {
   const kompetensi = instrumen?.kompetensi || [];
@@ -136,7 +147,8 @@ export function ubahSubKompetensi(kode, isian) {
 //   'isi'   = versi sama namun isi instrumen tidak lagi sama dengan berkas resmi (diubah/diunggah).
 export function bandingkanVersiTemplate(instrumen, infoTemplate) {
   const berkas = infoTemplate?.berkas?.find((b) => b.jenis === 'instrumen');
-  if (!instrumen || !infoTemplate || !berkas) return null;
+  // Instrumen dari template master madrasah sendiri tidak dibandingkan dengan template resmi lama.
+  if (!instrumen || !infoTemplate || !berkas || instrumen.sumber === 'master') return null;
   const versiTemplate = berkas.versi || infoTemplate.versi_template;
   if (String(instrumen.versi_template) !== String(versiTemplate)) {
     return { jenis: 'versi', versiInstrumen: instrumen.versi_template, versiTemplate };
