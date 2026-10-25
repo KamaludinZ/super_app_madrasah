@@ -13,6 +13,16 @@ import { api } from '@/lib/api';
 export const JENIS_DOKUMEN = {
   rekap: { judul: 'Rekap Hasil PKG', keterangan: 'Seluruh guru dalam cakupan Anda (format rekap_hasil_pkg_v2026)' },
   guru: { judul: 'Laporan PKG per Guru', keterangan: 'Berkas hasil PKG satu guru: cover, laporan, identitas, kompetensi, rekap, 360°, dan kehadiran' },
+  angket: { judul: 'Angket 360°', keterangan: 'Angket kertas sejawat, peserta didik, atau orang tua/wali' },
+  form: { judul: 'Form Isian Kosong', keterangan: 'Form cetak offline untuk diisi tim penilai lalu diinput ke aplikasi' },
+};
+
+// Jenis form isian kosong (POST /pkg/cetak/form).
+export const JENIS_FORM = {
+  instrumen: { judul: 'Instrumen Penilaian Kinerja', keterangan: 'Indikator Level 1–5 per sub-kompetensi dengan kotak centang' },
+  kehadiran: { judul: 'Kehadiran', keterangan: 'Rekap per bulan semester (terlambat, pulang cepat, tanpa keterangan, hadir, izin, sakit)' },
+  pkb: { judul: 'Rekomendasi PKB', keterangan: 'Opsi PKB dan fokus kompetensi tinggal dicentang' },
+  paket: { judul: 'Paket Lengkap', keterangan: 'Instrumen, kehadiran, dan rekomendasi PKB dalam satu PDF' },
 };
 
 export const MESIN_LABEL = {
@@ -82,6 +92,24 @@ export async function unduhDokumen({ jenis, format, periode, guru = null, lembar
     throw await galatDariRespons(e);
   } finally {
     pewaktu.forEach(clearTimeout);
+  }
+}
+
+// Form isian kosong untuk dicetak dan diisi offline (PDF): POST /pkg/cetak/form
+//   { jenis: 'instrumen' | 'kehadiran' | 'pkb' | 'paket', periode_id?, guru_id?, semua_guru? } -> PDF (blob).
+// guru_id mengisi identitas guru & memakai instrumen lembarnya; semua_guru = satu PDF berisi form setiap guru dalam cakupan.
+export async function cetakFormKosong({ jenis, periodeId, guruId, semuaGuru = false }) {
+  try {
+    const res = await api.post('/pkg/cetak/form', {
+      jenis, periode_id: periodeId || undefined, guru_id: guruId || undefined, semua_guru: semuaGuru || undefined,
+    }, { responseType: 'blob' });
+    return {
+      blob: res.data,
+      namaBerkas: namaDariHeader(res.headers?.['content-disposition'], `Form_PKG_${jenis}.pdf`),
+      mesin: res.headers?.['x-pkg-mesin'] || null,
+    };
+  } catch (e) {
+    throw await galatDariRespons(e);
   }
 }
 

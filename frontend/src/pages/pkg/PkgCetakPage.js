@@ -2,15 +2,17 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Printer, FileSpreadsheet, FileText, Loader2, Users, UserRound } from 'lucide-react';
+import { Printer, FileSpreadsheet, FileText, Loader2, Users, UserRound, ClipboardPen } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import RiwayatUnduhan from '@/components/pkg/RiwayatUnduhan';
 import DialogProsesCetak from '@/components/pkg/DialogProsesCetak';
+import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
 import { ambilRekap } from '@/lib/pkgRekap';
-import { JENIS_DOKUMEN, simpanBerkas, unduhDokumen } from '@/lib/pkgCetak';
+import { JENIS_DOKUMEN, JENIS_FORM, cetakFormKosong, simpanBerkas, unduhDokumen } from '@/lib/pkgCetak';
+import { JENIS_ANGKET, cetakAngket } from '@/lib/pkgAngket';
 
 // Tombol unduh Excel & PDF untuk satu dokumen. `kunci` membedakan proses unduh yang sedang berjalan.
 function TombolUnduh({ kunci, sedang, nonaktif, onUnduh }) {
@@ -24,6 +26,45 @@ function TombolUnduh({ kunci, sedang, nonaktif, onUnduh }) {
         </Button>
       ))}
     </div>
+  );
+}
+
+// Form isian kosong untuk dicetak dan diisi offline oleh tim penilai, lalu diinput ke aplikasi.
+function KartuFormKosong({ periodeId }) {
+  return (
+    <Card data-testid="pkg-cetak-form-kosong">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><ClipboardPen className="h-4 w-4 text-[#006837]" /> Form Isian Kosong (cetak offline)</CardTitle>
+        <p className="text-xs text-slate-500">Cetak formulir PDF untuk diisi tangan oleh tim penilai, lalu masukkan hasilnya ke aplikasi. Isi form mengikuti instrumen yang berlaku; identitas diisi tangan (form per guru ada di daftar tugas penilaian).</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <div className="mb-1.5 text-xs font-semibold text-slate-700">Formulir penilaian</div>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(JENIS_FORM).map(([jenis, info]) => (
+              <TombolCetakOffline key={jenis} ambil={() => cetakFormKosong({ jenis, periodeId })} testId={`pkg-form-kosong-${jenis}`}
+                variant={jenis === 'paket' ? 'default' : 'outline'} className={jenis === 'paket' ? 'bg-[#006837] hover:bg-[#005830]' : ''}>
+                {info.judul}
+              </TombolCetakOffline>
+            ))}
+            <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'paket', periodeId, semuaGuru: true })} testId="pkg-form-kosong-semua-guru">
+              Paket semua guru
+            </TombolCetakOffline>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-500">"Paket semua guru" = satu PDF berisi paket lengkap tiap guru dalam cakupan Anda (halaman terpisah, identitas terisi).</p>
+        </div>
+        <div>
+          <div className="mb-1.5 text-xs font-semibold text-slate-700">Angket 360° (dibagikan ke responden)</div>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(JENIS_ANGKET).map(([jenis, info]) => (
+              <TombolCetakOffline key={jenis} ambil={() => cetakAngket({ jenis, format: 'pdf', periodeId })} testId={`pkg-angket-kosong-${jenis}`}>
+                {info.label}
+              </TombolCetakOffline>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -84,6 +125,8 @@ function IsiHalamanCetak() {
 
       <SaringanPeriodeRekap nilai={rekap.periode?.id}
         onUbah={(id) => setSearchParams((sp) => { const baru = new URLSearchParams(sp); baru.set('periode', id); return baru; })} />
+
+      <KartuFormKosong periodeId={rekap.periode?.id} />
 
       <Card>
         <CardHeader className="pb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

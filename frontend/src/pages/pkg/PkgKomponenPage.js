@@ -9,7 +9,8 @@ import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import DaftarRekomendasiPkb from '@/components/pkg/RekomendasiPkb';
-import { simpanBerkas } from '@/lib/pkgCetak';
+import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
+import { cetakFormKosong, simpanBerkas } from '@/lib/pkgCetak';
 import { JENIS_ANGKET, cetakAngket, daftarJenisAngket, ringkasanAngket } from '@/lib/pkgAngket';
 import { ringkasanKehadiran } from '@/lib/pkgKehadiran';
 
@@ -124,6 +125,9 @@ function DaftarGuruKehadiran({ periodeId }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base"><CalendarCheck className="h-4 w-4 text-[#006837]" /> Rekap Kehadiran Guru</CardTitle>
         <p className="text-xs text-slate-500">Input manual per bulan: menit terlambat & pulang cepat serta hari tanpa keterangan (format INDEK-HDIR). Indeks kehadiran menjadi pengali nilai akhir PK Guru.</p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'kehadiran', periodeId })} testId="pkg-cetak-form-kehadiran">Cetak form kehadiran</TombolCetakOffline>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {data.guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}

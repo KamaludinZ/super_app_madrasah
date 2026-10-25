@@ -513,7 +513,8 @@ class KirimPenilaianRequest(DrafPenilaianRequest):
 
 # ---------------------------------------------------------------- cetak dokumen
 
-JENIS_DOKUMEN = ('rekap', 'guru', 'angket')  # 'angket' = angket kertas 360° (POST /pkg/angket/cetak)
+# 'angket' = angket kertas 360° (POST /pkg/angket/cetak); 'form' = form isian kosong offline (POST /pkg/cetak/form)
+JENIS_DOKUMEN = ('rekap', 'guru', 'angket', 'form')
 FORMAT_CETAK = ('xlsx', 'pdf')
 
 
@@ -624,3 +625,18 @@ class AngketCetakRequest(IsianPkg):
     format: str = Field('pdf', pattern='^(xlsx|pdf)$')
     periode_id: Optional[str] = Field(None, pattern=POLA_ID)
     guru_id: Optional[str] = Field(None, pattern=POLA_ID)
+
+
+class FormKosongRequest(IsianPkg):
+    """Cetak form isian kosong PKG (PDF) untuk diisi offline oleh tim penilai lalu diinput ke aplikasi. Tanpa guru_id
+    identitas diisi tangan; `semua_guru` mencetak satu PDF berisi form setiap guru dalam cakupan (halaman terpisah)."""
+    jenis: str = Field(..., pattern='^(instrumen|kehadiran|pkb|paket)$')
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    guru_id: Optional[str] = Field(None, pattern=POLA_ID)
+    semua_guru: bool = False
+
+    @model_validator(mode='after')
+    def _satu_cakupan(self):
+        if self.guru_id and self.semua_guru:
+            raise ValueError('guru_id dan semua_guru tidak dapat dipakai bersamaan')
+        return self

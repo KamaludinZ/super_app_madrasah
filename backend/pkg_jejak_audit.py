@@ -14,7 +14,7 @@ from pkg_audit import (
 from pkg_skema import KOLEKSI_AUDIT
 
 MESIN = {'openpyxl': 'Excel', 'libreoffice': 'LibreOffice', 'reportlab': 'cadangan ReportLab'}
-JENIS_DOKUMEN = {'rekap': 'Rekap hasil PKG', 'guru': 'Laporan PKG guru'}
+JENIS_DOKUMEN = {'rekap': 'Rekap hasil PKG', 'guru': 'Laporan PKG guru', 'form': 'Form isian kosong'}
 
 
 def _angka(n: Any) -> str:

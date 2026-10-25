@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
+import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
+import { cetakFormKosong } from '@/lib/pkgCetak';
 import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye } from 'lucide-react';
 
 // Tombol aksi per status lembar (badge status: BadgeStatusPenilaian).
@@ -126,17 +128,20 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
                     <span className="text-[11px] tabular-nums text-slate-500 w-9 text-right">{t.progres}%</span>
                   </div>
                 </div>
-                {terbuka ? (
-                  <Button asChild size="sm" variant={t.status === 'terkunci' ? 'outline' : 'default'} className={t.status === 'terkunci' ? 'shrink-0' : 'shrink-0 bg-[#006837] hover:bg-[#005830]'}>
-                    <Link to={`/pkg/penilaian/${t.id}`} data-testid={`pkg-tugas-aksi-${t.id}`}>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'paket', guruId: t.id })} testId={`pkg-tugas-cetak-form-${t.id}`}>Cetak form</TombolCetakOffline>
+                  {terbuka ? (
+                    <Button asChild size="sm" variant={t.status === 'terkunci' ? 'outline' : 'default'} className={t.status === 'terkunci' ? 'shrink-0' : 'shrink-0 bg-[#006837] hover:bg-[#005830]'}>
+                      <Link to={`/pkg/penilaian/${t.id}`} data-testid={`pkg-tugas-aksi-${t.id}`}>
+                        <IkonAksi className="h-3.5 w-3.5 mr-1" /> {status.aksi}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="shrink-0" disabled data-testid={`pkg-tugas-aksi-${t.id}`}>
                       <IkonAksi className="h-3.5 w-3.5 mr-1" /> {status.aksi}
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="shrink-0" disabled data-testid={`pkg-tugas-aksi-${t.id}`}>
-                    <IkonAksi className="h-3.5 w-3.5 mr-1" /> {status.aksi}
-                  </Button>
-                )}
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}

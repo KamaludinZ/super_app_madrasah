@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { GraduationCap, Lightbulb, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
+import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
+import { cetakFormKosong } from '@/lib/pkgCetak';
 import { ambilRekomendasiGuru, opsiPkb, ringkasanPkb, simpanRekomendasi } from '@/lib/pkgRekomendasi';
 
 const PERAN = { kepala: 'Kepala madrasah', penilai: 'Penilai' };
@@ -133,6 +135,9 @@ export default function DaftarRekomendasiPkb({ periodeId }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base"><GraduationCap className="h-4 w-4 text-[#006837]" /> Rekomendasi Pengembangan Keprofesian Berkelanjutan</CardTitle>
         <p className="text-xs text-slate-500">Disusun penilai atau kepala madrasah untuk setiap guru yang dinilai; tampil di rekap dan laporan hasil PKG.</p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'pkb', periodeId })} testId="pkg-cetak-form-pkb">Cetak form PKB</TombolCetakOffline>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {data.guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}
