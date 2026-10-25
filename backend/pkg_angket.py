@@ -14,11 +14,16 @@ from pkg_skema import KOLEKSI_ANGKET
 from pkg_template import buka_template, isi_template_ke_bytes, muat_lebar_halaman, tampilkan_hanya
 
 # form: rentang baris bagian FORM-360-GR (area cetak B:H); identitas: sel nama, NIP, tugas tambahan di bagian itu.
+# sembunyi: rentang baris kosong/sisa jeda halaman template (baris pemisah, kepala tabel salinan halaman 2, baris akhir)
+# yang disembunyikan di salinan cetak agar angket muat 1 lembar A4 tanpa mengecilkan huruf.
 # baris: rentang baris butir pada sheet isian; kolom penilai: 10 blok (0/1/2) mulai kolom F, label nomor di baris 7.
 JENIS_ANGKET: Dict[str, Dict[str, Any]] = {
-    'sejawat': {'label': 'Teman Sejawat', 'sheet': 'SEJAWAT', 'baris': (9, 36), 'form': (2, 50), 'identitas': ('E6', 'E7', 'E8')},
-    'siswa': {'label': 'Peserta Didik', 'sheet': 'SISWA', 'baris': (9, 48), 'form': (52, 124), 'identitas': ('E56', 'E57', 'E58')},
-    'ortu': {'label': 'Orang Tua/Wali', 'sheet': 'ORTU', 'baris': (9, 16), 'form': (155, 188), 'identitas': ('E159', 'E160', 'E161')},
+    'sejawat': {'label': 'Teman Sejawat', 'sheet': 'SEJAWAT', 'baris': (9, 36), 'form': (2, 50), 'identitas': ('E6', 'E7', 'E8'),
+                'sembunyi': ((43, 43), (50, 50))},
+    'siswa': {'label': 'Peserta Didik', 'sheet': 'SISWA', 'baris': (9, 48), 'form': (52, 124), 'identitas': ('E56', 'E57', 'E58'),
+             'sembunyi': ((96, 102), (113, 115), (123, 124))},
+    'ortu': {'label': 'Orang Tua/Wali', 'sheet': 'ORTU', 'baris': (9, 16), 'form': (155, 188), 'identitas': ('E159', 'E160', 'E161'),
+             'sembunyi': ((176, 179), (187, 188))},
 }
 SHEET_FORM = 'FORM-360-GR'
 SKOR_ANGKET = (0, 1, 2)
@@ -67,6 +72,22 @@ def daftar_jenis() -> List[Dict[str, Any]]:
             for j, c in JENIS_ANGKET.items()]
 
 
+def _satu_lembar_a4(ws) -> None:
+    """Setelan cetak salinan workbook (template asli tidak diubah): satu angket = tepat 1 lembar A4 tegak, margin
+    sempit, rata tengah, dan dimuatkan 1x1 (lebar & tinggi). Pemisah halaman manual template dibuang karena area
+    cetak sudah dibatasi pada bagian angket yang bersangkutan."""
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = 'portrait'
+    ws.page_setup.scale = None
+    ws.page_margins.left = ws.page_margins.right = 0.4
+    ws.page_margins.top = ws.page_margins.bottom = 0.4
+    ws.page_margins.header = ws.page_margins.footer = 0.2
+    ws.print_options.horizontalCentered = True
+    ws.row_breaks.brk = []
+    ws.col_breaks.brk = []
+    muat_lebar_halaman(ws, satu_halaman=True)
+
+
 def isi_form_angket(wb, jenis: str, guru: Optional[Dict[str, Any]] = None) -> None:
     """Siapkan workbook untuk mencetak angket kertas satu jenis: identitas guru di bagian FORM-360-GR (kosong = titik-
     titik isian template dipertahankan), area cetak bagian itu saja, dan sheet lain disembunyikan."""
@@ -77,7 +98,16 @@ def isi_form_angket(wb, jenis: str, guru: Optional[Dict[str, Any]] = None) -> No
             ws[sel] = f": {nilai or '-'}"
     awal, akhir = cfg['form']
     ws.print_area = f'B{awal}:H{akhir}'
-    muat_lebar_halaman(ws, satu_halaman=False)  # kolom skor terakhir (H) melewati lebar kertas pada setelan template
+    for a, b in cfg['sembunyi']:
+        for r in range(a, b + 1):
+            ws.row_dimensions[r].hidden = True
+    awal_butir, akhir_butir = cfg['form']
+    for r in range(awal_butir, akhir_butir + 1):  # tinggi baris butir pas isinya (template menyisakan ruang berlebih)
+        teks = ws[f'E{r}'].value
+        tinggi = ws.row_dimensions[r].height
+        if isinstance(ws[f'D{r}'].value, (int, float)) and teks and tinggi:
+            ws.row_dimensions[r].height = min(tinggi, 12.5 * max(1, -(-len(str(teks)) // 50)) + 1.5)
+    _satu_lembar_a4(ws)
     tampilkan_hanya(wb, [SHEET_FORM])
 
 
