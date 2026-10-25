@@ -741,9 +741,15 @@ class SettingsModel(BaseModel):
     app_name: str = "Super Apps MATSANDATAMA"
     school_name: str = "MTsN 2 Kota Malang"
     npsn: Optional[str] = None
+    nsm: Optional[str] = None  # Nomor Statistik Madrasah (identitas di rekap PKG)
     accreditation: Optional[str] = None
     headmaster_name: Optional[str] = None
     address: Optional[str] = None
+    # Wilayah sekolah untuk lampiran identitas & tanda tangan cetak PKG (backend/pkg_identitas.py)
+    village: Optional[str] = None  # kelurahan/desa
+    district: Optional[str] = None  # kecamatan
+    city: Optional[str] = None  # kota/kabupaten
+    province: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     logo_url: Optional[str] = None

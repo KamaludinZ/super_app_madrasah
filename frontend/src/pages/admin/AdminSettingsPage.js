@@ -311,11 +311,16 @@ export default function AdminSettingsPage() {
                 <div><Label>Nama Aplikasi</Label><Input value={form.app_name || ''} onChange={(e) => setForm({...form, app_name: e.target.value})} data-testid="settings-app-name" /></div>
                 <div><Label>Nama Sekolah</Label><Input value={form.school_name || ''} onChange={(e) => setForm({...form, school_name: e.target.value})} data-testid="settings-school-name" /></div>
                 <div><Label>NPSN</Label><Input value={form.npsn || ''} onChange={(e) => setForm({...form, npsn: e.target.value})} /></div>
+                <div><Label>NSM (Nomor Statistik Madrasah)</Label><Input value={form.nsm || ''} inputMode="numeric" onChange={(e) => setForm({...form, nsm: e.target.value})} data-testid="settings-nsm" /></div>
                 <div><Label>Akreditasi</Label><Input value={form.accreditation || ''} onChange={(e) => setForm({...form, accreditation: e.target.value})} /></div>
                 <div><Label>Nama Kepala Madrasah</Label><Input value={form.headmaster_name || ''} onChange={(e) => setForm({...form, headmaster_name: e.target.value})} /></div>
                 <div><Label>Email</Label><Input value={form.email || ''} onChange={(e) => setForm({...form, email: e.target.value})} /></div>
                 <div><Label>Telepon</Label><Input value={form.phone || ''} onChange={(e) => setForm({...form, phone: e.target.value})} /></div>
                 <div><Label>Alamat</Label><Input value={form.address || ''} onChange={(e) => setForm({...form, address: e.target.value})} /></div>
+                <div><Label>Kelurahan/Desa</Label><Input value={form.village || ''} onChange={(e) => setForm({...form, village: e.target.value})} /></div>
+                <div><Label>Kecamatan</Label><Input value={form.district || ''} onChange={(e) => setForm({...form, district: e.target.value})} /></div>
+                <div><Label>Kota/Kabupaten</Label><Input value={form.city || ''} placeholder="mis. Kota Malang" onChange={(e) => setForm({...form, city: e.target.value})} /></div>
+                <div><Label>Provinsi</Label><Input value={form.province || ''} onChange={(e) => setForm({...form, province: e.target.value})} /></div>
               </div>
             </CardContent>
           </Card>

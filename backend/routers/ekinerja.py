@@ -632,12 +632,16 @@ async def get_pengumpulan_status(
             })
         rekap.sort(key=lambda x: (x['sudah_upload'], x['gtk_name']))
         gtk_ids = {g['id'] for g in gtk_users}
+        # Penyusun yang juga GTK (kepala madrasah/KTU) ikut mengumpulkan dokumen sendiri: sertakan status dirinya.
+        mine = confirmed_by_id.get(user['id'])
         return {
             'link_url': link_url,
             'total_gtk': len(gtk_users),
             'total_confirmed': len(confirmed_ids & gtk_ids),
             'can_manage_status': _can_manage_pengumpulan_status(user),
             'rekap': rekap,
+            'sudah_upload': mine is not None,
+            'confirmed_at': mine.get('confirmed_at') if mine else None,
         }
     else:
         my_confirmation = await db.ekinerja_pengumpulan_konfirmasi.find_one(
