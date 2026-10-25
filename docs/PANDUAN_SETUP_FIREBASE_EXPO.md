@@ -30,11 +30,14 @@ Server **tidak** menyimpan kunci Firebase. Kunci Firebase hanya disimpan di akun
 
 1. **Akun Google madrasah** (mis. akun admin TIK). Pakai akun lembaga, bukan akun pribadi, agar mudah diwariskan.
 2. **Komputer/laptop** (Windows/Mac/Linux) dengan internet stabil.
-3. **Node.js versi LTS** (20 atau lebih baru): unduh dari https://nodejs.org → pilih *LTS* → pasang.
+3. **Node.js 22 LTS** (minimal 22.13; Expo SDK 58 tidak mendukung Node 18/20 maupun versi ganjil 23/25):
+   unduh dari https://nodejs.org atau `winget install OpenJS.NodeJS.22` → pasang. Gunakan rilis 22 terbaru agar
+   ikut tambalan keamanan (Oktober 2026: v22.23.4 — versi ini juga yang dipakai build EAS, lihat `mobile/eas.json`).
    Cek di Terminal/Command Prompt:
    ```bash
-   node -v      # contoh: v20.x.x
+   node -v      # contoh: v22.23.4
    npm -v
+   corepack yarn -v   # yarn 1.22.22 (dipakai proyek mobile)
    ```
 4. **Git** (opsional, untuk mengambil kode dari GitHub): https://git-scm.com
 5. **Satu HP Android** untuk uji (Android 8 ke atas).
@@ -278,11 +281,20 @@ Server tidak butuh file Firebase apa pun.
 
 ## Bagian 9 — Merilis versi baru
 
-1. Ubah di `app.json`: `version` (mis. `1.0.1`) **dan** naikkan `android.versionCode` (mis. `2`).
+1. Ubah di `app.json`: `version` (mis. `1.1.0`) **dan** naikkan `android.versionCode` (mis. `4`). Nomor build
+   tidak boleh sama dengan build yang sudah pernah diunggah.
 2. `eas build -p android --profile production`
 3. Unggah APK ke GitHub Releases / Google Drive madrasah.
 4. Terbitkan **Pengumuman** berisi tautan unduh APK → guru menerima notifikasi dan memasang versi baru
    (menimpa versi lama, data tetap aman).
+
+**Rilis lewat Google Play (AAB).** Build `eas build -p android --profile production-aab` menghasilkan berkas
+`.aab` untuk Play Console. Sejak versi 1.1.0 (Expo SDK 58, React Native 0.88, Android Gradle Plugin 9, target
+Android 16 / API 36) build rilis memakai **R8** (`enableMinifyInReleaseBuilds`) dan penyusutan resource
+(`enableShrinkResourcesInReleaseBuilds`) lewat plugin `expo-build-properties` di `app.json` — ini yang diminta
+laporan Play Console "Pengoptimalan kode DEX". Aplikasi sudah mendukung ukuran halaman memori 16 KB.
+Setelah build, uji di HP: login, buka modul web, unduh berkas, scan QR, dan notifikasi — bila ada fitur yang
+error hanya di build rilis, kemungkinan perlu aturan ProGuard tambahan (`extraProguardRules`).
 
 ---
 

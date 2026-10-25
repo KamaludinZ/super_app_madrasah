@@ -219,7 +219,7 @@ function KalenderView({ onAdd }: { onAdd: () => void }) {
             <EmptyState icon="calendar-clear-outline" title="Tidak ada penugasan" message="Belum ada guru pengganti pada tanggal ini." compact />
             {selected >= today ? <Button title="Tugaskan guru pengganti" icon="add" variant="outline" size="sm" onPress={onAdd} style={{ marginTop: spacing.sm }} /> : null}
           </Card>
-        ) : null
+        ) : undefined
       )}
       contentContainerStyle={{ paddingBottom: spacing.xxl }}
       refreshControl={<RefreshControl refreshing={res.refreshing} onRefresh={res.refresh} tintColor={colors.brandPrimary} colors={[colors.brandPrimary]} />}

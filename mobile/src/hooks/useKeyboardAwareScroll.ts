@@ -5,14 +5,14 @@
  * saat fokus berpindah ke kolom lain).
  */
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { DeviceEventEmitter, Dimensions, Keyboard, Platform, ScrollView, TextInput } from 'react-native';
+import { DeviceEventEmitter, Dimensions, Keyboard, Platform, TextInput, type ScrollViewInstance } from 'react-native';
 
 /** Dipancarkan komponen Input saat mendapat fokus (fokus pindah antar kolom tidak memicu event keyboard). */
 export const INPUT_FOCUS_EVENT = 'matsa:input-focus';
 
 const GAP = 24; // jarak kolom ke tepi atas keyboard
 
-export function useKeyboardAwareScroll(scrollRef: RefObject<ScrollView | null>) {
+export function useKeyboardAwareScroll(scrollRef: RefObject<ScrollViewInstance | null>) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const offsetY = useRef(0);
   /** Tepi atas keyboard pada koordinat layar (null = keyboard tertutup). */

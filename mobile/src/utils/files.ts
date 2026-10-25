@@ -27,7 +27,7 @@ export async function openAuthedFile(pathOrUrl: string) {
     const file = new File(Paths.cache, name);
     if (file.exists) file.delete();
     file.create();
-    file.write(new Uint8Array(await res.arrayBuffer()));
+    await file.write(new Uint8Array(await res.arrayBuffer()));
     if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle: name });
     else toast.success('Berkas tersimpan', name);
   } catch {

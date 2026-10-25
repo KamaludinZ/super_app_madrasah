@@ -98,7 +98,7 @@ export default function AntreanScreen() {
         }
         renderItem={({ item }) => <QueueRow it={item} onRetry={() => retry(item)} onRemove={() => remove(item)} />}
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
-        ListEmptyComponent={loading ? null : <Card><EmptyState icon="checkmark-done-circle-outline" title="Antrean kosong" message="Jurnal yang diisi saat offline akan menunggu di sini sampai terkirim." compact /></Card>}
+        ListEmptyComponent={loading ? undefined : <Card><EmptyState icon="checkmark-done-circle-outline" title="Antrean kosong" message="Jurnal yang diisi saat offline akan menunggu di sini sampai terkirim." compact /></Card>}
         contentContainerStyle={{ paddingBottom: spacing.xxl }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={load} tintColor={colors.brandPrimary} colors={[colors.brandPrimary]} />}
       />

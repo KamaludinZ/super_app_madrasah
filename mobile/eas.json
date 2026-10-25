@@ -6,6 +6,7 @@
   "build": {
     "development": {
       "environment": "development",
+      "node": "22.23.4",
       "developmentClient": true,
       "distribution": "internal",
       "android": {
@@ -17,6 +18,7 @@
     },
     "preview": {
       "environment": "preview",
+      "node": "22.23.4",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -27,6 +29,7 @@
     },
     "production": {
       "environment": "production",
+      "node": "22.23.4",
       "android": {
         "buildType": "apk"
       },
