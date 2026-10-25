@@ -1,4 +1,7 @@
-"""Impor instrumen PKG dari berkas Excel berformat template resmi (pkg_template_v2026.xlsx).
+"""Impor instrumen PKG dari berkas Excel: template master buatan aplikasi (pkg_template_master, dikenali dari
+penandanya) atau format template resmi lama (pkg_template_v2026.xlsx).
+
+Format template resmi lama:
 
 Struktur yang dibaca dari tiap sheet kompetensi (pkg_template.SHEET_KOMPETENSI, berurutan kode 1–4):
     kolom B  "N. NAMA KOMPETENSI"            -> kompetensi (baris pertama yang cocok)
@@ -19,6 +22,7 @@ from openpyxl import load_workbook
 from pydantic import ValidationError
 
 from pkg_skema import StrukturInstrumen
+from pkg_template_master import adalah_template_master, baca_template_master, peringatan_struktur_cetak
 from pkg_template import SHEET_KOMPETENSI, TEMPLATE_PKG, baca_bytes_template
 
 BATAS_UKURAN_BERKAS = 10 * 1024 * 1024
@@ -103,6 +107,12 @@ def _galat_validasi(e: ValidationError) -> List[Dict[str, str]]:
 
 def baca_instrumen_excel(isi: bytes) -> Tuple[StrukturInstrumen, List[str]]:
     """Baca & validasi struktur instrumen dari bytes .xlsx. Hasil: (struktur, peringatan)."""
+    struktur, peringatan, _ = baca_instrumen_excel_format(isi)
+    return struktur, peringatan
+
+
+def baca_instrumen_excel_format(isi: bytes) -> Tuple[StrukturInstrumen, List[str], str]:
+    """Seperti baca_instrumen_excel, ditambah format berkas: 'master' (template master aplikasi) | 'resmi'."""
     if not isi:
         raise GalatImporInstrumen('Berkas kosong.')
     if len(isi) > BATAS_UKURAN_BERKAS:
@@ -113,8 +123,12 @@ def baca_instrumen_excel(isi: bytes) -> Tuple[StrukturInstrumen, List[str]]:
         raise GalatImporInstrumen('Berkas bukan Excel .xlsx yang valid.') from e
     galat: List[Dict[str, str]] = []
     kompetensi = []
+    format_berkas = 'resmi'
     try:
-        for urutan, nama_sheet in enumerate(SHEET_KOMPETENSI, 1):
+        if adalah_template_master(wb):
+            format_berkas = 'master'
+            kompetensi, galat = baca_template_master(wb)
+        for urutan, nama_sheet in enumerate(SHEET_KOMPETENSI if format_berkas == 'resmi' else (), 1):
             if nama_sheet not in wb.sheetnames:
                 galat.append({'lokasi': nama_sheet, 'pesan': f'Sheet "{nama_sheet}" tidak ditemukan.'})
                 continue
@@ -129,16 +143,20 @@ def baca_instrumen_excel(isi: bytes) -> Tuple[StrukturInstrumen, List[str]]:
         struktur = StrukturInstrumen(kompetensi=kompetensi)
     except ValidationError as e:
         raise GalatImporInstrumen('Isi instrumen tidak valid.', _galat_validasi(e)) from e
-    return struktur, []
+    peringatan = [x for x in [peringatan_struktur_cetak(struktur.model_dump()['kompetensi'])] if x]
+    return struktur, peringatan, format_berkas
 
 
 def pratinjau_dari_bytes(isi: bytes, sumber: str, nama_berkas: str) -> Dict[str, Any]:
-    """Baca berkas lalu kembalikan pratinjau impor: struktur, checksum, kecocokan dengan template resmi, peringatan."""
-    struktur, peringatan = baca_instrumen_excel(isi)
+    """Baca berkas lalu kembalikan pratinjau impor: struktur, checksum, kecocokan dengan template resmi, peringatan.
+    Template master aplikasi ditandai sumber 'master' (milik madrasah, tidak dibandingkan dengan template resmi)."""
+    struktur, peringatan, format_berkas = baca_instrumen_excel_format(isi)
     checksum = hashlib.sha256(isi).hexdigest()
     resmi = TEMPLATE_PKG['instrumen']
     cocok = checksum == resmi['checksum_resmi']
-    if not cocok:
+    if format_berkas == 'master':
+        sumber = 'master'
+    elif not cocok:
         peringatan = [*peringatan, 'Berkas bukan salinan identik template resmi; pastikan isinya sudah disahkan.']
     return {
         'sumber': sumber, 'nama_berkas': nama_berkas, 'versi_template': resmi['versi'], 'checksum': checksum,

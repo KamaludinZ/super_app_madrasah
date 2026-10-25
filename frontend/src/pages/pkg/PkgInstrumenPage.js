@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { ListTree, Layers, ListChecks, Target, Loader2, Tag, AlertTriangle, RotateCw, FileSpreadsheet } from 'lucide-react';
+import { ListTree, Layers, ListChecks, Target, Loader2, Tag, AlertTriangle, RotateCw, FileSpreadsheet, Download } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,7 +16,8 @@ import PenandaInstrumenAktif from '@/components/pkg/PenandaInstrumenAktif';
 import PeringatanVersiTemplate from '@/components/pkg/PeringatanVersiTemplate';
 import RiwayatPerubahanInstrumen from '@/components/pkg/RiwayatPerubahanInstrumen';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { ambilInstrumenAktif, labelVersi, ringkasInstrumen } from '@/lib/pkgInstrumen';
+import { ambilInstrumenAktif, labelVersi, ringkasInstrumen, unduhTemplateMaster } from '@/lib/pkgInstrumen';
+import { simpanBerkas } from '@/lib/pkgCetak';
 
 function KartuAngka({ icon: Icon, label, value }) {
   return (
@@ -30,7 +31,30 @@ function KartuAngka({ icon: Icon, label, value }) {
   );
 }
 
-// Keadaan kosong: belum ada instrumen aktif. Kepala diarahkan mengimpor dari template resmi.
+// Unduh template master instrumen (.xlsx) buatan aplikasi berisi instrumen aktif dan identitas madrasah; kepala
+// mengeditnya lalu mengimpor kembali lewat Impor Instrumen (pengganti berkas template pihak lain).
+function TombolTemplateMaster() {
+  const [sedang, setSedang] = useState(false);
+  const unduh = async () => {
+    setSedang(true);
+    try {
+      const { blob, namaBerkas } = await unduhTemplateMaster();
+      simpanBerkas(blob, namaBerkas);
+      toast.success(`${namaBerkas} diunduh`);
+    } catch (e) {
+      toast.error(e.message || 'Gagal mengunduh template master.');
+    } finally {
+      setSedang(false);
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={unduh} disabled={sedang} data-testid="pkg-instrumen-template-master">
+      {sedang ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Unduh Template Master
+    </Button>
+  );
+}
+
+// Keadaan kosong: belum ada instrumen aktif. Kepala diarahkan mengimpor dari template master/resmi.
 function InstrumenKosong({ kepala, onImpor }) {
   return (
     <Card data-testid="pkg-instrumen-kosong">
@@ -40,10 +64,11 @@ function InstrumenKosong({ kepala, onImpor }) {
           size="sm"
           title="Instrumen PKG belum dimuat"
           description={kepala
-            ? 'Muat kompetensi, indikator, dan bobot dari berkas template resmi PKG agar penilai dapat mulai mengisi lembar penilaian.'
-            : 'Kepala madrasah belum memuat instrumen dari template resmi. Lembar penilaian dapat dibuka setelah instrumen tersedia.'}
+            ? 'Unduh template master, sesuaikan kompetensi, indikator, dan bobot, lalu impor agar penilai dapat mulai mengisi lembar penilaian.'
+            : 'Kepala madrasah belum memuat instrumen. Lembar penilaian dapat dibuka setelah instrumen tersedia.'}
           {...(kepala ? { actionLabel: 'Impor Instrumen', onAction: onImpor } : {})}
         />
+        {kepala && <div className="flex justify-center pb-6"><TombolTemplateMaster /></div>}
       </CardContent>
     </Card>
   );
@@ -102,6 +127,7 @@ function IsiHalamanInstrumen() {
             <Tag className="h-3 w-3" /> {labelVersi(instrumen)}
           </Badge>
           {instrumen.diimpor_pada && <span className="text-slate-500">Diimpor {formatWIBPanjang(instrumen.diimpor_pada)}</span>}
+          <TombolTemplateMaster />
           {kepala && (
             <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setImpor(true)} data-testid="pkg-instrumen-impor">
               <FileSpreadsheet className="h-3.5 w-3.5" /> Impor Instrumen
@@ -135,8 +161,8 @@ function IsiHalamanInstrumen() {
   );
 }
 
-// Master Instrumen PKG (semua anggota SK dapat membaca): struktur kompetensi dari template resmi yang dipakai
-// sebagai acuan lembar penilaian (lib/pkgInstrumen -> /pkg/instrumen/*).
+// Master Instrumen PKG (semua anggota SK dapat membaca & mengunduh template master): struktur kompetensi acuan lembar
+// penilaian (lib/pkgInstrumen -> /pkg/instrumen/*); kepala mengimpor dari template master madrasah atau template resmi.
 export default function PkgInstrumenPage() {
   return (
     <PenjagaMenuPkg menuKey="instrumen">

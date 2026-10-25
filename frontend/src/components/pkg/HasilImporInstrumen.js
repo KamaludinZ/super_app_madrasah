@@ -14,7 +14,7 @@ export default function HasilImporInstrumen({ hasil, onTutup }) {
         <p className="font-semibold">Instrumen berhasil diimpor dan diterapkan.</p>
         <p>
           {hasil.kompetensi} kompetensi · {hasil.sub} sub-kompetensi · {hasil.indikator} indikator dari{' '}
-          <span className="font-mono text-xs">{hasil.nama_berkas}</span>{hasil.sumber === 'template' ? ' (template resmi)' : ' (berkas unggahan)'}.
+          <span className="font-mono text-xs">{hasil.nama_berkas}</span>{{ template: ' (template resmi)', master: ' (template master madrasah)' }[hasil.sumber] || ' (berkas unggahan)'}.
         </p>
         <p className={`flex items-center gap-1 text-xs ${hasil.cocok_resmi ? 'text-emerald-700' : 'text-amber-700'}`}>
           {hasil.cocok_resmi ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
