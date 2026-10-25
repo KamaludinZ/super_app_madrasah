@@ -71,3 +71,35 @@ def test_konversi_gagal(monkeypatch, tmp_path):
     monkeypatch.setenv('PKG_SOFFICE', str(lambat))
     with pytest.raises(pkg_pdf.KonversiPdfGagal):
         asyncio.run(pkg_pdf.xlsx_ke_pdf(b'x', batas_detik=0.5))
+
+
+def test_konversi_jalan_di_selector_event_loop(monkeypatch):
+    """uvicorn --reload di Windows memakai SelectorEventLoop yang tidak mendukung asyncio subprocess; konversi
+    menjalankan soffice lewat subprocess.run di thread sehingga tetap berhasil."""
+    monkeypatch.setattr(pkg_pdf, 'cari_soffice', lambda: 'soffice-palsu')
+
+    def run_palsu(perintah, **kw):
+        folder, path = perintah[-2], perintah[-1]
+        assert perintah[perintah.index('--outdir') + 1] == folder
+        with open(os.path.splitext(path)[0] + '.pdf', 'wb') as f:
+            f.write(b'%PDF-1.7 palsu')
+        return subprocess.CompletedProcess(perintah, 0, b'', b'')
+
+    monkeypatch.setattr(pkg_pdf.subprocess, 'run', run_palsu)
+    loop = asyncio.SelectorEventLoop()
+    try:
+        assert loop.run_until_complete(pkg_pdf.xlsx_ke_pdf(b'x')).startswith(b'%PDF')
+    finally:
+        loop.close()
+
+
+def test_buat_pdf_galat_tak_terduga_pakai_cadangan(monkeypatch):
+    from routers import pkg_cetak_api
+
+    async def galat(*a, **kw):
+        raise NotImplementedError('loop tidak mendukung subprocess')
+
+    monkeypatch.setattr(pkg_cetak_api, 'kemampuan_pdf', lambda: {'libreoffice': True})
+    monkeypatch.setattr(pkg_cetak_api, 'xlsx_ke_pdf', galat)
+    isi, mesin, alasan = asyncio.run(pkg_cetak_api.buat_pdf({'xlsx': b'x', 'dasar_nama': 'uji', 'cadangan': lambda: b'%PDF cadangan'}))
+    assert (isi, mesin, alasan) == (b'%PDF cadangan', 'reportlab', 'konversi_gagal')

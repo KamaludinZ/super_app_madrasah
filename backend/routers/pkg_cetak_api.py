@@ -17,7 +17,7 @@ from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
 from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, catat_cetak_gagal, catat_cetak_template, daftar_unduhan
 from pkg_cetak import LEMBAR_PDF_LENGKAP, StrukturTidakSesuai, laporan_guru_excel, rekap_excel
-from pkg_pdf import KonversiPdfGagal, LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
+from pkg_pdf import LibreOfficeTidakTersedia, kemampuan_pdf, xlsx_ke_pdf
 from pkg_pdf_cadangan import laporan_guru_pdf_cadangan, rekap_pdf_cadangan
 from pkg_angket import JENIS_ANGKET, responden_guru
 from pkg_identitas import lampiran_identitas
@@ -119,9 +119,9 @@ async def buat_pdf(siap: Dict[str, Any]) -> Tuple[bytes, str, Optional[str]]:
         return siap['cadangan'](), 'reportlab', 'libreoffice_tidak_tersedia'
     try:
         return await xlsx_ke_pdf(siap['xlsx'], nama_berkas_cetak(siap['dasar_nama'], 'xlsx')), 'libreoffice', None
-    except (LibreOfficeTidakTersedia, KonversiPdfGagal) as e:
+    except Exception as e:  # noqa: BLE001 — galat tak terduga pun jatuh ke cadangan, bukan unduhan gagal
         # Cadangan: tata letak bukan salinan identik Excel; ditandai di setiap halaman & di header respons.
-        logger.warning(f'[pkg_cetak] PDF memakai cadangan ReportLab: {e}')
+        logger.warning(f'[pkg_cetak] PDF memakai cadangan ReportLab: {type(e).__name__}: {e}')
         alasan = 'libreoffice_tidak_tersedia' if isinstance(e, LibreOfficeTidakTersedia) else 'konversi_gagal'
         return siap['cadangan'](), 'reportlab', alasan
 

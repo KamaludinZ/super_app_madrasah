@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarCheck, ClipboardList, FileSpreadsheet, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
+import { CalendarCheck, ClipboardList, FileText, Loader2, Printer, UsersRound } from 'lucide-react';
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
@@ -49,7 +49,8 @@ function KartuAngketKosong({ jenis, sedang, onCetak }) {
             <div className="text-sm font-semibold text-slate-900">{j.label}</div>
             <div className="text-xs text-slate-500">{JENIS_ANGKET[j.jenis]?.keterangan} · {j.jumlah_butir} butir</div>
             <div className="mt-2 flex gap-2">
-              {[['pdf', 'PDF', FileText], ['xlsx', 'Excel', FileSpreadsheet]].map(([format, label, Ikon]) => (
+              {/* Excel disembunyikan (berkas template masih memuat isian master madrasah lain); hanya PDF. */}
+              {[['pdf', 'PDF', FileText]].map(([format, label, Ikon]) => (
                 <Button key={format} size="sm" variant={format === 'pdf' ? 'default' : 'outline'}
                   className={`h-8 gap-1 ${format === 'pdf' ? 'bg-[#006837] hover:bg-[#005830]' : ''}`}
                   disabled={!!sedang} onClick={() => onCetak(j.jenis, format)}>
