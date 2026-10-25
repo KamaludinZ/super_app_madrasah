@@ -6,6 +6,8 @@
  * Tiap kolom: { key, label, grup, path, kunci? }
  *  - path 'user.<field>' atau 'jenis' (Guru / Tenaga Kependidikan, dihitung dari peran)
  */
+import { jenisGtk as jenisGtkDariPeran } from '@/lib/jenisGtk';
+
 const kolom = (grup, daftar) => daftar.map(([key, label, extra]) => ({ key, label, grup, path: `user.${key}`, ...(extra || {}) }));
 
 export const KOLOM_DATA_GTK = [
@@ -79,15 +81,9 @@ export const KOLOM_DATA_GTK = [
   ]),
 ];
 
-export const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
-export const TENDIK_ROLES = ['tenaga_kependidikan'];
-
-/** 'guru' | 'tendik' | null — guru didahulukan bila punya kedua peran. */
+/** 'guru' | 'tendik' | null — guru didahulukan bila punya kedua peran; KS = guru, KTU = tendik. */
 export function jenisGtk(user) {
-  const roles = user?.roles || [];
-  if (roles.some((r) => GURU_ROLES.includes(r))) return 'guru';
-  if (roles.some((r) => TENDIK_ROLES.includes(r))) return 'tendik';
-  return null;
+  return jenisGtkDariPeran(user?.roles);
 }
 
 /** Field lama yang dipakai bila field baku kosong (data impor lama menyimpan NUPTK di nip_nuptk). */

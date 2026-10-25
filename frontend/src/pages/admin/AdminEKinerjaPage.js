@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { formatWIB } from '@/lib/datetime';
@@ -167,6 +168,10 @@ export default function AdminEKinerjaPage() {
   // Jurnal Harian state
   const isEkinerjaAuthorJurnal = EKINERJA_AUTHOR_ROLES.includes(activeRole);
   const [jurnalSubTab, setJurnalSubTab] = useState('link');
+  // KS & KTU adalah penyusun sekaligus GTK: selain rekap, mereka juga mengisi jurnal sendiri
+  // (absensi tendik/KTU dihitung dari Jurnal Harian). Admin murni hanya melihat rekap.
+  const isPenyusunGtk = activeRole === 'kepala_sekolah' || activeRole === 'kepala_tata_usaha';
+  const [jurnalPenyusunTab, setJurnalPenyusunTab] = useState('rekap');
 
   const loadRhk = async (year) => {
     try {
@@ -195,7 +200,7 @@ export default function AdminEKinerjaPage() {
     try {
       const { data: usersData } = await api.get('/users');
       const gtk = usersData.filter(u =>
-        u.roles?.some(r => ['guru', 'wali_kelas', 'tenaga_kependidikan'].includes(r))
+        jenisGtk(u.roles) !== null
       );
       setGtkList(gtk);
     } catch (e) {
@@ -634,7 +639,36 @@ export default function AdminEKinerjaPage() {
 
         {/* TAB JURNAL HARIAN */}
         <TabsContent value="jurnal_harian" className="mt-4">
-          {isEkinerjaAuthorJurnal ? (
+          {isEkinerjaAuthorJurnal && isPenyusunGtk ? (
+            <Tabs value={jurnalPenyusunTab} onValueChange={setJurnalPenyusunTab}>
+              <TabsList className="bg-white border border-slate-200 h-auto flex-wrap justify-start">
+                <TabsTrigger value="rekap" className="gap-2"><ClipboardList className="h-3.5 w-3.5" /> Rekap GTK</TabsTrigger>
+                <TabsTrigger value="link" className="gap-2"><Link2 className="h-3.5 w-3.5" /> Link Bukti Dukung</TabsTrigger>
+                <TabsTrigger value="isi" className="gap-2"><NotebookPen className="h-3.5 w-3.5" /> Isi Jurnal Saya</TabsTrigger>
+              </TabsList>
+              <TabsContent value="rekap" className="mt-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <JurnalHarianAdminView year={activeYear} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="link" className="mt-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <JurnalLinkManager />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="isi" className="mt-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <JurnalHarianForm year={activeYear} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          ) : isEkinerjaAuthorJurnal ? (
             <Card>
               <CardContent className="p-4">
                 <JurnalHarianAdminView year={activeYear} />

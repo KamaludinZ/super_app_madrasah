@@ -5,6 +5,7 @@
 import type { StaffEvent } from '@/api/types';
 import type { BadgeTone } from '@/components/ui/Badge';
 import { parseISO } from '@/utils/time';
+import { jenisGtk } from '@/utils/gtk';
 
 export const GURU_CATEGORIES = [
   { value: 'rapat', label: 'Rapat' }, { value: 'pelatihan', label: 'Pelatihan' }, { value: 'supervisi', label: 'Supervisi' },
@@ -23,7 +24,8 @@ export const STATUSES: { value: string; label: string; tone: BadgeTone }[] = [
   { value: 'completed', label: 'Selesai', tone: 'success' }, { value: 'cancelled', label: 'Dibatalkan', tone: 'error' },
 ];
 
-export const categoryOptions = (roles: string[] | undefined) => (roles?.includes('guru') ? GURU_CATEGORIES : TENDIK_CATEGORIES);
+// Kategori guru untuk semua peran guru termasuk kepala madrasah; tendik (termasuk Kepala TU) kategori tendik.
+export const categoryOptions = (roles: string[] | undefined) => (jenisGtk(roles) === 'guru' ? GURU_CATEGORIES : TENDIK_CATEGORIES);
 export const categoryLabel = (v?: string | null) => [...GURU_CATEGORIES, ...TENDIK_CATEGORIES].find((c) => c.value === v)?.label ?? v ?? '-';
 
 /** Status menurut waktu sekarang (WIB): rentang = tanggal mulai jam mulai s.d. tanggal selesai jam selesai. */

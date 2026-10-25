@@ -1,7 +1,7 @@
 """Shared helpers used across multiple routers (e.g. RBAC class check)."""
 from typing import Any, Dict, List, Optional, Tuple
 
-from core import GURU_MAPEL_ROLES, punya_peran_guru  # noqa: F401
+from core import GURU_MAPEL_ROLES, PERAN_GTK, jenis_gtk_peran, punya_peran_guru  # noqa: F401
 from core import db, require_role
 
 # Satu kebijakan akses untuk seluruh fitur kelengkapan data master (unduh data, template,
@@ -217,13 +217,31 @@ BAGIAN_KELENGKAPAN_GTK: List[Dict[str, Any]] = [
         {'jenis': 'field', 'field': f, 'label': l} for f, l in
         (('berkas_ktp', 'KTP'), ('berkas_kk', 'Kartu Keluarga'), ('berkas_ijazah', 'Ijazah Terakhir'), ('berkas_sk', 'SK Pengangkatan'))]},
 ]
+# Varian tendik: bagian pertama berlabel "Data Tendik" dan NUPTK tidak diwajibkan (NUPTK dikeluarkan
+# Kemendikbud untuk pendidik; tendik umumnya tidak punya). Key bagian & urutan tetap sama dengan guru.
+_SYARAT_DATA_TENDIK = [(f, l) for f, l in _SYARAT_DATA_GURU if f != 'nuptk']
+BAGIAN_KELENGKAPAN_TENDIK: List[Dict[str, Any]] = [
+    {**b, 'label': 'Data Tendik', 'syarat': [{'jenis': 'field', 'field': f, 'label': l} for f, l in _SYARAT_DATA_TENDIK]}
+    if b['key'] == 'data_guru' else b
+    for b in BAGIAN_KELENGKAPAN_GTK
+]
 _FALLBACK_GTK = {'nuptk': 'nip_nuptk'}
-_GTK_ROLES = ('guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler', 'tenaga_kependidikan')
+# Peran GTK (guru termasuk kepala madrasah, tendik termasuk Kepala TU): core.PERAN_GTK.
+_GTK_ROLES = PERAN_GTK
 
 
 def _bulat(x: float) -> int:
     """Pembulatan setengah ke atas (sama dengan Math.round di frontend; round() Python membulatkan ke genap)."""
     return int(x + 0.5)
+
+
+def adalah_tendik(user_doc: Optional[Dict]) -> bool:
+    """Tendik = punya peran tendik/KTU dan tidak punya peran guru (sama dengan lib/jenisGtk.js)."""
+    return jenis_gtk_peran((user_doc or {}).get('roles')) == 'tendik'
+
+
+def bagian_kelengkapan_gtk(jenis: Optional[str]) -> List[Dict[str, Any]]:
+    return BAGIAN_KELENGKAPAN_TENDIK if jenis == 'tendik' else BAGIAN_KELENGKAPAN_GTK
 
 
 def _adalah_gtk(user_doc: Optional[Dict]) -> bool:
@@ -237,14 +255,17 @@ def _cek_syarat_gtk(s: Dict[str, Any], user: Dict) -> bool:
     return _has_value(user.get(s['field'])) or (s['field'] in _FALLBACK_GTK and _has_value(user.get(_FALLBACK_GTK[s['field']])))
 
 
-def compute_completeness_gtk(user_doc: Optional[Dict]) -> Dict[str, Any]:
+def compute_completeness_gtk(user_doc: Optional[Dict], jenis: Optional[str] = None) -> Dict[str, Any]:
     """Kelengkapan data wajib GTK per bagian:
     {persen, terisi, total, bagian: [{key, label, persen, terisi, total, kurang: [label]}]}.
-    Persen keseluruhan = syarat terpenuhi / seluruh syarat (bobot per syarat)."""
+    Persen keseluruhan = syarat terpenuhi / seluruh syarat (bobot per syarat).
+    jenis 'guru' | 'tendik'; bila kosong ditentukan dari peran pengguna."""
     user = user_doc or {}
+    if jenis is None:
+        jenis = 'tendik' if adalah_tendik(user) else 'guru'
     isi = total = 0
     bagian = []
-    for b in BAGIAN_KELENGKAPAN_GTK:
+    for b in bagian_kelengkapan_gtk(jenis):
         kurang = [s['label'] for s in b['syarat'] if not _cek_syarat_gtk(s, user)]
         t = len(b['syarat'])
         f = t - len(kurang)

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserCircle, Mail, Phone, MapPin, Calendar, Save, X, User, FileText, GraduationCap, Briefcase, Shield } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
@@ -148,13 +149,14 @@ export default function ProfilePage() {
   const getUserType = () => {
     if (!user?.roles) return 'siswa';
     if (user.roles.includes('siswa')) return 'siswa';
-    if (user.roles.includes('guru')) return 'guru';
-    if (user.roles.includes('tenaga_kependidikan')) return 'tenaga_kependidikan';
+    const j = jenisGtk(user.roles);
+    if (j === 'guru') return 'guru';
+    if (j === 'tendik') return 'tenaga_kependidikan';
     return 'siswa';
   };
 
   const isSiswa = user?.roles?.includes('siswa');
-  const isGTK = user?.roles?.includes('guru') || user?.roles?.includes('tenaga_kependidikan');
+  const isGTK = jenisGtk(user?.roles) !== null;
   const isAdmin = user?.roles?.includes('admin');
 
   return (

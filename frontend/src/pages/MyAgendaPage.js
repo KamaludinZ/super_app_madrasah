@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY_FORM = {
@@ -75,8 +76,9 @@ export default function MyAgendaPage() {
   const [now, setNow] = useState(new Date());
 
   // Determine if user is guru or tendik
-  const isGuru = user?.roles?.includes('guru');
-  const isTendik = user?.roles?.includes('tenaga_kependidikan');
+  // KS = guru, KTU = tendik (aturan kanonis lib/jenisGtk)
+  const isGuru = jenisGtk(user?.roles) === 'guru';
+  const isTendik = jenisGtk(user?.roles) === 'tendik';
   const categoryOptions = isGuru ? GURU_CATEGORY_OPTIONS : TENDIK_CATEGORY_OPTIONS;
 
   useEffect(() => {

@@ -254,6 +254,26 @@ def punya_peran_guru(user: Dict[str, Any]) -> bool:
     return any(r in GURU_MAPEL_ROLES for r in (user.get('roles') or []))
 
 
+# Pengelompokan GTK (guru & tenaga kependidikan) untuk Data GTK, kelengkapan data, absensi GTK, agenda,
+# peminjaman, dan mutasi. Kepala madrasah termasuk guru tetapi tidak wajib punya jadwal/jam mengajar (bukan
+# GURU_MAPEL_ROLES); Kepala TU termasuk tendik. HARUS sama dengan frontend/src/lib/jenisGtk.js dan
+# mobile/src/utils/gtk.ts.
+PERAN_GURU_GTK = GURU_MAPEL_ROLES + ('wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler',
+                                     'kepala_sekolah')
+PERAN_TENDIK_GTK = ('tenaga_kependidikan', 'kepala_tata_usaha')
+PERAN_GTK = PERAN_GURU_GTK + PERAN_TENDIK_GTK
+
+
+def jenis_gtk_peran(roles) -> Optional[str]:
+    """'guru' | 'tendik' | None (bukan GTK). Guru didahulukan bila merangkap peran tendik."""
+    roles = roles or []
+    if any(r in PERAN_GURU_GTK for r in roles):
+        return 'guru'
+    if any(r in PERAN_TENDIK_GTK for r in roles):
+        return 'tendik'
+    return None
+
+
 def require_role(*allowed_roles: str):
     async def checker(user: Dict[str, Any] = Depends(get_current_user)):
         active = user.get('active_role')

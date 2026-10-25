@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EMPTY_FORM = {
@@ -108,7 +109,7 @@ export default function AdminAgendaGuruPage() {
     try {
       // Load guru
       const { data: usersData } = await api.get('/users');
-      const guruList = usersData.filter(u => u.roles?.includes('guru'));
+      const guruList = usersData.filter(u => jenisGtk(u.roles) === 'guru');
       setTeachers(guruList);
 
       // Load jabatan master data
@@ -123,7 +124,7 @@ export default function AdminAgendaGuruPage() {
       // Filter only guru events
       const guruAgendas = agendasData.filter(a => {
         const user = usersData.find(u => u.id === a.user_id);
-        return user && user.roles?.includes('guru');
+        return user && jenisGtk(user.roles) === 'guru';
       });
       setAgendas(guruAgendas);
     } catch (e) {

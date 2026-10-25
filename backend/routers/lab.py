@@ -16,7 +16,7 @@ import uuid
 from fastapi.responses import StreamingResponse
 import io
 
-from core import db, get_current_user, require_role, serialize_doc, log_audit, get_settings
+from core import PERAN_GTK, PERAN_GURU_GTK, PERAN_TENDIK_GTK, db, get_current_user, require_role, serialize_doc, log_audit, get_settings
 from notify import notify_roles, notify_users, spawn
 
 router = APIRouter()
@@ -229,14 +229,13 @@ async def list_warga_madrasah(
             class_ids = [c['id'] for c in await db.classes.find({'grade': grade}, {'_id': 0, 'id': 1}).to_list(500)]
             query['student_class_id'] = {'$in': class_ids}
     elif peminjam_jenis == 'gtk':
-        GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler',
-                      'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik']
+        # Kepala madrasah termasuk guru, Kepala TU termasuk tendik (core.PERAN_GURU_GTK / PERAN_TENDIK_GTK).
         if gtk_jenis == 'tenaga_kependidikan':
-            query['roles'] = 'tenaga_kependidikan'
+            query['roles'] = {'$in': list(PERAN_TENDIK_GTK)}
         elif gtk_jenis == 'guru':
-            query['roles'] = {'$in': GURU_ROLES}
+            query['roles'] = {'$in': list(PERAN_GURU_GTK)}
         else:
-            query['roles'] = {'$in': GURU_ROLES + ['tenaga_kependidikan']}
+            query['roles'] = {'$in': list(PERAN_GTK)}
 
     items = await db.users.find(
         query,

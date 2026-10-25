@@ -21,11 +21,12 @@ import { confirmDialog } from '@/components/ui/confirm-dialog';
 import UnduhDataGtkButton from '@/components/staff/UnduhDataGtkButton';
 import ExportTemplateButton from '@/components/students/ExportTemplateButton';
 import { KOLOM_DATA_GTK } from '@/lib/dataGtkKolom';
+import { PERAN_GURU_GTK, PERAN_TENDIK_GTK, jenisGtk } from '@/lib/jenisGtk';
 import KelengkapanGtkCell from '@/components/staff/KelengkapanGtkCell';
 import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
 
-const GURU_ROLES = ['guru', 'wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
-const TENDIK_ROLES = ['tenaga_kependidikan'];
+const GURU_ROLES = PERAN_GURU_GTK;
+const TENDIK_ROLES = PERAN_TENDIK_GTK;
 const STATUS_KEPEGAWAIAN_LIST = ['PNS', 'PPPK', 'Non ASN'];
 const BELUM_DIISI = 'Belum diisi';
 
@@ -77,8 +78,8 @@ export default function AdminGTKPage() {
 
   const filtered = users.filter((u) => {
     const roles = u.roles || [];
-    const isGuru = roles.some((r) => GURU_ROLES.includes(r));
-    const isTendik = roles.some((r) => TENDIK_ROLES.includes(r)) && !isGuru;
+    const isGuru = jenisGtk(roles) === 'guru';
+    const isTendik = jenisGtk(roles) === 'tendik';
     if (tab === 'guru' && !isGuru) return false;
     if (tab === 'tendik' && !isTendik) return false;
     if (roleFilter !== 'all' && !roles.includes(roleFilter)) return false;
@@ -93,12 +94,12 @@ export default function AdminGTKPage() {
   });
 
   const counts = {
-    guru: users.filter((u) => (u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
-    tendik: users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r))).length,
+    guru: users.filter((u) => jenisGtk(u.roles) === 'guru').length,
+    tendik: users.filter((u) => jenisGtk(u.roles) === 'tendik').length,
   };
 
-  const guruUsers = users.filter((u) => (u.roles || []).some((r) => GURU_ROLES.includes(r)));
-  const tendikUsers = users.filter((u) => (u.roles || []).some((r) => TENDIK_ROLES.includes(r)) && !(u.roles || []).some((r) => GURU_ROLES.includes(r)));
+  const guruUsers = users.filter((u) => jenisGtk(u.roles) === 'guru');
+  const tendikUsers = users.filter((u) => jenisGtk(u.roles) === 'tendik');
 
   const genderStats = (list) => ({
     L: list.filter((u) => u.gender === 'L').length,

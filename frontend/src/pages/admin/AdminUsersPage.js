@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { api, ROLE_LABELS } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { toast } from 'sonner';
 
 const EMPTY = {
@@ -81,9 +82,8 @@ export default function AdminUsersPage() {
         const studs = await api.get('/users', { params: { role: 'siswa' } });
         setStudentsList(studs.data);
 
-        const gtkRoles = ['guru', 'wali_kelas', 'tenaga_kependidikan', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler'];
         const noAccountGtk = (u.data || []).filter((usr) =>
-          (usr.roles || []).some((rr) => gtkRoles.includes(rr)) &&
+          jenisGtk(usr.roles) !== null &&
           (!usr.username || !String(usr.username).trim())
         );
         setGtkWithoutAccount(noAccountGtk);
@@ -305,7 +305,7 @@ export default function AdminUsersPage() {
                   </TableHeader>
                   <TableBody>
                     {filtered.map((u) => {
-                      const isStaff = u.roles?.some(r => ['guru', 'wali_kelas', 'tenaga_kependidikan', 'guru_piket', 'guru_bk', 'guru_tata_tertib', 'guru_ekstrakurikuler', 'admin'].includes(r));
+                      const isStaff = jenisGtk(u.roles) !== null || u.roles?.includes('admin');
 
                       // Get user's jabatan names
                       const userJabatanNames = u.jabatan_ids?.map(jid => {
@@ -538,7 +538,7 @@ export default function AdminUsersPage() {
                   ))}
               </div>
             </div>
-            {(form.roles.includes('guru') || form.roles.includes('tenaga_kependidikan')) && (
+            {jenisGtk(form.roles) !== null && (
               <div className="sm:col-span-2">
                 <Label>Jabatan (boleh lebih dari satu)</Label>
                 <div className="grid grid-cols-2 gap-2 mt-2 max-h-40 overflow-y-auto p-2 border border-slate-200 rounded-lg">

@@ -422,7 +422,7 @@ def gtk_initial_template() -> bytes:
         instructions=[
             "Import data awal GTK TANPA username/password.",
             "Kolom WAJIB: nama_lengkap, roles.",
-            "roles dapat berisi: guru, wali_kelas, tenaga_kependidikan, guru_piket, guru_bk, guru_tata_tertib, guru_ekstrakurikuler (bisa gabungan pisah koma).",
+            "roles dapat berisi: guru, wali_kelas, tenaga_kependidikan, guru_piket, guru_bk, guru_tata_tertib, guru_ekstrakurikuler, kepala_sekolah, kepala_tata_usaha (bisa gabungan pisah koma).",
             "Akun login dibuat terpisah melalui menu import akun massal GTK.",
         ],
     )
@@ -465,7 +465,7 @@ def gtk_combined_template() -> bytes:
             "",
             "Kolom 'roles' dapat berisi (bisa gabungan dipisah koma):",
             "  guru, wali_kelas, tenaga_kependidikan, guru_piket, guru_bk,",
-            "  guru_tata_tertib, guru_ekstrakurikuler",
+            "  guru_tata_tertib, guru_ekstrakurikuler, kepala_sekolah, kepala_tata_usaha",
             "",
             "Contoh roles ganda: 'wali_kelas,guru' (tanpa spasi setelah koma).",
             "Kolom 'gender': L atau P (opsional).",

@@ -281,6 +281,7 @@ function navForRoleDasar(role, userRoles = []) {
           { to: '/admin/gtk', label: 'Data GTK', icon: Briefcase, testid: 'nav-ktu-gtk' },
           { to: '/admin/buku-induk-kepegawaian', label: 'Buku Induk Kepegawaian', icon: BookMarked, testid: 'nav-ktu-buku-induk-kepegawaian' },
           { to: '/admin/gtk/laporan-absensi', label: 'Laporan Absensi', icon: UserCheck, testid: 'nav-ktu-absensi' },
+          { to: '/gtk/absensi-saya', label: 'Laporan Absensi Saya', icon: UserCheck, testid: 'nav-ktu-absensi-saya' },
           { to: '/admin/gtk/agenda-guru', label: 'Agenda Guru', icon: Calendar, testid: 'nav-ktu-agenda-guru' },
           { to: '/admin/gtk/agenda-tendik', label: 'Agenda Tendik', icon: Calendar, testid: 'nav-ktu-agenda-tendik' },
           { to: '/admin/gtk/e-kinerja', label: 'E-Kinerja', icon: Target, testid: 'nav-ktu-ekinerja' },

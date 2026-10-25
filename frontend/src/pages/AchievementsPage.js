@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { api, openAuthedFile } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
+import { jenisGtk } from '@/lib/jenisGtk';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
@@ -166,7 +167,7 @@ export default function AchievementsPage() {
   const isKesiswaan = activeRole === 'waka_kesiswaan';
   const isSiswa = activeRole === 'siswa';
   const isGuru = activeRole === 'guru' || isWaliKelas || (activeRole || '').startsWith('guru_');
-  const isTendik = activeRole === 'tenaga_kependidikan';
+  const isTendik = activeRole === 'tenaga_kependidikan' || activeRole === 'kepala_tata_usaha';
   // Guru BK's "Data Prestasi" menu item is meant to browse student achievements
   // (like admin's reporting view), not just their own guru submissions.
   const isGuruBk = activeRole === 'guru_bk';
@@ -910,9 +911,7 @@ export default function AchievementsPage() {
                   <SelectTrigger data-testid="ach-form-staff"><SelectValue placeholder="Pilih pemegang..." /></SelectTrigger>
                   <SelectContent>
                     {staff
-                      .filter((u) => form.holder_type === 'guru'
-                        ? (u.roles || []).some((r) => ['guru','wali_kelas','guru_piket','guru_bk','guru_tata_tertib','guru_ekstrakurikuler'].includes(r))
-                        : (u.roles || []).includes('tenaga_kependidikan'))
+                      .filter((u) => jenisGtk(u.roles) === (form.holder_type === 'guru' ? 'guru' : 'tendik'))
                       .map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.full_name} {s.nip_nuptk ? `(${s.nip_nuptk})` : ''}</SelectItem>
                       ))}

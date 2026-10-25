@@ -22,15 +22,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from pydantic import BaseModel
 
-from core import db, get_current_user, get_settings, log_audit, require_role, serialize_doc
+from core import PERAN_GTK, db, get_current_user, get_settings, jenis_gtk_peran, log_audit, require_role, serialize_doc
 from journal_core import now_wib, DAY_MAP_EN_ID
 
 router = APIRouter()
 
 EKINERJA_AUTHOR_ROLES = ('admin', 'kepala_sekolah', 'kepala_tata_usaha', 'penjamin_mutu')
-SUBJECT_TEACHER_ROLES = ('guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik')
-GTK_ROLES = SUBJECT_TEACHER_ROLES + ('wali_kelas', 'guru_piket', 'guru_bk', 'guru_tata_tertib',
-                                       'guru_ekstrakurikuler', 'tenaga_kependidikan')
+# Semua GTK ikut direkap: kepala madrasah sebagai guru, Kepala TU sebagai tendik (core.PERAN_GTK).
+GTK_ROLES = PERAN_GTK
 
 IZIN_JENIS_LIST = ['sakit', 'cuti', 'dinas_luar', 'lainnya']
 IZIN_JENIS_LABELS = {
@@ -237,9 +236,10 @@ def _summarize(days: List[Dict]) -> Dict:
 
 
 async def _resolve_gtk_and_compute(gtk_user: Dict, semester_id: Optional[str], date_from: date_cls, date_to: date_cls):
-    roles = gtk_user.get('roles', [])
-    is_subject_teacher_family = any(r in roles for r in GTK_ROLES if r != 'tenaga_kependidikan')
-    if is_subject_teacher_family:
+    # Guru (termasuk kepala madrasah) dihitung dari jurnal mengajar vs jadwal: hari tanpa jadwal tidak dihitung,
+    # sehingga kepala madrasah tanpa jadwal mengajar tidak pernah tercatat alpha. Tendik (termasuk Kepala TU)
+    # dan akun non-GTK dihitung dari Jurnal Harian E-Kinerja.
+    if jenis_gtk_peran(gtk_user.get('roles')) == 'guru':
         days = await _compute_guru_attendance(gtk_user['id'], semester_id, date_from, date_to)
     else:
         days = await _compute_tendik_attendance(gtk_user['id'], date_from, date_to)

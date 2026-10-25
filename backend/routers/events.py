@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from core import db, get_current_user, log_audit, require_role, serialize_doc
+from core import PERAN_GTK, db, get_current_user, log_audit, require_role, serialize_doc
 from journal_core import now_wib
 from models import MadrasahEventModel, StaffEventModel
 
@@ -218,7 +218,8 @@ async def create_staff_event(
         raise HTTPException(404, "User tidak ditemukan")
 
     roles = target_user.get('roles', [])
-    if not any(r in roles for r in ['guru', 'tenaga_kependidikan', 'admin']):
+    # GTK mana pun (termasuk kepala madrasah & Kepala TU) atau admin.
+    if not any(r in roles for r in PERAN_GTK + ('admin',)):
         raise HTTPException(400, "Kegiatan pegawai hanya untuk guru dan tenaga kependidikan")
 
     event = StaffEventModel(

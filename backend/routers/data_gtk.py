@@ -1,6 +1,6 @@
 """Data GTK untuk kelengkapan data: unduh Excel (ekspor -> lengkapi -> impor), khusus Admin."""
 import io
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -80,6 +80,13 @@ async def export_gtk_excel(
 LIHAT_KELENGKAPAN = require_role('admin', 'kepala_sekolah')
 
 
+def _label_bagian(b: Dict[str, Any], jenis: Optional[str]) -> str:
+    """Label bagian untuk ringkasan; bagian pertama menyesuaikan jenis yang disaring."""
+    if b['key'] != 'data_guru':
+        return b['label']
+    return {'guru': 'Data Guru', 'tendik': 'Data Tendik'}.get(jenis, 'Data Guru/Tendik')
+
+
 @router.get("/gtk/kelengkapan")
 async def kelengkapan_gtk(jenis: Optional[str] = None, user: Dict = Depends(LIHAT_KELENGKAPAN)):
     """% kelengkapan data wajib tiap GTK (guru/tendik, bukan mutasi keluar) beserta rincian per bagian
@@ -90,13 +97,14 @@ async def kelengkapan_gtk(jenis: Optional[str] = None, user: Dict = Depends(LIHA
     items = []
     for d in data:
         u = d['user']
-        items.append({'id': u['id'], 'full_name': u.get('full_name'), 'jenis': d['jenis'], 'kelengkapan': compute_completeness_gtk(u)})
+        items.append({'id': u['id'], 'full_name': u.get('full_name'), 'jenis': d['jenis'],
+                      'kelengkapan': compute_completeness_gtk(u, d['jenis'])})
     n = len(items)
     per_bagian = []
     for i, b in enumerate(BAGIAN_KELENGKAPAN_GTK):
         nilai = [it['kelengkapan']['bagian'][i] for it in items]
         per_bagian.append({
-            'key': b['key'], 'label': b['label'],
+            'key': b['key'], 'label': _label_bagian(b, jenis),
             'rata_rata': round(sum(x['persen'] for x in nilai) / n) if n else 0,
             'gtk_kosong': sum(1 for x in nilai if x['terisi'] == 0),
             'gtk_lengkap': sum(1 for x in nilai if x['terisi'] == x['total']),
@@ -121,7 +129,7 @@ async def rincian_kelengkapan_gtk(gtk_id: str, user: Dict = Depends(get_current_
     target = await db.users.find_one({'id': gtk_id}, {'_id': 0, 'password_hash': 0})
     if not target or not jenis_gtk(target):
         raise HTTPException(404, 'GTK tidak ditemukan')
-    k = compute_completeness_gtk(target)
+    k = compute_completeness_gtk(target, jenis_gtk(target))
     for b in k['bagian']:
         b['status'] = 'lengkap' if b['terisi'] >= b['total'] else ('kosong' if b['terisi'] == 0 else 'sebagian')
     k['bagian_kosong'] = [b['label'] for b in k['bagian'] if b['status'] == 'kosong']

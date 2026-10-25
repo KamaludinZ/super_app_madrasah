@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
+import { adalahTendik } from '@/lib/jenisGtk';
 import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
 
 const formatTanggalId = (teks) => bacaTanggal(teks)?.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) || teks;
@@ -45,6 +46,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
   const { user: currentUser } = useAuth();
   const id = userIdOverride || paramId;
   const [gtk, setGtk] = useState(null);
+  // Mode tendik mengikuti peran GTK yang dilihat (bukan peran pengguna yang login).
+  const tendik = adalahTendik(gtk?.roles);
+  const labelData = tendik ? 'Data Tendik' : 'Data Guru';
   const [vervalStatus, setVervalStatus] = useState({ hasDraft: false, hasPending: false, hasRejected: false });
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -291,7 +295,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
       {userIdOverride && (
         <VervalDraftAlert
           userId={id}
-          userType={gtk?.roles?.includes('guru') ? 'guru' : 'tenaga_kependidikan'}
+          userType={tendik ? 'tenaga_kependidikan' : 'guru'}
           onRefresh={loadGTKData}
           onStatusChange={setVervalStatus}
           onAdjustToDraft={(draft) => {
@@ -312,12 +316,12 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-white border border-slate-200 w-full justify-start overflow-x-auto">
+        <TabsList className="bg-white border border-slate-200 w-full h-auto flex-wrap justify-start gap-1" data-testid="tabs-utama-gtk">
           <TabsTrigger value="info-akun" className="gap-2">
             <Settings className="h-4 w-4" /> Info Akun
           </TabsTrigger>
           <TabsTrigger value="data-guru" className="gap-2">
-            <User className="h-4 w-4" /> Data Guru
+            <User className="h-4 w-4" /> {labelData}
           </TabsTrigger>
           <TabsTrigger value="status-kepegawaian" className="gap-2">
             <Briefcase className="h-4 w-4" /> Status & Riwayat
@@ -391,10 +395,10 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
           </Card>
         </TabsContent>
 
-        {/* TAB: DATA GURU */}
+        {/* TAB: DATA GURU / DATA TENDIK */}
         <TabsContent value="data-guru">
           <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-            <TabsList className="bg-slate-50">
+            <TabsList className="bg-slate-50 h-auto w-full flex-wrap justify-start gap-1" data-testid="tabs-data-gtk">
               <TabsTrigger value="data-diri">Formulir Data Diri</TabsTrigger>
               <TabsTrigger value="kepegawaian">Kepegawaian</TabsTrigger>
               <TabsTrigger value="informasi-lain">Informasi Lainnya</TabsTrigger>
@@ -533,10 +537,12 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     <Label>NPK</Label>
                     <Input value={formKepegawaian.npk} onChange={(e) => setFormKepegawaian({...formKepegawaian, npk: e.target.value})} disabled={!editing} data-testid="input-npk" />
                   </div>
-                  <div>
-                    <Label>NRG</Label>
-                    <Input value={formKepegawaian.nrg} onChange={(e) => setFormKepegawaian({...formKepegawaian, nrg: e.target.value})} disabled={!editing} data-testid="input-nrg" />
-                  </div>
+                  {!tendik && (
+                    <div>
+                      <Label>NRG</Label>
+                      <Input value={formKepegawaian.nrg} onChange={(e) => setFormKepegawaian({...formKepegawaian, nrg: e.target.value})} disabled={!editing} data-testid="input-nrg" />
+                    </div>
+                  )}
                   <div>
                     <Label>TMT PNS</Label>
                     <Input type="date" value={formKepegawaian.tmt_pns} onChange={(e) => setFormKepegawaian({...formKepegawaian, tmt_pns: e.target.value})} disabled={!editing} />
@@ -736,9 +742,9 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     <Select value={formPenugasan.jenis_ptk} onValueChange={(v) => setFormPenugasan({...formPenugasan, jenis_ptk: v})} disabled={!editing}>
                       <SelectTrigger><SelectValue placeholder="Pilih..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="guru_mapel">Guru Mata Pelajaran</SelectItem>
-                        <SelectItem value="guru_bk">Guru BK</SelectItem>
-                        <SelectItem value="kepala_sekolah">Kepala Sekolah</SelectItem>
+                        {!tendik && <SelectItem value="guru_mapel">Guru Mata Pelajaran</SelectItem>}
+                        {!tendik && <SelectItem value="guru_bk">Guru BK</SelectItem>}
+                        {!tendik && <SelectItem value="kepala_sekolah">Kepala Sekolah</SelectItem>}
                         <SelectItem value="tenaga_administrasi">Tenaga Administrasi</SelectItem>
                         <SelectItem value="pustakawan">Pustakawan</SelectItem>
                         <SelectItem value="laboran">Laboran</SelectItem>
@@ -750,7 +756,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                     <Input type="date" value={formPenugasan.tmt_pegawai} onChange={(e) => setFormPenugasan({...formPenugasan, tmt_pegawai: e.target.value})} disabled={!editing} />
                   </div>
                   <div>
-                    <Label>TMT Guru/Tanggal SK PTK</Label>
+                    <Label>{tendik ? 'TMT/Tanggal SK PTK' : 'TMT Guru/Tanggal SK PTK'}</Label>
                     <Input type="date" value={formPenugasan.tmt_guru} onChange={(e) => setFormPenugasan({...formPenugasan, tmt_guru: e.target.value})} disabled={!editing} />
                   </div>
                   <div className="md:col-span-2">

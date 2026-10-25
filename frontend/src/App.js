@@ -265,7 +265,7 @@ function ProfilePageByRole() {
 
   if (roles.includes('siswa')) return <Navigate to="/profile/siswa" replace />;
   if (roles.includes('guru') || roles.includes('kepala_sekolah')) return <Navigate to="/profile/guru" replace />;
-  if (roles.includes('tenaga_kependidikan')) return <Navigate to="/profile/tendik" replace />;
+  if (roles.includes('tenaga_kependidikan') || roles.includes('kepala_tata_usaha')) return <Navigate to="/profile/tendik" replace />;
 
   return <Navigate to="/profile/guru" replace />;
 }

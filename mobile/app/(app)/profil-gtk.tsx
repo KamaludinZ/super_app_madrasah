@@ -16,6 +16,7 @@ import { useCached } from '@/hooks/useCached';
 import { useAuth } from '@/store/auth';
 import { initials, roleLabel } from '@/utils/roles';
 import { openAuthedFile } from '@/utils/files';
+import { adalahTendik } from '@/utils/gtk';
 import { PROFILE_FIELD_LABELS } from '@/verval/labels';
 import { spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
@@ -24,6 +25,7 @@ import { T } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon, IconName } from '@/components/ui/Icon';
+import { InfoRow } from '@/components/ui/InfoRow';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
 
@@ -54,6 +56,7 @@ const show = (k: string, v: unknown): string | null => {
   if (typeof v === 'object') return null;
   return String(v).replace(/_/g, ' ');
 };
+const KHUSUS_GURU = new Set(['nrg']);
 const mask = (v: string) => (v.length > 6 ? `${v.slice(0, 4)}${'•'.repeat(v.length - 6)}${v.slice(-2)}` : '••••');
 
 export default function ProfilGtk() {
@@ -70,6 +73,7 @@ export default function ProfilGtk() {
   const peranLabel = lain
     ? (((res.data?.roles as string[] | undefined) ?? []).slice(0, 2).map((r) => roleLabel(r)).join(', ') || '-')
     : roleLabel(activeRole ?? '');
+  const tendik = adalahTendik(((lain ? res.data?.roles : (res.data?.roles ?? user?.roles)) as string[] | undefined) ?? []);
   const [open, setOpen] = useState<string | null>('diri');
   const [reveal, setReveal] = useState(false);
   const d = res.data ?? {};
@@ -132,7 +136,7 @@ export default function ProfilGtk() {
             ))}
             {lain ? null : (
               <Button title={k.persen < 100 ? 'Lengkapi data / ajukan perubahan' : 'Ajukan perubahan data'} icon="create-outline" variant="outline" size="sm"
-                onPress={() => router.push({ pathname: '/web', params: { path: activeRole === 'tenaga_kependidikan' ? '/profile/tendik' : '/profile/guru', title: 'Ubah Data Diri' } })} />
+                onPress={() => router.push({ pathname: '/web', params: { path: tendik ? '/profile/tendik' : '/profile/guru', title: 'Ubah Data Diri' } })} />
             )}
           </Card>
         ) : null}
@@ -143,10 +147,11 @@ export default function ProfilGtk() {
         </View>
 
         {SECTIONS.map((s) => {
-          const rows = s.fields.map((f) => [label(f), val(f)] as const).filter(([, v]) => v);
+          const rows = s.fields.filter((f) => !(tendik && KHUSUS_GURU.has(f)))
+            .map((f) => [tendik && f === 'tmt_guru' ? 'TMT/Tanggal SK PTK' : label(f), val(f)] as const).filter(([, v]) => v);
           return (
             <Section key={s.id} id={s.id} title={s.title} icon={s.icon}>
-              {rows.length ? rows.map(([l, v]) => <Row key={l} label={l} value={v!} />) : <T variant="caption" tone="muted">Belum diisi.</T>}
+              {rows.length ? rows.map(([l, v]) => <InfoRow key={l} label={l} value={v!} />) : <T variant="caption" tone="muted">Belum diisi.</T>}
             </Section>
           );
         })}
@@ -159,7 +164,7 @@ export default function ProfilGtk() {
                 const entries = Object.entries(it).filter(([kk, v]) => kk !== 'id' && !/^file_|_url$/.test(kk) && show(kk, v));
                 return (
                   <View key={it.id ?? i} style={[styles.item, { borderColor: colors.divider }]}>
-                    {entries.slice(0, 6).map(([kk, v]) => <Row key={kk} label={label(kk)} value={show(kk, v)!} />)}
+                    {entries.slice(0, 6).map(([kk, v]) => <InfoRow key={kk} label={label(kk)} value={show(kk, v)!} />)}
                   </View>
                 );
               }) : <T variant="caption" tone="muted">{l.kosong && d[l.kosong] ? (l.field === 'data_anak' ? 'Tidak memiliki anak.' : 'Tidak pernah mondok di pesantren.') : 'Belum diisi.'}</T>}
@@ -181,22 +186,11 @@ export default function ProfilGtk() {
   );
 }
 
-function Row({ label: l, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.kv}>
-      <T variant="caption" tone="muted" style={styles.kvLabel}>{l}</T>
-      <T style={{ flex: 1 }} selectable>{value}</T>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   idCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, minHeight: 52 },
   secBody: { gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
-  kv: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
-  kvLabel: { width: 128, paddingTop: 2 },
   item: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing.sm, gap: 4 },
 });
