@@ -12,8 +12,8 @@ jobs:
 
     strategy:
       matrix:
-        # Node 18 sudah EOL dan react-router-dom v7 butuh Node >= 20
-        node-version: [20.x, 22.x]
+        # Node 22 LTS = versi build di Dockerfile (Node 18/20 sudah EOL, tanpa patch keamanan)
+        node-version: [22.x]
 
     steps:
     - uses: actions/checkout@v4

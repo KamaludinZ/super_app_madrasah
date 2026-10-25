@@ -1,5 +1,6 @@
 # ── Stage 1: Build React ─────────────────────────────────────
-FROM node:20-alpine AS builder
+# Node 22 LTS (dapat patch keamanan; Node 18/20 sudah EOL). Hanya dipakai saat build.
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

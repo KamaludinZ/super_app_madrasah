@@ -204,7 +204,7 @@ Lakukan urutan berikut:
 1. **Redeploy sekali lagi** (kadang transient network issue BuildKit).
 2. Di server Coolify, pastikan bisa pull image dasar manual:
    - `docker pull python:3.11-slim`
-   - `docker pull node:20-alpine`
+   - `docker pull node:22-alpine`
    - `docker pull nginx:1.27-alpine`
 3. Pastikan DNS server host stabil (8.8.8.8 / 1.1.1.1) dan outbound HTTPS ke Docker Hub tidak diblok.
 4. Jika memakai proxy/corporate firewall, whitelist:
