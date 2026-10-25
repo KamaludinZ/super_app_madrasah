@@ -120,10 +120,12 @@
         {
           "android": {
             "enableMinifyInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# Kelas yang dibuat lewat refleksi (lihat plugins/withR8KeepRulesCompat.js).\n-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep class * extends androidx.work.InputMerger { <init>(); }\n-keep class * extends androidx.work.ListenableWorker { <init>(...); }\n-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }"
           }
         }
-      ]
+      ],
+      "./plugins/withR8KeepRulesCompat"
     ],
     "experiments": {
       "typedRoutes": false
