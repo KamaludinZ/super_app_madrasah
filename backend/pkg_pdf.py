@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -58,20 +59,19 @@ async def xlsx_ke_pdf(isi_xlsx: bytes, nama_berkas: str = 'pkg.xlsx', batas_deti
     with salinan_sementara(isi_xlsx, nama_berkas) as path:
         folder = os.path.dirname(path)
         profil = os.path.join(folder, 'profil_lo')
-        proses = await asyncio.create_subprocess_exec(
-            soffice, f'-env:UserInstallation={Path(profil).resolve().as_uri()}', '--headless', '--norestore', '--nolockcheck',
-            '--nodefault', '--nologo', '--convert-to', 'pdf', '--outdir', folder, path,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
+        perintah = [soffice, f'-env:UserInstallation={Path(profil).resolve().as_uri()}', '--headless', '--norestore',
+                    '--nolockcheck', '--nodefault', '--nologo', '--convert-to', 'pdf', '--outdir', folder, path]
+        # subprocess.run di thread terpisah, bukan asyncio.create_subprocess_exec: yang terakhir tidak didukung
+        # SelectorEventLoop (mis. uvicorn --reload di Windows) sehingga konversi selalu gagal di sana.
         try:
-            _, galat = await asyncio.wait_for(proses.communicate(), timeout=batas)
-        except asyncio.TimeoutError as e:
-            proses.kill()
-            await proses.wait()
+            proses = await asyncio.to_thread(subprocess.run, perintah, capture_output=True, timeout=batas)
+        except subprocess.TimeoutExpired as e:
             raise KonversiPdfGagal(f'Konversi PDF melebihi {batas:g} detik.') from e
+        except OSError as e:
+            raise KonversiPdfGagal(f'LibreOffice tidak dapat dijalankan: {e}') from e
         hasil = os.path.splitext(path)[0] + '.pdf'
         if proses.returncode != 0 or not os.path.isfile(hasil):
-            logger.warning(f'[pkg_pdf] konversi gagal (kode {proses.returncode}): {galat.decode(errors="ignore")[:300]}')
+            logger.warning(f'[pkg_pdf] konversi gagal (kode {proses.returncode}): {proses.stderr.decode(errors="ignore")[:300]}')
             raise KonversiPdfGagal('LibreOffice gagal mengonversi berkas ke PDF.')
         with open(hasil, 'rb') as f:
             return f.read()

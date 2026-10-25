@@ -7,14 +7,16 @@ import { simpanBerkas } from '@/lib/pkgCetak';
 // Tombol cetak form/angket kertas untuk diisi offline. `ambil` = fungsi async yang mengembalikan
 // { blob, namaBerkas } (mis. cetakFormKosong / cetakAngket); `sedangLuar` mengunci tombol saat proses lain berjalan.
 // Memakai pola unduh blob yang sama dengan halaman Cetak (simpanBerkas) agar jalan juga di WebView aplikasi HP.
-export default function TombolCetakOffline({ ambil, children, ikon: Ikon = Printer, variant = 'outline', size = 'sm', className = '', sedangLuar = false, testId }) {
+// `onHasil` (opsional) menerima hasil alih-alih langsung disimpan, mis. untuk dibuka di dialog pratinjau.
+export default function TombolCetakOffline({ ambil, children, ikon: Ikon = Printer, variant = 'outline', size = 'sm', className = '', sedangLuar = false, testId, onHasil }) {
   const [sedang, setSedang] = useState(false);
   const cetak = async () => {
     setSedang(true);
     try {
-      const { blob, namaBerkas } = await ambil();
-      simpanBerkas(blob, namaBerkas);
-      toast.success(`${namaBerkas} diunduh`);
+      const hasil = await ambil();
+      if (onHasil) return onHasil(hasil);
+      simpanBerkas(hasil.blob, hasil.namaBerkas);
+      toast.success(`${hasil.namaBerkas} diunduh`);
     } catch (e) {
       toast.error(e.message || 'Gagal mencetak form');
     } finally {
