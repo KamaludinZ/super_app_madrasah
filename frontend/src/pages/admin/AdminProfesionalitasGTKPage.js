@@ -18,6 +18,9 @@ import { ViewYearNotice } from '@/components/layout/ViewYearNotice';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 const EKINERJA_AUTHOR_ROLES = ['admin', 'kepala_sekolah', 'kepala_tata_usaha'];
+// KS & KTU adalah penyusun sekaligus GTK: selain rekap, mereka juga mengumpulkan dokumen & sertifikat sendiri.
+// Admin murni hanya melihat rekap (sama dengan tab Jurnal Harian di E-Kinerja).
+const PENYUSUN_GTK_ROLES = ['kepala_sekolah', 'kepala_tata_usaha'];
 const CURRENT_QUARTER = `TW${Math.floor(new Date().getMonth() / 3) + 1}`;
 
 const SERTIFIKASI_EMPTY_FORM = {
@@ -27,7 +30,9 @@ const SERTIFIKASI_EMPTY_FORM = {
 export default function AdminProfesionalitasGTKPage() {
   const { activeRole } = useAuth();
   const isAuthor = EKINERJA_AUTHOR_ROLES.includes(activeRole);
+  const isPenyusunGtk = PENYUSUN_GTK_ROLES.includes(activeRole);
   const [activeTab, setActiveTab] = useState('profesionalitas');
+  const [profesionalitasTab, setProfesionalitasTab] = useState('rekap');
   // Tahun yang DILIHAT pengguna ini: ikut "Konteks Lihat" pribadi bila dipilih, selain itu tahun aktif madrasah
   const viewYear = useViewYear();
   const activeYear = viewYear.year || new Date().getFullYear();
@@ -59,14 +64,31 @@ export default function AdminProfesionalitasGTKPage() {
           <Card>
             <CardContent className="p-4">
               <p className="text-xs text-slate-500 mb-3">Pendataan upload dokumen pengembangan profesionalitas GTK (mis. sertifikat pelatihan/diklat/seminar).</p>
-              <PengumpulanPanel
-                type="profesionalitas_gtk"
-                year={activeYear}
-                isAuthor={isAuthor}
-                metaKey="quarterly_periods"
-                periodOptions={null}
-                label="Profesionalitas GTK"
-              />
+              {isPenyusunGtk ? (
+                <Tabs value={profesionalitasTab} onValueChange={setProfesionalitasTab}>
+                  <TabsList className="bg-slate-50 h-auto flex-wrap justify-start">
+                    <TabsTrigger value="rekap">Rekap GTK</TabsTrigger>
+                    <TabsTrigger value="saya">Pengumpulan Saya</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="rekap" className="mt-3">
+                    <PengumpulanPanel type="profesionalitas_gtk" year={activeYear} isAuthor metaKey="quarterly_periods"
+                      periodOptions={null} label="Profesionalitas GTK" />
+                  </TabsContent>
+                  <TabsContent value="saya" className="mt-3">
+                    <PengumpulanPanel type="profesionalitas_gtk" year={activeYear} isAuthor={false} metaKey="quarterly_periods"
+                      periodOptions={null} label="Profesionalitas GTK" />
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <PengumpulanPanel
+                  type="profesionalitas_gtk"
+                  year={activeYear}
+                  isAuthor={isAuthor}
+                  metaKey="quarterly_periods"
+                  periodOptions={null}
+                  label="Profesionalitas GTK"
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -86,8 +108,10 @@ export default function AdminProfesionalitasGTKPage() {
 function SertifikasiPanel({ year }) {
   const { activeRole } = useAuth();
   const isAuthor = EKINERJA_AUTHOR_ROLES.includes(activeRole);
+  const isPenyusunGtk = PENYUSUN_GTK_ROLES.includes(activeRole);
   const [quarterOptions, setQuarterOptions] = useState([]);
   const [period, setPeriod] = useState(CURRENT_QUARTER);
+  const [sertifikasiTab, setSertifikasiTab] = useState('rekap');
 
   useEffect(() => {
     api.get('/ekinerja/pengumpulan/meta').then(({ data }) => setQuarterOptions(data.quarterly_periods || [])).catch(() => {});
@@ -107,10 +131,34 @@ function SertifikasiPanel({ year }) {
         </Select>
       </div>
 
+      {isPenyusunGtk ? (
+        <Tabs value={sertifikasiTab} onValueChange={setSertifikasiTab}>
+          <TabsList className="bg-slate-50 h-auto flex-wrap justify-start">
+            <TabsTrigger value="rekap">Rekap GTK</TabsTrigger>
+            <TabsTrigger value="saya">Sertifikasi Saya</TabsTrigger>
+          </TabsList>
+          <TabsContent value="rekap" className="mt-3">
+            <SertifikasiIsi year={year} period={period} setPeriod={setPeriod} periodLabel={periodLabel} pribadi={false} />
+          </TabsContent>
+          <TabsContent value="saya" className="mt-3">
+            <SertifikasiIsi year={year} period={period} setPeriod={setPeriod} periodLabel={periodLabel} pribadi />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <SertifikasiIsi year={year} period={period} setPeriod={setPeriod} periodLabel={periodLabel} pribadi={!isAuthor} />
+      )}
+    </div>
+  );
+}
+
+// Status pengumpulan + rekaman sertifikat: `pribadi` = milik pengguna sendiri, selain itu rekap seluruh GTK (penyusun).
+function SertifikasiIsi({ year, period, setPeriod, periodLabel, pribadi }) {
+  return (
+    <div className="space-y-6">
       <PengumpulanPanel
         type="sertifikasi"
         year={year}
-        isAuthor={isAuthor}
+        isAuthor={!pribadi}
         period={period}
         onPeriodChange={setPeriod}
         hidePeriodSelector
@@ -121,10 +169,10 @@ function SertifikasiPanel({ year }) {
 
       <div>
         <h3 className="text-sm font-semibold text-slate-900 mb-2">Rekaman Kegiatan/Sertifikat {periodLabel} {year}</h3>
-        {isAuthor ? (
-          <SertifikasiAdminTable year={year} period={period} />
-        ) : (
+        {pribadi ? (
           <SertifikasiOwnTable year={year} period={period} periodLabel={periodLabel} />
+        ) : (
+          <SertifikasiAdminTable year={year} period={period} />
         )}
       </div>
     </div>
