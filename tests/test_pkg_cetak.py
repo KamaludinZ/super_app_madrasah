@@ -75,3 +75,44 @@ def test_laporan_pdf_lengkap_dan_cover():
     assert 'MODEL-GURU' not in terlihat and 'DUDI' not in terlihat and '00-DATA' not in terlihat
     assert wb['COVER']['C43'].value == 'kantor kementerian agama kabupaten malang'
     assert wb['04-RKAP-PKG'].page_setup.fitToHeight == 1 and wb['SISWA'].page_setup.fitToHeight == 0  # SISWA punya pemisah halaman
+
+
+def _lap_lengkap():
+    import pkg_instrumen_impor
+    instrumen = {'kompetensi': pkg_instrumen_impor.pratinjau_dari_template()['kompetensi']}
+    return {'instrumen': instrumen, 'isian': {}, 'identitas': {'sekolah': {'kota': 'Kabupaten Malang'}}}
+
+
+def test_hasil_excel_tidak_terkunci():
+    # Template resmi memproteksi sheet (COVER, KOMP, rekap) dengan sandi yang tidak dimiliki pengguna; salinan unduhan harus bebas.
+    asli = load_workbook(pkg_template.path_template('instrumen'))
+    assert any(ws.protection.sheet for ws in asli.worksheets)  # sumber memang terkunci
+    for isi in (pkg_cetak.laporan_guru_excel(_lap_lengkap()), pkg_cetak.laporan_guru_excel(_lap_lengkap(), lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP)),
+                pkg_cetak.rekap_excel(_guru(3), PERIODE)):
+        wb = load_workbook(io.BytesIO(isi))
+        assert not any(ws.protection.sheet for ws in wb.worksheets) and not (wb.security and wb.security.lockStructure)
+        assert all(not ws.protection.password for ws in wb.worksheets)
+
+
+def test_pdf_lengkap_urutan_dan_page_setup_per_lembar():
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel(_lap_lengkap(), lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP))))
+    terlihat = [ws.title for ws in wb.worksheets if ws.sheet_state == 'visible']
+    assert terlihat == list(pkg_cetak.LEMBAR_PDF_LENGKAP) == [
+        'COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG', '05-RKAP-PKGR', 'INDEK-HDIR',
+        'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN']
+    for ws in (wb[n] for n in terlihat):
+        assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4) and ws.sheet_properties.pageSetUpPr.fitToPage is True
+        assert ws.page_setup.fitToWidth == 1 and not ws.row_breaks.brk and ws.print_options.horizontalCentered and ws.print_area
+        assert ws.page_setup.fitToHeight == (0 if ws.title in pkg_cetak.LEMBAR_TINGGI_BEBAS else 1), ws.title
+    assert all(wb[n].print_title_rows == '$7:$8' for n in pkg_cetak.LEMBAR_TINGGI_BEBAS)
+    assert wb['INDEK-HDIR'].page_setup.orientation == 'landscape' and wb['COVER'].page_setup.orientation == 'portrait'
+    assert wb['RUBRIK-CAPAIAN'].page_setup.orientation == 'portrait'
+
+
+def test_rekap_page_setup_lanskap_satu_halaman_dan_judul_berulang():
+    ws = _buka(pkg_cetak.rekap_excel(_guru(5), PERIODE))
+    assert ws.page_setup.orientation == 'landscape' and int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4)
+    assert (ws.page_setup.fitToWidth, ws.page_setup.fitToHeight) == (1, 1) and ws.print_area == "'Rekap hasil PKG'!$A$1:$H$24"
+    banyak = _buka(pkg_cetak.rekap_excel(_guru(25), PERIODE))
+    assert (banyak.page_setup.fitToWidth, banyak.page_setup.fitToHeight) == (1, 0) and banyak.print_title_rows == '$5:$5'
+    assert banyak.print_area.endswith(f'$H${banyak.max_row}')
