@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.worksheet.protection import SheetProtection
 
 logger = logging.getLogger('matsandatama')
 
@@ -283,13 +284,27 @@ def muat_lebar_halaman(ws, satu_halaman: Optional[bool] = None) -> None:
     ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, (1 if satu_halaman else 0)
 
 
-def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True) -> bytes:
-    """Muat template, jalankan `pengisi(wb)`, dan kembalikan hasilnya sebagai bytes .xlsx baru (template asli utuh)."""
+def buka_proteksi(wb: Workbook) -> None:
+    """Matikan proteksi sheet & struktur workbook pada salinan hasil cetak: sheet template resmi (COVER, KOMP, rekap,
+    dll.) terkunci dengan kata sandi yang tidak dimiliki pengguna, padahal berkas unduhan dibuat aplikasi dan harus
+    bebas disunting. Berkas template di repo tidak berubah (hanya salinan di memori)."""
+    for ws in wb.worksheets:
+        ws.protection = SheetProtection()  # bawaan: sheet tidak terproteksi, tanpa kata sandi
+    wb.security = None
+
+
+def isi_template_ke_bytes(jenis: str, pengisi: Callable[[Workbook], None], wajib_utuh: bool = True,
+                         ubah_drawing: Optional[Callable[[str, str], str]] = None) -> bytes:
+    """Muat template, jalankan `pengisi(wb)`, dan kembalikan hasilnya sebagai bytes .xlsx baru (template asli utuh).
+    openpyxl membuang shape (kotak teks/label/garis); drawing template dipulihkan setelah simpan (pkg_drawing) dan
+    teksnya dapat disesuaikan lewat `ubah_drawing(judul_lembar, xml_drawing)`."""
+    from pkg_drawing import pulihkan_drawing
     wb = buka_template(jenis, hanya_baca=False, wajib_utuh=wajib_utuh)
     pengisi(wb)
+    buka_proteksi(wb)
     keluaran = io.BytesIO()
     wb.save(keluaran)
-    return keluaran.getvalue()
+    return pulihkan_drawing(keluaran.getvalue(), path_template(jenis), ubah_drawing)
 
 
 # Folder induk salinan sementara hasil cetak (bawaan: folder temp sistem). Tiap cetak memakai subfolder pkg_*.

@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 
 from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
@@ -117,11 +118,55 @@ def _geser_sel(sel: str, baris: int) -> str:
     return f'{m.group(1)}{int(m.group(2)) + baris}'
 
 
+def atur_halaman_rekap(ws: Worksheet, jumlah_guru: int) -> None:
+    """Setelan cetak rekap madrasah (salinan hasil): A4 lanskap, area cetak seluruh tabel sampai tanda tangan, lebar 1
+    halaman, rata tengah. Sampai kapasitas tabel template (10 guru) seluruhnya 1 halaman; lebih dari itu tinggi
+    mengikuti isi dan baris judul tabel diulang di setiap halaman."""
+    peta = PETA_CETAK['rekap']
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.scale = None
+    ws.print_area = f'A1:{get_column_letter(ws.max_column)}{ws.max_row}'
+    ws.page_margins.left = ws.page_margins.right = 0.5
+    ws.page_margins.top = ws.page_margins.bottom = 0.5
+    ws.print_options.horizontalCentered = True
+    ws.row_breaks.brk = []
+    if jumlah_guru > peta['baris_tersedia']:
+        ws.print_title_rows = f"{peta['baris_awal'] - 1}:{peta['baris_awal'] - 1}"
+    muat_lebar_halaman(ws, satu_halaman=jumlah_guru <= peta['baris_tersedia'])
+
+
+def isi_kotak_identitas(xml: str, madrasah: Dict[str, Any]) -> str:
+    """Isi kotak teks "IDENTITAS RA / MADRASAH" pada drawing rekap: nilai ditulis setelah titik dua tiap baris label
+    (nama lembaga, alamat, NSM, NPSN, status akreditasi, nama kepala); data yang tidak ada dibiarkan kosong. Teks
+    di-escape XML."""
+    def esc(t):
+        return str(t or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    akreditasi = str(madrasah.get('akreditasi') or '').strip()
+    if akreditasi and not akreditasi.lower().startswith('terakreditasi'):
+        akreditasi = f'Terakreditasi {akreditasi}'
+    isian = [('Lembaga', madrasah.get('nama')), ('Alamat', madrasah.get('alamat')), ('N S M', madrasah.get('nsm')),
+             ('N P S N', madrasah.get('npsn')), ('Status Akreditasi', akreditasi), ('Nama Kepala RA/Madrasah', madrasah.get('kepala'))]
+
+    def ganti(m):
+        isi = m.group(1)
+        for label, nilai in isian:
+            if label in isi and ':' in isi:
+                return f"<a:t>{isi[:isi.index(':') + 1]} {esc(nilai)}</a:t>"
+        return m.group(0)
+    return re.sub(r'<a:t>([^<]*)</a:t>', ganti, xml)
+
+
 def rekap_excel(guru: List[Dict[str, Any]], periode: Dict[str, Any], kepala: Optional[str] = None,
-                tanggal_cetak: Optional[date] = None) -> bytes:
+                tanggal_cetak: Optional[date] = None, madrasah: Optional[Dict[str, Any]] = None) -> bytes:
     """Berkas .xlsx rekap hasil PKG dari template resmi (template harus utuh sesuai checksum resmi)."""
     sheet = PETA_CETAK['rekap']['sheet']
-    return isi_template_ke_bytes('rekap', lambda wb: isi_rekap(wb[sheet], guru, periode, kepala, tanggal_cetak))
+
+    def pengisi(wb):
+        isi_rekap(wb[sheet], guru, periode, kepala, tanggal_cetak)
+        atur_halaman_rekap(wb[sheet], len(guru))
+    ubah = (lambda judul, xml: isi_kotak_identitas(xml, {**madrasah, 'kepala': madrasah.get('kepala') or kepala})) if madrasah is not None else None
+    return isi_template_ke_bytes('rekap', pengisi, ubah_drawing=ubah)
 
 
 # ---------------------------------------------------------------- laporan per guru (template instrumen)
@@ -254,6 +299,29 @@ LEMBAR_PDF_LENGKAP = ('COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'K
                       '05-RKAP-PKGR', 'INDEK-HDIR', 'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN')
 
 
+# Lembar angket 360° berlanjut ke beberapa halaman (tinggi bebas, kepala tabel diulang); lembar lain dicetak 1 halaman
+# A4 sesuai orientasi template (tegak/lanskap), lebar dan tinggi dimuatkan.
+LEMBAR_TINGGI_BEBAS = {'SEJAWAT': '7:8', 'SISWA': '7:8', 'ORTU': '7:8'}
+LEMBAR_TEGAK = ('RUBRIK-CAPAIAN',)  # kolom sempit & baris tinggi: tegak agar huruf tidak mengecil pada kertas lanskap
+
+
+def atur_halaman_lembar(ws: Worksheet) -> None:
+    """Setelan cetak satu lembar laporan guru pada salinan: kertas A4, orientasi template, skala otomatis (fit lebar 1
+    halaman). SEJAWAT/SISWA/ORTU: tinggi bebas dengan kepala tabel diulang (pemisah halaman manual template dibuang);
+    lembar lain: 1 halaman penuh tanpa pemisah halaman tersisa."""
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.scale = None
+    ws.print_options.horizontalCentered = True
+    if ws.title in LEMBAR_TEGAK:
+        ws.page_setup.orientation = 'portrait'
+    ws.row_breaks.brk = []  # pemisah manual template disetel untuk skala Excel; LibreOffice memotong otomatis mengikuti skala
+    if ws.title in LEMBAR_TINGGI_BEBAS:
+        ws.print_title_rows = LEMBAR_TINGGI_BEBAS[ws.title]
+        muat_lebar_halaman(ws, satu_halaman=False)
+    else:
+        muat_lebar_halaman(ws, satu_halaman=True)
+
+
 def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False, lembar: Optional[List[str]] = None) -> bytes:
     """Berkas .xlsx laporan PKG satu guru dari template instrumen resmi (seluruh sheet resmi ikut).
     Untuk PDF, `lembar` (mis. LEMBAR_PDF_LENGKAP) atau `hanya_rekap=True` (04-RKAP-PKG saja) menentukan sheet yang
@@ -264,5 +332,5 @@ def laporan_guru_excel(laporan: Dict[str, Any], hanya_rekap: bool = False, lemba
         if tampil:
             tampilkan_hanya(wb, tampil)
             for nama in tampil:
-                muat_lebar_halaman(wb[nama])
+                atur_halaman_lembar(wb[nama])
     return isi_template_ke_bytes('instrumen', pengisi)

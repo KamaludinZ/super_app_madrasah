@@ -57,7 +57,9 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
         rek = await rekomendasi_periode(db_, periode['id'], [g['guru_id'] for g in agregat['guru']])
         for g in agregat['guru']:
             g['rekomendasi'] = teks_rekomendasi(rek.get(g['guru_id'])) or None
-        isi = rekap_excel(agregat['guru'], periode, kepala=kepala)
+        madrasah = {'nama': pengaturan.get('school_name'), 'alamat': pengaturan.get('address'), 'nsm': pengaturan.get('nsm'),
+                    'npsn': pengaturan.get('npsn'), 'akreditasi': pengaturan.get('accreditation'), 'kepala': kepala}
+        isi = rekap_excel(agregat['guru'], periode, kepala=kepala, madrasah=madrasah)
         return {'jenis_template': 'rekap', 'dasar_nama': f"Rekap_Hasil_PKG_{periode.get('nama_periode') or ''}",
                 'xlsx': isi, 'periode': periode, 'guru_id': None,
                 'cadangan': lambda: rekap_pdf_cadangan(agregat['guru'], periode, kepala)}

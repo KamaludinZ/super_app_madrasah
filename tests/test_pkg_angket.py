@@ -37,6 +37,27 @@ def test_berkas_angket_hanya_bagian_form():
     assert kosong['E159'].value.startswith(': …')
 
 
+@pytest.mark.parametrize('jenis', ['sejawat', 'siswa', 'ortu'])
+def test_berkas_angket_muat_satu_lembar_a4(jenis):
+    ws = load_workbook(io.BytesIO(pkg_angket.angket_excel(jenis, {'nama': 'Budi', 'nip': '1', 'tugas_tambahan': None})))['FORM-360-GR']
+    assert ws.sheet_properties.pageSetUpPr.fitToPage is True
+    assert (ws.page_setup.fitToWidth, ws.page_setup.fitToHeight) == (1, 1)
+    assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4) and ws.page_setup.orientation == 'portrait'
+    assert ws.print_options.horizontalCentered and not ws.row_breaks.brk and ws.page_margins.left <= 0.5
+    a, b = pkg_angket.JENIS_ANGKET[jenis]['form']
+    sembunyi = {r for x, y in pkg_angket.JENIS_ANGKET[jenis]['sembunyi'] for r in range(x, y + 1)}
+    assert sembunyi and all(ws.row_dimensions[r].hidden for r in sembunyi) and a < min(sembunyi) and max(sembunyi) <= b
+
+
+@pytest.mark.parametrize('jenis', ['sejawat', 'siswa', 'ortu'])
+def test_pdf_cadangan_angket_satu_halaman(jenis):
+    import re
+    from pkg_pdf_cadangan import angket_pdf_cadangan
+    for guru in (None, {'nama': 'Budi', 'nip': '1', 'tugas_tambahan': 'Wali Kelas'}):
+        pdf = angket_pdf_cadangan(jenis, guru)
+        assert pdf.startswith(b'%PDF') and len(re.findall(rb'/Type\s*/Page(?!s)', pdf)) == 1
+
+
 @pytest.fixture
 def klien(monkeypatch):
     from fastapi import FastAPI

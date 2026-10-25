@@ -75,3 +75,102 @@ def test_laporan_pdf_lengkap_dan_cover():
     assert 'MODEL-GURU' not in terlihat and 'DUDI' not in terlihat and '00-DATA' not in terlihat
     assert wb['COVER']['C43'].value == 'kantor kementerian agama kabupaten malang'
     assert wb['04-RKAP-PKG'].page_setup.fitToHeight == 1 and wb['SISWA'].page_setup.fitToHeight == 0  # SISWA punya pemisah halaman
+
+
+def _lap_lengkap():
+    import pkg_instrumen_impor
+    instrumen = {'kompetensi': pkg_instrumen_impor.pratinjau_dari_template()['kompetensi']}
+    return {'instrumen': instrumen, 'isian': {}, 'identitas': {'sekolah': {'kota': 'Kabupaten Malang'}}}
+
+
+def test_hasil_excel_tidak_terkunci():
+    # Template resmi memproteksi sheet (COVER, KOMP, rekap) dengan sandi yang tidak dimiliki pengguna; salinan unduhan harus bebas.
+    asli = load_workbook(pkg_template.path_template('instrumen'))
+    assert any(ws.protection.sheet for ws in asli.worksheets)  # sumber memang terkunci
+    for isi in (pkg_cetak.laporan_guru_excel(_lap_lengkap()), pkg_cetak.laporan_guru_excel(_lap_lengkap(), lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP)),
+                pkg_cetak.rekap_excel(_guru(3), PERIODE)):
+        wb = load_workbook(io.BytesIO(isi))
+        assert not any(ws.protection.sheet for ws in wb.worksheets) and not (wb.security and wb.security.lockStructure)
+        assert all(not ws.protection.password for ws in wb.worksheets)
+
+
+def test_pdf_lengkap_urutan_dan_page_setup_per_lembar():
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel(_lap_lengkap(), lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP))))
+    terlihat = [ws.title for ws in wb.worksheets if ws.sheet_state == 'visible']
+    assert terlihat == list(pkg_cetak.LEMBAR_PDF_LENGKAP) == [
+        'COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG', '05-RKAP-PKGR', 'INDEK-HDIR',
+        'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN']
+    for ws in (wb[n] for n in terlihat):
+        assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4) and ws.sheet_properties.pageSetUpPr.fitToPage is True
+        assert ws.page_setup.fitToWidth == 1 and not ws.row_breaks.brk and ws.print_options.horizontalCentered and ws.print_area
+        assert ws.page_setup.fitToHeight == (0 if ws.title in pkg_cetak.LEMBAR_TINGGI_BEBAS else 1), ws.title
+    assert all(wb[n].print_title_rows == '$7:$8' for n in pkg_cetak.LEMBAR_TINGGI_BEBAS)
+    assert wb['INDEK-HDIR'].page_setup.orientation == 'landscape' and wb['COVER'].page_setup.orientation == 'portrait'
+    assert wb['RUBRIK-CAPAIAN'].page_setup.orientation == 'portrait'
+
+
+def test_rekap_page_setup_lanskap_satu_halaman_dan_judul_berulang():
+    ws = _buka(pkg_cetak.rekap_excel(_guru(5), PERIODE))
+    assert ws.page_setup.orientation == 'landscape' and int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4)
+    assert (ws.page_setup.fitToWidth, ws.page_setup.fitToHeight) == (1, 1) and ws.print_area == "'Rekap hasil PKG'!$A$1:$H$24"
+    banyak = _buka(pkg_cetak.rekap_excel(_guru(25), PERIODE))
+    assert (banyak.page_setup.fitToWidth, banyak.page_setup.fitToHeight) == (1, 0) and banyak.print_title_rows == '$5:$5'
+    assert banyak.print_area.endswith(f'$H${banyak.max_row}')
+
+
+def _drawing_per_lembar(isi):
+    """{judul lembar: xml drawing} dari berkas hasil, memakai pembaca paket yang sama dengan pemulih drawing."""
+    import zipfile
+    import pkg_drawing
+    with zipfile.ZipFile(io.BytesIO(isi)) as z:
+        return {judul: z.read(d).decode('utf-8') for judul, sheet in pkg_drawing._peta_sheet(z).items()
+                if (d := pkg_drawing._drawing_template(z, sheet))}
+
+
+def _semua_relasi_ada(isi):
+    import zipfile
+    import pkg_drawing
+    with zipfile.ZipFile(io.BytesIO(isi)) as z:
+        nama = set(z.namelist())
+        for n in nama:
+            if n.endswith('.rels') and n != '_rels/.rels':
+                basis = n.replace('_rels/', '', 1)[:-5]
+                for r in pkg_drawing._rels(z.read(n).decode('utf-8')):
+                    if r.get('TargetMode') != 'External':
+                        assert pkg_drawing._jalur(basis, r['Target']) in nama, (n, r['Target'])
+        ct = z.read('[Content_Types].xml').decode('utf-8')
+        for n in nama:
+            if n.startswith('xl/drawings/drawingT'):
+                assert f'PartName="/{n}"' in ct
+
+
+def test_rekap_drawing_kotak_identitas_terisi_dan_aman_xml():
+    madrasah = {'nama': 'MTsN 2 Kota Malang', 'alamat': 'Jl. A & B <Blok 1>', 'npsn': '20533012', 'akreditasi': 'A', 'kepala': 'Drs. H. Mahmud'}
+    isi = pkg_cetak.rekap_excel(_guru(3), PERIODE, madrasah=madrasah)
+    drawing = _drawing_per_lembar(isi)
+    assert list(drawing) == ['Rekap hasil PKG'] and drawing['Rekap hasil PKG'].count('<xdr:sp ') == 1
+    xml = drawing['Rekap hasil PKG']
+    assert 'IDENTITAS RA / MADRASAH' in xml and 'Lembaga\t: MTsN 2 Kota Malang' in xml and 'Jl. A &amp; B &lt;Blok 1&gt;' in xml
+    assert 'N P S N\t\t: 20533012' in xml and 'Status Akreditasi\t: Terakreditasi A' in xml and 'Nama Kepala RA/Madrasah\t: Drs. H. Mahmud' in xml
+    assert 'N S M\t\t: <' in xml  # NSM tidak ada di sistem: kosong setelah titik dua
+    _semua_relasi_ada(isi)
+    assert load_workbook(io.BytesIO(isi))['Rekap hasil PKG']['B6'].value == 'Guru 01'
+
+
+def test_laporan_guru_mempertahankan_drawing_template_tanpa_tombol_navigasi():
+    import zipfile
+    isi = pkg_cetak.laporan_guru_excel(_lap_lengkap())
+    drawing = _drawing_per_lembar(isi)
+    with zipfile.ZipFile(pkg_template.path_template('instrumen')) as tz:
+        import pkg_drawing
+        asli = {j: pkg_drawing._buang_navigasi(tz.read(pkg_drawing._drawing_template(tz, sh)).decode('utf-8'))
+                for j, sh in pkg_drawing._peta_sheet(tz).items() if pkg_drawing._drawing_template(tz, sh)}
+    harus = {j for j, x in asli.items() if pkg_drawing.ANCHOR.search(x)}
+    assert set(drawing) == harus and {'COVER', 'KOMP-1', '05-RKAP-PKGR'} <= harus
+    for j, xml in drawing.items():
+        assert '<a:hlinkClick' not in xml, j  # tombol navigasi makro tidak ikut
+        assert xml.count('<xdr:pic>') == asli[j].count('<xdr:pic>'), j  # gambar tidak dobel
+    assert drawing['COVER'].count('<xdr:pic>') >= 1 and drawing['05-RKAP-PKGR'].count('<xdr:sp ') > 100
+    _semua_relasi_ada(isi)
+    wb = load_workbook(io.BytesIO(isi))
+    assert wb['COVER']['C43'].value is not None and not any(ws.protection.sheet for ws in wb.worksheets)

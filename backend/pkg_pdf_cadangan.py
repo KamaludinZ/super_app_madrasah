@@ -171,37 +171,46 @@ def laporan_guru_pdf_cadangan(laporan: Dict[str, Any]) -> bytes:
 
 
 def angket_pdf_cadangan(jenis: str, guru: Optional[Dict[str, Any]] = None) -> bytes:
-    """PDF cadangan angket kertas 360° satu jenis (A4 tegak): identitas guru, tabel butir per komponen dengan kolom
-    skor 0/1/2 untuk dicentang responden, dan tempat tanda tangan responden."""
+    """PDF cadangan angket kertas 360° satu jenis, selalu 1 lembar A4 tegak: identitas guru, tabel butir per komponen
+    dengan kolom skor 0/1/2 untuk dicentang responden, dan tempat tanda tangan responden. Ukuran huruf & jarak baris
+    menyesuaikan jumlah butir (8 pt untuk 40 butir, 8,5-9 pt untuk angket lebih pendek)."""
     from pkg_angket import JENIS_ANGKET, butir_angket
+    butir = butir_angket(jenis)
+    huruf = 9.0 if len(butir) <= 12 else 8.5 if len(butir) <= 30 else 8.0
     gaya = getSampleStyleSheet()
-    sel = gaya['BodyText'].clone('sel', fontSize=8.5, leading=10)
+    sel = gaya['BodyText'].clone('sel', fontSize=huruf, leading=huruf + 1.2, spaceBefore=0, spaceAfter=0)
     g = guru or {}
     titik = '.' * 60
+    judul = gaya['Title'].clone('judul_angket', fontSize=12, leading=14, spaceAfter=0)
     isi = [
-        Paragraph('<b>INSTRUMEN PENILAIAN PERILAKU KINERJA GURU</b>', gaya['Title']),
+        Paragraph('<b>INSTRUMEN PENILAIAN PERILAKU KINERJA GURU</b>', judul),
         Paragraph(f"<b>OLEH {JENIS_ANGKET[jenis]['label'].upper()}</b>", gaya['Normal'].clone('sub', alignment=1)),
-        Spacer(1, 0.4 * cm),
+        Spacer(1, 0.2 * cm),
     ]
     t_id = Table([['Nama Guru', f": {g.get('nama') or titik}"], ['NIP', f": {g.get('nip') or titik}"],
-                  ['Tugas Tambahan', f": {g.get('tugas_tambahan') or titik}"]], colWidths=[3.5 * cm, 13.5 * cm])
-    t_id.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9)]))
-    baris = [['No', 'Pernyataan', 'Tidak ada bukti\n(0)', 'Sebagian\n(1)', 'Seluruhnya\n(2)']]
+                  ['Tugas Tambahan', f": {g.get('tugas_tambahan') or titik}"]], colWidths=[3.5 * cm, 14 * cm])
+    t_id.setStyle(TableStyle([('FONTSIZE', (0, 0), (-1, -1), 9), ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1)]))
+    baris = [['No', 'Pernyataan', 'Tidak ada\nbukti (0)', 'Sebagian\n(1)', 'Seluruhnya\n(2)']]
     gaya_tabel = _gaya_tabel()
+    gaya_tabel.add('FONTSIZE', (0, 0), (-1, -1), huruf)
+    gaya_tabel.add('LEADING', (0, 0), (-1, -1), huruf + 1.2)
+    gaya_tabel.add('TOPPADDING', (0, 0), (-1, -1), 1.2)
+    gaya_tabel.add('BOTTOMPADDING', (0, 0), (-1, -1), 1.2)
     komponen = None
-    for b in butir_angket(jenis):
+    for b in butir:
         if b['komponen'] != komponen:
             komponen = b['komponen']
             baris.append(['', Paragraph(f'<b>{komponen}</b>', sel), '', '', ''])
             gaya_tabel.add('BACKGROUND', (0, len(baris) - 1), (-1, len(baris) - 1), colors.HexColor('#ECFDF5'))
         baris.append([str(b['nomor']), Paragraph(b['pernyataan'], sel), '', '', ''])
-    tabel = Table(baris, colWidths=[1 * cm, 10.5 * cm, 2 * cm, 2 * cm, 2 * cm], repeatRows=1)
+    tabel = Table(baris, colWidths=[0.9 * cm, 12.1 * cm, 1.5 * cm, 1.5 * cm, 1.5 * cm], repeatRows=1)
     gaya_tabel.add('ALIGN', (0, 0), (0, -1), 'CENTER')
     gaya_tabel.add('ALIGN', (2, 0), (-1, 0), 'CENTER')
     tabel.setStyle(gaya_tabel)
-    isi += [t_id, Spacer(1, 0.3 * cm), tabel, Spacer(1, 0.8 * cm),
-            Paragraph('.................., ........................ 20....<br/>Responden,<br/><br/><br/><br/>(.........................................)',
-                      gaya['Normal'].clone('ttd', leftIndent=11 * cm))]
+    isi += [t_id, Spacer(1, 0.2 * cm), tabel, Spacer(1, 0.3 * cm),
+            Paragraph('.................., ........................ 20....<br/>Responden,<br/><br/><br/>(.........................................)',
+                      gaya['Normal'].clone('ttd', fontSize=8.5, leading=10, leftIndent=11 * cm))]
     output = io.BytesIO()
-    _dokumen(output, A4).build(isi, onFirstPage=_penanda_halaman, onLaterPages=_penanda_halaman)
+    SimpleDocTemplate(output, pagesize=A4, topMargin=1.3 * cm, bottomMargin=1.2 * cm, leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+                      title='PKG (versi cadangan)').build(isi, onFirstPage=_penanda_halaman, onLaterPages=_penanda_halaman)
     return output.getvalue()
