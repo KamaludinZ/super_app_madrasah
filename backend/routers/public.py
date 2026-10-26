@@ -1,12 +1,26 @@
 """Public endpoints (no auth): monitoring + holidays today."""
+from datetime import date, datetime, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter
 
 from core import db, get_active_academic_year, get_settings, serialize_doc
-from journal_core import current_day_id, now_wib
+from journal_core import DAY_MAP_ID_EN, current_day_id, day_started_at_filter, now_wib
 
 router = APIRouter()
+
+_URUT_HARI_EN = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
+
+
+def tanggal_hari_pantau(hari: str, sekarang: datetime) -> date:
+    """Tanggal WIB yang dipantau untuk hari `hari` ('senin'..'minggu'): hari ini bila sama, selain itu tanggal
+    terakhir (sudah lewat) dengan hari tersebut. Jadwal berulang tiap minggu, jadi status jurnal harus dicek
+    pada tanggal ini — bukan sembarang jurnal yang pernah diisi untuk jadwal itu."""
+    en = DAY_MAP_ID_EN.get((hari or '').lower())
+    if en not in _URUT_HARI_EN:
+        return sekarang.date()
+    mundur = (sekarang.weekday() - _URUT_HARI_EN.index(en)) % 7
+    return sekarang.date() - timedelta(days=mundur)
 
 
 @router.get("/public/monitoring")
@@ -31,6 +45,8 @@ async def public_monitoring(day: Optional[str] = None):
     }, {'_id': 0}).sort('start_time', 1).to_list(2000)
 
     now = now_wib()
+    tanggal = tanggal_hari_pantau(current_day, now)
+    jurnal_tanggal = day_started_at_filter(tanggal)
 
     # Enrich schedules with class, subject, room, teacher, journal info
     enriched = []
@@ -39,7 +55,9 @@ async def public_monitoring(day: Optional[str] = None):
         sub = await db.subjects.find_one({'id': s.get('subject_id')}, {'_id': 0, 'name': 1, 'code': 1})
         room = await db.rooms.find_one({'id': s.get('room_id')}, {'_id': 0, 'name': 1})
         teacher = await db.users.find_one({'id': s.get('teacher_id')}, {'_id': 0, 'full_name': 1})
-        journal = await db.journals.find_one({'schedule_id': s['id']}, {'_id': 0, 'id': 1, 'materi': 1, 'started_at': 1})
+        # Jurnal slot ini pada tanggal yang dipantau saja (semua asal input & pengisi dihitung "terisi").
+        journal = await db.journals.find_one({'schedule_id': s['id'], **jurnal_tanggal},
+                                             {'_id': 0, 'id': 1, 'materi': 1, 'started_at': 1})
         # Determine status based on time
         try:
             sh, sm = map(int, s['start_time'].split(':'))
@@ -49,7 +67,9 @@ async def public_monitoring(day: Optional[str] = None):
         except Exception:
             continue
 
-        if now < start_dt:
+        if tanggal < now.date():
+            status_label = 'past'  # memantau hari lain minggu ini: jadwalnya sudah lewat
+        elif now < start_dt:
             status_label = 'upcoming'
         elif start_dt <= now <= end_dt:
             status_label = 'active'
@@ -135,7 +155,7 @@ async def public_monitoring(day: Optional[str] = None):
 
     settings = await get_settings()
     return {
-        'time': now.isoformat(), 'day': current_day,
+        'time': now.isoformat(), 'day': current_day, 'date': tanggal.isoformat(),
         'academic_year': ay.get('name'),
         'school_name': settings.get('school_name'),
         'app_name': settings.get('app_name'),
