@@ -26,7 +26,7 @@ const FILTER = [
 ];
 
 // Tugas Penilaian Saya: guru yang dibagikan kepala madrasah kepada pengguna (penilai) pada SK aktif.
-// Lembar penilaian baru bisa dibuka setelah penilai disupervisi kepala madrasah.
+// Lembar penilaian baru bisa dibuka setelah penilai disupervisi atau diberi izin menilai oleh kepala madrasah.
 // `tugas` = [{ id, nama, nip, mapel, status, progres }], `keanggotaan` = { nomor_sk, peran, supervisi_selesai, izin_menilai }.
 export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
   const [cari, setCari] = useState('');
@@ -67,7 +67,7 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
         {penilai && !bolehMenilai && (
           <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" data-testid="pkg-tugas-belum-supervisi">
             <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>Anda belum disupervisi kepala madrasah pada periode ini. Lembar penilaian dapat dibuka setelah supervisi tercatat.</span>
+            <span>Anda belum disupervisi kepala madrasah pada periode ini. Lembar penilaian dapat dibuka setelah supervisi tercatat atau kepala madrasah memberi izin menilai.</span>
           </div>
         )}
 
