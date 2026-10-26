@@ -27,13 +27,14 @@ const FILTER = [
 
 // Tugas Penilaian Saya: guru yang dibagikan kepala madrasah kepada pengguna (penilai) pada SK aktif.
 // Lembar penilaian baru bisa dibuka setelah penilai disupervisi kepala madrasah.
-// `tugas` = [{ id, nama, nip, mapel, status, progres }], `keanggotaan` = { nomor_sk, peran, supervisi_selesai }.
+// `tugas` = [{ id, nama, nip, mapel, status, progres }], `keanggotaan` = { nomor_sk, peran, supervisi_selesai, izin_menilai }.
 export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
   const [cari, setCari] = useState('');
   const [filter, setFilter] = useState('semua');
   const [identitasGuru, setIdentitasGuru] = useState(null);
   const penilai = keanggotaan?.peran !== 'dinilai';
-  const bolehMenilai = !!keanggotaan?.supervisi_selesai;
+  // Lembar terbuka bila penilai sudah disupervisi atau diberi izin menilai oleh kepala.
+  const bolehMenilai = !!(keanggotaan?.supervisi_selesai || keanggotaan?.izin_menilai);
 
   const jumlahPerStatus = useMemo(() => tugas.reduce((acc, t) => {
     acc[t.status] = (acc[t.status] || 0) + 1;

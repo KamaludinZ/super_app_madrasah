@@ -9,7 +9,8 @@ import { api } from '@/lib/api';
 //   anggota   = { id, nama, nip, mapel }   (snapshot identitas periode)
 //   pembagian = { periode, sk, penilai, dinilai, penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n},
 //                 penilaian_dimulai, peringatan: [teks] }
-//   supervisi = { penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru }
+//   supervisi = { penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru,
+//                 izin_menilai, izin_alasan, izin_oleh, izin_pada, boleh_menilai }
 // Setelah penilaian berjalan, perubahan susunan (penilai, guru dinilai, pembagian) wajib menyertakan alasan.
 
 // Pesan galat dari detail backend: teks (400/404/409) atau daftar validasi (422).
@@ -99,4 +100,13 @@ export const tandaiSupervisi = (penilaiId, { tanggal_supervisi: tanggal, catatan
 
 export const batalkanSupervisi = (penilaiId) => panggil(
   () => api.delete(`/pkg/supervisi/${penilaiId}`), 'Gagal membatalkan supervisi.',
+);
+
+// Izin kepala agar penilai dapat membuka lembar penilaian sebelum supervisi tercatat (alasan wajib, min. 10 karakter).
+export const beriIzinMenilai = (penilaiId, alasan) => panggil(
+  () => api.post(`/pkg/supervisi/${penilaiId}/izin`, { alasan }), 'Gagal memberi izin menilai.',
+);
+
+export const cabutIzinMenilai = (penilaiId) => panggil(
+  () => api.delete(`/pkg/supervisi/${penilaiId}/izin`), 'Gagal mencabut izin menilai.',
 );

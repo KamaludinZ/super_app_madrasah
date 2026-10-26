@@ -5,6 +5,8 @@ import { ClipboardPen, Loader2, AlertTriangle, RotateCw, CalendarX } from 'lucid
 import DaftarTugasPenilaian from '@/components/pkg/DaftarTugasPenilaian';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import PenandaInstrumenAktif from '@/components/pkg/PenandaInstrumenAktif';
+import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
+import { cetakFormKosong } from '@/lib/pkgCetak';
 import { ambilTugasPenilaian } from '@/lib/pkg';
 
 const RINGKAS = [
@@ -47,7 +49,13 @@ function IsiHalamanPenilaian() {
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><ClipboardPen className="h-5 w-5 text-[#006837]" /> Penilaian Kinerja</h2>
           <p className="text-xs text-slate-500">Guru yang dibagikan kepala madrasah kepada Anda pada periode berjalan.</p>
         </div>
-        <PenandaInstrumenAktif instrumen={data.instrumen} varian="lencana" />
+        <div className="flex flex-wrap items-center gap-2">
+          <PenandaInstrumenAktif instrumen={data.instrumen} varian="lencana" />
+          {/* Form instrumen berisi kotak centang dengan identitas dikosongkan (titik-titik), untuk penilaian offline. */}
+          <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'instrumen', periodeId: data.periode?.id })} testId="pkg-penilaian-cetak-form-kosong">
+            Cetak form penilaian kinerja
+          </TombolCetakOffline>
+        </div>
       </div>
 
       {!data.dapat_diisi && (
@@ -75,8 +83,9 @@ function IsiHalamanPenilaian() {
   );
 }
 
-// Daftar tugas penilaian guru (penilai yang sudah disupervisi; kepala selalu boleh): guru yang dibagikan beserta
-// status & progres lembar (GET /pkg/penilaian/tugas). Tombol per guru membuka lembar penilaian.
+// Daftar tugas penilaian guru (penilai yang sudah disupervisi atau diberi izin menilai; kepala selalu boleh): guru yang
+// dibagikan beserta status & progres lembar (GET /pkg/penilaian/tugas). Tombol per guru membuka lembar penilaian; tombol
+// cetak form penilaian kinerja kosong (identitas titik-titik) untuk penilaian offline.
 export default function PkgPenilaianPage() {
   return (
     <PenjagaMenuPkg menuKey="penilaian">

@@ -350,7 +350,8 @@ async def rekap_tim(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], p
             'penilai_id': pid or None,
             'penilai_nama': (snap.get(pid) or {}).get('nama') or next((b['penilai_nama'] for b in guru if b.get('penilai_nama')), None)
             or ('Belum dibagikan' if not pid else None),
-            'supervisi_selesai': bool(t.get('supervisi_selesai')), 'jumlah_jatah': int(t.get('jumlah_jatah') or 0),
+            'supervisi_selesai': bool(t.get('supervisi_selesai')), 'izin_menilai': bool(t.get('izin_menilai')),
+            'jumlah_jatah': int(t.get('jumlah_jatah') or 0),
             'jumlah': len(guru), 'terkunci': sum(1 for b in guru if b['status'] == 'terkunci'),
             'draf': sum(1 for b in guru if b['status'] == 'draf'), 'belum': sum(1 for b in guru if b['status'] == 'belum'),
             'rata_capaian': _bulat2(sum(nilai) / len(nilai)) if nilai else None,
