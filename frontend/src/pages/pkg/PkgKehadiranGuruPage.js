@@ -7,12 +7,17 @@ import { ArrowLeft, CalendarCheck, Loader2, Save, UserRound } from 'lucide-react
 import { toast } from 'sonner';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { KOLOM_INPUT, MENIT_PER_HARI, PEMBAGI_HARI, ambilKehadiranGuru, hitungBulan, hitungIndeks, simpanKehadiran } from '@/lib/pkgKehadiran';
+import {
+  KOLOM_INPUT, MENIT_PER_HARI, PEMBAGI_HARI, ambilKehadiranGuru, ambilKehadiranSaya, hitungBulan, hitungIndeks, simpanKehadiran,
+  simpanKehadiranSaya,
+} from '@/lib/pkgKehadiran';
 
 const ANGKA = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
 const PERSEN = new Intl.NumberFormat('id-ID', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function IsiKehadiranGuru() {
+// `sendiri` = guru yang dinilai mengisi rekapnya sendiri (menu Kehadiran Saya, /pkg/kehadiran/saya); selain itu
+// pengelola mengisi rekap guru `:guruId`.
+export function IsiKehadiranGuru({ sendiri = false }) {
   const { guruId } = useParams();
   const [searchParams] = useSearchParams();
   const periodeId = searchParams.get('periode') || undefined;
@@ -23,14 +28,14 @@ function IsiKehadiranGuru() {
 
   const muat = useCallback(async () => {
     try {
-      const d = await ambilKehadiranGuru(guruId, periodeId);
+      const d = sendiri ? await ambilKehadiranSaya(periodeId) : await ambilKehadiranGuru(guruId, periodeId);
       setData(d);
       setBulan(d.bulan);
       setUbah(false);
     } catch (e) {
       setData({ galat: e.message });
     }
-  }, [guruId, periodeId]);
+  }, [guruId, periodeId, sendiri]);
   useEffect(() => { muat(); }, [muat]);
 
   const kembali = periodeId ? `/pkg/komponen?periode=${periodeId}&tab=kehadiran` : '/pkg/komponen?tab=kehadiran';
@@ -48,7 +53,8 @@ function IsiKehadiranGuru() {
   const simpan = async () => {
     setMenyimpan(true);
     try {
-      await simpanKehadiran(guruId, { periodeId: data.periode.id, bulan });
+      const isi = { periodeId: data.periode.id, bulan };
+      await (sendiri ? simpanKehadiranSaya(isi) : simpanKehadiran(guruId, isi));
       toast.success('Rekap kehadiran disimpan');
       await muat();
     } catch (e) {
@@ -60,7 +66,13 @@ function IsiKehadiranGuru() {
 
   return (
     <div className="space-y-4" data-testid="pkg-kehadiran-guru">
-      <Link to={kembali} className="inline-flex items-center gap-1 text-sm text-[#006837] hover:underline"><ArrowLeft className="h-4 w-4" /> Komponen 360° &amp; Kehadiran</Link>
+      {!sendiri && <Link to={kembali} className="inline-flex items-center gap-1 text-sm text-[#006837] hover:underline"><ArrowLeft className="h-4 w-4" /> Komponen 360° &amp; Kehadiran</Link>}
+      {sendiri && (
+        <p className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 text-sm text-slate-700">
+          Isi rekap kehadiran Anda per bulan sesuai catatan presensi. Kepala madrasah dan tim penilai dapat memeriksa dan mengoreksi isian ini;
+          indeks kehadiran menjadi pengali nilai akhir PK Guru Anda.
+        </p>
+      )}
       <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#006837]"><UserRound className="h-6 w-6" /></div>
         <div className="min-w-0 flex-1">

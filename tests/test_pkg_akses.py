@@ -210,18 +210,21 @@ def test_menu_sesuai_akses(db):
         return {m['key']: m['alasan'] for m in _panggil(api.menu_beranda, user)}
 
     kepala = akses(KEPALA)
-    assert len(kepala) == 10 and all(a is None for a in kepala.values())
+    assert len(kepala) == 11 and kepala.pop('kehadiran_saya') == 'bukan_dinilai'  # kepala tidak dinilai
+    assert all(a is None for a in kepala.values())
 
     pen = akses(GURU('pen'))  # penilai tersupervisi
     assert pen['penilaian'] is None and pen['cetak'] is None and pen['rekap'] is None
     assert {pen[k] for k in ('periode', 'sk', 'penugasan', 'supervisi', 'audit')} == {'bukan_kepala'}
+    assert pen['kehadiran_saya'] == 'bukan_dinilai'
 
     rangkap = akses(GURU('rangkap'))  # penilai belum disupervisi
     assert rangkap['penilaian'] == 'belum_disupervisi' and rangkap['cetak'] is None
+    assert rangkap['kehadiran_saya'] is None  # penilai yang merangkap dinilai
 
     gur = akses(GURU('gur'))  # hanya dinilai
     assert gur['penilaian'] == 'bukan_penilai' and gur['cetak'] == 'bukan_penilai'
-    assert gur['instrumen'] is None and gur['rekap'] is None
+    assert gur['instrumen'] is None and gur['rekap'] is None and gur['kehadiran_saya'] is None
 
     menu = _panggil(api.beranda_pkg, GURU('pen'), None)['menu']
     assert [m['key'] for m in menu][:2] == ['periode', 'sk'] and menu[0]['khusus'] == 'kepala' and menu[0]['akses'] is False
@@ -279,7 +282,7 @@ def test_penjaga_syarat_kepala(db):
     assert e.value.detail['alasan'] == 'bukan_kepala'
     log = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'tolak_akses']
     assert log[0]['metadata']['endpoint'] == '/pkg/periode' and log[0]['kunci'] == '/pkg/periode:bukan_kepala'
-    assert len(_panggil(api.menu_beranda, KEPALA, syarat='kepala')) == 10
+    assert len(_panggil(api.menu_beranda, KEPALA, syarat='kepala')) == 11
     with pytest.raises(ValueError):
         pkg_penjaga.penjaga_pkg('salah')
 
@@ -304,12 +307,12 @@ def test_wajib_akses_per_syarat(db):
             assert e.status_code == 403
             return e.detail['alasan']
 
-    tabel = {  # pengguna: (anggota, kepala, pengelola, penilai)
-        'kep': (None, None, None, None),
-        'pen': (None, 'bukan_kepala', None, None),
-        'rangkap': (None, 'bukan_kepala', None, 'belum_disupervisi'),
-        'gur': (None, 'bukan_kepala', 'bukan_penilai', 'bukan_penilai'),
-        'asing': ('bukan_anggota_sk',) * 4,
+    tabel = {  # pengguna: (anggota, kepala, pengelola, penilai, dinilai)
+        'kep': (None, None, None, None, 'bukan_dinilai'),
+        'pen': (None, 'bukan_kepala', None, None, 'bukan_dinilai'),
+        'rangkap': (None, 'bukan_kepala', None, 'belum_disupervisi', None),
+        'gur': (None, 'bukan_kepala', 'bukan_penilai', 'bukan_penilai', None),
+        'asing': ('bukan_anggota_sk',) * 5,
     }
     for uid, harapan in tabel.items():
         user = KEPALA if uid == 'kep' else GURU(uid)
@@ -344,5 +347,5 @@ def test_dependency_lewat_fastapi(db):
 
     pengguna['user'] = GURU('pen')
     r = klien.get('/api/pkg/beranda/menu')
-    assert r.status_code == 200 and len(r.json()) == 10
+    assert r.status_code == 200 and len(r.json()) == 11
     assert klien.get('/api/pkg/sk/my-membership').json()['peran'] == 'penilai'

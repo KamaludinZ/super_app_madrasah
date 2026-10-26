@@ -95,8 +95,8 @@ async def tugas_penilaian_saya(db, user: Dict[str, Any], periode: Optional[Dict[
     return hasil
 
 
-# Sembilan sub-menu PKG beserta syarat aksesnya (lihat pkg_akses.SYARAT_AKSES). Instrumen dibaca semua anggota;
-# rekap dibatasi per peran di halamannya.
+# Sub-menu PKG beserta syarat aksesnya (lihat pkg_akses.SYARAT_AKSES). Instrumen dibaca semua anggota;
+# rekap dibatasi per peran di halamannya; Kehadiran Saya hanya untuk guru yang dinilai (input rekap kehadiran sendiri).
 MENU_PKG = [
     ('periode', 'Periode PKG', 'Tetapkan periode penilaian', '/pkg/periode', 'kepala'),
     ('sk', 'SK & Tim Penilai', 'Data SK dan anggota', '/pkg/sk', 'kepala'),
@@ -105,6 +105,7 @@ MENU_PKG = [
     ('instrumen', 'Master Instrumen', 'Kompetensi & indikator', '/pkg/instrumen', 'anggota'),
     ('penilaian', 'Penilaian Kinerja', 'Isi lembar penilaian', '/pkg/penilaian', 'penilai'),
     ('komponen', 'Komponen 360° & Kehadiran', 'Angket 360°, kehadiran & rekomendasi PKB', '/pkg/komponen', 'pengelola'),
+    ('kehadiran_saya', 'Kehadiran Saya', 'Input rekap kehadiran Anda', '/pkg/kehadiran-saya', 'dinilai'),
     ('rekap', 'Rekap Hasil', 'Nilai akhir & predikat', '/pkg/rekap', 'anggota'),
     ('cetak', 'Cetak Excel & PDF', 'Unduh dokumen resmi', '/pkg/cetak', 'pengelola'),
     ('audit', 'Jejak Audit', 'Riwayat aksi PKG', '/pkg/audit', 'kepala'),
@@ -112,7 +113,7 @@ MENU_PKG = [
 
 
 def menu_pkg(keanggotaan: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Pintasan sepuluh menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
+    """Pintasan menu PKG untuk pengguna: {key, label, keterangan, to, khusus, akses, alasan}."""
     hasil = []
     for key, label, keterangan, to, syarat in MENU_PKG:
         alasan = alasan_tolak(keanggotaan, syarat)

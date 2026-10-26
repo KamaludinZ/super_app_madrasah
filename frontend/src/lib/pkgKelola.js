@@ -5,7 +5,8 @@ import { api } from '@/lib/api';
 //   periode   = { id, nama_periode, semester_id, tahun_pelajaran, semester, tanggal_buka, tanggal_tutup,
 //                 status: 'draf' | 'berjalan' | 'ditutup' }   (hanya satu periode 'berjalan')
 //   sk        = { id, nomor_sk, tanggal_sk, tentang, periode_id, is_active, penilaian_berjalan,
-//                 penilai: [anggota], dinilai: [anggota] }
+//                 penilai: [anggota], dinilai: [anggota], berkas: berkasSk | null }
+//   berkasSk  = { nama_asli, jenis: 'pdf' | 'jpg' | 'png', ukuran, diunggah_oleh_nama, diunggah_pada }  (file SK)
 //   anggota   = { id, nama, nip, mapel }   (snapshot identitas periode)
 //   pembagian = { periode, sk, penilai, dinilai, penugasan: {guru_id: penilai_id}, jatah: {penilai_id: n},
 //                 penilaian_dimulai, peringatan: [teks] }
@@ -54,6 +55,15 @@ export const simpanSk = (data, id = null) => panggil(
 );
 
 export const aktifkanSk = (id) => panggil(() => api.post(`/pkg/sk/${id}/aktifkan`), 'Gagal mengaktifkan SK.');
+
+// File SK (PDF/JPG/PNG, maks. 5 MB): unggah/ganti & hapus -> sk. Dilihat lewat lib/pkg.bukaBerkasSk.
+export const MAKS_BERKAS_SK = 5 * 1024 * 1024;
+export function unggahBerkasSk(skId, berkas) {
+  const form = new FormData();
+  form.append('berkas', berkas);
+  return panggil(() => api.post(`/pkg/sk/${skId}/berkas`, form, { headers: { 'Content-Type': 'multipart/form-data' } }), 'Gagal mengunggah file SK.');
+}
+export const hapusBerkasSk = (skId) => panggil(() => api.delete(`/pkg/sk/${skId}/berkas`), 'Gagal menghapus file SK.');
 
 // Akun guru aktif untuk ceklist anggota SK: [{ id, full_name, nip, roles }].
 export const daftarGuru = () => panggil(() => api.get('/pkg/guru'), 'Gagal memuat daftar guru.');

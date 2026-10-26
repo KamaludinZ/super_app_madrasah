@@ -10,6 +10,7 @@ import SaringanPeriodeRekap from '@/components/pkg/SaringanPeriodeRekap';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import DaftarRekomendasiPkb from '@/components/pkg/RekomendasiPkb';
 import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
+import KartuTautanAngket from '@/components/pkg/KartuTautanAngket';
 import { cetakFormKosong, simpanBerkas } from '@/lib/pkgCetak';
 import { JENIS_ANGKET, cetakAngket, daftarJenisAngket, ringkasanAngket } from '@/lib/pkgAngket';
 import { ringkasanKehadiran } from '@/lib/pkgKehadiran';
@@ -70,7 +71,7 @@ function DaftarGuruAngket({ guru, jenis, periodeId, sedang, onCetak }) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Angket per Guru</CardTitle>
-        <p className="text-xs text-slate-500">Cetak angket PDF beridentitas guru untuk dibagikan, lalu input rekap jawabannya per responden.</p>
+        <p className="text-xs text-slate-500">Jumlah responden mencakup angket online dan rekap angket kertas. Cetak angket PDF beridentitas guru untuk dibagikan, lalu input rekap jawabannya per responden.</p>
       </CardHeader>
       <CardContent className="space-y-2">
         {guru.length === 0 && <p className="py-6 text-center text-sm text-slate-500">Belum ada guru dalam cakupan Anda pada periode ini.</p>}
@@ -190,6 +191,7 @@ function IsiHalamanKomponen() {
           <TabsTrigger value="pkb" data-testid="pkg-komponen-tab-pkb">Rekomendasi PKB</TabsTrigger>
         </TabsList>
         <TabsContent value="angket" className="space-y-4">
+          <KartuTautanAngket periodeId={rekap.periode?.id} />
           <KartuAngketKosong jenis={jenis} sedang={sedang} onCetak={cetak} />
           <DaftarGuruAngket guru={rekap.guru} jenis={jenis} periodeId={periodeId} sedang={sedang} onCetak={cetak} />
         </TabsContent>
@@ -204,8 +206,8 @@ function IsiHalamanKomponen() {
   );
 }
 
-// Komponen penilaian di luar lembar kompetensi (kepala & tim penilai): angket 360° kertas & rekap jawabannya,
-// kehadiran guru, dan rekomendasi PKB. Guru & skor 360° dari GET /pkg/angket/ringkasan (cakupan peran); angket dari POST /pkg/angket/cetak.
+// Komponen penilaian di luar lembar kompetensi (kepala & tim penilai): tautan angket 360° online, angket kertas &
+// rekap jawabannya, kehadiran guru, dan rekomendasi PKB. Guru & skor 360° dari GET /pkg/angket/ringkasan (cakupan peran); angket dari POST /pkg/angket/cetak.
 export default function PkgKomponenPage() {
   return (
     <PenjagaMenuPkg menuKey="komponen">

@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, Pencil, Plus, Save, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Globe, Loader2, Pencil, Plus, Save, Trash2, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { sebutan360 } from '@/lib/pkgAmbang';
-import { ambilAngketGuru, hapusJawaban, hitungNilaiResponden, tambahJawaban, ubahJawaban } from '@/lib/pkgAngket';
+import { ambilAngketGuru, ambilTtdJawaban, hapusJawaban, hitungNilaiResponden, tambahJawaban, ubahJawaban } from '@/lib/pkgAngket';
 
 const FORMAT = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const SKOR = [
@@ -93,6 +93,23 @@ function FormResponden({ jenis, awal, onSimpan, onBatal }) {
   );
 }
 
+// Gambar tanda tangan responden angket online (endpoint berotorisasi -> blob URL).
+function TandaTangan({ id }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    let url = null;
+    let batal = false;
+    ambilTtdJawaban(id).then((blob) => {
+      if (batal) return;
+      url = URL.createObjectURL(blob);
+      setSrc(url);
+    }).catch(() => {});
+    return () => { batal = true; if (url) URL.revokeObjectURL(url); };
+  }, [id]);
+  if (!src) return <div className="h-10 w-24 rounded border border-dashed border-slate-200" aria-hidden="true" />;
+  return <img src={src} alt="Tanda tangan responden" className="h-10 w-24 rounded border border-slate-200 bg-white object-contain" />;
+}
+
 function TabJenis({ jenis, bolehUbah, onTambah, onUbah, onHapus }) {
   const [form, setForm] = useState(null); // null | 'baru' | responden
   const penuh = jenis.jumlah_responden >= jenis.maks_responden;
@@ -122,9 +139,15 @@ function TabJenis({ jenis, bolehUbah, onTambah, onUbah, onHapus }) {
       {jenis.responden.map((r) => (
         <div key={r.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center" data-testid={`pkg-responden-${r.id}`}>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-slate-900">Penilai {r.urutan}{r.nama_responden ? ` · ${r.nama_responden}` : ''}</div>
-            <div className="text-xs text-slate-500">Diinput {r.diinput_oleh_nama || '-'} · {r.diubah_pada ? formatWIBPanjang(r.diubah_pada) : '-'}</div>
+            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+              Penilai {r.urutan}{r.nama_responden ? ` · ${r.nama_responden}` : ''}
+              {r.sumber === 'publik' && <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 font-normal text-sky-700"><Globe className="h-3 w-3" /> Online</Badge>}
+            </div>
+            <div className="text-xs text-slate-500">
+              {r.sumber === 'publik' ? 'Diisi responden lewat angket online' : `Diinput ${r.diinput_oleh_nama || '-'}`} · {r.diubah_pada ? formatWIBPanjang(r.diubah_pada) : '-'}
+            </div>
           </div>
+          {r.ada_ttd && <TandaTangan id={r.id} />}
           <div className="text-sm tabular-nums">{r.skor}/{r.skor_maks} · <span className="font-semibold">{FORMAT.format(r.nilai)}</span>
             <span className="ml-1 text-xs text-slate-500">{sebutan360(r.nilai) || ''}</span></div>
           {bolehUbah && (

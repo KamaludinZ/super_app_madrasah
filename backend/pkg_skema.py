@@ -5,7 +5,8 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     status ('draf' | 'berjalan' | 'ditutup'), dibuat_oleh, created_at, updated_at}
     pkg_sk         {id, nomor_sk, nomor_sk_kunci (huruf kecil, unik), tanggal_sk, tentang, periode_id,
                     ditetapkan_oleh, penilai_ids, dinilai_ids, snapshot_anggota {<user_id>: {nama, nip, mapel}},
-                    is_active, created_at, updated_at}
+                    berkas {nama_berkas (di uploads/pkg_sk), nama_asli, jenis ('pdf' | 'jpg' | 'png'), ukuran, checksum,
+                    diunggah_oleh, diunggah_oleh_nama, diunggah_pada} (file SK, opsional), is_active, created_at, updated_at}
     pkg_penugasan  {id, periode_id, sk_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
                     supervisi_selesai, tanggal_supervisi, catatan_supervisi, disupervisi_oleh,
                     izin_menilai, izin_alasan, izin_oleh {id, nama}, izin_pada (izin kepala tanpa supervisi),
@@ -30,8 +31,14 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                    Riwayat unduhan & cetak dokumen resmi (pasangan jejak audit aksi cetak_template).
     pkg_angket     {id, periode_id, guru_dinilai_id, jenis ('sejawat' | 'siswa' | 'ortu'), urutan (1–10 = kolom penilai
                     sheet SEJAWAT/SISWA/ORTU), nama_responden, jawaban [skor 0/1/2 per butir sesuai urutan sheet], skor,
-                    skor_maks, nilai (skor / skor_maks x 100), diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
-                   Rekap jawaban angket kertas 360° per responden (responden tidak memiliki akun).
+                    skor_maks, nilai (skor / skor_maks x 100), sumber ('manual' | 'publik'), ada_ttd, slot (unik:
+                    periode:guru:jenis:urutan), diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
+                   Jawaban angket 360° per responden (responden tidak memiliki akun): rekap angket kertas yang diinput
+                   pengelola ('manual') atau diisi responden sendiri lewat tautan angket online ('publik').
+    pkg_angket_tautan {id, periode_id (unik), token (unik, bagian URL /public/angket-360/<token>), aktif (False = pengisian
+                    ditutup), dibuat_oleh, dibuat_oleh_nama, dibuat_pada, status_oleh_nama, status_pada}
+                   Satu tautan angket online per periode; diganti = tautan lama mati.
+    pkg_angket_ttd {responden_id (unik), png (bytes), dibuat_pada}  Tanda tangan responden angket online.
     pkg_kehadiran  {id, periode_id, guru_dinilai_id, bulan [{bulan (YYYY-MM), terlambat_menit, pulang_cepat_menit,
                     tanpa_keterangan, hadir, izin, sakit}], diinput_oleh, diinput_oleh_nama, tanggal_input, diubah_pada}
                    Rekap kehadiran manual per guru per periode (sheet INDEK-HDIR; lihat pkg_kehadiran).
@@ -69,6 +76,8 @@ KOLEKSI_TEMPLATE = 'pkg_template'
 KOLEKSI_PRATINJAU_IMPOR = 'pkg_impor_pratinjau'
 KOLEKSI_REKAP = 'pkg_rekap'
 KOLEKSI_ANGKET = 'pkg_angket'
+KOLEKSI_ANGKET_TAUTAN = 'pkg_angket_tautan'
+KOLEKSI_ANGKET_TTD = 'pkg_angket_ttd'
 KOLEKSI_KEHADIRAN = 'pkg_kehadiran'
 KOLEKSI_REKOMENDASI = 'pkg_rekomendasi_pkb'
 
@@ -108,6 +117,11 @@ INDEX_PKG = [
     (KOLEKSI_REKAP, [('periode_id', 1), ('penilai_id', 1)], {'name': 'periode_penilai'}),
     (KOLEKSI_ANGKET, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_ANGKET, [('periode_id', 1), ('guru_dinilai_id', 1), ('jenis', 1), ('urutan', 1)], {'name': 'periode_guru_jenis'}),
+    # Satu responden per kolom penilai: pengisian online serentak tidak boleh menempati urutan yang sama.
+    (KOLEKSI_ANGKET, [('slot', 1)], {'unique': True, 'name': 'slot_unik', 'partialFilterExpression': {'slot': {'$type': 'string'}}}),
+    (KOLEKSI_ANGKET_TAUTAN, [('periode_id', 1)], {'unique': True, 'name': 'satu_tautan_per_periode'}),
+    (KOLEKSI_ANGKET_TAUTAN, [('token', 1)], {'unique': True, 'name': 'token_unik'}),
+    (KOLEKSI_ANGKET_TTD, [('responden_id', 1)], {'unique': True, 'name': 'responden_unik'}),
     (KOLEKSI_KEHADIRAN, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
     (KOLEKSI_KEHADIRAN, [('periode_id', 1), ('guru_dinilai_id', 1)], {'unique': True, 'name': 'guru_per_periode'}),
     (KOLEKSI_REKOMENDASI, [('id', 1)], {'unique': True, 'name': 'id_unik'}),
@@ -584,6 +598,42 @@ class AngketJawabanRequest(IsianPkg):
     @classmethod
     def _nama(cls, v):
         return (v or '').strip() or None
+
+
+class AngketPublikRequest(IsianPkg):
+    """Angket 360° yang diisi responden sendiri lewat tautan angket online: nama responden wajib, skor 0/1/2 setiap
+    butir, dan tanda tangan (PNG data URL dari kanvas)."""
+    jenis_angket: str = Field(..., pattern='^(' + '|'.join(JENIS_ANGKET) + ')$')
+    guru_id: str = Field(..., pattern=POLA_ID)
+    nama_responden: str = Field(..., max_length=120)
+    jawaban: List[int] = Field(..., min_length=1, max_length=60)
+    tanda_tangan: str = Field(..., max_length=400_000, pattern=r'^data:image/png;base64,[A-Za-z0-9+/=]+$')
+
+    @field_validator('jawaban')
+    @classmethod
+    def _skor(cls, v):
+        if any(n not in (0, 1, 2) for n in v):
+            raise ValueError('skor setiap butir harus 0, 1, atau 2')
+        return v
+
+    @field_validator('nama_responden')
+    @classmethod
+    def _nama(cls, v):
+        v = _teks(v)
+        if len(v) < 2:
+            raise ValueError('nama responden wajib diisi')
+        return v
+
+
+class AngketTautanRequest(IsianPkg):
+    """Ganti tautan angket online periode (tautan lama tidak berlaku lagi)."""
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+
+
+class AngketTautanStatusRequest(IsianPkg):
+    """Buka (aktif) atau tutup pengisian lewat tautan angket online periode."""
+    periode_id: Optional[str] = Field(None, pattern=POLA_ID)
+    aktif: bool
 
 
 class KehadiranBulan(IsianPkg):

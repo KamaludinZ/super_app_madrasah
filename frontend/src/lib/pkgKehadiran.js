@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 //        diinput_oleh_nama, diubah_pada }
 //   PUT /pkg/kehadiran/{guru_id} { periode_id?, bulan: [{ bulan: 'YYYY-MM', terlambat_menit, pulang_cepat_menit,
 //        tanpa_keterangan, hadir, izin, sakit }] }  (hanya periode berjalan; mengganti data sebelumnya)
+//   GET/PUT /pkg/kehadiran/saya — sama, untuk guru yang dinilai mengisi rekapnya sendiri (menu Kehadiran Saya)
 // Rumus (sama dengan backend): jumlah menit = terlambat + pulang cepat; konversi = menit / 480 (hari);
 // tidak hadir = konversi + tanpa keterangan; indeks kehadiran = 1 - total tidak hadir / 46. Hadir/izin/sakit hanya
 // informasi (tidak masuk rumus template).
@@ -54,3 +55,5 @@ export const simpanKehadiran = (guruId, { periodeId, bulan }) => panggil(
   }),
   'Gagal menyimpan rekap kehadiran.',
 );
+export const ambilKehadiranSaya = (periodeId) => ambilKehadiranGuru('saya', periodeId);
+export const simpanKehadiranSaya = (isi) => simpanKehadiran('saya', isi);

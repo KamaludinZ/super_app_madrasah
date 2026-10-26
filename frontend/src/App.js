@@ -11,6 +11,7 @@ import PublicMonitoring from '@/pages/PublicMonitoring';
 import PublicPrestasi from '@/pages/PublicPrestasi';
 import PublicAgenda from '@/pages/PublicAgenda';
 import PublicRKAMPage from '@/pages/PublicRKAMPage';
+import PublicAngket360Page from '@/pages/PublicAngket360Page';
 import AppShell from '@/components/layout/AppShell';
 import InstallPWA from '@/components/pwa/InstallPWA';
 import useForegroundNotification from '@/hooks/useForegroundNotification';
@@ -104,6 +105,7 @@ import PkgCetakPage from '@/pages/pkg/PkgCetakPage';
 import PkgKomponenPage from '@/pages/pkg/PkgKomponenPage';
 import PkgAngketGuruPage from '@/pages/pkg/PkgAngketGuruPage';
 import PkgKehadiranGuruPage from '@/pages/pkg/PkgKehadiranGuruPage';
+import PkgKehadiranSayaPage from '@/pages/pkg/PkgKehadiranSayaPage';
 import PkgAuditPage from '@/pages/pkg/PkgAuditPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
@@ -317,6 +319,7 @@ function App() {
           <Route path="/public/prestasi" element={<PublicPageGuard pageName="prestasi"><PublicPrestasi /></PublicPageGuard>} />
           <Route path="/public/agenda" element={<PublicPageGuard pageName="agenda"><PublicAgenda /></PublicPageGuard>} />
           <Route path="/public/rkam" element={<PublicPageGuard pageName="rkam"><PublicRKAMPage /></PublicPageGuard>} />
+          <Route path="/public/angket-360/:token" element={<PublicAngket360Page />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
@@ -419,6 +422,7 @@ function App() {
               <Route path="komponen" element={<PkgKomponenPage />} />
               <Route path="komponen/angket/:guruId" element={<PkgAngketGuruPage />} />
               <Route path="komponen/kehadiran/:guruId" element={<PkgKehadiranGuruPage />} />
+              <Route path="kehadiran-saya" element={<PkgKehadiranSayaPage />} />
               <Route path="rekap" element={<PkgRekapPage />} />
               <Route path="rekap/:guruId" element={<PkgRekapGuruPage />} />
               <Route path="cetak" element={<PkgCetakPage />} />

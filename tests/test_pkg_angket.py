@@ -167,3 +167,141 @@ def test_isi_lembar_360_dan_form():
         w, {'guru': {'nama': 'Guru A', 'nip': '1'}, 'penilai': {'nama': 'P'}, 'sekolah': {'kota': 'Kota Malang'},
             'periode': {'tanggal_penilaian': '2 November 2026'}}))))['FORM-INSTR']
     assert (instr['E4'].value, instr['E7'].value, instr['E9'].value) == (': Guru A', ': P', ': Kota Malang, 2 November 2026')
+
+
+def _png(goresan=True, latar=(0, 0, 0, 0)):
+    import base64
+    from PIL import Image, ImageDraw
+    img = Image.new('RGBA', (300, 120), latar)
+    if goresan:
+        ImageDraw.Draw(img).line([(20, 60), (150, 30), (280, 90)], fill=(15, 23, 42, 255), width=4)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+
+def test_olah_tanda_tangan():
+    assert pkg_angket.olah_tanda_tangan(_png()).startswith(b'\x89PNG')
+    assert pkg_angket.olah_tanda_tangan(_png(latar=(255, 255, 255, 255))).startswith(b'\x89PNG')  # latar putih
+    for salah in (_png(goresan=False), _png(goresan=False, latar=(255, 255, 255, 255)),
+                  'data:image/png;base64,' + 'QUJD' * 10, 'data:image/png;base64,!!'):
+        with pytest.raises(ValueError):
+            pkg_angket.olah_tanda_tangan(salah)
+
+
+def test_slot_responden_serentak():
+    import asyncio
+    from pymongo.errors import DuplicateKeyError
+
+    class KoleksiUnik(Koleksi):
+        async def insert_one(self, doc):
+            if doc.get('slot') and any(d.get('slot') == doc['slot'] for d in self.docs):
+                raise DuplicateKeyError('slot')
+            await super().insert_one(doc)
+
+    d = Db({'pkg_angket': KoleksiUnik([{'id': 'x', 'periode_id': 'p1', 'guru_dinilai_id': 'g1', 'jenis': 'ortu', 'urutan': 2}])})
+    asli, baca = pkg_angket.responden_guru, []
+
+    async def basi(db, *a, **kw):  # bacaan pertama belum melihat pengisian lain yang baru menempati kolom 1
+        baca.append(1)
+        return [r for r in await asli(db, *a, **kw) if len(baca) > 1 or r['urutan'] != 1]
+    d['pkg_angket'].docs.append({'id': 'y', 'periode_id': 'p1', 'guru_dinilai_id': 'g1', 'jenis': 'ortu', 'urutan': 1, 'slot': 'p1:g1:ortu:1'})
+    pkg_angket.responden_guru = basi
+    try:
+        doc = asyncio.run(pkg_angket.tambah_responden(d, 'p1', 'g1', 'ortu', [2] * 8, 'A', None, sumber='publik'))
+    finally:
+        pkg_angket.responden_guru = asli
+    assert (doc['urutan'], doc['slot'], doc['sumber'], doc['diinput_oleh']) == (3, 'p1:g1:ortu:3', 'publik', None)
+    assert len(baca) == 2  # kolom 1 bentrok -> dibaca ulang -> kolom 3
+
+
+@pytest.fixture
+def klien_publik(klien, monkeypatch):
+    from fastapi.testclient import TestClient
+    from routers import pkg_angket_publik_api as publik
+    k, d, pengguna = klien
+    monkeypatch.setattr(publik, 'db', d)
+    k.app.include_router(publik.router, prefix='/api')
+    d['users'].docs.append({'id': 'kep', 'full_name': 'Kepala', 'roles': ['kepala_sekolah']})
+    d['pkg_sk'].docs[0]['dinilai_ids'] = ['g2', 'g1', 'kep']
+    d['pkg_sk'].docs[0]['snapshot_anggota']['g2'] = {'nama': 'Ahmad Guru', 'mapel': 'IPA'}
+    return TestClient(k.app), d, pengguna
+
+
+def test_tautan_angket_online(klien_publik):
+    k, d, pengguna = klien_publik
+    t = k.get('/api/pkg/angket/tautan').json()
+    assert len(t['token']) >= 16 and t['aktif'] and t['terbuka'] and t['boleh_kelola'] and t['periode']['id'] == 'p1'
+    assert k.get('/api/pkg/angket/tautan').json()['token'] == t['token'] and len(d['pkg_angket_tautan'].docs) == 1
+    pengguna['user'] = {'id': 'pen', 'roles': ['guru'], 'full_name': 'Penilai'}
+    t2 = k.get('/api/pkg/angket/tautan').json()
+    assert t2['token'] == t['token'] and t2['boleh_kelola'] is False  # penilai boleh menyalin, tidak boleh mengelola
+    assert k.post('/api/pkg/angket/tautan/ganti', json={}).status_code == 403
+    assert k.post('/api/pkg/angket/tautan/status', json={'aktif': False}).status_code == 403
+    pengguna['user'] = {'id': 'g2', 'roles': ['guru']}
+    assert k.get('/api/pkg/angket/tautan').status_code == 403  # guru dinilai bukan pengelola
+    pengguna['user'] = {'id': 'kep', 'roles': ['kepala_sekolah'], 'full_name': 'Kepala'}
+    baru = k.post('/api/pkg/angket/tautan/ganti', json={}).json()
+    assert baru['token'] != t['token'] and d['pkg_audit_log'].docs[-1]['aksi'] == 'angket_tautan_ganti'
+    assert k.get(f"/api/public/pkg/angket/{t['token']}").status_code == 404  # tautan lama mati
+    assert k.get(f"/api/public/pkg/angket/{baru['token']}").status_code == 200
+
+    tutup = k.post('/api/pkg/angket/tautan/status', json={'aktif': False}).json()
+    assert (tutup['aktif'], tutup['terbuka'], tutup['token'], tutup['status_oleh_nama']) == (False, False, baru['token'], 'Kepala')
+    assert d['pkg_audit_log'].docs[-1]['aksi'] == 'angket_tautan_status'
+    assert k.post('/api/pkg/angket/tautan/ganti', json={}).json()['aktif'] is False  # ganti token tidak membuka tautan
+    token = k.get('/api/pkg/angket/tautan').json()['token']
+    publik = k.get(f'/api/public/pkg/angket/{token}').json()
+    assert publik['terbuka'] is False and publik['guru'] == [] and 'ditutup oleh madrasah' in publik['pesan']
+    isi = {'jenis_angket': 'ortu', 'guru_id': 'g1', 'nama_responden': 'Ibu Ani', 'jawaban': [2] * 8, 'tanda_tangan': _png()}
+    assert k.post(f'/api/public/pkg/angket/{token}/jawaban', json=isi).status_code == 409
+    assert k.post('/api/pkg/angket/tautan/status', json={'aktif': True}).json()['terbuka'] is True
+    assert k.post(f'/api/public/pkg/angket/{token}/jawaban', json=isi).status_code == 200
+
+
+def test_isi_angket_online(klien_publik):
+    k, d, pengguna = klien_publik
+    token = k.get('/api/pkg/angket/tautan').json()['token']
+    url = f'/api/public/pkg/angket/{token}'
+    pengguna['user'] = None  # endpoint publik tidak memakai login
+    data = k.get(url).json()
+    assert data['terbuka'] and data['periode']['nama_periode'] == 'Ganjil' and data['maks_responden'] == 10
+    assert [g['nama'] for g in data['guru']] == ['Ahmad Guru', 'Guru Satu']  # urut nama, kepala tidak dinilai
+    assert 'nip' not in data['guru'][1] and data['guru'][1]['jumlah'] == {'sejawat': 0, 'siswa': 0, 'ortu': 0}
+    assert [(j['jenis'], j['jumlah_butir'], len(j['butir'])) for j in data['jenis']] == [('sejawat', 28, 28), ('siswa', 40, 40), ('ortu', 8, 8)]
+
+    isi = {'jenis_angket': 'ortu', 'guru_id': 'g1', 'nama_responden': '  Ibu   Ani ', 'jawaban': [2] * 7 + [1], 'tanda_tangan': _png()}
+    r = k.post(f'{url}/jawaban', json=isi)
+    assert r.status_code == 200, r.text
+    assert (r.json()['urutan'], r.json()['jumlah_responden'], r.json()['guru_nama']) == (1, 1, 'Guru Satu')
+    doc = d['pkg_angket'].docs[0]
+    assert (doc['nama_responden'], doc['sumber'], doc['ada_ttd'], doc['nilai'], doc['diinput_oleh']) == ('Ibu Ani', 'publik', True, 93.75, None)
+    assert d['pkg_angket_ttd'].docs[0]['responden_id'] == doc['id']
+    assert d['pkg_audit_log'].docs[-1]['aksi'] == 'angket_isi_publik'
+    assert k.get(url).json()['guru'][1]['jumlah']['ortu'] == 1
+
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'ibu ani'}).status_code == 409  # nama sama
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Pak Budi', 'tanda_tangan': _png(goresan=False)}).status_code == 422
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': ' '}).status_code == 422
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Pak Budi', 'jawaban': [2] * 7}).status_code == 422
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Pak Budi', 'guru_id': 'kep'}).status_code == 422
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Pak Budi', 'tanda_tangan': 'data:image/jpeg;base64,AAAA'}).status_code == 422
+    assert k.post('/api/public/pkg/angket/tokentidakadasama/jawaban', json=isi).status_code == 404
+    for i in range(9):
+        assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': f'Wali {i}'}).status_code == 200
+    penuh = k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Wali 10'})
+    assert penuh.status_code == 409 and 'kuota penuh' in penuh.json()['detail']
+
+    pengguna['user'] = {'id': 'kep', 'roles': ['kepala_sekolah'], 'full_name': 'Kepala'}
+    ortu = next(j for j in k.get('/api/pkg/angket/guru/g1').json()['jenis'] if j['jenis'] == 'ortu')
+    assert ortu['jumlah_responden'] == 10 and ortu['responden'][0]['sumber'] == 'publik' and ortu['responden'][0]['ada_ttd']
+    ttd = k.get(f"/api/pkg/angket/jawaban/{doc['id']}/ttd")
+    assert ttd.status_code == 200 and ttd.headers['content-type'] == 'image/png' and ttd.content.startswith(b'\x89PNG')
+    assert k.delete(f"/api/pkg/angket/jawaban/{doc['id']}").status_code == 200
+    assert not [t for t in d['pkg_angket_ttd'].docs if t['responden_id'] == doc['id']]
+    assert k.get(f"/api/pkg/angket/jawaban/{doc['id']}/ttd").status_code == 404
+
+    d['pkg_periode'].docs[0]['status'] = 'ditutup'
+    tutup = k.get(url).json()
+    assert tutup['terbuka'] is False and tutup['guru'] == [] and 'tidak sedang berjalan' in tutup['pesan']
+    assert k.post(f'{url}/jawaban', json={**isi, 'nama_responden': 'Pak Budi'}).status_code == 409

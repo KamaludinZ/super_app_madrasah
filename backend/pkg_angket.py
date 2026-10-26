@@ -1,13 +1,19 @@
 """Angket penilaian 360° PKG (sejawat, peserta didik, orang tua/wali) mengikuti template resmi pkg_template_v2026.xlsx.
 
 Butir angket dibaca dari sheet isian template (SEJAWAT, SISWA, ORTU: kolom C komponen, D nomor, E pernyataan) sehingga
-urutan butir di aplikasi, angket cetak, dan berkas laporan selalu sama. Angket kertas dicetak dari bagian sheet
-FORM-360-GR yang sesuai (identitas guru diisi, area cetak dibatasi bagian itu, sheet lain disembunyikan). Skor tiap
+urutan butir di aplikasi, angket cetak, angket online, dan berkas laporan selalu sama. Angket kertas dicetak dari bagian
+sheet FORM-360-GR yang sesuai (identitas guru diisi, area cetak dibatasi bagian itu, sheet lain disembunyikan); angket
+online diisi responden lewat tautan publik periode (routers.pkg_angket_publik_api) dengan tanda tangan kanvas. Skor tiap
 butir 0 (tidak ada bukti) / 1 (terpenuhi sebagian) / 2 (seluruhnya terpenuhi). DUDI tidak dipakai (khusus SMK).
 """
+import base64
+import binascii
+import io
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from pymongo.errors import DuplicateKeyError
 
 from pkg_ambang import AMBANG_SEBUTAN_360, terapkan
 from pkg_skema import KOLEKSI_ANGKET
@@ -185,19 +191,68 @@ def periksa_jawaban(jenis: str, jawaban: List[int]) -> None:
 
 
 async def tambah_responden(db, periode_id: str, guru_id: str, jenis: str, jawaban: List[int], nama: Optional[str],
-                           aktor: Dict[str, Any]) -> Dict[str, Any]:
-    """Simpan rekap jawaban satu responden pada kolom penilai kosong pertama (urutan 1–10)."""
+                           aktor: Optional[Dict[str, Any]], sumber: str = 'manual',
+                           tambahan: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Simpan jawaban satu responden pada kolom penilai kosong pertama (urutan 1–10). `sumber` 'manual' = rekap angket
+    kertas oleh pengelola, 'publik' = diisi responden lewat tautan angket online (aktor None). Index unik `slot`
+    mencegah dua pengisian serentak menempati kolom yang sama: kolom yang baru terisi dilewati lalu dicoba berikutnya."""
     periksa_jawaban(jenis, jawaban)
-    terpakai = {d.get('urutan') for d in await responden_guru(db, periode_id, guru_id, jenis)}
-    urutan = next((i for i in range(1, MAKS_RESPONDEN + 1) if i not in terpakai), None)
-    if urutan is None:
-        raise AngketPenuh(f"Responden angket {JENIS_ANGKET[jenis]['label']} sudah {MAKS_RESPONDEN} (batas kolom penilai template).")
-    sekarang = datetime.now(timezone.utc).isoformat()
-    doc = {'id': str(uuid.uuid4()), 'periode_id': periode_id, 'guru_dinilai_id': guru_id, 'jenis': jenis, 'urutan': urutan,
-           'nama_responden': nama, **_dokumen_jawaban(jawaban), 'diinput_oleh': aktor.get('id'),
-           'diinput_oleh_nama': aktor.get('full_name'), 'tanggal_input': sekarang, 'diubah_pada': sekarang}
-    await db[KOLEKSI_ANGKET].insert_one(dict(doc))
-    return doc
+    aktor = aktor or {}
+    for _ in range(MAKS_RESPONDEN):
+        terpakai = {d.get('urutan') for d in await responden_guru(db, periode_id, guru_id, jenis)}
+        urutan = next((i for i in range(1, MAKS_RESPONDEN + 1) if i not in terpakai), None)
+        if urutan is None:
+            break
+        sekarang = datetime.now(timezone.utc).isoformat()
+        doc = {'id': str(uuid.uuid4()), 'periode_id': periode_id, 'guru_dinilai_id': guru_id, 'jenis': jenis, 'urutan': urutan,
+               'slot': f'{periode_id}:{guru_id}:{jenis}:{urutan}', 'nama_responden': nama, **_dokumen_jawaban(jawaban),
+               'sumber': sumber, 'diinput_oleh': aktor.get('id'), 'diinput_oleh_nama': aktor.get('full_name'),
+               'tanggal_input': sekarang, 'diubah_pada': sekarang, **(tambahan or {})}
+        try:
+            await db[KOLEKSI_ANGKET].insert_one(dict(doc))
+        except DuplicateKeyError:
+            continue
+        return doc
+    raise AngketPenuh(f"Responden angket {JENIS_ANGKET[jenis]['label']} sudah {MAKS_RESPONDEN} (batas kolom penilai template).")
+
+
+# ---------------------------------------------------------------- tanda tangan responden angket online
+
+TTD_MAKS_BYTE = 300_000
+TTD_MAKS_SISI = 2000  # piksel
+
+
+def olah_tanda_tangan(data_url: str) -> bytes:
+    """PNG tanda tangan dari kanvas (data URL) -> PNG bersih (dibaca ulang & disimpan ulang tanpa metadata). ValueError
+    bila bukan PNG sah, terlalu besar, atau kosong (tidak ada goresan)."""
+    from PIL import Image, ImageOps
+    try:
+        mentah = base64.b64decode(data_url.split(',', 1)[1], validate=True)
+    except (IndexError, binascii.Error) as e:
+        raise ValueError('Tanda tangan tidak terbaca.') from e
+    if len(mentah) > TTD_MAKS_BYTE or not mentah.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise ValueError('Tanda tangan harus berupa gambar PNG berukuran wajar.')
+    try:
+        with Image.open(io.BytesIO(mentah)) as uji:
+            uji.verify()
+        gambar = Image.open(io.BytesIO(mentah))
+        if max(gambar.size) > TTD_MAKS_SISI:
+            raise ValueError('Ukuran gambar tanda tangan terlalu besar.')
+        rgba = gambar.convert('RGBA')
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 — PIL melempar beragam galat untuk berkas rusak
+        raise ValueError('Tanda tangan tidak terbaca.') from e
+    alfa = rgba.getchannel('A')
+    if alfa.getextrema()[0] < 255:  # latar transparan: goresan = piksel tidak transparan
+        ada_goresan = alfa.getbbox() is not None
+    else:  # latar putih: goresan = piksel gelap
+        ada_goresan = ImageOps.invert(rgba.convert('L')).point(lambda v: 255 if v > 64 else 0).getbbox() is not None
+    if not ada_goresan:
+        raise ValueError('Tanda tangan masih kosong.')
+    keluar = io.BytesIO()
+    rgba.save(keluar, format='PNG', optimize=True)
+    return keluar.getvalue()
 
 
 async def ubah_responden(db, doc: Dict[str, Any], jawaban: List[int], nama: Optional[str]) -> Dict[str, Any]:

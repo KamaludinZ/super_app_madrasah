@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { api } from '@/lib/api';
 import { galatDariRespons, namaDariHeader } from '@/lib/pkgCetak';
 
@@ -64,6 +65,42 @@ export const ubahJawaban = (id, { jenis, nama, jawaban }) => panggil(
   () => api.put(`/pkg/angket/jawaban/${id}`, { jenis_angket: jenis, nama_responden: nama || null, jawaban }), 'Gagal mengubah jawaban angket.',
 );
 export const hapusJawaban = (id) => panggil(() => api.delete(`/pkg/angket/jawaban/${id}`), 'Gagal menghapus jawaban angket.');
+// Tanda tangan responden angket online (PNG, butuh login) -> blob.
+export const ambilTtdJawaban = (id) => panggil(() => api.get(`/pkg/angket/jawaban/${id}/ttd`, { responseType: 'blob' }), 'Gagal memuat tanda tangan.');
+
+// Tautan angket online (satu per periode; halaman publik /public/angket-360/<token>):
+//   GET  /pkg/angket/tautan?periode_id= -> { token, aktif, terbuka, periode, dibuat_pada, dibuat_oleh_nama, status_pada,
+//        status_oleh_nama, boleh_kelola }   (pengelola; dibuat otomatis saat pertama diminta)
+//   POST /pkg/angket/tautan/status { periode_id?, aktif } -> sama  (kepala: buka/tutup pengisian)
+//   POST /pkg/angket/tautan/ganti { periode_id? } -> sama  (kepala: token baru, tautan lama mati)
+// `terbuka` = tautan aktif dan periode berjalan.
+export const ambilTautanAngket = (periodeId) => panggil(() => api.get('/pkg/angket/tautan', params(periodeId)), 'Gagal memuat tautan angket online.');
+export const aturStatusTautanAngket = (periodeId, aktif) => panggil(
+  () => api.post('/pkg/angket/tautan/status', { periode_id: periodeId || undefined, aktif }), 'Gagal mengubah status tautan angket.',
+);
+export const gantiTautanAngket = (periodeId) => panggil(
+  () => api.post('/pkg/angket/tautan/ganti', { periode_id: periodeId || undefined }), 'Gagal mengganti tautan angket.',
+);
+export const urlAngketPublik = (token) => `${window.location.origin}/public/angket-360/${token}`;
+
+// Halaman publik angket online (tanpa login; backend/routers/pkg_angket_publik_api.py):
+//   GET  /public/pkg/angket/{token} -> { periode: { nama_periode, tahun_pelajaran, semester }, terbuka, pesan,
+//        maks_responden, jenis: [{ jenis, label, jumlah_butir, butir }], guru: [{ id, nama, mapel, jumlah: { sejawat, siswa, ortu } }] }
+//   POST /public/pkg/angket/{token}/jawaban { jenis_angket, guru_id, nama_responden, jawaban: [0|1|2], tanda_tangan: PNG data URL }
+//        -> { jenis, label, guru_nama, urutan, jumlah_responden, maks_responden }
+const publik = axios.create({ baseURL: `${process.env.REACT_APP_BACKEND_URL || ''}/api` });
+export const ambilAngketPublik = (token) => panggil(() => publik.get(`/public/pkg/angket/${token}`), 'Gagal memuat angket.');
+export const kirimAngketPublik = (token, { jenis, guruId, nama, jawaban, tandaTangan }) => panggil(
+  () => publik.post(`/public/pkg/angket/${token}/jawaban`, { jenis_angket: jenis, guru_id: guruId, nama_responden: nama, jawaban, tanda_tangan: tandaTangan }),
+  'Gagal mengirim angket.',
+);
+
+// Label skor sesuai kepala kolom FORM-360-GR.
+export const SKOR_ANGKET = [
+  { nilai: 0, label: 'Tidak ada bukti', keterangan: 'Tidak terpenuhi' },
+  { nilai: 1, label: 'Sebagian', keterangan: 'Terpenuhi sebagian' },
+  { nilai: 2, label: 'Seluruhnya', keterangan: 'Seluruhnya terpenuhi' },
+];
 
 // Nilai responden di layar (sama dengan backend pkg_angket.nilai_responden); jawaban kosong (null) belum dihitung.
 export function hitungNilaiResponden(jawaban = []) {

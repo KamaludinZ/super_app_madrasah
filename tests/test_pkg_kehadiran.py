@@ -118,3 +118,26 @@ def test_input_kehadiran_periode_sebulan(klien):
     data = c.get('/api/pkg/kehadiran/g1').json()
     assert [b['bulan'] for b in data['bulan']] == ['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12']
     assert c.put('/api/pkg/kehadiran/g1', json={'bulan': [{'bulan': '2026-07', 'tanpa_keterangan': 1}]}).status_code == 200
+
+
+def test_kehadiran_saya_oleh_guru_dinilai(klien):
+    c, d, pengguna = klien
+    assert c.get('/api/pkg/kehadiran/saya').status_code == 403  # kepala tidak dinilai
+    pengguna['user'] = {'id': 'pen', 'roles': ['guru'], 'full_name': 'Penilai'}
+    assert c.get('/api/pkg/kehadiran/saya').json()['detail']['alasan'] == 'bukan_dinilai'
+    pengguna['user'] = {'id': 'g2', 'roles': ['guru'], 'full_name': 'Guru Dua (akun)'}
+    awal = c.get('/api/pkg/kehadiran/saya').json()
+    assert (awal['guru']['id'], awal['guru']['nama'], awal['terisi'], len(awal['bulan'])) == ('g2', 'Guru Dua', False, 6)
+    r = c.put('/api/pkg/kehadiran/saya', json={'bulan': [{'bulan': '2026-09', 'tanpa_keterangan': 1, 'terlambat_menit': 240}]})
+    assert r.status_code == 200 and r.json()['indeks_persen'] == round((1 - 1.5 / 46) * 100, 2)
+    assert d['pkg_kehadiran'].docs[0]['guru_dinilai_id'] == 'g2' and d['pkg_kehadiran'].docs[0]['diinput_oleh_nama'] == 'Guru Dua (akun)'
+    assert d['pkg_audit_log'].docs[-1]['metadata']['mandiri'] is True
+    assert c.put('/api/pkg/kehadiran/saya', json={'bulan': [{'bulan': '2027-01'}]}).status_code == 422
+    pengguna['user'] = {'id': 'kep', 'roles': ['kepala_sekolah'], 'full_name': 'Kepala'}
+    assert c.get('/api/pkg/kehadiran/g2').json()['terisi'] is True  # isian mandiri terlihat pengelola
+    assert d['pkg_audit_log'].docs[-1]['metadata']['mandiri'] is True
+    c.put('/api/pkg/kehadiran/g2', json={'bulan': []})
+    assert d['pkg_audit_log'].docs[-1]['metadata']['mandiri'] is False
+    d['pkg_periode'].docs[0]['status'] = 'ditutup'
+    pengguna['user'] = {'id': 'g2', 'roles': ['guru']}
+    assert c.put('/api/pkg/kehadiran/saya', json={'periode_id': 'p1', 'bulan': []}).status_code == 409

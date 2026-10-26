@@ -25,6 +25,7 @@ PESAN_TOLAK = {
     'bukan_kepala': 'Aksi ini hanya dapat dilakukan dari akun kepala madrasah.',
     'bukan_penugasan': 'Guru ini tidak dibagikan kepada Anda pada periode berjalan.',
     'di_luar_masa': 'Lembar penilaian hanya dapat diisi pada masa penilaian periode berjalan.',
+    'bukan_dinilai': 'Halaman ini khusus guru yang dinilai pada periode ini.',
 }
 
 
@@ -34,6 +35,14 @@ def tolak(alasan: str, pesan: Optional[str] = None) -> HTTPException:
 
 def adalah_kepala(user: Dict[str, Any]) -> bool:
     return PERAN_KEPALA in (user.get('roles') or [])
+
+
+def berkas_sk_tampil(sk: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Info file SK unggahan (tanpa nama berkas di server), atau None bila SK belum memiliki file."""
+    b = (sk or {}).get('berkas')
+    if not b:
+        return None
+    return {k: b.get(k) for k in ('nama_asli', 'jenis', 'ukuran', 'diunggah_oleh_nama', 'diunggah_pada')}
 
 
 def periode_tampil(periode: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -83,6 +92,7 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
         'periode': periode_tampil(periode),
         'sk_id': (sk or {}).get('id'),
         'nomor_sk': (sk or {}).get('nomor_sk'),
+        'berkas_sk': berkas_sk_tampil(sk) if anggota else None,
         'peran': 'kepala' if kepala else 'penilai' if sebagai_penilai else 'dinilai' if sebagai_dinilai else None,
         'sebagai_penilai': sebagai_penilai,
         'sebagai_dinilai': sebagai_dinilai,
@@ -100,7 +110,8 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
 #   'kepala'    = hanya akun kepala madrasah (periode, SK, pembagian, supervisi, jejak audit)
 #   'pengelola' = kepala atau penilai (mis. cetak dokumen)
 #   'penilai'   = penilai yang sudah disupervisi atau diberi izin menilai oleh kepala (kepala selalu lolos)
-SYARAT_AKSES = ('anggota', 'kepala', 'pengelola', 'penilai')
+#   'dinilai'   = guru yang dinilai pada SK aktif, termasuk penilai yang merangkap (kepala tidak pernah dinilai)
+SYARAT_AKSES = ('anggota', 'kepala', 'pengelola', 'penilai', 'dinilai')
 
 
 def alasan_tolak(k: Dict[str, Any], syarat: str = 'anggota') -> Optional[str]:
@@ -111,6 +122,8 @@ def alasan_tolak(k: Dict[str, Any], syarat: str = 'anggota') -> Optional[str]:
         return 'bukan_anggota_sk'
     if syarat == 'kepala':
         return None if k.get('peran') == 'kepala' else 'bukan_kepala'
+    if syarat == 'dinilai':
+        return None if k.get('sebagai_dinilai') else 'bukan_dinilai'
     if syarat in ('penilai', 'pengelola') and not k.get('sebagai_penilai'):
         return 'bukan_penilai'
     if syarat == 'penilai' and not (k.get('supervisi_selesai') or k.get('izin_menilai')):
