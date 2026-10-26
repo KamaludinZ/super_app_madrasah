@@ -71,7 +71,16 @@ export type ScheduleItem = {
   reason?: string | null;
   /** Slot user yang sedang digantikan guru lain. */
   substitute?: SubstituteInfo | null;
+  /** Jendela tombol Catat Jurnal (isi jurnal di luar jam): jam selesai + toleransi s.d. 24.00 WIB. */
+  catat_jurnal?: CatatJurnalWindow | null;
   [k: string]: unknown;
+};
+
+export type CatatJurnalWindow = {
+  tersedia: boolean;
+  dibuka_pada?: string | null;
+  berakhir_pada?: string | null;
+  alasan?: string | null;
 };
 
 /** Ejaan baku backend: 'alpa' (scan QR, ekspor). */
@@ -81,6 +90,9 @@ export type AttendanceDetail = { student_id: string; student_name?: string | nul
 
 export type Journal = {
   id: string;
+  /** 'jurnal_presisi' (isi tepat waktu lewat QR/token) | 'catat_jurnal' (diisi di luar jam). */
+  asal_input?: string;
+  asal_input_label?: string;
   schedule_id?: string;
   class_name?: string | null;
   subject_name?: string | null;
