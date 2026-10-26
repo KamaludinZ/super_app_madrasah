@@ -536,6 +536,9 @@ class JournalModel(BaseModel):
     validations: Dict[str, Any] = Field(default_factory=dict)
     qr_mode: str = 'static'
     is_locked: bool = False
+    # Asal input: 'jurnal_presisi' (isi jurnal tepat waktu, alur awal) | 'catat_jurnal' (isi di luar jam, POST
+    # /jurnal/catat). Dokumen lama tanpa field ini dianggap Jurnal Presisi (lihat jurnal_asal).
+    asal_input: str = 'jurnal_presisi'
     # === DEPRECATED fields (keep for backward compatibility) ===
     academic_year_id: Optional[str] = None  # DEPRECATED: use semester_id instead
     semester: Optional[str] = None  # DEPRECATED: use semester_id instead

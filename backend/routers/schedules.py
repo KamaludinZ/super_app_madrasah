@@ -20,6 +20,7 @@ from core import (
     serialize_doc,
 )
 from journal_core import current_day_id, day_started_at_filter, now_wib
+from jurnal_asal import jendela_catat_jurnal
 from models import ScheduleModel
 
 router = APIRouter()
@@ -550,6 +551,9 @@ async def my_today_schedule(include_substitute: bool = False, user: Dict = Depen
 
     include_substitute=true: ikut sertakan slot hasil penugasan Guru Pengganti hari ini
     (ditandai `is_substitute: true`), diurutkan bersama jadwal reguler berdasarkan jam mulai.
+    Setiap slot reguler membawa `catat_jurnal` {tersedia, dibuka_pada, berakhir_pada, alasan}: tombol Catat Jurnal
+    (isi jurnal di luar jam) tersedia bila jam pelajaran + toleransi sudah lewat, jurnal belum diisi, dan slot
+    tidak sedang digantikan; berakhir pukul 24.00 WIB (lihat jurnal_asal.jendela_catat_jurnal).
     """
     from routers.guru_pengganti import day_query, substitute_slots_for_date
 
@@ -583,6 +587,8 @@ async def my_today_schedule(include_substitute: bool = False, user: Dict = Depen
         ).to_list(50)
     } if replaced else set()
 
+    grace = (await get_settings()).get('grace_minutes', 15)
+    sekarang = now_wib()
     enriched = []
     for s in items:
         cls = await db.classes.find_one({'id': s.get('class_id')}, {'_id': 0, 'name': 1})
@@ -605,6 +611,8 @@ async def my_today_schedule(include_substitute: bool = False, user: Dict = Depen
             'substitute_teacher_name': sub_names.get(a['substitute_teacher_id']),
             'journal_filled': a['id'] in sub_journals,
         } if a else None
+        jendela = jendela_catat_jurnal(s, sekarang, grace)
+        s['catat_jurnal'] = {**jendela, 'tersedia': jendela['tersedia'] and not s['journal_filled'] and not a}
         enriched.append(serialize_doc(s))
     if substitute:
         enriched = sorted(enriched + substitute, key=lambda x: x.get('start_time') or '')

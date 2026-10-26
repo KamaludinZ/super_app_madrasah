@@ -19,6 +19,7 @@ import { groupSideBySideJournals } from '@/lib/guruPengganti';
 import { hariIniWIB } from '@/lib/tanggal';
 import { formatWIB, wibDateKey } from '@/lib/datetime';
 import KehadiranPerkiraanNotice from '@/components/journal/KehadiranPerkiraanNotice';
+import { ASAL_INPUT, asalInput } from '@/lib/jurnalAsal';
 
 // Detail kehadiran per status, dikelompokkan dari attendance_details -> teks
 // "Hadir: A, B | Sakit: C | Izin: - | Alpa: D" untuk satu sel kolom export.
@@ -88,6 +89,7 @@ export default function JurnalHistoryPage() {
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterQrMode, setFilterQrMode] = useState('all');
   const [filterFillMode, setFilterFillMode] = useState('all');
+  const [filterAsalInput, setFilterAsalInput] = useState('all');
 
   useEffect(() => {
     let endpoint = '/jurnal/my';
@@ -169,9 +171,14 @@ export default function JurnalHistoryPage() {
       filtered = filtered.filter(j => (j.fill_mode || 'self') === filterFillMode);
     }
 
+    // Asal input: Jurnal Presisi (tepat waktu) vs Catat Jurnal (diisi di luar jam)
+    if (filterAsalInput !== 'all') {
+      filtered = filtered.filter(j => asalInput(j) === filterAsalInput);
+    }
+
     // Catatan guru asli & guru pengganti pada slot yang sama ditampilkan berurutan.
     return groupSideBySideJournals(filtered);
-  }, [items, filterDateStart, filterDateEnd, filterClass, filterSubject, filterQrMode, filterFillMode]);
+  }, [items, filterDateStart, filterDateEnd, filterClass, filterSubject, filterQrMode, filterFillMode, filterAsalInput]);
 
   const handleExportExcel = () => {
     if (filteredItems.length === 0) {
@@ -195,6 +202,7 @@ export default function JurnalHistoryPage() {
           'Guru Pengajar': j.teacher_name || '-',
           'Ruangan': j.room_name || '-',
           'Mode QR': j.qr_mode || 'static',
+          'Asal Input': ASAL_INPUT[asalInput(j)].label,
           'KD/Indikator': j.kd_indikator || '-',
           'Materi/Pokok Bahasan (Terdaftar)': j.materi_nama || '-',
           'Materi': j.materi,
@@ -236,6 +244,7 @@ export default function JurnalHistoryPage() {
         { wch: 20 }, // Guru Pengajar
         { wch: 15 }, // Ruangan
         { wch: 12 }, // Mode QR
+        { wch: 15 }, // Asal Input
         { wch: 25 }, // KD/Indikator
         { wch: 30 }, // Materi/Pokok Bahasan (Terdaftar)
         { wch: 40 }, // Materi
@@ -300,10 +309,12 @@ export default function JurnalHistoryPage() {
     setFilterSubject('all');
     setFilterQrMode('all');
     setFilterFillMode('all');
+    setFilterAsalInput('all');
   };
 
   const hasActiveFilters = filterDateStart || filterDateEnd || filterClass !== 'all' ||
-                          filterSubject !== 'all' || filterQrMode !== 'all' || filterFillMode !== 'all';
+                          filterSubject !== 'all' || filterQrMode !== 'all' || filterFillMode !== 'all' ||
+                          filterAsalInput !== 'all';
 
   const getQrModeBadge = (mode) => {
     const qrMode = mode || 'static';
@@ -315,6 +326,8 @@ export default function JurnalHistoryPage() {
       return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">Rotation QR</Badge>;
     } else if (qrMode === 'substitute') {
       return <Badge variant="outline" className="text-slate-600">Tanpa QR (Pengganti)</Badge>;
+    } else if (qrMode === 'none') {
+      return <Badge variant="outline" className="text-slate-600">Tanpa QR</Badge>;
     }
     return <Badge variant="outline">{qrMode}</Badge>;
   };
@@ -430,6 +443,18 @@ export default function JurnalHistoryPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs">Asal Input</Label>
+                <Select value={filterAsalInput} onValueChange={setFilterAsalInput}>
+                  <SelectTrigger className="text-sm" data-testid="filter-asal-input">
+                    <SelectValue placeholder="Semua Asal Input" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Asal Input</SelectItem>
+                    {Object.entries(ASAL_INPUT).map(([kode, a]) => <SelectItem key={kode} value={kode}>{a.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               {isPiket && (
                 <div>
                   <Label className="text-xs">Mode Pengisian</Label>
@@ -487,6 +512,7 @@ export default function JurnalHistoryPage() {
                     <TableHead className="min-w-[120px]">Diisi Oleh</TableHead>
                     <TableHead className="min-w-[100px]">Ruangan</TableHead>
                     <TableHead className="min-w-[100px]">Mode QR</TableHead>
+                    <TableHead className="min-w-[120px]">Asal Input</TableHead>
                     <TableHead className="min-w-[250px]">Materi</TableHead>
                     <TableHead className="min-w-[200px]">Catatan</TableHead>
                     {isPiket && <TableHead className="min-w-[200px]">Catatan Piket</TableHead>}
@@ -560,6 +586,11 @@ export default function JurnalHistoryPage() {
                       </TableCell>
                       <TableCell>
                         {getQrModeBadge(j.qr_mode)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`whitespace-nowrap ${ASAL_INPUT[asalInput(j)].badge}`} data-testid={`asal-input-${j.id}`}>
+                          {ASAL_INPUT[asalInput(j)].label}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-slate-900 max-w-xs">
@@ -697,6 +728,10 @@ export default function JurnalHistoryPage() {
                     <div>
                       <div className="text-xs text-slate-500 mb-1">Mode QR</div>
                       {getQrModeBadge(selectedJournal.qr_mode)}
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Asal Input</div>
+                      <Badge variant="outline" className={ASAL_INPUT[asalInput(selectedJournal)].badge}>{ASAL_INPUT[asalInput(selectedJournal)].label}</Badge>
                     </div>
                   </div>
                   {selectedJournal.kd_indikator && (

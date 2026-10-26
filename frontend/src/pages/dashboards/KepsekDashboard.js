@@ -12,6 +12,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import GrafikAsalInputJurnal from '@/components/journal/GrafikAsalInputJurnal';
 
 function StatCard({ icon: Icon, label, value, color, subtitle }) {
   return (
@@ -150,6 +151,8 @@ export default function KepsekDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <GrafikAsalInputJurnal />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>

@@ -528,3 +528,16 @@ def day_started_at_filter(day: Optional[date] = None) -> Dict[str, Any]:
         {'started_at': {'$regex': rf"^{day.isoformat()}T.*\+07:00$"}},
         {'started_at': {'$gte': utc_start, '$lt': utc_end, '$not': re.compile(r'[+Z]')}},
     ]}
+
+
+def month_started_at_filter(tahun: int, bulan: int) -> Dict[str, Any]:
+    """Filter Mongo `started_at` untuk satu bulan kalender WIB (format campuran seperti day_started_at_filter:
+    WIB ber-offset '+07:00' atau UTC tanpa zona)."""
+    start_wib = datetime(tahun, bulan, 1, tzinfo=WIB_TZ)
+    akhir_wib = datetime(tahun + (bulan == 12), bulan % 12 + 1, 1, tzinfo=WIB_TZ)
+    utc_start = start_wib.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    utc_end = akhir_wib.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    return {'$or': [
+        {'started_at': {'$regex': rf"^{tahun:04d}-{bulan:02d}-\d{{2}}T.*\+07:00$"}},
+        {'started_at': {'$gte': utc_start, '$lt': utc_end, '$not': re.compile(r'[+Z]')}},
+    ]}
