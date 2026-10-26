@@ -22,6 +22,7 @@ import SubstituteBadge from '@/components/guru-pengganti/SubstituteBadge';
 import SubstituteJournalDialog from '@/components/guru-pengganti/SubstituteJournalDialog';
 import ReplacedSlotNote from '@/components/guru-pengganti/ReplacedSlotNote';
 import CatatJurnalDialog from '@/components/journal/CatatJurnalDialog';
+import { ASAL_CATAT, ASAL_INPUT, ASAL_PRESISI } from '@/lib/jurnalAsal';
 
 // This dashboard is shared by roles whose sidebar menus differ significantly —
 // each Menu Cepat set below mirrors exactly what that role sees in AppShell.js,
@@ -228,10 +229,16 @@ export default function GuruDashboard() {
                 <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">{timeliness.on_time_percentage}%</div>
                 <div className="text-sm text-slate-600">
                   Tepat waktu dari {timeliness.total_jurnal} jurnal semester ini
-                  <span className="block text-xs text-slate-400">Toleransi {timeliness.grace_minutes} menit dari jadwal</span>
+                  <span className="block text-xs text-slate-500">
+                    {timeliness.total_on_time} {ASAL_INPUT[ASAL_PRESISI].label} · {timeliness.total_late} {ASAL_INPUT[ASAL_CATAT].label}
+                  </span>
                 </div>
               </div>
             )}
+            <p className="text-xs text-slate-500 mb-3">
+              Tepat waktu = jurnal diisi lewat {ASAL_INPUT[ASAL_PRESISI].label} (scan QR/token kelas dalam rentang jam mengajar,
+              toleransi {timeliness?.grace_minutes ?? 15} menit). Terlambat = jurnal diisi lewat tombol {ASAL_INPUT[ASAL_CATAT].label} setelah jam mengajar.
+            </p>
             {chartData.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-8">Belum ada data jurnal untuk ditampilkan</p>
             ) : (
@@ -243,8 +250,8 @@ export default function GuruDashboard() {
                     <YAxis fontSize={11} allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="Tepat Waktu" stackId="a" fill="#006837" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="Terlambat" stackId="a" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Tepat Waktu" stackId="a" fill={ASAL_INPUT[ASAL_PRESISI].warna} stroke="#ffffff" strokeWidth={2} />
+                    <Bar dataKey="Terlambat" stackId="a" fill={ASAL_INPUT[ASAL_CATAT].warna} stroke="#ffffff" strokeWidth={2} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

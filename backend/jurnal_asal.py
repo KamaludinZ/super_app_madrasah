@@ -9,7 +9,7 @@ ini dianggap Jurnal Presisi. Monitoring publik tidak membedakan asal input (teta
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
-from journal_core import month_started_at_filter
+from journal_core import month_started_at_filter, parse_waktu_wib
 
 ASAL_PRESISI = 'jurnal_presisi'
 ASAL_CATAT = 'catat_jurnal'
@@ -80,4 +80,34 @@ def susun_rekap_asal_input(tahun: int, bulan: int, hasil: Iterable[Dict[str, Any
         'bulan': f'{tahun:04d}-{bulan:02d}', 'label': f'{NAMA_BULAN[bulan - 1]} {tahun}',
         'label_asal_input': LABEL_ASAL_INPUT, 'guru': guru,
         'total': {k: sum(g[k] for g in guru) for k in (ASAL_PRESISI, ASAL_CATAT, 'total')},
+    }
+
+
+# ---------------------------------------------------------------- ketepatan waktu (dashboard guru mata pelajaran)
+
+def rekap_ketepatan_waktu(jurnal: Iterable[Dict[str, Any]], hari: int = 14) -> Dict[str, Any]:
+    """Ketepatan waktu mengisi jurnal guru: Jurnal Presisi = tepat waktu (alur awal hanya menerima isian dalam rentang
+    jam mengajar jadwal ± toleransi), Catat Jurnal = terlambat. Jurnal yang diisi pihak lain atas slot guru (piket,
+    admin, guru pengganti) tidak dihitung. `daily` = `hari` tanggal WIB terakhir yang memiliki jurnal."""
+    per_tanggal: Dict[str, Dict[str, Any]] = {}
+    tepat = telat = 0
+    for j in jurnal:
+        if j.get('fill_mode') in FILL_MODE_BUKAN_GURU:
+            continue
+        waktu = parse_waktu_wib(j.get('started_at'))
+        if not waktu:
+            continue
+        d = per_tanggal.setdefault(waktu.date().isoformat(), {'date': waktu.date().isoformat(), 'on_time': 0, 'late': 0})
+        if asal_input_jurnal(j) == ASAL_CATAT:
+            d['late'] += 1
+            telat += 1
+        else:
+            d['on_time'] += 1
+            tepat += 1
+    total = tepat + telat
+    return {
+        'total_jurnal': total, 'total_on_time': tepat, 'total_late': telat,
+        'on_time_percentage': round(tepat / total * 100, 1) if total else 0,
+        'daily': sorted(per_tanggal.values(), key=lambda x: x['date'])[-hari:],
+        'aturan': 'Tepat waktu = Jurnal Presisi (diisi dalam rentang jam mengajar); terlambat = Catat Jurnal',
     }

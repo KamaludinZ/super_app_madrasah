@@ -1,5 +1,5 @@
 """Jurnal: validate / create / my / by-class + admin jurnal rekap & stats."""
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Optional, List, Any, Set, Tuple
 import logging
 
@@ -17,9 +17,10 @@ from core import (
     require_role,
     serialize_doc,
 )
-from journal_core import day_started_at_filter, now_wib, parse_waktu_wib, WIB_TZ
+from journal_core import day_started_at_filter, now_wib, parse_waktu_wib
 from jurnal_asal import (
-    ASAL_CATAT, ASAL_PRESISI, jendela_catat_jurnal, pipeline_asal_input, susun_rekap_asal_input, tandai_asal_input,
+    ASAL_CATAT, ASAL_PRESISI, jendela_catat_jurnal, pipeline_asal_input, rekap_ketepatan_waktu, susun_rekap_asal_input,
+    tandai_asal_input,
 )
 from fastapi.responses import StreamingResponse
 from journal_exports import (
@@ -635,73 +636,17 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
 
 @router.get("/jurnal/my-timeliness")
 async def my_journal_timeliness(user: Dict = Depends(get_current_user)):
-    """Ketepatan waktu pengisian jurnal guru: bandingkan started_at (WIB) dengan
-    scheduled_start jadwal, dalam batas grace_minutes sekolah. Untuk dashboard
-    guru — grafik ketepatan waktu mengisi jurnal sesuai jadwal, 14 hari terakhir."""
+    """Ketepatan waktu pengisian jurnal guru (dashboard guru mapel) pada semester aktif, menurut asal input:
+    Jurnal Presisi = tepat waktu (scan QR/token kelas hanya diterima dalam rentang jam mengajar ± toleransi),
+    Catat Jurnal = terlambat. Grafik harian = 14 tanggal terakhir yang memiliki jurnal."""
     ctx = await get_active_context(user)
     semester_id = ctx.get('semester_id')
     settings = await get_settings()
-    grace = settings.get('grace_minutes', 15)
-
     query = {'teacher_id': user['id']}
     if semester_id:
         query['semester_id'] = semester_id
-
-    items = await db.journals.find(query, {'_id': 0, 'started_at': 1, 'scheduled_start': 1}).sort('started_at', -1).to_list(500)
-
-    rows = []
-    for j in items:
-        started_at = j.get('started_at')
-        scheduled_start = j.get('scheduled_start')
-        if not started_at or not scheduled_start:
-            continue
-        if isinstance(started_at, str):
-            try:
-                started_at = datetime.fromisoformat(started_at)
-            except ValueError:
-                continue
-        if started_at.tzinfo is None:
-            # Jurnal lama (Scan QR/Token QR) tersimpan UTC tanpa zona (JournalModel dulu memakai
-            # utcnow); lihat migrations/migrate_waktu_wib.py. Anggap UTC, bukan WIB.
-            started_wib = started_at.replace(tzinfo=timezone.utc).astimezone(WIB_TZ)
-        else:
-            started_wib = started_at.astimezone(WIB_TZ)
-        try:
-            sched_h, sched_m = (int(x) for x in scheduled_start.split(':')[:2])
-        except (ValueError, AttributeError):
-            continue
-        scheduled_minutes = sched_h * 60 + sched_m
-        actual_minutes = started_wib.hour * 60 + started_wib.minute
-        delta = actual_minutes - scheduled_minutes
-        rows.append({
-            'date': started_wib.date().isoformat(),
-            'delta_minutes': delta,
-            'on_time': delta <= grace,
-        })
-
-    # Group by date (14 most recent distinct days with journal entries)
-    by_date = {}
-    for r in rows:
-        d = r['date']
-        by_date.setdefault(d, {'date': d, 'on_time': 0, 'late': 0})
-        if r['on_time']:
-            by_date[d]['on_time'] += 1
-        else:
-            by_date[d]['late'] += 1
-
-    daily = sorted(by_date.values(), key=lambda x: x['date'])[-14:]
-    total_on_time = sum(1 for r in rows if r['on_time'])
-    total_late = sum(1 for r in rows if not r['on_time'])
-    total = len(rows)
-
-    return {
-        'grace_minutes': grace,
-        'total_jurnal': total,
-        'total_on_time': total_on_time,
-        'total_late': total_late,
-        'on_time_percentage': round((total_on_time / total) * 100, 1) if total else 0,
-        'daily': daily,
-    }
+    items = await db.journals.find(query, {'_id': 0, 'started_at': 1, 'asal_input': 1, 'fill_mode': 1}).sort('started_at', -1).to_list(2000)
+    return {'grace_minutes': settings.get('grace_minutes', 15), **rekap_ketepatan_waktu(items)}
 
 
 @router.get("/jurnal/by-class/{class_id}")
@@ -832,9 +777,14 @@ async def admin_jurnal_rekap(
     subject_id: Optional[str] = None,
     semester_id: Optional[str] = None,
     limit: int = 500,
-    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'penjamin_mutu'))
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'wali_kelas', 'waka_kurikulum', 'penjamin_mutu')),
+    asal_input: Optional[str] = Query(None, pattern=f'^({ASAL_PRESISI}|{ASAL_CATAT})$'),
 ):
-    """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id"""
+    """Rekap lengkap data jurnal mengajar untuk admin, filtered by user's view context (semester) or by provided semester_id.
+    `asal_input`: jurnal_presisi (termasuk data lama tanpa penanda) atau catat_jurnal. Parameter ini di akhir karena
+    routers.waka_kurikulum memanggil fungsi ini langsung; nilai bawaan Query (bukan str) diabaikan."""
+    if not isinstance(asal_input, str):
+        asal_input = None
     # Use user's view context semester if no semester_id provided in query
     if not semester_id:
         ctx = await get_active_context(user)
@@ -845,6 +795,8 @@ async def admin_jurnal_rekap(
     if teacher_id: q['teacher_id'] = teacher_id
     if subject_id: q['subject_id'] = subject_id
     if semester_id: q['semester_id'] = semester_id
+    if asal_input:
+        q['asal_input'] = ASAL_CATAT if asal_input == ASAL_CATAT else {'$ne': ASAL_CATAT}
     if start_date or end_date:
         date_q = {}
         if start_date: date_q['$gte'] = start_date

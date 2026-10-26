@@ -136,7 +136,8 @@ async def wakakur_jurnal_rekap(
 ):
     """Get teaching journal recap - read-only access."""
     from routers.journals import admin_jurnal_rekap
-    return await admin_jurnal_rekap(start_date, end_date, class_id, teacher_id, subject_id, semester_id, limit, user)
+    return await admin_jurnal_rekap(start_date=start_date, end_date=end_date, class_id=class_id, teacher_id=teacher_id,
+                                    subject_id=subject_id, semester_id=semester_id, limit=limit, user=user, asal_input=None)
 
 
 @router.get("/wakakur/jurnal/stats-by-teacher")

@@ -18,6 +18,13 @@ import * as XLSX from 'xlsx';
 import { SubstituteFilledBadge } from '@/components/guru-pengganti/FilledByCell';
 import { formatWIB } from '@/lib/datetime';
 import KehadiranPerkiraanNotice from '@/components/journal/KehadiranPerkiraanNotice';
+import { ASAL_INPUT, asalInput } from '@/lib/jurnalAsal';
+
+// Badge asal input jurnal: Jurnal Presisi (tepat waktu) vs Catat Jurnal (diisi di luar jam).
+function BadgeAsalInput({ journal }) {
+  const a = ASAL_INPUT[asalInput(journal)];
+  return <Badge variant="outline" className={`whitespace-nowrap text-xs ${a.badge}`} data-testid={`asal-input-${journal.id}`}>{a.label}</Badge>;
+}
 
 export default function AdminJurnalRekapPage() {
   const navigate = useNavigate();
@@ -30,7 +37,7 @@ export default function AdminJurnalRekapPage() {
   const [teachers, setTeachers] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [filters, setFilters] = useState({
-    class_id: 'all', teacher_id: 'all', subject_id: 'all',
+    class_id: 'all', teacher_id: 'all', subject_id: 'all', asal_input: 'all',
     start_date: '', end_date: '',
   });
   const [detailDialog, setDetailDialog] = useState({ open: false, journal: null });
@@ -72,7 +79,7 @@ export default function AdminJurnalRekapPage() {
   }, []);
 
   const reset = () => {
-    setFilters({ class_id: 'all', teacher_id: 'all', subject_id: 'all', start_date: '', end_date: '' });
+    setFilters({ class_id: 'all', teacher_id: 'all', subject_id: 'all', asal_input: 'all', start_date: '', end_date: '' });
     setTimeout(() => load(), 50);
   };
 
@@ -113,10 +120,10 @@ export default function AdminJurnalRekapPage() {
 
   const exportCSV = () => {
     if (!data.items.length) return;
-    const headers = ['Tanggal', 'JTM', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'KD/Indikator', 'Materi/Pokok Bahasan (Terdaftar)', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Detail Kehadiran Siswa'];
+    const headers = ['Tanggal', 'JTM', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Asal Input', 'KD/Indikator', 'Materi/Pokok Bahasan (Terdaftar)', 'Materi', 'Catatan', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Detail Kehadiran Siswa'];
     const rows = data.items.map((j) => [
       formatWIB(j.started_at, ''), j.jtm_count || 1, j.class_name, j.subject_name, j.teacher_name, j.room_name,
-      JSON.stringify(j.kd_indikator || ''), JSON.stringify(j.materi_nama || ''), JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
+      ASAL_INPUT[asalInput(j)].label, JSON.stringify(j.kd_indikator || ''), JSON.stringify(j.materi_nama || ''), JSON.stringify(j.materi), JSON.stringify(j.catatan || ''), j.siswa_hadir, j.siswa_sakit, j.siswa_izin, j.siswa_tidak_hadir,
       JSON.stringify(formatAttendanceDetail(j)),
     ]);
     const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
@@ -137,6 +144,7 @@ export default function AdminJurnalRekapPage() {
       'Mapel': j.subject_name || '-',
       'Guru': j.teacher_name || '-',
       'Ruang': j.room_name || '-',
+      'Asal Input': ASAL_INPUT[asalInput(j)].label,
       'KD/Indikator': j.kd_indikator || '-',
       'Materi/Pokok Bahasan (Terdaftar)': j.materi_nama || '-',
       'Materi': j.materi || '-',
@@ -161,6 +169,7 @@ export default function AdminJurnalRekapPage() {
       { wch: 25 }, // Mapel
       { wch: 25 }, // Guru
       { wch: 15 }, // Ruang
+      { wch: 15 }, // Asal Input
       { wch: 25 }, // KD/Indikator
       { wch: 30 }, // Materi/Pokok Bahasan (Terdaftar)
       { wch: 40 }, // Materi
@@ -241,7 +250,7 @@ export default function AdminJurnalRekapPage() {
       <div>
         <Badge className="bg-[#006837]/10 text-[#006837] border-[#006837]/20 mb-2"><ClipboardList className="h-3 w-3 mr-1" /> Data Jurnal</Badge>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Rekap Jurnal Mengajar</h1>
-        <p className="text-sm text-slate-600 mt-1">{data.total} entri jurnal {filters.class_id !== 'all' || filters.teacher_id !== 'all' || filters.subject_id !== 'all' || filters.start_date || filters.end_date ? '(terfilter)' : ''}</p>
+        <p className="text-sm text-slate-600 mt-1">{data.total} entri jurnal {filters.class_id !== 'all' || filters.teacher_id !== 'all' || filters.subject_id !== 'all' || filters.asal_input !== 'all' || filters.start_date || filters.end_date ? '(terfilter)' : ''}</p>
       </div>
 
       {/* Filters */}
@@ -251,7 +260,7 @@ export default function AdminJurnalRekapPage() {
             <Filter className="h-4 w-4 text-[#006837]" />
             <h2 className="text-sm font-semibold">Filter Data</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
             <div>
               <Label className="text-xs">Kelas</Label>
               <Select value={filters.class_id} onValueChange={(v) => setFilters({...filters, class_id: v})}>
@@ -279,6 +288,16 @@ export default function AdminJurnalRekapPage() {
                 <SelectContent>
                   <SelectItem value="all">Semua Mapel</SelectItem>
                   {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Asal Input</Label>
+              <Select value={filters.asal_input} onValueChange={(v) => setFilters({...filters, asal_input: v})}>
+                <SelectTrigger data-testid="rekap-filter-asal-input"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Asal Input</SelectItem>
+                  {Object.entries(ASAL_INPUT).map(([kode, a]) => <SelectItem key={kode} value={kode}>{a.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -313,10 +332,10 @@ export default function AdminJurnalRekapPage() {
           {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
             <Card><CardContent className="p-0"><div className="overflow-x-auto"><Table data-testid="admin-jurnal-rekap-table">
               <TableHeader><TableRow>
-                <TableHead>Tanggal</TableHead><TableHead>Jam Ke</TableHead><TableHead className="text-center">JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead>Jenis Izin</TableHead><TableHead>Catatan</TableHead><TableHead className="text-center">Kehadiran</TableHead><TableHead>Diisi oleh</TableHead><TableHead className="text-center">Aksi</TableHead>
+                <TableHead>Tanggal</TableHead><TableHead>Jam Ke</TableHead><TableHead className="text-center">JTM</TableHead><TableHead>Kelas</TableHead><TableHead>Mapel</TableHead><TableHead>Guru</TableHead><TableHead>Ruang</TableHead><TableHead>Materi</TableHead><TableHead>Jenis Izin</TableHead><TableHead>Catatan</TableHead><TableHead className="text-center">Kehadiran</TableHead><TableHead>Diisi oleh</TableHead><TableHead>Asal Input</TableHead><TableHead className="text-center">Aksi</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {data.items.length === 0 ? <TableRow><TableCell colSpan={13} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
+                {data.items.length === 0 ? <TableRow><TableCell colSpan={14} className="text-center py-8 text-slate-500">Tidak ada data</TableCell></TableRow> :
                   data.items.map((j) => (
                     <TableRow key={j.id}>
                       <TableCell className="text-xs whitespace-nowrap">{formatWIB(j.started_at, '', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
@@ -377,6 +396,7 @@ export default function AdminJurnalRekapPage() {
                           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Pengajar</Badge>
                         )}
                       </TableCell>
+                      <TableCell><BadgeAsalInput journal={j} /></TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button
@@ -498,6 +518,10 @@ export default function AdminJurnalRekapPage() {
                       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pengajar</Badge>
                     )}
                   </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Asal Input</Label>
+                  <div><BadgeAsalInput journal={detailDialog.journal} /></div>
                 </div>
               </div>
 

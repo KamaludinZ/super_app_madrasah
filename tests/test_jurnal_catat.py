@@ -143,3 +143,45 @@ def test_catat_jurnal_ditolak_di_luar_syarat(klien):
     d['schedules'].docs[0]['day'] = 'Selasa'
     assert k.post('/api/jurnal/catat', json=ISIAN).status_code == 400  # bukan jadwal hari ini (kemarin = expired)
     assert not d['journals'].docs
+
+
+def test_admin_jurnal_filter_asal_input(klien):
+    k, d, _, pengguna = klien
+    d['journals'].docs.extend([
+        {'id': 'jp', 'schedule_id': 'sch1', 'teacher_id': 'g1', 'semester_id': 'sem1', 'started_at': '2026-10-26T07:05:00+07:00', 'materi': 'a'},
+        {'id': 'jc', 'schedule_id': 'sch1', 'teacher_id': 'g1', 'semester_id': 'sem1', 'started_at': '2026-10-26T10:00:00+07:00', 'materi': 'b',
+         'asal_input': 'catat_jurnal'},
+    ])
+    pengguna['user'] = {'id': 'adm', 'username': 'adm', 'roles': ['admin'], 'active_role': 'admin'}
+    semua = k.get('/api/admin/jurnal').json()['items']
+    assert {j['id']: j['asal_input_label'] for j in semua} == {'jp': 'Jurnal Presisi', 'jc': 'Catat Jurnal'}
+    assert [j['id'] for j in k.get('/api/admin/jurnal', params={'asal_input': 'catat_jurnal'}).json()['items']] == ['jc']
+    assert [j['id'] for j in k.get('/api/admin/jurnal', params={'asal_input': 'jurnal_presisi'}).json()['items']] == ['jp']
+    assert k.get('/api/admin/jurnal', params={'asal_input': 'lain'}).status_code == 422
+
+
+def test_ketepatan_waktu_menurut_asal_input():
+    jurnal = [
+        {'started_at': '2026-10-26T07:05:00+07:00'},                                   # presisi (data lama, tanpa penanda)
+        {'started_at': '2026-10-26T01:30:00', 'asal_input': 'jurnal_presisi'},        # 08:30 WIB (UTC naif), akhir jam: tetap tepat
+        {'started_at': '2026-10-26T15:00:00+07:00', 'asal_input': 'catat_jurnal'},    # catat jurnal = terlambat
+        {'started_at': '2026-10-27T09:00:00+07:00', 'asal_input': 'catat_jurnal'},
+        {'started_at': '2026-10-27T08:00:00+07:00', 'fill_mode': 'piket'},            # isian piket tidak dihitung
+        {'started_at': '2026-10-27T08:00:00+07:00', 'fill_mode': 'substitute'},       # isian guru pengganti tidak dihitung
+        {'started_at': None},
+    ]
+    r = ja.rekap_ketepatan_waktu(jurnal)
+    assert (r['total_jurnal'], r['total_on_time'], r['total_late'], r['on_time_percentage']) == (4, 2, 2, 50.0)
+    assert r['daily'] == [{'date': '2026-10-26', 'on_time': 2, 'late': 1}, {'date': '2026-10-27', 'on_time': 0, 'late': 1}]
+    assert len(ja.rekap_ketepatan_waktu([{'started_at': f'2026-10-{d:02d}T07:00:00+07:00'} for d in range(1, 21)])['daily']) == 14
+
+
+def test_endpoint_ketepatan_waktu(klien):
+    k, d, _, _ = klien
+    d['journals'].docs.extend([
+        {'teacher_id': 'g1', 'semester_id': 'sem1', 'started_at': '2026-10-26T07:05:00+07:00', 'scheduled_start': '2026-10-26T07:00:00+07:00'},
+        {'teacher_id': 'g1', 'semester_id': 'sem1', 'started_at': '2026-10-26T10:00:00+07:00', 'asal_input': 'catat_jurnal'},
+        {'teacher_id': 'g1', 'semester_id': 'lama', 'started_at': '2026-04-01T07:00:00+07:00'},
+    ])
+    r = k.get('/api/jurnal/my-timeliness').json()
+    assert (r['total_jurnal'], r['total_on_time'], r['total_late'], r['grace_minutes']) == (2, 1, 1, 15)
