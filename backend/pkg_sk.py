@@ -16,7 +16,12 @@ Aturan:
     - Snapshot identitas (nama, NIP/Peg ID, mapel dari jadwal semester periode) disalin ke `snapshot_anggota`
       setiap kali anggota ditetapkan selama periode belum ditutup, agar cetak periode lalu tetap utuh walau
       akun berubah atau dinonaktifkan.
+    - File SK (PDF/JPG/PNG, maks. 5 MB) diunggah kepala madrasah ke uploads/pkg_sk dan dapat dilihat seluruh personil
+      yang tercantum di SK itu (penilai & dinilai). Mengunggah lagi mengganti file lama; boleh juga untuk arsip SK
+      periode yang sudah ditutup karena tidak mengubah susunan SK.
 """
+import hashlib
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -24,6 +29,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 
 from core import GURU_MAPEL_ROLES
+from penyimpanan import folder_unggahan
+from pkg_akses import berkas_sk_tampil
 from pkg_skema import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, KOLEKSI_PERIODE, KOLEKSI_SK, SkRequest
 
 # Peran akun yang dihitung sebagai guru (boleh menjadi penilai / guru yang dinilai pada SK PKG).
@@ -96,6 +103,7 @@ async def sk_tampil_banyak(db, daftar: List[Dict[str, Any]]) -> List[Dict[str, A
         'penilaian_berjalan': sk['id'] in berjalan,
         'penilai': [anggota(sk, u) for u in sk.get('penilai_ids') or []],
         'dinilai': [anggota(sk, u) for u in sk.get('dinilai_ids') or []],
+        'berkas': berkas_sk_tampil(sk),
         'created_at': sk.get('created_at'),
         'updated_at': sk.get('updated_at'),
     } for sk in daftar]
@@ -189,7 +197,68 @@ async def hapus_sk(db, sk_id: str) -> Dict[str, Any]:
     if await db[KOLEKSI_PENILAIAN].find_one({'sk_id': sk_id}, {'_id': 0, 'id': 1}):
         raise HTTPException(409, 'SK sudah memiliki lembar penilaian dan tidak dapat dihapus.')
     await db[KOLEKSI_SK].delete_one({'id': sk_id})
+    _hapus_file(sk.get('berkas'))
     return sk
+
+
+# ---------------------------------------------------------------- file SK
+
+MAKS_BERKAS_SK = 5 * 1024 * 1024
+# jenis -> (tanda awal berkas, media type)
+JENIS_BERKAS_SK = {
+    'pdf': (b'%PDF-', 'application/pdf'),
+    'png': (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    'jpg': (b'\xff\xd8\xff', 'image/jpeg'),
+}
+
+
+def jenis_berkas_sk(isi: bytes) -> str:
+    """Jenis file SK dari isinya (bukan dari nama/ekstensi). ValueError bila bukan PDF/JPG/PNG."""
+    for jenis, (tanda, _) in JENIS_BERKAS_SK.items():
+        if isi.startswith(tanda):
+            return jenis
+    raise ValueError('File SK harus berupa PDF, JPG, atau PNG.')
+
+
+def path_berkas_sk(berkas: Dict[str, Any]) -> str:
+    return os.path.join(folder_unggahan('pkg_sk'), os.path.basename(berkas['nama_berkas']))
+
+
+def _hapus_file(berkas: Optional[Dict[str, Any]]) -> None:
+    if berkas and berkas.get('nama_berkas'):
+        try:
+            os.remove(path_berkas_sk(berkas))
+        except FileNotFoundError:
+            pass
+
+
+async def simpan_berkas_sk(db, sk_id: str, isi: bytes, nama_asli: Optional[str], aktor: Dict[str, Any]) -> Dict[str, Any]:
+    """Simpan (ganti) file SK; file lama dihapus setelah data SK diperbarui. ValueError bila kosong/terlalu besar/bukan
+    PDF-JPG-PNG."""
+    sk = await ambil_sk(db, sk_id)
+    if not isi:
+        raise ValueError('File SK kosong.')
+    if len(isi) > MAKS_BERKAS_SK:
+        raise ValueError('Ukuran file SK maksimal 5 MB.')
+    jenis = jenis_berkas_sk(isi)
+    berkas = {'nama_berkas': f'{sk_id}_{uuid.uuid4().hex[:12]}.{jenis}',
+              'nama_asli': os.path.basename((nama_asli or '').replace('\\', '/'))[-150:] or f'SK.{jenis}',
+              'jenis': jenis, 'ukuran': len(isi), 'checksum': hashlib.sha256(isi).hexdigest(),
+              'diunggah_oleh': aktor.get('id'), 'diunggah_oleh_nama': aktor.get('full_name'), 'diunggah_pada': _sekarang()}
+    with open(path_berkas_sk(berkas), 'wb') as f:
+        f.write(isi)
+    await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$set': {'berkas': berkas, 'updated_at': berkas['diunggah_pada']}})
+    _hapus_file(sk.get('berkas'))
+    return {**sk, 'berkas': berkas}
+
+
+async def hapus_berkas_sk(db, sk_id: str) -> Dict[str, Any]:
+    sk = await ambil_sk(db, sk_id)
+    if not sk.get('berkas'):
+        raise HTTPException(404, 'SK ini belum memiliki file.')
+    await db[KOLEKSI_SK].update_one({'id': sk_id}, {'$unset': {'berkas': ''}, '$set': {'updated_at': _sekarang()}})
+    _hapus_file(sk['berkas'])
+    return {**sk, 'berkas': None}
 
 
 async def guru_aktif(db) -> List[Dict[str, Any]]:

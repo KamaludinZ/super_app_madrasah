@@ -5,7 +5,7 @@ dan penolakannya tercatat. Setiap perubahan tercatat di pkg_audit_log.
 """
 from typing import Annotated, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Request, UploadFile
 from pymongo.errors import DuplicateKeyError
 
 from core import db
@@ -14,7 +14,10 @@ from pkg_periode import ambil_periode, buat_periode, daftar_periode, periode_tam
 from pkg_penjaga import penjaga_pkg
 from pkg_penugasan import ambil_pembagian, simpan_pembagian
 from pkg_supervisi import batalkan_supervisi, beri_izin_menilai, cabut_izin_menilai, daftar_supervisi, tandai_supervisi
-from pkg_sk import aktifkan_sk, ambil_sk, atur_dinilai, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_sk, sk_tampil, ubah_sk
+from pkg_sk import (
+    MAKS_BERKAS_SK, aktifkan_sk, ambil_sk, atur_dinilai, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_berkas_sk, hapus_sk,
+    simpan_berkas_sk, sk_tampil, ubah_sk,
+)
 from pkg_skema import (
     POLA_ID,
     DinilaiSkRequest, IzinMenilaiRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest,
@@ -129,6 +132,27 @@ async def hapus_sk_api(sk_id: IdPkg, request: Request, akses: Dict = Depends(kep
     sk = await hapus_sk(db, sk_id)
     await catat_audit_pkg(db, 'sk_hapus', akses['user'], _ringkas_sk(sk), request=request)
     return {'id': sk_id, 'dihapus': True}
+
+
+@router.post("/pkg/sk/{sk_id}/berkas")
+async def unggah_berkas_sk_api(sk_id: IdPkg, request: Request, berkas: UploadFile = File(...), akses: Dict = Depends(kepala)):
+    """Unggah/ganti file SK (PDF, JPG, atau PNG; maks. 5 MB). File dapat dilihat seluruh personil SK di Status Saya."""
+    isi = await berkas.read(MAKS_BERKAS_SK + 1)
+    try:
+        sk = await simpan_berkas_sk(db, sk_id, isi, berkas.filename, akses['user'])
+    except ValueError as e:
+        raise HTTPException(413 if len(isi) > MAKS_BERKAS_SK else 422, str(e)) from e
+    b = sk['berkas']
+    await catat_audit_pkg(db, 'sk_berkas_unggah', akses['user'], {**_ringkas_sk(sk), 'nama_asli': b['nama_asli'], 'jenis': b['jenis'],
+                                                                   'ukuran': b['ukuran'], 'checksum': b['checksum']}, request=request)
+    return await sk_tampil(db, sk)
+
+
+@router.delete("/pkg/sk/{sk_id}/berkas")
+async def hapus_berkas_sk_api(sk_id: IdPkg, request: Request, akses: Dict = Depends(kepala)):
+    sk = await hapus_berkas_sk(db, sk_id)
+    await catat_audit_pkg(db, 'sk_berkas_hapus', akses['user'], _ringkas_sk(sk), request=request)
+    return await sk_tampil(db, sk)
 
 
 @router.get("/pkg/guru")

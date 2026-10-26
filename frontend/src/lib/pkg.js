@@ -1,10 +1,10 @@
-import { api } from '@/lib/api';
+import { api, openAuthedFile } from '@/lib/api';
 
 // Modul PKG (Penilaian Kinerja Guru): pemanggil API (backend/routers/pkg.py).
 // Penolakan akses dikirim sebagai HTTP 403 dengan detail { alasan, pesan }.
 
 // Rute sub-menu PKG yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen', '/pkg/penilaian', '/pkg/komponen', '/pkg/rekap', '/pkg/cetak', '/pkg/audit']);
+export const RUTE_PKG_TERSEDIA = new Set(['/pkg/periode', '/pkg/sk', '/pkg/penugasan', '/pkg/supervisi', '/pkg/instrumen', '/pkg/penilaian', '/pkg/komponen', '/pkg/kehadiran-saya', '/pkg/rekap', '/pkg/cetak', '/pkg/audit']);
 
 // Galat API PKG: menyimpan status & penolakan terstruktur (bila 403) untuk ditampilkan PesanTolakPkg.
 export class GalatPkg extends Error {
@@ -33,6 +33,11 @@ export const ambilTugasSaya = () => panggil(() => api.get('/pkg/beranda/tugas-sa
 // Tugas penilaian modul Penilaian Kinerja (penilai tersupervisi): { periode, instrumen, dapat_diisi,
 // alasan_tidak_dapat_diisi, ringkasan: { total, belum, draf, terkunci }, tugas: [...] }.
 export const ambilTugasPenilaian = () => panggil(() => api.get('/pkg/penilaian/tugas'), 'Gagal memuat tugas penilaian.');
+
+// Buka file SK di tab baru (kepala & personil SK itu; GET /pkg/sk/{id}/berkas).
+export const bukaBerkasSk = (skId) => openAuthedFile(`/pkg/sk/${skId}/berkas`);
+
+export const ukuranBerkas = (bita) => (bita >= 1024 * 1024 ? `${(bita / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bita / 1024))} KB`);
 
 export const LABEL_PERAN_PKG = {
   kepala: 'Kepala Madrasah · Penilai',

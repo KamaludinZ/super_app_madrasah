@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import FormSkDialog from '@/components/pkg/FormSkDialog';
 import CeklistGuruDialog from '@/components/pkg/CeklistGuruDialog';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
+import BerkasSkPanel from '@/components/pkg/BerkasSkPanel';
 import { formatWIBPanjang } from '@/lib/datetime';
 import {
   adalahKepala, aktifkanSk, daftarGuru, daftarPeriode, daftarSk, simpanDinilaiSk, simpanPenilaiSk,
@@ -139,7 +140,7 @@ function IsiHalamanSk() {
                 {s.is_active && <Badge className="shrink-0 bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>}
               </div>
               <div className="mt-0.5 text-xs text-slate-500">{namaPeriode[s.periode_id]?.nama_periode || '-'}</div>
-              <div className="mt-1 text-[11px] text-slate-400 tabular-nums">{s.penilai.length} penilai · {s.dinilai.length} dinilai</div>
+              <div className="mt-1 text-[11px] text-slate-400 tabular-nums">{s.penilai.length} penilai · {s.dinilai.length} dinilai{s.berkas ? ' · ada file SK' : ''}</div>
             </button>
           ))}
         </CardContent>
@@ -174,6 +175,7 @@ function IsiHalamanSk() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
+              <BerkasSkPanel sk={sk} onBerubah={(baru) => setDaftar((d) => d.map((x) => (x.id === baru.id ? baru : x)))} />
               <TabelAnggota
                 judul="Tim Penilai"
                 icon={ClipboardCheck}
@@ -242,7 +244,7 @@ function IsiHalamanSk() {
   );
 }
 
-// Pengelolaan SK PKG & anggotanya (khusus kepala madrasah): daftar SK per periode, identitas SK,
+// Pengelolaan SK PKG & anggotanya (khusus kepala madrasah): daftar SK per periode, identitas SK, file SK,
 // penetapan SK aktif, serta tim penilai & guru yang dinilai (lib/pkgKelola → /pkg/sk, /pkg/guru).
 export default function PkgSkPage() {
   return (

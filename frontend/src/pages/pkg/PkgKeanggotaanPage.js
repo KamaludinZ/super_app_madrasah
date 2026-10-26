@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   IdCard, FileBadge, ContactRound, CalendarRange, UserCheck, ClipboardCheck, ShieldCheck, ShieldAlert, CheckCircle2, Lock, RotateCw,
+  FileText, Eye, Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { formatWIBPanjang } from '@/lib/datetime';
-import { labelPeranPkg } from '@/lib/pkg';
+import { bukaBerkasSk, labelPeranPkg, ukuranBerkas } from '@/lib/pkg';
 import PanelIdentitasPkg from '@/components/pkg/PanelIdentitasPkg';
 
 // Penjelasan alasan sub-menu tidak dapat dibuka (kode sama dengan detail 403 backend).
@@ -16,7 +18,34 @@ const ALASAN_MENU = {
   bukan_penilai: 'Khusus anggota tim penilai',
   belum_disupervisi: 'Menunggu supervisi kepala madrasah',
   bukan_anggota_sk: 'Tidak terdaftar di SK aktif',
+  bukan_dinilai: 'Khusus guru yang dinilai',
 };
+
+// Tombol buka file SK aktif (diunggah kepala madrasah di menu SK & Tim Penilai).
+function FileSk({ k }) {
+  const [membuka, setMembuka] = useState(false);
+  const b = k.berkas_sk;
+  if (!k.sk_id) return <span className="text-slate-400">-</span>;
+  if (!b) return <span className="text-xs font-normal text-slate-400">Belum diunggah kepala madrasah</span>;
+  const buka = async () => {
+    setMembuka(true);
+    try {
+      await bukaBerkasSk(k.sk_id);
+    } catch {
+      toast.error('Gagal membuka file SK');
+    } finally {
+      setMembuka(false);
+    }
+  };
+  return (
+    <div className="flex flex-col items-start gap-1 sm:items-end">
+      <Button size="sm" variant="outline" className="h-8 gap-1" onClick={buka} disabled={membuka} data-testid="pkg-keanggotaan-lihat-sk">
+        {membuka ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />} Lihat file SK
+      </Button>
+      <span className="max-w-[16rem] truncate text-xs font-normal text-slate-500" title={b.nama_asli}>{b.nama_asli} · {ukuranBerkas(b.ukuran)}</span>
+    </div>
+  );
+}
 
 function Baris({ icon: Icon, label, children, testid }) {
   return (
@@ -36,7 +65,7 @@ function YaTidak({ ya, teksYa = 'Ya', teksTidak = 'Tidak' }) {
     : <Badge variant="outline" className="text-slate-500">{teksTidak}</Badge>;
 }
 
-// Status keanggotaan SK pengguna di dalam PkgLayout: data SK & periode, peran (penilai/dinilai/merangkap),
+// Status keanggotaan SK pengguna di dalam PkgLayout: data SK (termasuk file SK) & periode, peran (penilai/dinilai/merangkap),
 // status supervisi, dan hak akses tiap sub-menu PKG beserta alasannya. Data dari konteks layout
 // (GET /pkg/sk/my-membership + GET /pkg/beranda/menu).
 export default function PkgKeanggotaanPage() {
@@ -62,6 +91,7 @@ export default function PkgKeanggotaanPage() {
           <Baris icon={FileBadge} label="Nomor SK" testid="pkg-keanggotaan-sk">
             {k.nomor_sk || <span className="text-slate-400">Belum ada SK aktif</span>}
           </Baris>
+          <Baris icon={FileText} label="File SK" testid="pkg-keanggotaan-file-sk"><FileSk k={k} /></Baris>
           <Baris icon={CalendarRange} label="Periode" testid="pkg-keanggotaan-periode">
             {periode ? (
               <>

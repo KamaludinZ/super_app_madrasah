@@ -234,3 +234,55 @@ def test_kunci_susunan_sk_setelah_berjalan(db):
     _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1', 'g2'], alasan_perubahan='guru baru'), Request())
     meta = db['pkg_audit_log'].docs[-1]['metadata']
     assert meta['setelah_berjalan'] is True and meta['alasan'] == 'guru baru' and meta['ditambah'] == ['g1', 'g2']
+
+
+def test_file_sk_unggah_lihat_hapus(db, monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import penyimpanan
+    from core import get_current_user
+    from routers import pkg as api_pkg
+    monkeypatch.setattr(penyimpanan, 'UPLOAD_ROOT', str(tmp_path))
+    monkeypatch.setattr(api_pkg, 'db', d := db)
+    d['pkg_sk'].docs.append({'id': 's1', 'nomor_sk': 'B-9/2026', 'periode_id': 'p1', 'is_active': True,
+                             'penilai_ids': ['kep', 'pen'], 'dinilai_ids': ['g1']})
+    app = FastAPI()
+    app.include_router(api_pkg.router, prefix='/api')
+    app.include_router(api.router, prefix='/api')
+    pengguna = {'user': KEPALA}
+    app.dependency_overrides[get_current_user] = lambda: pengguna['user']
+    k = TestClient(app)
+
+    pdf = b'%PDF-1.4\n%uji\n'
+    r = k.post('/api/pkg/sk/s1/berkas', files={'berkas': ('SK Tim PKG.pdf', pdf, 'application/pdf')})
+    assert r.status_code == 200, r.text
+    assert {k_: r.json()['berkas'][k_] for k_ in ('nama_asli', 'jenis', 'ukuran')} == {'nama_asli': 'SK Tim PKG.pdf', 'jenis': 'pdf', 'ukuran': len(pdf)}
+    assert 'nama_berkas' not in r.json()['berkas'] and d['pkg_audit_log'].docs[-1]['aksi'] == 'sk_berkas_unggah'
+    lama = d['pkg_sk'].docs[-1]['berkas']['nama_berkas']
+    assert (tmp_path / 'pkg_sk' / lama).read_bytes() == pdf
+
+    palsu = k.post('/api/pkg/sk/s1/berkas', files={'berkas': ('virus.pdf', b'MZ\x90\x00', 'application/pdf')})
+    assert palsu.status_code == 422  # isi bukan PDF/JPG/PNG walau berekstensi .pdf
+    besar = k.post('/api/pkg/sk/s1/berkas', files={'berkas': ('besar.pdf', b'%PDF-' + b'0' * (5 * 1024 * 1024), 'application/pdf')})
+    assert besar.status_code == 413
+
+    png = b'\x89PNG\r\n\x1a\n' + b'\x00' * 20
+    assert k.post('/api/pkg/sk/s1/berkas', files={'berkas': ('scan.png', png, 'image/png')}).json()['berkas']['jenis'] == 'png'
+    assert not (tmp_path / 'pkg_sk' / lama).exists()  # file lama diganti
+
+    for uid in ('pen', 'g1'):  # penilai & guru yang dinilai dapat melihat
+        pengguna['user'] = {'id': uid, 'roles': ['guru'], 'full_name': uid}
+        lihat = k.get('/api/pkg/sk/s1/berkas')
+        assert lihat.status_code == 200 and lihat.headers['content-type'] == 'image/png' and lihat.content == png
+        assert lihat.headers['content-disposition'].startswith('inline')
+    assert k.get('/api/pkg/sk/my-membership').json()['berkas_sk']['nama_asli'] == 'scan.png'
+    assert k.post('/api/pkg/sk/s1/berkas', files={'berkas': ('x.pdf', pdf, 'application/pdf')}).status_code == 403  # bukan kepala
+    pengguna['user'] = {'id': 'asing', 'roles': ['guru']}
+    assert k.get('/api/pkg/sk/s1/berkas').status_code == 403
+    assert k.get('/api/pkg/sk/my-membership').json()['berkas_sk'] is None
+
+    pengguna['user'] = KEPALA
+    assert k.delete('/api/pkg/sk/s1/berkas').json()['berkas'] is None
+    assert d['pkg_audit_log'].docs[-1]['aksi'] == 'sk_berkas_hapus' and not list((tmp_path / 'pkg_sk').iterdir())
+    assert k.get('/api/pkg/sk/s1/berkas').status_code == 404
+    assert k.delete('/api/pkg/sk/s1/berkas').status_code == 404

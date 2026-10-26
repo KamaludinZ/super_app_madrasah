@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RUTE_PKG_TERSEDIA } from '@/lib/pkg';
 import {
   LayoutGrid, Lock, CalendarCog, FileBadge, Split, ShieldCheck, ListTree, ClipboardPen, BarChart3, Printer, History,
-  UsersRound,
+  UsersRound, CalendarCheck,
 } from 'lucide-react';
 
 const IKON_MENU = {
@@ -15,6 +15,7 @@ const IKON_MENU = {
   instrumen: ListTree,
   penilaian: ClipboardPen,
   komponen: UsersRound,
+  kehadiran_saya: CalendarCheck,
   rekap: BarChart3,
   cetak: Printer,
   audit: History,

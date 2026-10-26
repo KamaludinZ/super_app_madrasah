@@ -31,6 +31,11 @@ const ALASAN = {
     saran: 'Lembar penilaian hanya dapat diisi pada rentang tanggal buka–tutup periode PKG.',
     Icon: ShieldAlert,
   },
+  bukan_dinilai: {
+    judul: 'Khusus guru yang dinilai',
+    saran: 'Menu ini untuk guru yang tercantum sebagai guru dinilai pada SK penilaian aktif, agar dapat menginput rekap kehadirannya sendiri. Kepala madrasah dan tim penilai menginput kehadiran guru lewat menu Komponen 360° & Kehadiran.',
+    Icon: UserX,
+  },
   bukan_kepala: {
     judul: 'Khusus kepala madrasah',
     saran: 'Penetapan periode, tim penilai, dan pembagian guru yang dinilai hanya dapat dilakukan dari akun kepala madrasah.',

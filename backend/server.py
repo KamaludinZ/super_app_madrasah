@@ -47,6 +47,7 @@ from routers import (
     pkg,
     pkg_audit_api,
     pkg_angket_api,
+    pkg_angket_publik_api,
     pkg_identitas_api,
     pkg_kehadiran_api,
     pkg_rekomendasi_api,
@@ -154,6 +155,7 @@ api_router.include_router(pkg_penilaian_api.router)
 api_router.include_router(pkg_rekap_api.router)
 api_router.include_router(pkg_cetak_api.router)
 api_router.include_router(pkg_angket_api.router)
+api_router.include_router(pkg_angket_publik_api.router)
 api_router.include_router(pkg_identitas_api.router)
 api_router.include_router(pkg_form_api.router)
 api_router.include_router(pkg_kehadiran_api.router)

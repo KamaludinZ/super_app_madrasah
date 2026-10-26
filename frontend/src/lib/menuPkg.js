@@ -1,5 +1,5 @@
 import {
-  Award, CalendarCog, FileBadge, Split, ShieldCheck, ListTree, ClipboardPen, BarChart3, Printer, History, UsersRound,
+  Award, CalendarCog, FileBadge, Split, ShieldCheck, ListTree, ClipboardPen, BarChart3, Printer, History, UsersRound, CalendarCheck,
 } from 'lucide-react';
 import { adalahGtk } from '@/lib/menuUmum';
 import { RUTE_PKG_TERSEDIA } from '@/lib/pkg';
@@ -16,6 +16,7 @@ const IKON_MENU_PKG = {
   instrumen: ListTree,
   penilaian: ClipboardPen,
   komponen: UsersRound,
+  kehadiran_saya: CalendarCheck,
   rekap: BarChart3,
   cetak: Printer,
   audit: History,

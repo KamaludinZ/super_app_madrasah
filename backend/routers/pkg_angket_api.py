@@ -1,18 +1,21 @@
 """API angket penilaian 360° PKG (sejawat, peserta didik, orang tua/wali) — angket dicetak di kertas, diisi responden
-tanpa akun, lalu rekap jawabannya diinput kembali oleh kepala madrasah atau tim penilai.
+tanpa akun, lalu rekap jawabannya diinput kembali oleh kepala madrasah atau tim penilai; atau diisi responden sendiri
+lewat tautan angket online periode (tautan dikelola di sini, halaman isiannya di routers.pkg_angket_publik_api).
 
 Otorisasi: personil PKG pada periode (pkg_rekap.anggota_periode) yang berperan pengelola (kepala madrasah atau penilai);
 guru dibatasi cakupan peran (kepala semua guru, penilai guru yang dinilainya). Cetak angket memakai bagian sheet
 FORM-360-GR template resmi; PDF lewat LibreOffice dengan cadangan ReportLab berpenanda. Setiap unduhan tercatat di
 riwayat unduhan & jejak audit (jenis dokumen 'angket').
 """
-from datetime import date
+import secrets
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from pymongo.errors import DuplicateKeyError
 
 from core import db, get_current_user
-from pkg_akses import keanggotaan_sk, tolak
+from pkg_akses import adalah_kepala, keanggotaan_sk, tolak
 from pkg_angket import (
     JENIS_ANGKET, AngketPenuh, angket_excel, butir_angket, daftar_jenis, responden_guru, skor_360, skor_360_periode,
     tambah_responden, ubah_responden,
@@ -20,7 +23,10 @@ from pkg_angket import (
 from pkg_audit import catat_audit_pkg, catat_cetak_gagal, catat_cetak_template
 from pkg_pdf_cadangan import angket_pdf_cadangan
 from pkg_rekap import agregasi_rekap, anggota_periode, cakupan_rekap, periode_dan_sk
-from pkg_skema import KOLEKSI_ANGKET, POLA_ID, AngketCetakRequest, AngketJawabanRequest
+from pkg_skema import (
+    KOLEKSI_ANGKET, KOLEKSI_ANGKET_TAUTAN, KOLEKSI_ANGKET_TTD, POLA_ID, AngketCetakRequest, AngketJawabanRequest,
+    AngketTautanRequest, AngketTautanStatusRequest,
+)
 from pkg_template import TEMPLATE_PKG, TemplateTidakTersedia, nama_berkas_cetak
 from routers.pkg_cetak_api import buat_pdf, respon_berkas
 
@@ -103,8 +109,9 @@ def _wajib_berjalan(periode: Dict[str, Any]) -> None:
 
 
 def _responden_publik(d: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: d.get(k) for k in ('id', 'jenis', 'urutan', 'nama_responden', 'jawaban', 'skor', 'skor_maks', 'nilai',
-                                  'diinput_oleh_nama', 'tanggal_input', 'diubah_pada')}
+    return {**{k: d.get(k) for k in ('id', 'jenis', 'urutan', 'nama_responden', 'jawaban', 'skor', 'skor_maks', 'nilai',
+                                     'diinput_oleh_nama', 'tanggal_input', 'diubah_pada')},
+            'sumber': d.get('sumber') or 'manual', 'ada_ttd': bool(d.get('ada_ttd'))}
 
 
 @router.get("/pkg/angket/ringkasan")
@@ -191,7 +198,91 @@ async def hapus_jawaban_api(request: Request, responden_id: str = Path(..., patt
     """Hapus rekap jawaban satu responden; kolom penilainya kosong kembali."""
     doc, _ = await _responden_milik(user, responden_id)
     await db[KOLEKSI_ANGKET].delete_one({'id': responden_id})
+    await db[KOLEKSI_ANGKET_TTD].delete_one({'responden_id': responden_id})
     await catat_audit_pkg(db, 'angket_hapus', user, {'periode_id': doc['periode_id'], 'guru_id': doc['guru_dinilai_id'],
                                                      'jenis_angket': doc['jenis'], 'urutan': doc['urutan'], 'nilai': doc.get('nilai')},
                           request=request)
     return {'id': responden_id, 'dihapus': True}
+
+
+@router.get("/pkg/angket/jawaban/{responden_id}/ttd")
+async def ttd_jawaban_api(responden_id: str = Path(..., pattern=POLA_ID), user: Dict = Depends(get_current_user)):
+    """Gambar PNG tanda tangan responden angket online (dalam cakupan pengelola). 404 bila tanpa tanda tangan."""
+    doc = await db[KOLEKSI_ANGKET].find_one({'id': responden_id}, {'_id': 0, 'periode_id': 1, 'guru_dinilai_id': 1})
+    if not doc:
+        raise HTTPException(404, 'Jawaban angket tidak ditemukan.')
+    await konteks_pengelola(db, user, doc['periode_id'], doc['guru_dinilai_id'])
+    ttd = await db[KOLEKSI_ANGKET_TTD].find_one({'responden_id': responden_id}, {'_id': 0, 'png': 1})
+    if not ttd or not ttd.get('png'):
+        raise HTTPException(404, 'Responden ini tidak memiliki tanda tangan.')
+    return Response(content=bytes(ttd['png']), media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
+
+
+# ---------------------------------------------------------------- tautan angket online (satu tautan per periode)
+
+def _tautan_publik(t: Dict[str, Any], periode: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
+    """`aktif` = sakelar buka/tutup tautan; `terbuka` = halaman benar-benar menerima jawaban (aktif & periode berjalan)."""
+    aktif = t.get('aktif', True)
+    return {'token': t['token'], 'aktif': aktif, 'terbuka': aktif and periode.get('status') == 'berjalan',
+            'dibuat_pada': t.get('dibuat_pada'), 'dibuat_oleh_nama': t.get('dibuat_oleh_nama'),
+            'status_pada': t.get('status_pada'), 'status_oleh_nama': t.get('status_oleh_nama'),
+            'periode': {k: periode.get(k) for k in ('id', 'nama_periode', 'status')}, 'boleh_kelola': adalah_kepala(user)}
+
+
+def _tautan_baru(user: Dict[str, Any]) -> Dict[str, Any]:
+    return {'token': secrets.token_urlsafe(18), 'dibuat_oleh': user.get('id'), 'dibuat_oleh_nama': user.get('full_name'),
+            'dibuat_pada': datetime.now(timezone.utc).isoformat()}
+
+
+async def _tautan_periode(periode_id: str, user: Dict[str, Any]) -> Dict[str, Any]:
+    """Tautan angket online periode; dibuat (aktif) saat pertama diminta."""
+    t = await db[KOLEKSI_ANGKET_TAUTAN].find_one({'periode_id': periode_id}, {'_id': 0})
+    if t:
+        return t
+    t = {'id': periode_id, 'periode_id': periode_id, 'aktif': True, **_tautan_baru(user)}
+    try:
+        await db[KOLEKSI_ANGKET_TAUTAN].insert_one(dict(t))
+    except DuplicateKeyError:  # dibuat bersamaan oleh pengelola lain
+        t = await db[KOLEKSI_ANGKET_TAUTAN].find_one({'periode_id': periode_id}, {'_id': 0})
+    return t
+
+
+async def _konteks_kelola_tautan(user: Dict[str, Any], periode_id: Optional[str], pesan: str) -> Dict[str, Any]:
+    ktx = await konteks_pengelola(db, user, periode_id, None)
+    if not adalah_kepala(user):
+        raise tolak('bukan_kepala', pesan)
+    return ktx
+
+
+@router.get("/pkg/angket/tautan")
+async def tautan_angket_api(periode_id: Optional[str] = Query(None, pattern=POLA_ID), user: Dict = Depends(get_current_user)):
+    """Tautan angket online periode untuk disalin & dibagikan ke responden (dibuat otomatis saat pertama diminta).
+    Halaman isiannya hanya menerima jawaban selama tautan aktif dan periode berjalan."""
+    ktx = await konteks_pengelola(db, user, periode_id, None)
+    return _tautan_publik(await _tautan_periode(ktx['periode']['id'], user), ktx['periode'], user)
+
+
+@router.post("/pkg/angket/tautan/status")
+async def status_tautan_angket_api(data: AngketTautanStatusRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Buka/tutup pengisian lewat tautan angket online (kepala madrasah), mis. ditutup setelah pengisian selesai.
+    Token tidak berubah sehingga tautan yang sudah dibagikan dapat dibuka kembali."""
+    ktx = await _konteks_kelola_tautan(user, data.periode_id, 'Tautan angket online hanya dapat dibuka/ditutup kepala madrasah.')
+    pid = ktx['periode']['id']
+    t = await _tautan_periode(pid, user)
+    ubah = {'aktif': data.aktif, 'status_oleh_nama': user.get('full_name'), 'status_pada': datetime.now(timezone.utc).isoformat()}
+    await db[KOLEKSI_ANGKET_TAUTAN].update_one({'periode_id': pid}, {'$set': ubah})
+    await catat_audit_pkg(db, 'angket_tautan_status', user, {'periode_id': pid, 'aktif': data.aktif}, request=request)
+    return _tautan_publik({**t, **ubah}, ktx['periode'], user)
+
+
+@router.post("/pkg/angket/tautan/ganti")
+async def ganti_tautan_angket_api(data: AngketTautanRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Ganti token tautan angket online (kepala madrasah): tautan lama langsung tidak berlaku, jawaban yang sudah masuk
+    tetap tersimpan, status buka/tutup tidak berubah."""
+    ktx = await _konteks_kelola_tautan(user, data.periode_id, 'Tautan angket online hanya dapat diganti kepala madrasah.')
+    pid = ktx['periode']['id']
+    t = await _tautan_periode(pid, user)
+    baru = _tautan_baru(user)
+    await db[KOLEKSI_ANGKET_TAUTAN].update_one({'periode_id': pid}, {'$set': baru})
+    await catat_audit_pkg(db, 'angket_tautan_ganti', user, {'periode_id': pid}, request=request)
+    return _tautan_publik({**t, **baru}, ktx['periode'], user)
