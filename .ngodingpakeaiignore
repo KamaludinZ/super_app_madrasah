@@ -23,3 +23,7 @@ openapi.json
 # Cache lokal Expo (berisi status dev server, bukan kode)
 mobile/.expo/
 mobile/yarn.lock
+
+# Berkas kunci sementara Microsoft Office / LibreOffice saat berkas sedang dibuka
+~$*
+.~lock.*#

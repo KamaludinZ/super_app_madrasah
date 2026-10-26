@@ -148,3 +148,7 @@ backend/uploads/
 
 # Cache build Gradle (Android)
 .gradle/
+
+# Berkas kunci sementara Microsoft Office / LibreOffice saat berkas sedang dibuka
+~$*
+.~lock.*#
