@@ -93,11 +93,21 @@ class Koleksi:
 
     @staticmethod
     def _terapkan(d, u):
-        d.update(u.get('$set', {}))
+        for k, v in u.get('$set', {}).items():  # jalur bertitik ('snapshot_anggota.g1.pangkat') seperti MongoDB
+            *induk, daun = k.split('.')
+            wadah = d
+            for b in induk:
+                wadah = wadah.setdefault(b, {})
+            wadah[daun] = v
         for k, v in u.get('$inc', {}).items():
             d[k] = d.get(k, 0) + v
         for k in u.get('$unset', {}):
-            d.pop(k, None)
+            *induk, daun = k.split('.')
+            wadah = d
+            for b in induk:
+                wadah = wadah.get(b) if isinstance(wadah, dict) else None
+            if isinstance(wadah, dict):
+                wadah.pop(daun, None)
 
     async def update_one(self, q, u, upsert=False):
         d = next((d for d in self.docs if self._cocok(d, q)), None)

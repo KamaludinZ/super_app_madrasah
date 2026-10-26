@@ -6,7 +6,9 @@ Sumber data berlapis, yang pertama tersedia dipakai:
        disalin saat SK disusun) — agar cetak periode lama tetap utuh walau akun berubah/nonaktif;
     2. data GTK akun saat ini (tempat/tanggal lahir, jenis kelamin, NUPTK/NRG, TMT, tugas tambahan);
     3. pengaturan madrasah (nama, telepon, alamat, kota) dan kepala madrasah.
-Field yang tidak tersedia di data GTK (pangkat/golongan, jabatan fungsional, pendidikan, spesialisasi) dicetak '-'.
+Pangkat/golongan, jabatan fungsional, pendidikan terakhir, dan spesialisasi diisi lewat isian khusus PKG
+(pkg_identitas_isian); bila kosong, pangkat/golongan dipecah dari `pangkat_golongan` profil GTK dan pendidikan
+diturunkan dari `riwayat_pendidikan` (lihat lengkapi_akun). Field yang tetap kosong dicetak '-'.
 """
 import re
 from datetime import date
@@ -20,6 +22,62 @@ BULAN = ('Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustu
 FIELD_GTK = ('birth_place', 'birth_date', 'gender', 'nuptk', 'nrg', 'nip', 'peg_id', 'status_kepegawaian', 'tmt_pns',
              'tmt_guru', 'tmt_pegawai', 'tugas_tambahan', 'tugas_utama', 'jenis_ptk', 'pangkat', 'golongan', 'tmt_golongan',
              'jabatan_fungsional', 'pendidikan_terakhir', 'spesialisasi')
+
+# Field isian khusus PKG (boleh diubah langsung tanpa verval; lihat pkg_identitas_isian).
+FIELD_PKG = ('pangkat', 'golongan', 'tmt_golongan', 'jabatan_fungsional', 'pendidikan_terakhir', 'spesialisasi')
+# Field profil GTK yang hanya dibaca sebagai cadangan (tidak disalin ke snapshot).
+FIELD_CADANGAN = ('pangkat_golongan', 'riwayat_pendidikan')
+
+GOLONGAN_ROMAWI = ('I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII')
+_POLA_GOLONGAN = re.compile(r'^(?:(?P<pangkat>.*?)[\s,;(\-–]+)?\(?\s*(?P<gol>[IVX]{1,5})(?:\s*/\s*(?P<ruang>[A-Ea-e]))?\s*\)?$')
+# Urutan jenjang pendidikan formal (makin besar makin tinggi).
+URUTAN_JENJANG = {'SD/MI': 1, 'SMP/MTS': 2, 'SMA/MA/SMK': 3, 'D1': 4, 'D2': 5, 'D3': 6, 'D4': 7, 'S1': 8, 'S2': 9, 'S3': 10}
+
+
+def pecah_pangkat_golongan(teks: Any) -> tuple:
+    """(pangkat, golongan) dari teks gabungan, mis. 'Penata Muda, III/a' -> ('Penata Muda', 'III/a'),
+    'Pengatur Muda (V)' -> ('Pengatur Muda', 'V'). Bila golongan tidak dikenali, seluruh teks menjadi pangkat."""
+    t = re.sub(r'\s+', ' ', str(teks or '')).strip()
+    if not t:
+        return None, None
+    m = _POLA_GOLONGAN.match(t)
+    if not m or m.group('gol') not in GOLONGAN_ROMAWI:
+        return t, None
+    gol = m.group('gol') + (f"/{m.group('ruang').lower()}" if m.group('ruang') else '')
+    return (m.group('pangkat') or '').strip(' ,;-') or None, gol
+
+
+def pendidikan_dari_riwayat(riwayat: Any) -> Optional[str]:
+    """Pendidikan terakhir dari daftar riwayat_pendidikan: entri berjenjang tertinggi (seri: tahun lulus terbaru),
+    ditulis '<jenjang> <jurusan>'."""
+    terbaik, kunci_terbaik = None, None
+    for r in riwayat if isinstance(riwayat, list) else []:
+        if not isinstance(r, dict) or not str(r.get('jenjang') or '').strip():
+            continue
+        jenjang = str(r['jenjang']).strip()
+        try:
+            tahun = int(str(r.get('tahun_lulus') or 0)[:4])
+        except ValueError:
+            tahun = 0
+        kunci = (URUTAN_JENJANG.get(jenjang.upper(), 0), tahun)
+        if kunci_terbaik is None or kunci >= kunci_terbaik:
+            terbaik, kunci_terbaik = r, kunci
+    if not terbaik:
+        return None
+    return ' '.join(x for x in (str(terbaik['jenjang']).strip(), str(terbaik.get('jurusan') or '').strip()) if x)
+
+
+def lengkapi_akun(akun: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Salinan akun dengan cadangan otomatis: pangkat/golongan kosong dipecah dari `pangkat_golongan`, pendidikan
+    terakhir kosong diturunkan dari `riwayat_pendidikan`. Isian yang sudah ada tidak ditimpa."""
+    a = dict(akun or {})
+    if (not a.get('pangkat') or not a.get('golongan')) and a.get('pangkat_golongan'):
+        pangkat, golongan = pecah_pangkat_golongan(a['pangkat_golongan'])
+        a['pangkat'] = a.get('pangkat') or pangkat
+        a['golongan'] = a.get('golongan') or golongan
+    if not a.get('pendidikan_terakhir') and a.get('riwayat_pendidikan'):
+        a['pendidikan_terakhir'] = pendidikan_dari_riwayat(a['riwayat_pendidikan'])
+    return a
 
 
 def _tanggal(nilai: Any) -> Optional[date]:
@@ -57,7 +115,7 @@ def kota_dari(pengaturan: Dict[str, Any]) -> Optional[str]:
 
 def identitas_orang(snap: Optional[Dict[str, Any]], akun: Optional[Dict[str, Any]], per: Any = None) -> Dict[str, Any]:
     """Identitas cetak satu orang dari snapshot periode (utama) dan akun GTK saat ini (pelengkap)."""
-    s, a = snap or {}, akun or {}
+    s, a = snap or {}, lengkapi_akun(akun)
 
     def ambil(*kunci):
         for k in kunci:
@@ -82,14 +140,14 @@ async def _akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
-    proyeksi = {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in FIELD_GTK}}
+    proyeksi = {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in (*FIELD_GTK, *FIELD_CADANGAN)}}
     return {u['id']: u for u in await db.users.find({'id': {'$in': ids}}, proyeksi).to_list(len(ids))}
 
 
 async def akun_kepala(db) -> Optional[Dict[str, Any]]:
     from pkg_akses import PERAN_KEPALA
     return await db.users.find_one({'roles': PERAN_KEPALA, 'is_active': {'$ne': False}},
-                                   {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in FIELD_GTK}})
+                                   {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, **{f: 1 for f in (*FIELD_GTK, *FIELD_CADANGAN)}})
 
 
 async def lampiran_identitas(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any]], guru_id: str,

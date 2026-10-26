@@ -42,6 +42,8 @@ def ringkasan_entri(e: Dict[str, Any], nama: Dict[str, str]) -> str:
     elif aksi.startswith('sk_'):
         bagian = [m.get('nomor_sk'), f"+{len(m.get('ditambah') or [])} / -{len(m.get('dilepas') or [])}"
                   if 'ditambah' in m else None, m.get('alasan')]
+    elif aksi == 'identitas_ubah':
+        bagian = [guru, ', '.join(m.get('field') or []), f"oleh {m.get('sebagai')}" if m.get('sebagai') else None]
     elif aksi == 'penugasan_simpan':
         bagian = [f"{len(m.get('perubahan') or [])} perubahan", m.get('alasan')]
     elif aksi.startswith('supervisi_'):

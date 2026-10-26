@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, MessageSquareText } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, MessageSquareText, ContactRound } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import { labelVersi } from '@/lib/pkgInstrumen';
 import { hitungTingkat } from '@/lib/pkgPenilaian';
 import { ambilIdentitasGuru, ambilModelKompetensi, ambilRekapGuru } from '@/lib/pkgRekap';
+import DialogLengkapiIdentitas from '@/components/pkg/DialogLengkapiIdentitas';
 import LampiranIdentitas from '@/components/pkg/LampiranIdentitas';
 import { FormatPenghitungan, KartuLevelGuru, NilaiAkhir360, TabelModelKompetensi } from '@/components/pkg/RekapModelKompetensi';
 
@@ -18,12 +19,22 @@ import { FormatPenghitungan, KartuLevelGuru, NilaiAkhir360, TabelModelKompetensi
 function TabIdentitas({ guruId, periodeId }) {
   const [data, setData] = useState(null);
   const [galat, setGalat] = useState(null);
-  useEffect(() => {
-    ambilIdentitasGuru(guruId, periodeId).then(setData).catch(setGalat);
-  }, [guruId, periodeId]);
+  const [dialog, setDialog] = useState(false);
+  const muat = useCallback(() => ambilIdentitasGuru(guruId, periodeId).then(setData).catch(setGalat), [guruId, periodeId]);
+  useEffect(() => { muat(); }, [muat]);
   if (galat) return <p className="py-10 text-center text-sm text-slate-700" role="alert">{galat.message}</p>;
   if (!data) return <div className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#006837]" /></div>;
-  return <LampiranIdentitas data={data} />;
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => setDialog(true)} data-testid="pkg-rekap-guru-lengkapi-identitas">
+          <ContactRound className="mr-1.5 h-4 w-4" /> Lengkapi identitas
+        </Button>
+      </div>
+      <LampiranIdentitas data={data} />
+      <DialogLengkapiIdentitas open={dialog} onOpenChange={setDialog} guruId={guruId} nama={data.guru?.nama} onTersimpan={muat} />
+    </div>
+  );
 }
 
 // Tab "Model Kompetensi": rekap per kompetensi (04-RKAP-PKG) + format penghitungan NKG (05-RKAP-PKGR); dimuat saat dibuka.
