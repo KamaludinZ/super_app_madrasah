@@ -18,7 +18,7 @@ const ALASAN = {
   },
   belum_disupervisi: {
     judul: 'Menunggu supervisi kepala madrasah',
-    saran: 'Penilai wajib disupervisi kepala madrasah lebih dahulu sebelum membuka lembar penilaian guru yang dibagikan.',
+    saran: 'Penilai wajib disupervisi kepala madrasah lebih dahulu (atau diberi izin menilai oleh kepala) sebelum membuka lembar penilaian guru yang dibagikan.',
     Icon: ShieldAlert,
   },
   bukan_penugasan: {

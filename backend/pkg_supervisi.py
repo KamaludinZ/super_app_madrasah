@@ -1,10 +1,13 @@
 """Service penandaan supervisi penilai oleh kepala madrasah — gerbang pembukaan lembar penilaian.
 
 Disimpan di dokumen pkg_penugasan penilai (periode berjalan): supervisi_selesai, tanggal_supervisi,
-catatan_supervisi, disupervisi_oleh {id, nama}. keanggotaan_sk() membaca supervisi_selesai untuk menentukan
-apakah penilai boleh membuka lembar. Kepala madrasah tidak memerlukan supervisi dan tidak ditampilkan.
+catatan_supervisi, disupervisi_oleh {id, nama}. Alternatifnya kepala dapat memberi izin menilai dengan alasan
+(izin_menilai, izin_alasan, izin_oleh {id, nama}, izin_pada) bila supervisi belum dapat dilaksanakan; izin tidak
+mengubah status supervisi. keanggotaan_sk() membuka lembar penilaian bila supervisi_selesai atau izin_menilai.
+Kepala madrasah tidak memerlukan supervisi dan tidak ditampilkan.
 
-Bentuk untuk API: {penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru}
+Bentuk untuk API: {penilai: anggota, supervisi_selesai, tanggal_supervisi, catatan, disupervisi_oleh, jumlah_guru,
+izin_menilai, izin_alasan, izin_oleh, izin_pada, boleh_menilai}
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -14,7 +17,7 @@ from fastapi import HTTPException
 
 from pkg_akses import PERAN_KEPALA, sk_aktif
 from pkg_sk import sk_tampil
-from pkg_skema import KOLEKSI_PENUGASAN, SupervisiRequest
+from pkg_skema import KOLEKSI_PENUGASAN, IzinMenilaiRequest, SupervisiRequest
 
 WIB = timezone(timedelta(hours=7))
 
@@ -37,6 +40,7 @@ async def _kepala_ids(db, ids: List[str]) -> set:
 
 def _baris(anggota: Dict[str, Any], dok: Dict[str, Any]) -> Dict[str, Any]:
     selesai = bool(dok.get('supervisi_selesai'))
+    izin = bool(dok.get('izin_menilai'))
     oleh = dok.get('disupervisi_oleh') or {}
     return {
         'penilai': anggota,
@@ -45,6 +49,11 @@ def _baris(anggota: Dict[str, Any], dok: Dict[str, Any]) -> Dict[str, Any]:
         'catatan': (dok.get('catatan_supervisi') or '') if selesai else '',
         'disupervisi_oleh': oleh.get('nama') if selesai else None,
         'jumlah_guru': len(dok.get('guru_dinilai_ids') or []),
+        'izin_menilai': izin,
+        'izin_alasan': (dok.get('izin_alasan') or '') if izin else '',
+        'izin_oleh': (dok.get('izin_oleh') or {}).get('nama') if izin else None,
+        'izin_pada': dok.get('izin_pada') if izin else None,
+        'boleh_menilai': selesai or izin,
     }
 
 
@@ -93,6 +102,35 @@ async def batalkan_supervisi(db, penilai_id: str) -> Dict[str, Any]:
         {'periode_id': periode['id'], 'penilai_id': penilai_id},
         {'$set': {'supervisi_selesai': False, 'updated_at': _sekarang()},
          '$unset': {'tanggal_supervisi': '', 'catatan_supervisi': '', 'disupervisi_oleh': ''}},
+    )
+    dok = await db[KOLEKSI_PENUGASAN].find_one({'periode_id': periode['id'], 'penilai_id': penilai_id}, {'_id': 0})
+    return _baris(anggota, dok or {})
+
+
+async def beri_izin_menilai(db, penilai_id: str, data: IzinMenilaiRequest, kepala: Dict[str, Any]) -> Dict[str, Any]:
+    """Izinkan penilai membuka lembar penilaian sebelum supervisi tercatat (alasan wajib). Status supervisi tetap."""
+    periode, sk = await _konteks(db)
+    anggota = await _penilai_sah(db, sk, penilai_id)
+    await db[KOLEKSI_PENUGASAN].update_one(
+        {'periode_id': periode['id'], 'penilai_id': penilai_id},
+        {'$set': {'izin_menilai': True, 'izin_alasan': data.alasan, 'izin_pada': _sekarang(), 'sk_id': sk['id'],
+                  'izin_oleh': {'id': kepala.get('id'), 'nama': kepala.get('full_name') or kepala.get('username')},
+                  'updated_at': _sekarang()},
+         '$setOnInsert': {'id': str(uuid.uuid4()), 'guru_dinilai_ids': [], 'jumlah_jatah': 0, 'supervisi_selesai': False}},
+        upsert=True,
+    )
+    dok = await db[KOLEKSI_PENUGASAN].find_one({'periode_id': periode['id'], 'penilai_id': penilai_id}, {'_id': 0})
+    return _baris(anggota, dok or {})
+
+
+async def cabut_izin_menilai(db, penilai_id: str) -> Dict[str, Any]:
+    """Cabut izin menilai; lembar penilaian terkunci kembali kecuali penilai sudah disupervisi."""
+    periode, sk = await _konteks(db)
+    anggota = await _penilai_sah(db, sk, penilai_id)
+    await db[KOLEKSI_PENUGASAN].update_one(
+        {'periode_id': periode['id'], 'penilai_id': penilai_id},
+        {'$set': {'izin_menilai': False, 'updated_at': _sekarang()},
+         '$unset': {'izin_alasan': '', 'izin_oleh': '', 'izin_pada': ''}},
     )
     dok = await db[KOLEKSI_PENUGASAN].find_one({'periode_id': periode['id'], 'penilai_id': penilai_id}, {'_id': 0})
     return _baris(anggota, dok or {})

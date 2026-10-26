@@ -4,7 +4,8 @@ Aturan akses:
     - Modul hanya untuk personil SK aktif (SK is_active pada periode berstatus 'berjalan').
     - Kepala madrasah selalu berperan sebagai penilai (tanpa perlu supervisi) dan tidak pernah dinilai.
     - Guru boleh merangkap penilai sekaligus dinilai pada periode yang sama.
-    - Penilai selain kepala wajib disupervisi kepala lebih dahulu (pkg_penugasan.supervisi_selesai).
+    - Penilai selain kepala wajib disupervisi kepala lebih dahulu (pkg_penugasan.supervisi_selesai), atau diberi
+      izin menilai oleh kepala dengan alasan (pkg_penugasan.izin_menilai).
 Penolakan dikirim sebagai HTTP 403 terstruktur: detail = {'alasan': <kode>, 'pesan': <teks>}.
 """
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,7 @@ STATUS_BERJALAN = 'berjalan'
 PESAN_TOLAK = {
     'bukan_anggota_sk': 'Akun Anda tidak terdaftar pada SK penilaian kinerja yang aktif.',
     'bukan_penilai': 'Halaman ini khusus anggota tim penilai pada periode berjalan.',
-    'belum_disupervisi': 'Anda belum disupervisi kepala madrasah pada periode ini.',
+    'belum_disupervisi': 'Anda belum disupervisi (atau diberi izin menilai) oleh kepala madrasah pada periode ini.',
     'bukan_kepala': 'Aksi ini hanya dapat dilakukan dari akun kepala madrasah.',
     'bukan_penugasan': 'Guru ini tidak dibagikan kepada Anda pada periode berjalan.',
     'di_luar_masa': 'Lembar penilaian hanya dapat diisi pada masa penilaian periode berjalan.',
@@ -68,11 +69,12 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
     # Kepala madrasah tidak menjadi objek penilaian walau tercantum di dinilai_ids.
     sebagai_dinilai = not kepala and bool(sk and uid in (sk.get('dinilai_ids') or []))
 
-    supervisi_selesai = kepala
+    supervisi_selesai, izin_menilai = kepala, False
     if sebagai_penilai and not kepala and periode:
         penugasan = await db[KOLEKSI_PENUGASAN].find_one(
-            {'periode_id': periode['id'], 'penilai_id': uid}, {'_id': 0, 'supervisi_selesai': 1})
+            {'periode_id': periode['id'], 'penilai_id': uid}, {'_id': 0, 'supervisi_selesai': 1, 'izin_menilai': 1})
         supervisi_selesai = bool((penugasan or {}).get('supervisi_selesai'))
+        izin_menilai = bool((penugasan or {}).get('izin_menilai'))
 
     # Kepala tetap dapat membuka modul tanpa SK aktif untuk menetapkan periode & SK.
     anggota = kepala or bool(sk and (sebagai_penilai or sebagai_dinilai))
@@ -85,6 +87,9 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
         'sebagai_penilai': sebagai_penilai,
         'sebagai_dinilai': sebagai_dinilai,
         'supervisi_selesai': supervisi_selesai,
+        'izin_menilai': izin_menilai,
+        # Lembar penilaian terbuka bila sudah disupervisi ATAU diberi izin kepala.
+        'boleh_menilai': supervisi_selesai or izin_menilai,
         'dalam_masa_penilaian': dalam_masa_penilaian(periode),
         'penolakan': None if anggota else {'alasan': 'bukan_anggota_sk', 'pesan': PESAN_TOLAK['bukan_anggota_sk']},
     }
@@ -94,7 +99,7 @@ async def keanggotaan_sk(db, user: Dict[str, Any]) -> Dict[str, Any]:
 #   'anggota'   = semua anggota SK aktif (kepala selalu termasuk)
 #   'kepala'    = hanya akun kepala madrasah (periode, SK, pembagian, supervisi, jejak audit)
 #   'pengelola' = kepala atau penilai (mis. cetak dokumen)
-#   'penilai'   = penilai yang sudah disupervisi (kepala selalu lolos)
+#   'penilai'   = penilai yang sudah disupervisi atau diberi izin menilai oleh kepala (kepala selalu lolos)
 SYARAT_AKSES = ('anggota', 'kepala', 'pengelola', 'penilai')
 
 
@@ -108,7 +113,7 @@ def alasan_tolak(k: Dict[str, Any], syarat: str = 'anggota') -> Optional[str]:
         return None if k.get('peran') == 'kepala' else 'bukan_kepala'
     if syarat in ('penilai', 'pengelola') and not k.get('sebagai_penilai'):
         return 'bukan_penilai'
-    if syarat == 'penilai' and not k.get('supervisi_selesai'):
+    if syarat == 'penilai' and not (k.get('supervisi_selesai') or k.get('izin_menilai')):
         return 'belum_disupervisi'
     return None
 

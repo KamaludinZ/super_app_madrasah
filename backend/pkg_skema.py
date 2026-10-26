@@ -8,6 +8,7 @@ Koleksi (semua dokumen memakai `id` string UUID sebagai kunci, `_id` Mongo tidak
                     is_active, created_at, updated_at}
     pkg_penugasan  {id, periode_id, sk_id, penilai_id, guru_dinilai_ids, jumlah_jatah,
                     supervisi_selesai, tanggal_supervisi, catatan_supervisi, disupervisi_oleh,
+                    izin_menilai, izin_alasan, izin_oleh {id, nama}, izin_pada (izin kepala tanpa supervisi),
                     snapshot_guru {<guru_id>: {nama, nip, mapel}}, updated_at}
     pkg_instrumen  {id, versi_template, revisi, checksum (berkas sumber), cocok_resmi, sumber ('template' | 'unggah'),
                     nama_berkas, revisi_dari (id instrumen asal), alasan_perubahan, diimpor_oleh, diimpor_pada,
@@ -308,6 +309,19 @@ class SupervisiRequest(IsianPkg):
     @classmethod
     def _catatan(cls, v):
         return _teks(v)
+
+
+class IzinMenilaiRequest(IsianPkg):
+    """Izin kepala agar penilai dapat membuka lembar penilaian sebelum supervisi tercatat; alasan wajib (jejak audit)."""
+    alasan: str = Field(..., max_length=500)
+
+    @field_validator('alasan')
+    @classmethod
+    def _alasan(cls, v):
+        v = _teks(v)
+        if len(v) < 10:
+            raise ValueError('alasan izin minimal 10 karakter')
+        return v
 
 
 # ---------------------------------------------------------------- struktur instrumen (kompetensi -> sub -> indikator)

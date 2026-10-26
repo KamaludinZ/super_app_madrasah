@@ -86,6 +86,11 @@ export default function PkgKeanggotaanPage() {
                 : <YaTidak ya={k.supervisi_selesai} teksYa="Sudah disupervisi" teksTidak="Belum disupervisi" />}
             </Baris>
           )}
+          {k.sebagai_penilai && !kepala && !k.supervisi_selesai && k.izin_menilai && (
+            <Baris icon={ShieldCheck} label="Izin menilai" testid="pkg-keanggotaan-izin">
+              <span className="text-xs font-medium text-emerald-700">Diizinkan kepala madrasah — lembar penilaian terbuka</span>
+            </Baris>
+          )}
         </CardContent>
       </Card>
 
@@ -108,9 +113,9 @@ export default function PkgKeanggotaanPage() {
               </div>
             </div>
           ))}
-          {k.sebagai_penilai && !k.supervisi_selesai && (
+          {k.sebagai_penilai && !k.supervisi_selesai && !k.izin_menilai && (
             <p className="pt-3 text-xs text-amber-700">
-              Lembar penilaian terbuka setelah kepala madrasah mencatat supervisi Anda pada periode ini.
+              Lembar penilaian terbuka setelah kepala madrasah mencatat supervisi Anda atau memberi izin menilai pada periode ini.
             </p>
           )}
         </CardContent>

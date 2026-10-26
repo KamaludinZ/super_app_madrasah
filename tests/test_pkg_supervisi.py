@@ -87,3 +87,43 @@ def test_validasi_supervisi(db):
     with pytest.raises(HTTPException) as e:
         _api(api.tandai_supervisi_api, 'g1', SupervisiRequest(tanggal_supervisi='2026-10-08'), Request())
     assert e.value.status_code == 409
+
+
+def test_izin_menilai_tanpa_supervisi(db):
+    from pydantic import ValidationError
+    from pkg_skema import IzinMenilaiRequest
+
+    assert not _boleh_menilai(db, 'g1')
+    hasil = _api(api.beri_izin_menilai_api, 'g1', IzinMenilaiRequest(alasan='  Supervisi dijadwalkan ulang minggu depan  '), Request())
+    assert (hasil['izin_menilai'], hasil['supervisi_selesai'], hasil['boleh_menilai']) == (True, False, True)
+    assert (hasil['izin_alasan'], hasil['izin_oleh']) == ('Supervisi dijadwalkan ulang minggu depan', 'Kepala Madrasah')
+    assert _boleh_menilai(db, 'g1')
+    k = asyncio.run(pkg_akses.keanggotaan_sk(db, {'id': 'g1', 'roles': ['guru']}))
+    assert (k['supervisi_selesai'], k['izin_menilai'], k['boleh_menilai']) == (False, True, True)
+    assert db['pkg_penugasan'].docs[0]['guru_dinilai_ids'] == ['g3']  # pembagian tidak tersentuh
+
+    # Penilai tanpa dokumen penugasan: dokumen dibuat.
+    baru = _api(api.beri_izin_menilai_api, 'g2', IzinMenilaiRequest(alasan='Kepala dinas luar sampai akhir bulan'), Request())
+    assert baru['boleh_menilai'] and baru['jumlah_guru'] == 0 and _boleh_menilai(db, 'g2')
+
+    cabut = _api(api.cabut_izin_menilai_api, 'g1', Request())
+    assert (cabut['izin_menilai'], cabut['izin_alasan'], cabut['boleh_menilai']) == (False, '', False)
+    assert not _boleh_menilai(db, 'g1')
+
+    # Izin dicabut setelah supervisi tercatat: lembar tetap terbuka karena supervisi.
+    _api(api.tandai_supervisi_api, 'g2', SupervisiRequest(tanggal_supervisi='2026-10-09'), Request())
+    _api(api.cabut_izin_menilai_api, 'g2', Request())
+    assert _boleh_menilai(db, 'g2')
+    assert [d['aksi'] for d in db['pkg_audit_log'].docs] == [
+        'supervisi_izin', 'supervisi_izin', 'supervisi_izin_cabut', 'supervisi_tandai', 'supervisi_izin_cabut']
+    assert db['pkg_audit_log'].docs[0]['metadata']['alasan'] == 'Supervisi dijadwalkan ulang minggu depan'
+
+    with pytest.raises(ValidationError):
+        IzinMenilaiRequest(alasan='singkat')
+    for pid, kode in (('kep', 400), ('asing', 404)):
+        with pytest.raises(HTTPException) as e:
+            _api(api.beri_izin_menilai_api, pid, IzinMenilaiRequest(alasan='alasan yang cukup panjang'), Request())
+        assert e.value.status_code == kode
+    with pytest.raises(HTTPException) as e:
+        _api(api.beri_izin_menilai_api, 'g1', IzinMenilaiRequest(alasan='alasan yang cukup panjang'), Request(), user=GURU)
+    assert e.value.status_code == 403

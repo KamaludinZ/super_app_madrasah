@@ -13,11 +13,12 @@ from pkg_audit import catat_audit_pkg
 from pkg_periode import ambil_periode, buat_periode, daftar_periode, periode_tampil, ubah_periode, ubah_status_periode
 from pkg_penjaga import penjaga_pkg
 from pkg_penugasan import ambil_pembagian, simpan_pembagian
-from pkg_supervisi import batalkan_supervisi, daftar_supervisi, tandai_supervisi
+from pkg_supervisi import batalkan_supervisi, beri_izin_menilai, cabut_izin_menilai, daftar_supervisi, tandai_supervisi
 from pkg_sk import aktifkan_sk, ambil_sk, atur_dinilai, atur_penilai, buat_sk, daftar_sk, guru_aktif, hapus_sk, sk_tampil, ubah_sk
 from pkg_skema import (
     POLA_ID,
-    DinilaiSkRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest, SupervisiRequest,
+    DinilaiSkRequest, IzinMenilaiRequest, PenilaiSkRequest, PenugasanRequest, PeriodeRequest, SkRequest, StatusPeriodeRequest,
+    SupervisiRequest,
 )
 
 router = APIRouter()
@@ -195,4 +196,20 @@ async def batalkan_supervisi_api(penilai_id: IdPkg, request: Request, akses: Dic
     """Batalkan tanda supervisi; lembar penilaian penilai terkunci kembali."""
     hasil = await batalkan_supervisi(db, penilai_id)
     await catat_audit_pkg(db, 'supervisi_batal', akses['user'], {'penilai_id': penilai_id}, request=request)
+    return hasil
+
+
+@router.post("/pkg/supervisi/{penilai_id}/izin")
+async def beri_izin_menilai_api(penilai_id: IdPkg, data: IzinMenilaiRequest, request: Request, akses: Dict = Depends(kepala)):
+    """Izinkan penilai membuka lembar penilaian walau supervisi belum tercatat; alasan wajib dan tercatat di audit."""
+    hasil = await beri_izin_menilai(db, penilai_id, data, akses['user'])
+    await catat_audit_pkg(db, 'supervisi_izin', akses['user'], {'penilai_id': penilai_id, 'alasan': data.alasan}, request=request)
+    return hasil
+
+
+@router.delete("/pkg/supervisi/{penilai_id}/izin")
+async def cabut_izin_menilai_api(penilai_id: IdPkg, request: Request, akses: Dict = Depends(kepala)):
+    """Cabut izin menilai; lembar penilaian terkunci kembali bila penilai belum disupervisi."""
+    hasil = await cabut_izin_menilai(db, penilai_id)
+    await catat_audit_pkg(db, 'supervisi_izin_cabut', akses['user'], {'penilai_id': penilai_id}, request=request)
     return hasil

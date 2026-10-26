@@ -144,7 +144,7 @@ async def pengingat_pkg(db, user: Dict[str, Any], keanggotaan: Dict[str, Any], p
     if not keanggotaan.get('anggota') or not periode or not sk:
         return []
     hasil = []
-    if keanggotaan.get('sebagai_penilai') and not keanggotaan.get('supervisi_selesai'):
+    if keanggotaan.get('sebagai_penilai') and not (keanggotaan.get('supervisi_selesai') or keanggotaan.get('izin_menilai')):
         hasil.append({
             'id': f"supervisi_{periode['id']}", 'jenis': 'supervisi', 'judul': 'Menunggu supervisi penilai',
             'tanggal': None,
