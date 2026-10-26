@@ -18,6 +18,9 @@ from core import (
     serialize_doc,
 )
 from journal_core import day_started_at_filter, now_wib, parse_waktu_wib, WIB_TZ
+from jurnal_asal import (
+    ASAL_CATAT, ASAL_PRESISI, jendela_catat_jurnal, pipeline_asal_input, susun_rekap_asal_input, tandai_asal_input,
+)
 from fastapi.responses import StreamingResponse
 from journal_exports import (
     export_monthly_teacher_journal_excel,
@@ -31,7 +34,7 @@ from journal_core import (
     validate_gps,
     validate_schedule,
 )
-from models import JournalCreateRequest, JournalModel, QRValidateRequest
+from models import JournalAttendanceDetail, JournalCreateRequest, JournalModel, QRValidateRequest
 
 router = APIRouter()
 
@@ -239,7 +242,7 @@ async def create_journal(req: JournalCreateRequest, request: Request, user: Dict
 # CLASS TOKEN FALLBACK (alternatif scan QR)
 # ============================================================
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 async def _validate_by_class_token(class_token: str, user_lat, user_lon, teacher_id: str) -> Dict:
@@ -398,7 +401,7 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
         'started_at': now_wib().isoformat(),
         'scheduled_start': validation['context'].get('start_time'),
         'scheduled_end': validation['context'].get('end_time'),
-        'validations': validation, 'qr_mode': 'class_token',
+        'validations': validation, 'qr_mode': 'class_token', 'asal_input': ASAL_PRESISI,
         'created_at': now_wib().isoformat(),
     }
     _stamp_filled_by(doc, user)
@@ -414,6 +417,103 @@ async def create_journal_by_class_token(req: ClassTokenJournalRequest, request: 
                     request=request)
     return serialize_doc(doc)
 
+
+
+# ============================================================
+# CATAT JURNAL (isi jurnal di luar jam, asal input "Catat Jurnal")
+# ============================================================
+POLA_ID_JURNAL = r'^[A-Za-z0-9_-]{1,64}$'
+
+
+class CatatJurnalRequest(BaseModel):
+    """Isian Catat Jurnal: sama dengan isi jurnal biasa, tanpa QR/GPS, untuk satu jadwal hari ini."""
+    model_config = ConfigDict(extra='forbid')
+    schedule_id: str = Field(..., pattern=POLA_ID_JURNAL)
+    materi: str = Field(..., min_length=1, max_length=5000)
+    indikator_id: Optional[str] = Field(None, pattern=POLA_ID_JURNAL)
+    materi_id: Optional[str] = Field(None, pattern=POLA_ID_JURNAL)
+    catatan: Optional[str] = Field(None, max_length=5000)
+    attendance_details: List[JournalAttendanceDetail] = Field(default_factory=list, max_length=200)
+
+
+async def status_catat_jurnal(sch: Dict, user_id: str, settings: Dict, sekarang=None) -> Dict:
+    """Apakah jadwal `sch` milik `user_id` boleh diisi lewat Catat Jurnal sekarang:
+    {tersedia, dibuka_pada, berakhir_pada, alasan, kode} — kode galat HTTP bila tidak tersedia.
+    Syarat: jadwal hari ini & semester aktif, jam pelajaran + toleransi sudah lewat (sebelum 24.00 WIB),
+    jurnal guru sendiri hari ini belum ada, dan slot tidak sedang digantikan guru pengganti."""
+    from routers.guru_pengganti import day_key
+    sekarang = sekarang or now_wib()
+    jendela = jendela_catat_jurnal(sch, sekarang, settings.get('grace_minutes', 15))
+
+    def tolak(kode: int, alasan: str) -> Dict:
+        return {**jendela, 'tersedia': False, 'alasan': alasan, 'kode': kode}
+
+    if sch.get('teacher_id') != user_id:
+        return tolak(403, 'Jadwal ini bukan milik Anda')
+    if day_key(sch.get('day')) != current_day_id():
+        return tolak(400, 'Catat Jurnal hanya untuk jadwal mengajar hari ini')
+    semester_aktif = (await get_active_context(None)).get('semester_id')
+    if semester_aktif and sch.get('semester_id') and sch['semester_id'] != semester_aktif:
+        return tolak(400, 'Jadwal ini bukan bagian dari semester aktif')
+    if not jendela['tersedia']:
+        return {**jendela, 'kode': 400}
+    if await db.substitute_assignments.find_one(
+            {'schedule_id': sch['id'], 'date': sekarang.date().isoformat(), 'status': 'active'}, {'_id': 1}):
+        return tolak(409, 'Slot ini sedang digantikan guru pengganti; isi jurnal Anda lewat tombol Isi pada slot tersebut')
+    if await db.journals.find_one({'schedule_id': sch['id'], 'teacher_id': user_id, 'fill_mode': {'$ne': 'substitute'},
+                                   **day_started_at_filter(sekarang.date())}, {'_id': 1}):
+        return tolak(409, 'Jurnal untuk jadwal ini hari ini sudah diisi')
+    return {**jendela, 'kode': None}
+
+
+@router.post("/jurnal/catat")
+async def catat_jurnal(req: CatatJurnalRequest, request: Request, user: Dict = Depends(get_current_user)):
+    """Catat Jurnal: guru mengisi jurnal jadwalnya sendiri hari ini setelah jam pelajaran lewat (tanpa scan QR),
+    paling lambat pukul 24.00 WIB. Tersimpan seperti jurnal biasa dengan asal input 'catat_jurnal'."""
+    sch = await db.schedules.find_one({'id': req.schedule_id}, {'_id': 0})
+    if not sch or sch.get('is_published') is False:
+        raise HTTPException(404, "Jadwal tidak ditemukan atau tidak aktif")
+    sekarang = now_wib()
+    status = await status_catat_jurnal(sch, user['id'], await get_settings(), sekarang)
+    if not status['tersedia']:
+        raise HTTPException(status['kode'] or 400, status['alasan'])
+    materi = req.materi.strip()
+    if not materi:
+        raise HTTPException(400, "Materi pelajaran wajib diisi")
+
+    def jam_hari_ini(hhmm: Optional[str]) -> Optional[str]:
+        try:
+            h, m = map(int, (hhmm or '').split(':'))
+        except ValueError:
+            return None
+        return sekarang.replace(hour=h, minute=m, second=0, microsecond=0).isoformat()
+
+    resolved = await _resolve_indikator_materi(req.indikator_id, req.materi_id)
+    j_id = str(uuid.uuid4())
+    doc = {
+        'id': j_id, 'schedule_id': sch['id'], 'teacher_id': user['id'],
+        'class_id': sch.get('class_id'), 'subject_id': sch.get('subject_id'), 'room_id': sch.get('room_id'),
+        'semester_id': sch.get('semester_id'),
+        'materi': materi, 'indikator_id': req.indikator_id, 'kd_indikator': resolved['kd_indikator'],
+        'materi_id': req.materi_id, 'materi_nama': resolved['materi_nama'],
+        'catatan': (req.catatan or '').strip() or None,
+        'siswa_hadir': 0, 'siswa_tidak_hadir': 0, 'siswa_izin': 0, 'siswa_sakit': 0,
+        'attendance_details': [a.model_dump() for a in req.attendance_details],
+        'started_at': sekarang.isoformat(),
+        'scheduled_start': jam_hari_ini(sch.get('start_time')), 'scheduled_end': jam_hari_ini(sch.get('end_time')),
+        'slot_indexes': sch.get('slot_indexes'),
+        'validations': {'catat_jurnal': {k: status[k] for k in ('dibuka_pada', 'berakhir_pada')}},
+        'qr_mode': 'none', 'asal_input': ASAL_CATAT,
+        'journal_date': sekarang.date().isoformat(), 'is_locked': False,
+        'created_at': sekarang.isoformat(),
+    }
+    _stamp_filled_by(doc, user)
+    await db.journals.insert_one(dict(doc))
+    doc.update(await _simpan_kehadiran(j_id, req.attendance_details) or {})
+    await log_audit(user, 'create', 'journal', j_id, details={
+        'class_id': sch.get('class_id'), 'subject_id': sch.get('subject_id'), 'method': 'catat_jurnal', 'asal_input': ASAL_CATAT,
+    }, request=request)
+    return serialize_doc(tandai_asal_input(doc))
 
 
 @router.get("/jurnal/my")
@@ -529,7 +629,7 @@ async def my_journals(user: Dict = Depends(get_current_user), semester_filter: b
         journal_id = j.get('id')
         j['attendance_details'], j['kehadiran_perkiraan'] = await _kehadiran_jurnal(j)
 
-        enriched.append(serialize_doc(j))
+        enriched.append(serialize_doc(tandai_asal_input(j)))
     return group_side_by_side(enriched)
 
 
@@ -624,7 +724,7 @@ async def journals_by_class(class_id: str, limit: int = 50, user: Dict = Depends
         teacher = await db.users.find_one({'id': j.get('teacher_id')}, {'_id': 0, 'full_name': 1})
         j['subject_name'] = sub.get('name') if sub else None
         j['teacher_name'] = teacher.get('full_name') if teacher else None
-        enriched.append(serialize_doc(j))
+        enriched.append(serialize_doc(tandai_asal_input(j)))
     return enriched
 
 
@@ -716,7 +816,7 @@ async def piket_filled_journals(user: Dict = Depends(require_role('guru_piket', 
         journal_id = j.get('id')
         j['attendance_details'], j['kehadiran_perkiraan'] = await _kehadiran_jurnal(j)
 
-        enriched.append(serialize_doc(j))
+        enriched.append(serialize_doc(tandai_asal_input(j)))
     return enriched
 
 
@@ -812,7 +912,7 @@ async def admin_jurnal_rekap(
         journal_id = j.get('id')
         j['attendance_details'], j['kehadiran_perkiraan'] = await _kehadiran_jurnal(j)
 
-        enriched.append(serialize_doc(j))
+        enriched.append(serialize_doc(tandai_asal_input(j)))
 
     total_hadir = sum(j.get('siswa_hadir', 0) for j in enriched)
     total_sakit = sum(j.get('siswa_sakit', 0) for j in enriched)
@@ -904,6 +1004,26 @@ async def admin_jurnal_stats_teacher(
     if enriched:
         logger.debug(f"[STATS-BY-TEACHER] Sample enriched: {enriched[0]}")
     return enriched
+
+
+@router.get("/admin/jurnal/asal-input")
+async def rekap_asal_input_bulanan(
+    bulan: Optional[str] = Query(None, pattern=r'^\d{4}-(0[1-9]|1[0-2])$'),
+    user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'waka_kurikulum', 'penjamin_mutu')),
+):
+    """Grafik dashboard kepala madrasah: jumlah jurnal per guru dalam satu bulan (WIB, bawaan bulan ini), dipisah
+    asal input Jurnal Presisi vs Catat Jurnal. Hanya jurnal yang diisi guru sendiri (bukan piket/admin/guru
+    pengganti). Guru berjadwal di semester aktif tetap tampil walau belum mengisi (nilai 0)."""
+    sekarang = now_wib()
+    tahun, bln = (map(int, bulan.split('-')) if bulan else (sekarang.year, sekarang.month))
+    hasil = await db.journals.aggregate(pipeline_asal_input(tahun, bln)).to_list(1000)
+    semester_id = (await get_active_context(None)).get('semester_id')
+    berjadwal = {s['teacher_id'] for s in await db.schedules.find(
+        {'semester_id': semester_id} if semester_id else {}, {'_id': 0, 'teacher_id': 1}).to_list(5000) if s.get('teacher_id')}
+    ids = list(berjadwal | {r['_id'] for r in hasil if r.get('_id')})
+    nama = {u['id']: u.get('full_name') or u.get('username') for u in await db.users.find(
+        {'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'username': 1}).to_list(len(ids) or 1)}
+    return susun_rekap_asal_input(tahun, bln, hasil, berjadwal, nama)
 
 
 @router.put("/admin/jurnal/{journal_id}")
@@ -999,7 +1119,7 @@ async def get_journal_by_id(journal_id: str, user: Dict = Depends(get_current_us
         journal['jam_ke'] = '-'
         journal['jtm_count'] = 1
 
-    return journal
+    return tandai_asal_input(journal)
 
 
 @router.put("/admin/jurnal/{journal_id}/attendances")

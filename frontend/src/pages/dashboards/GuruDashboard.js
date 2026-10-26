@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ScanLine, Calendar, CheckCircle2, Circle, ClipboardList, UserCircle,
   CalendarDays, History, ShieldAlert, FileText, ClipboardEdit, BookOpen, Clock,
-  ListChecks, Sparkles, Trophy, PenLine,
+  ListChecks, Sparkles, Trophy, PenLine, NotebookPen,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +21,7 @@ import { getMySubstituteToday, mergeTodaySchedule } from '@/lib/guruPenggantiSch
 import SubstituteBadge from '@/components/guru-pengganti/SubstituteBadge';
 import SubstituteJournalDialog from '@/components/guru-pengganti/SubstituteJournalDialog';
 import ReplacedSlotNote from '@/components/guru-pengganti/ReplacedSlotNote';
+import CatatJurnalDialog from '@/components/journal/CatatJurnalDialog';
 
 // This dashboard is shared by roles whose sidebar menus differ significantly —
 // each Menu Cepat set below mirrors exactly what that role sees in AppShell.js,
@@ -39,6 +40,15 @@ const QUICK_MENU_BY_ROLE = {
     { to: '/prestasi', label: 'Data Prestasi', icon: Trophy },
   ],
 };
+
+// Tombol Catat Jurnal (isi jurnal di luar jam): jendela dari server (jam selesai + toleransi s.d. 24.00 WIB),
+// dicek ulang terhadap jam sekarang agar tombol muncul/hilang tanpa memuat ulang halaman.
+function bisaCatatJurnal(slot, sekarang) {
+  const c = slot.catat_jurnal;
+  if (!c || slot.journal_filled || slot.is_substitute || slot.substitute) return false;
+  if (!c.dibuka_pada || !c.berakhir_pada) return false;
+  return sekarang > new Date(c.dibuka_pada).getTime() && sekarang < new Date(c.berakhir_pada).getTime();
+}
 
 const SUBJECT_TEACHER_QUICK_MENU = [
   { to: '/profile/guru', label: 'Profil Saya', icon: UserCircle },
@@ -62,6 +72,13 @@ export default function GuruDashboard() {
   const [loading, setLoading] = useState(true);
   // Slot yang sedang diisi jurnalnya: mode 'substitute' (saya pengganti) | 'original' (slot saya sedang digantikan).
   const [journalTarget, setJournalTarget] = useState(null);
+  const [catatTarget, setCatatTarget] = useState(null);
+  const [sekarang, setSekarang] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setSekarang(Date.now()), 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (!isSubjectTeacher) { setLoading(false); return; }
@@ -158,6 +175,13 @@ export default function GuruDashboard() {
                         onClick={() => setJournalTarget({ slot: s, mode: 'original' })} data-testid={`fill-original-${s.id}`}>
                         <PenLine className="h-3.5 w-3.5" /> Isi
                       </Button>
+                    ) : bisaCatatJurnal(s, sekarang) ? (
+                      // Jam pelajaran sudah lewat & belum diisi: catat jurnal tanpa QR (asal input "Catat Jurnal").
+                      <Button size="sm" variant="outline" className="gap-1 border-orange-300 text-orange-800 hover:bg-orange-50"
+                        title="Jam pelajaran sudah lewat — isi jurnal di luar jam, berlaku sampai pukul 24.00 WIB"
+                        onClick={() => setCatatTarget(s)} data-testid={`catat-jurnal-${s.id}`}>
+                        <NotebookPen className="h-3.5 w-3.5" /> Catat Jurnal
+                      </Button>
                     ) : (
                       <Link to="/jurnal/scan">
                         <Button size="sm" variant="outline" className="gap-1" data-testid={`scan-now-${idx}`}><ScanLine className="h-3.5 w-3.5" /> Isi</Button>
@@ -228,6 +252,14 @@ export default function GuruDashboard() {
           </CardContent>
         </Card>
       )}
+
+      <CatatJurnalDialog
+        slot={catatTarget}
+        open={!!catatTarget}
+        onOpenChange={(o) => { if (!o) setCatatTarget(null); }}
+        onSaved={(slot) => setSchedule((list) => list.map((x) => (
+          !x.is_substitute && x.id === slot.id ? { ...x, journal_filled: true } : x)))}
+      />
 
       <SubstituteJournalDialog
         slot={journalTarget?.slot}
