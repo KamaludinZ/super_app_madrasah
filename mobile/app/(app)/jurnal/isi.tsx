@@ -6,7 +6,9 @@
  *  substitute  slot guru pengganti         → POST /guru-pengganti/journals  (offline: antrean)
  *  original    slot sendiri yang digantikan → POST /guru-pengganti/journals/original (perlu online)
  *  piket       guru piket atas nama guru    → POST /piket/fill-journal (perlu online; opsional task_id titipan)
- *  slot        dari notifikasi pengingat   → diarahkan ke layar Scan
+ *  catat       Catat Jurnal: slot sendiri yang jam pelajarannya sudah lewat (+ toleransi), tanpa QR, s.d. 24.00 WIB
+ *              → POST /jurnal/catat (perlu online; asal input "Catat Jurnal")
+ *  slot        dari notifikasi pengingat   → Catat Jurnal bila jendelanya terbuka, selain itu layar Scan
  * Bila jaringan putus saat mengirim, jurnal dialihkan ke antrean offline (selama izin offline ada).
  */
 import React, { useEffect, useMemo, useState } from 'react';
@@ -26,6 +28,7 @@ import { enqueueJournal } from '@/offline/queue';
 import { runSync } from '@/offline/sync';
 import { cancelFollowUpReminder } from '@/notifications';
 import { formatDateLong, todayISO } from '@/utils/time';
+import { bisaCatatJurnal } from '@/utils/jurnal';
 import { spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
@@ -40,7 +43,7 @@ import { toast } from '@/components/ui/Toast';
 import { AttendanceList, AttendanceMap, summarize } from '@/components/AttendanceList';
 import { SelectField } from '@/components/ui/SelectField';
 
-type Mode = 'qr' | 'class_token' | 'offline' | 'substitute' | 'original' | 'piket' | 'slot';
+type Mode = 'qr' | 'class_token' | 'offline' | 'substitute' | 'original' | 'piket' | 'catat' | 'slot';
 
 const MODE_INFO: Record<Exclude<Mode, 'slot'>, { title: string; badge: string; tone: 'brand' | 'warning' | 'neutral' }> = {
   qr: { title: 'Isi Jurnal', badge: 'QR tervalidasi', tone: 'brand' },
@@ -49,6 +52,7 @@ const MODE_INFO: Record<Exclude<Mode, 'slot'>, { title: string; badge: string; t
   substitute: { title: 'Jurnal Guru Pengganti', badge: 'Guru Pengganti', tone: 'warning' },
   original: { title: 'Jurnal Saya (Digantikan)', badge: 'Tanpa QR', tone: 'neutral' },
   piket: { title: 'Isi Jurnal (Guru Piket)', badge: 'Atas nama guru', tone: 'neutral' },
+  catat: { title: 'Catat Jurnal', badge: 'Di luar jam', tone: 'warning' },
 };
 
 export default function IsiJurnalScreen() {
@@ -73,6 +77,19 @@ export default function IsiJurnalScreen() {
   const [attendance, setAttendance] = useState<AttendanceMap>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Mode 'slot' (dari notifikasi): tujuan ditentukan dari jadwal hari ini di cache — Catat Jurnal atau Scan.
+  const [slotTujuan, setSlotTujuan] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== 'slot' || !user) return;
+    const scan = `/scan?schedule_id=${encodeURIComponent(scheduleId)}&date=${date}`;
+    getCache<ScheduleItem[]>(CacheKeys.myToday, user.id)
+      .then((today) => {
+        const s = date === todayISO() ? today?.data.find((x) => x.id === scheduleId && !x.is_substitute) : undefined;
+        setSlotTujuan(s && bisaCatatJurnal(s) ? `/jurnal/isi?mode=catat&schedule_id=${encodeURIComponent(scheduleId)}&date=${date}` : scan);
+      })
+      .catch(() => setSlotTujuan(scan));
+  }, [mode, user, scheduleId, date]);
 
   // Info slot: dari validasi QR, izin offline, atau cache jadwal hari ini.
   useEffect(() => {
@@ -107,7 +124,7 @@ export default function IsiJurnalScreen() {
   // KD/Indikator & Materi/Pokok Bahasan (opsional, sama dengan web) untuk jurnal QR, Token Kelas, dan offline.
   const subjectId = (slot?.subject_id as string | undefined) || undefined;
   const semesterId = (slot?.semester_id as string | undefined) || null;
-  const withAkademik = !!subjectId && (mode === 'qr' || mode === 'class_token' || mode === 'offline');
+  const withAkademik = !!subjectId && (mode === 'qr' || mode === 'class_token' || mode === 'offline' || mode === 'catat');
   const indikator = useCached<Indikator[]>(
     subjectId ? CacheKeys.indikator(subjectId, semesterId) : 'akademik.none',
     () => api.akademik.indikator({ mapel_id: subjectId!, semester_id: semesterId }),
@@ -125,7 +142,9 @@ export default function IsiJurnalScreen() {
     [students.data],
   );
 
-  if (mode === 'slot') return <Redirect href={`/scan?schedule_id=${encodeURIComponent(scheduleId)}&date=${date}` as any} />;
+  if (mode === 'slot') {
+    return slotTujuan ? <Redirect href={slotTujuan as any} /> : <Screen title="Isi Jurnal" back><CardSkeleton lines={3} /></Screen>;
+  }
   const info = MODE_INFO[mode];
 
   const records = () => studentList.map((s) => ({ student_id: s.id, student_name: s.full_name, status: attendance[s.id] ?? 'hadir' }));
@@ -186,10 +205,11 @@ export default function IsiJurnalScreen() {
         if (await enqueue(null)) finish('Jurnal pengganti disimpan di perangkat', 'Akan dikirim otomatis saat online.');
         return;
       }
-      if ((mode === 'original' || mode === 'piket' || mode === 'class_token') && !online) {
+      if ((mode === 'original' || mode === 'piket' || mode === 'class_token' || mode === 'catat') && !online) {
         setError(mode === 'piket' ? 'Jurnal piket perlu koneksi internet. Coba lagi saat online.'
           : mode === 'class_token' ? 'Jurnal lewat Token Kelas perlu koneksi internet. Coba lagi saat online, atau kembali dan gunakan Scan QR / Token QR.'
-            : 'Jurnal saat digantikan perlu koneksi internet. Coba lagi saat online.');
+            : mode === 'catat' ? 'Catat Jurnal perlu koneksi internet. Coba lagi saat online sebelum pukul 24.00 WIB.'
+              : 'Jurnal saat digantikan perlu koneksi internet. Coba lagi saat online.');
         return;
       }
       try {
@@ -238,6 +258,14 @@ export default function IsiJurnalScreen() {
             siswa_tidak_hadir: counts.alpa,
             attendance_records: records(),
           });
+        } else if (mode === 'catat') {
+          await api.jurnal.catat({
+            schedule_id: scheduleId,
+            materi: materi.trim(),
+            catatan: catatan.trim() || null,
+            ...akademikIds,
+            attendance_details: records().map((r) => ({ ...r, student_name: r.student_name || '-' })),
+          });
         } else if (mode === 'substitute') {
           await api.gp.fillJournal({ assignment_id: p.assignment_id!, materi: materi.trim(), catatan: catatan.trim() || undefined, attendance_records: records() });
         } else {
@@ -246,7 +274,7 @@ export default function IsiJurnalScreen() {
         finish('Jurnal tersimpan', `${slot?.class_name ?? ''} · ${slot?.subject_name ?? ''}`);
       } catch (e) {
         // Koneksi putus saat mengirim → alihkan ke antrean offline (QR & guru pengganti).
-        if (isNetworkError(e) && mode !== 'original' && mode !== 'piket' && mode !== 'class_token') {
+        if (isNetworkError(e) && mode !== 'original' && mode !== 'piket' && mode !== 'class_token' && mode !== 'catat') {
           const pm = permit ?? (await getPermit(user.id, scheduleId, date));
           if (await enqueue(pm ? computeTimeEvidence(pm) : null)) {
             finish('Koneksi terputus — jurnal disimpan di perangkat', 'Akan dikirim otomatis saat online.');
@@ -292,6 +320,11 @@ export default function IsiJurnalScreen() {
             {mode === 'original' ? (
               <T variant="caption" tone="secondary">
                 Slot ini sedang diampu {slot.substitute?.substitute_teacher_name || 'guru pengganti'}. Catatan Anda (mis. materi/tugas yang dititipkan) disimpan berdampingan; absensi dicatat guru pengganti.
+              </T>
+            ) : null}
+            {mode === 'catat' ? (
+              <T variant="caption" tone="secondary">
+                Jam pelajaran ini sudah lewat, jadi jurnal dicatat tanpa scan QR dan ditandai Catat Jurnal (berbeda dari Jurnal Presisi yang diisi tepat waktu). Bisa diisi sampai pukul 23.59 WIB hari ini.
               </T>
             ) : null}
             {mode === 'offline' || (!online && mode === 'substitute') ? (

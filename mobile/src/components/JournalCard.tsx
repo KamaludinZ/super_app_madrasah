@@ -1,6 +1,6 @@
 /**
  * Kartu ringkas satu jurnal untuk riwayat: tanggal & jam, kelas/mapel, materi, kehadiran,
- * kolom "diisi oleh" (mis. "pengganti: nama"), penanda berdampingan & perlu verifikasi.
+ * kolom "diisi oleh" (mis. "pengganti: nama"), asal input Catat Jurnal, penanda berdampingan & perlu verifikasi.
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -11,6 +11,7 @@ import { T } from './ui/Text';
 import { Badge } from './ui/Badge';
 import { Icon } from './ui/Icon';
 import { formatDateShort, formatTime } from '@/utils/time';
+import { isCatatJurnal } from '@/utils/jurnal';
 
 export function JournalCard({ j, onPress }: { j: Journal; onPress?: () => void }) {
   const { colors } = useTheme();
@@ -39,6 +40,7 @@ export function JournalCard({ j, onPress }: { j: Journal; onPress?: () => void }
           tone={substitute ? 'warning' : j.fill_mode === 'piket' ? 'neutral' : 'brand'}
           small
         />
+        {isCatatJurnal(j) ? <Badge label="Catat Jurnal" icon="time-outline" tone="warning" small /> : null}
         {total > 0 ? <Badge label={`H ${j.siswa_hadir} · S ${j.siswa_sakit} · I ${j.siswa_izin} · A ${j.siswa_tidak_hadir}`} tone="neutral" small /> : null}
         {paired && j.pair_position === 'second' ? <Badge label="Berdampingan" icon="git-compare-outline" tone="warning" small /> : null}
         {j.offline_submission?.needs_verification ? <Badge label="Perlu verifikasi" icon="alert-circle-outline" tone="error" small /> : null}

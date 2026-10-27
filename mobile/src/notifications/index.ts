@@ -164,7 +164,8 @@ export async function scheduleReminders(userId: string, minutesBefore: number): 
         when: end + 15 * 60_000,
         id: reminderId(p.schedule_id, p.date, -15),
         title: `📝 Jurnal ${kelas} belum diisi?`,
-        body: 'Isi sekarang agar tidak terlewat. Ketuk untuk membuka jurnal.',
+        body: p.is_substitute ? 'Isi sekarang agar tidak terlewat. Ketuk untuk membuka jurnal.'
+          : 'Jam pelajaran sudah selesai — ketuk untuk Catat Jurnal (berlaku sampai pukul 24.00 WIB).',
       },
     ];
     for (const e of entries) {

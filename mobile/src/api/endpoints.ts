@@ -57,6 +57,8 @@ export const api = {
     validateByClassToken: (class_token: string, user_lat?: number | null, user_lon?: number | null) =>
       request<QRValidation>('/jurnal/validate-by-class-token', { method: 'POST', body: { class_token, user_lat, user_lon } }),
     createByClassToken: (body: Record<string, unknown>) => request<Journal>('/jurnal/by-class-token', { method: 'POST', body }),
+    /** Catat Jurnal: isi jurnal slot hari ini setelah jam pelajaran lewat, tanpa QR (s.d. 24.00 WIB, perlu online). */
+    catat: (body: Record<string, unknown>) => request<Journal>('/jurnal/catat', { method: 'POST', body }),
     my: () => request<Journal[]>('/jurnal/my'),
     detail: (id: string) => request<Journal>(`/jurnal/${id}`),
     byClass: (class_id: string) => request<Journal[]>(`/jurnal/by-class/${class_id}`),

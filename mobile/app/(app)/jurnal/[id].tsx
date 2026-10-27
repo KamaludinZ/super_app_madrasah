@@ -15,6 +15,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { T } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
+import { isCatatJurnal } from '@/utils/jurnal';
 import { Icon, IconName } from '@/components/ui/Icon';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
@@ -71,6 +72,8 @@ export default function JurnalDetail() {
           <View style={styles.badges}>
             {substitute ? <Badge label="Guru pengganti" icon="swap-horizontal" tone="warning" small /> : null}
             {j.fill_mode === 'piket' ? <Badge label="Diisi guru piket" icon="hand-left-outline" tone="neutral" small /> : null}
+            <Badge label={isCatatJurnal(j) ? 'Catat Jurnal' : 'Jurnal Presisi'} icon={isCatatJurnal(j) ? 'time-outline' : 'checkmark-circle-outline'}
+              tone={isCatatJurnal(j) ? 'warning' : 'success'} small />
             {j.pair_position ? <Badge label="Jurnal berdampingan" icon="git-compare-outline" tone="warning" small /> : null}
             {j.offline_submission?.was_offline ? <Badge label="Diisi offline" icon="cloud-offline-outline" tone="neutral" small /> : null}
             {j.offline_submission?.needs_verification ? <Badge label="Perlu verifikasi" icon="alert-circle-outline" tone="error" small /> : null}

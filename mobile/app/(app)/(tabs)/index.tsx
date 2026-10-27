@@ -3,13 +3,14 @@
  *  - Guru (dan siapa pun yang punya jadwal/slot pengganti hari ini): ringkasan & daftar slot hari ini
  *    (GET /schedules/my-today?include_substitute=true) dengan aksi sesuai jenis slot:
  *      slot sendiri           → Scan QR & isi jurnal (online/offline)
+ *      slot sendiri terlewat  → Catat Jurnal (jam pelajaran + toleransi lewat, s.d. 24.00 WIB, perlu online)
  *      slot sendiri digantikan → Isi jurnal saya tanpa QR (mode original)
  *      slot guru pengganti    → Isi jurnal pengganti (mode substitute)
  *  - Guru piket / admin: kartu Tugas Piket (slot hari ini tanpa jurnal & titipan menunggu) → /piket.
  *  - Ringkasan per peran (src/home/RingkasanPeran): siswa, kepala madrasah, GTK.
  *  - Semua peran: pintasan menu peran (sama dengan menu web) & pengumuman terbaru.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { api } from '@/api/endpoints';
@@ -31,6 +32,7 @@ import { EmptyState, ErrorState } from '@/components/ui/States';
 import { SlotCard, SlotAction } from '@/components/SlotCard';
 import { formatDateLong, formatRelative, greeting, slotStatus, todayISO } from '@/utils/time';
 import { canPiket, canScan, homeKind, roleLabel } from '@/utils/roles';
+import { bisaCatatJurnal } from '@/utils/jurnal';
 import { quickItems, useRoleMenu } from '@/menu';
 
 export default function HomeScreen() {
@@ -58,6 +60,13 @@ export default function HomeScreen() {
     ))).catch(() => {});
   }, [user?.id, pendingCount]));
 
+  // Jam sekarang (diperbarui tiap menit) agar tombol Catat Jurnal muncul/hilang tanpa menyegarkan layar.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   const date = todayISO();
   const slots = useMemo(
     () => [...(today.data ?? [])].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '')),
@@ -80,6 +89,13 @@ export default function HomeScreen() {
       return {
         label: 'Isi jurnal saya (tanpa QR)', icon: 'create-outline', variant: 'outline',
         onPress: () => router.push(`/jurnal/isi?${q({ mode: 'original', assignment_id: s.substitute!.assignment_id, schedule_id: s.id, date })}` as any),
+      };
+    }
+    if (bisaCatatJurnal(s, now)) {
+      // Jam pelajaran sudah lewat & belum diisi: isi tanpa QR, tercatat sebagai "Catat Jurnal".
+      return {
+        label: 'Catat Jurnal (di luar jam)', icon: 'create-outline', variant: 'secondary',
+        onPress: () => router.push(`/jurnal/isi?${q({ mode: 'catat', schedule_id: s.id, date })}` as any),
       };
     }
     if (canScan(activeRole) || kind === 'guru') {
