@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 import pkg_cetak  # noqa: E402
+import pkg_cetak_rapi  # noqa: E402
 import pkg_template  # noqa: E402
 
 PERIODE = {'id': 'p1', 'semester': 'Ganjil', 'tahun_pelajaran': '2026/2027', 'tanggal_buka': '2026-10-01', 'tanggal_tutup': '2026-11-30'}
@@ -102,6 +103,8 @@ def test_laporan_huruf_kapital_periode_dan_persetujuan():
         assert all(ws[f'{kol}{r}'].alignment.horizontal == 'center' for r in range(29, 36))
         assert not ws[f'{kol}30'].font.u and not ws[f'{kol}35'].font.u and ws[f'{kol}34'].font.u
         assert ws[f'{kanan}30'].border.right.style == ws['H24'].border.right.style if kanan == 'H' else True
+        # Nama & NIP rapat: nama menempel ke bawah barisnya, NIP ke atas barisnya.
+        assert (ws[f'{kol}34'].alignment.vertical, ws[f'{kol}35'].alignment.vertical) == ('bottom', 'top')
     assert (ws['C29'].value, ws['F29'].value, ws['G34'].value) == ('Guru yang Dinilai', 'Penilai', None)
     # Font resmi seragam di seluruh lembar cetak.
     assert {sel.font.name for n in pkg_cetak.LEMBAR_PDF_LENGKAP for sel in pkg_cetak.sel_berisi(wb[n])} == {'Arial'}
@@ -135,6 +138,11 @@ def test_rapikan_cetak_tanda_tangan_dan_teks_panjang():
     assert 'E34:H34' in gab(ws) and ws['F34'].value is None and ws['G34'].value is None and '", "' in ws['E34'].value
     # Tiga pihak di rekap & indeks kehadiran.
     assert {'B50:C50', 'D50:E50', 'F50:H50'} <= gab(wb['04-RKAP-PKG'])
+    # Nama & NIP rapat di setiap blok tanda tangan (baris nama template tinggi; dulu nama di tengah -> jauh dari NIP).
+    for nama, (r_nama, r_nip) in {'02-IDNTY': (38, 39), '04-RKAP-PKG': (50, 51), '05-RKAP-PKGR': (52, 53),
+                                  'INDEK-HDIR': (35, 36)}.items():
+        w, a = wb[nama], pkg_cetak_rapi.BLOK_TTD[nama]['pihak'][0][0]
+        assert (w[f'{a}{r_nama}'].alignment.vertical, w[f'{a}{r_nip}'].alignment.vertical) == ('bottom', 'top'), nama
     assert {'B35:D35', 'E35:H35', 'I35:K35'} <= gab(wb['INDEK-HDIR'])
     assert {'B52:D52', 'E52:F52', 'B53:D53', 'E53:F53'} <= gab(wb['05-RKAP-PKGR'])
 
@@ -178,14 +186,14 @@ def test_pdf_lengkap_urutan_dan_page_setup_per_lembar():
     terlihat = [ws.title for ws in wb.worksheets if ws.sheet_state == 'visible']
     assert terlihat == list(pkg_cetak.LEMBAR_PDF_LENGKAP) == [
         'COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG', '05-RKAP-PKGR', 'INDEK-HDIR',
-        'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN']
+        'SEJAWAT', 'SISWA', 'ORTU']  # RUBRIK-CAPAIAN (tabel acuan) tidak ikut dicetak
     for ws in (wb[n] for n in terlihat):
         assert int(ws.page_setup.paperSize) == int(ws.PAPERSIZE_A4) and ws.sheet_properties.pageSetUpPr.fitToPage is True
         assert ws.page_setup.fitToWidth == 1 and not ws.row_breaks.brk and ws.print_options.horizontalCentered and ws.print_area
         assert ws.page_setup.fitToHeight == (0 if ws.title in pkg_cetak.LEMBAR_TINGGI_BEBAS else 1), ws.title
     assert all(wb[n].print_title_rows == '$7:$8' for n in pkg_cetak.LEMBAR_TINGGI_BEBAS)
     assert wb['INDEK-HDIR'].page_setup.orientation == 'landscape' and wb['COVER'].page_setup.orientation == 'portrait'
-    assert wb['RUBRIK-CAPAIAN'].page_setup.orientation == 'portrait'
+    assert wb['RUBRIK-CAPAIAN'].sheet_state != 'visible'  # tabel acuan tidak dicetak (rumus 01-LAPORN tetap membacanya)
 
 
 def test_rekap_page_setup_lanskap_satu_halaman_dan_judul_berulang():

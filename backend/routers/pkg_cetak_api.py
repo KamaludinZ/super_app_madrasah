@@ -149,7 +149,7 @@ async def kemampuan_cetak_api(user: Dict = Depends(get_current_user)):
 async def cetak_api(data: CetakRequest, request: Request, user: Dict = Depends(get_current_user)):
     """Unduh dokumen resmi: rekap seluruh guru dalam cakupan (`jenis=rekap`) atau laporan satu guru (`jenis=guru`)
     sebagai Excel dari template resmi, atau PDF hasil konversi LibreOffice (rumus template dihitung ulang; laporan
-    per guru `lembar=lengkap` COVER s.d. RUBRIK-CAPAIAN, `lembar=rekap` 04-RKAP-PKG saja). Tanpa LibreOffice: PDF
+    per guru `lembar=lengkap` COVER s.d. ORTU, `lembar=rekap` 04-RKAP-PKG saja). Tanpa LibreOffice: PDF
     cadangan ReportLab berpenanda.
     403 di luar hak/cakupan, 409 bila belum ada lembar terkunci, 503 bila template tidak tersedia/berubah.
     Unduhan berhasil tercatat di riwayat unduhan & jejak audit; percobaan yang ditolak/gagal dicatat sebagai cetak_gagal."""
