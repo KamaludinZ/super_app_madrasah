@@ -2,7 +2,7 @@ import { api } from '@/lib/api';
 
 // Cetak dokumen resmi PKG dari template (Excel) dan konversi PDF.
 //   POST /pkg/cetak { jenis: 'rekap' | 'guru', format: 'xlsx' | 'pdf', periode_id, guru_id?, lembar?: 'lengkap' | 'rekap' }
-//        -> berkas (blob); `lembar` hanya untuk PDF laporan per guru (lengkap: COVER s.d. RUBRIK-CAPAIAN; rekap: 04-RKAP-PKG)
+//        -> berkas (blob); `lembar` hanya untuk PDF laporan per guru (lengkap: COVER s.d. ORTU; rekap: 04-RKAP-PKG)
 //        header: Content-Disposition (nama berkas), X-PKG-Mesin: 'openpyxl' | 'libreoffice' | 'reportlab'
 //        (PDF memakai LibreOffice; bila tidak tersedia, cadangan ReportLab dengan penanda "bukan salinan identik"
 //        dan header X-PKG-Cadangan berisi alasannya). 403 {alasan, pesan} di luar cakupan, 409/503 pesan teks.

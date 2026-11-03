@@ -272,7 +272,13 @@ def tata_blok_ttd(ws, cfg: Dict[str, Any]) -> None:
             sel.value = f'={gabungan}' if len(ekspr) > 1 or (isinstance(bagian[0], str) and bagian[0].startswith('=')) else bagian[0]
             gabung(ws, r, a, b)
             atur_rata(sel, horizontal='center', vertical='center', wrap_text=False, shrink_to_fit=True)
+    # Nama menempel ke bawah barisnya dan NIP ke atas barisnya: baris nama di template sering tinggi (ruang tanda
+    # tangan), sehingga bila rata tengah jarak nama -> NIP terlihat terlalu jauh.
+    baris_nip = {r for r in cfg['baris'] if any(isinstance(ws.cell(r, c).value, str) and 'NIP' in ws.cell(r, c).value.upper()
+                                                for c in range(kiri, kanan + 1))}
+    baris_nama = {sebelum for sebelum, r in zip(cfg['baris'], cfg['baris'][1:]) if r in baris_nip}
     for r in cfg['baris']:
+        tegak = 'bottom' if r in baris_nama else 'top' if r in baris_nip else 'center'
         isi = []
         for a, b in pihak:
             sel = next((ws.cell(r, c) for c in range(a, b + 1)
@@ -288,7 +294,7 @@ def tata_blok_ttd(ws, cfg: Dict[str, Any]) -> None:
             sel = ws.cell(r, a)
             sel.value, sel._style = data[0], data[1]
             gabung(ws, r, a, b)
-            atur_rata(sel, horizontal='center', vertical='center', wrap_text=False, shrink_to_fit=True, indent=0)
+            atur_rata(sel, horizontal='center', vertical=tegak, wrap_text=False, shrink_to_fit=True, indent=0)
             ukuran.append((sel, ukuran_pas(ws.parent, ws, sel, lebar_rentang_pt(ws, a, b))))
         # Satu baris (mis. semua nama) memakai ukuran huruf yang sama: yang terkecil agar semua muat. Bila harus
         # diperkecil terlalu banyak (nama bergelar panjang), teks dibungkus 2 baris dengan ukuran asli.
