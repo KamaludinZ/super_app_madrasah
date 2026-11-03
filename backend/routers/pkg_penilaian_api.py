@@ -10,10 +10,10 @@ from core import db
 from pkg_akses import sk_aktif
 from pkg_beranda import tugas_penilaian_saya
 from pkg_instrumen import instrumen_aktif
-from pkg_audit import catat_audit_draf, catat_audit_kirim, catat_audit_pkg_harian
-from pkg_lembar import kirim_dan_kunci, konteks_lembar, lembar_tampil, riwayat_lembar, simpan_draf
+from pkg_audit import catat_audit_batal_kunci, catat_audit_draf, catat_audit_kirim, catat_audit_pkg_harian
+from pkg_lembar import batal_kunci, kirim_dan_kunci, konteks_lembar, lembar_tampil, riwayat_lembar, simpan_draf
 from pkg_penjaga import penjaga_pkg
-from pkg_skema import POLA_ID, DrafPenilaianRequest, KirimPenilaianRequest
+from pkg_skema import POLA_ID, BatalKunciPenilaianRequest, DrafPenilaianRequest, KirimPenilaianRequest
 
 router = APIRouter()
 
@@ -84,5 +84,18 @@ async def kirim_api(data: KirimPenilaianRequest, request: Request, akses: Dict =
     ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
     lembar = await kirim_dan_kunci(db, ktx, data, akses['user'])
     await catat_audit_kirim(db, akses['user'], lembar, request=request)
+    ktx['lembar'] = lembar
+    return await lembar_tampil(db, ktx, data.guru_id)
+
+
+@router.post("/pkg/penilaian/batal-kunci")
+async def batal_kunci_api(data: BatalKunciPenilaianRequest, request: Request, akses: Dict = Depends(penilai)):
+    """Batalkan kunci lembar milik penilai (kembali ke draf agar dapat diperbaiki lalu dikunci ulang). Hanya selama
+    masa penilaian (403 di_luar_masa); 409 bila lembar belum terkunci. Nilai resmi & baris rekap dihapus sampai lembar
+    dikunci lagi; alasan dan nilai sebelumnya tercatat di jejak audit dan riwayat lembar."""
+    ktx = await konteks_lembar(db, akses['user'], akses['keanggotaan'], data.guru_id)
+    sebelum = dict(ktx['lembar'] or {})
+    lembar = await batal_kunci(db, ktx, data.alasan, akses['user'])
+    await catat_audit_batal_kunci(db, akses['user'], lembar, sebelum, data.alasan, request=request)
     ktx['lembar'] = lembar
     return await lembar_tampil(db, ktx, data.guru_id)

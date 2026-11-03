@@ -72,6 +72,7 @@ LABEL_AKSI = {
     'penilaian_buka': 'Membuka lembar penilaian',
     'penilaian_draf': 'Menyimpan draf penilaian',
     'penilaian_kirim': 'Mengirim & mengunci penilaian',
+    'penilaian_batal_kunci': 'Membatalkan kunci penilaian',
     'lihat_rekap': 'Melihat rekap',
     'lihat_rekap_guru': 'Melihat rekap per guru',
     'rekap_hitung_ulang': 'Menghitung ulang rekap',
@@ -87,7 +88,8 @@ LABEL_AKSI = {
 # Kategori aksi untuk saringan halaman Jejak Audit (warna penanda di frontend lib/pkgAudit.KATEGORI_AUDIT).
 KATEGORI_AUDIT = ('penilaian', 'komponen', 'instrumen', 'susunan', 'unduhan', 'akses')
 KATEGORI_AKSI = {
-    **{a: 'penilaian' for a in ('penilaian_mulai', 'penilaian_buka', 'penilaian_draf', 'penilaian_kirim', 'rekap_hitung_ulang')},
+    **{a: 'penilaian' for a in ('penilaian_mulai', 'penilaian_buka', 'penilaian_draf', 'penilaian_kirim', 'penilaian_batal_kunci',
+                                'rekap_hitung_ulang')},
     **{a: 'komponen' for a in ('angket_simpan', 'angket_ubah', 'angket_hapus', 'angket_isi_publik', 'angket_tautan_ganti',
                                'angket_tautan_status', 'kehadiran_simpan', 'rekomendasi_simpan', 'identitas_ubah')},
     **{a: 'instrumen' for a in ('instrumen_impor', 'instrumen_ubah', 'instrumen_aktifkan')},
@@ -202,6 +204,16 @@ async def catat_audit_draf(db, aktor: Optional[Dict[str, Any]], lembar: Dict[str
         await catat_audit_pkg(db, 'penilaian_mulai', aktor, meta, penilaian_id=lembar.get('id'), request=request)
     await catat_audit_pkg_harian(db, 'penilaian_draf', aktor, kunci=lembar.get('id') or '', metadata=meta, request=request,
                                  penilaian_id=lembar.get('id'), perbarui_metadata=True)
+
+
+async def catat_audit_batal_kunci(db, aktor: Optional[Dict[str, Any]], lembar: Dict[str, Any], sebelum: Dict[str, Any],
+                                  alasan: str, request=None) -> None:
+    """Audit pembatalan kunci lembar: alasan serta nilai resmi & checksum isian saat terkunci (sebelum dibuka)."""
+    meta = {**_identitas_lembar(lembar), 'alasan': alasan, 'progres': lembar.get('progres'),
+            **{k: sebelum.get(k) for k in ('nilai_akhir', 'nilai_maks', 'capaian_persen', 'level_capaian', 'predikat',
+                                           'terkunci_pada')},
+            'checksum_isian': checksum_isian(sebelum.get('isian'))}
+    await catat_audit_pkg(db, 'penilaian_batal_kunci', aktor, meta, penilaian_id=lembar.get('id'), request=request)
 
 
 async def catat_audit_kirim(db, aktor: Optional[Dict[str, Any]], lembar: Dict[str, Any], request=None) -> None:

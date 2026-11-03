@@ -13,11 +13,12 @@ from copy import copy
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from openpyxl.styles import Alignment
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Font
+from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from pkg_ambang import AMBANG_PREDIKAT_REKAP, terapkan
+from pkg_cetak_rapi import bungkus_dua_baris, gabung, lebar_rentang_pt, rapikan_cetak
 from pkg_template import PETA_CETAK, isi_template_ke_bytes, muat_lebar_halaman, tampilkan_hanya
 
 BULAN = ('Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November',
@@ -225,6 +226,10 @@ def isi_laporan_guru(wb, laporan: Dict[str, Any]) -> None:
 
     isi_kehadiran(wb, laporan.get('kehadiran'))
     isi_rekomendasi(wb, laporan.get('rekomendasi'))
+    rapikan_huruf_kapital(wb)
+    rapikan_laporan_evaluasi(wb)
+    rapikan_cetak(wb, LEMBAR_PDF_LENGKAP)
+    seragamkan_font(wb)
 
     isian = laporan.get('isian') or {}
     kol = peta['kolom_centang']
@@ -241,7 +246,105 @@ def isi_cover(wb, identitas: Dict[str, Any]) -> None:
     (teks tetap di template) yang disesuaikan dengan kabupaten/kota madrasah."""
     kota = ((identitas.get('sekolah') or {}).get('kota') or '').strip()
     if kota:
-        wb[PETA_CETAK['instrumen']['cover']['sheet']][PETA_CETAK['instrumen']['cover']['kantor']] = f'kantor kementerian agama {kota.lower()}'
+        wb[PETA_CETAK['instrumen']['cover']['sheet']][PETA_CETAK['instrumen']['cover']['kantor']] = f'KANTOR KEMENTERIAN AGAMA {kota.upper()}'
+
+
+# Font resmi seragam untuk seluruh laporan (tata naskah dinas). Template memakai campuran font dekoratif (Berlin Sans FB,
+# Quicksand, Bernard MT, Perpetua Titling, Calibri, Arial Narrow, Times New Roman) yang tidak ada di server sehingga
+# LibreOffice menggantinya dengan font lain yang lebih lebar dan teks terpotong. Arial dicetak dengan Liberation Sans
+# (lebar huruf identik) sehingga tampilan Excel dan PDF sama.
+FONT_RESMI = 'Arial'
+
+
+def sel_berisi(ws):
+    """Sel yang benar-benar tersimpan di lembar (tanpa membuat sel kosong baru seperti iter_rows pada lembar lebar)."""
+    return [sel for sel in list(ws._cells.values()) if sel.value is not None]
+
+
+def seragamkan_font(wb, nama: str = FONT_RESMI) -> None:
+    """Ganti font semua sel bernilai di seluruh lembar menjadi `nama` (ukuran, tebal, miring, warna tetap)."""
+    for ws in wb.worksheets:
+        for sel in sel_berisi(ws):
+            if sel.value is None or not sel.has_style or (sel.font.name or '') == nama:
+                continue
+            f = copy(sel.font)
+            f.name = nama
+            sel.font = f
+
+
+# Font judul template yang hanya memiliki huruf kapital. Excel menampilkannya kapital walau teksnya huruf kecil, tetapi
+# server PDF (LibreOffice) tidak memiliki font ini sehingga teks huruf kecil tercetak apa adanya.
+FONT_KAPITAL = ('Perpetua Titling',)
+
+
+def rapikan_huruf_kapital(wb) -> None:
+    """Jadikan kapital teks bertipe font judul kapital (mis. nama kantor di COVER, nama sekolah di INDEK-HDIR) agar
+    tampil sama di Excel maupun PDF: teks tetap -> upper(); rumus -> dibungkus UPPER()."""
+    for ws in wb.worksheets:
+        for sel in sel_berisi(ws):
+            v = sel.value
+            if not isinstance(v, str) or not v or not any(f in (sel.font.name or '') for f in FONT_KAPITAL):
+                continue
+            if v.startswith('='):
+                if not v.upper().startswith('=UPPER('):
+                    sel.value = f'=UPPER({v[1:]})'
+            elif v != v.upper():
+                sel.value = v.upper()
+
+
+def rapikan_laporan_evaluasi(wb) -> None:
+    """Lembar 01-LAPORN pada salinan cetak:
+    - Periode Penilaian: tanggal awal & akhir dalam satu teks pada sel gabungan E:H ('1 Juli 2026 s.d. 31 Desember 2026')
+      karena sel tanggal template sempit (diapit 'S.d') sehingga tanggal panjang terpotong.
+    - Kotak persetujuan: urutan ditata label -> 'Tanda tangan' -> ruang tanda tangan -> nama -> NIP (template: nama &
+      NIP di atas tulisan tanda tangan)."""
+    peta = PETA_CETAK['instrumen']['laporan']
+    ws = wb[peta['sheet']]
+    r = peta['periode']
+    awal, akhir = ws[f'E{r}'].value, ws[f'G{r}'].value
+    if isinstance(awal, str) and isinstance(akhir, str) and awal.startswith('=') and akhir.startswith('='):
+        ws[f'E{r}'] = f'={awal[1:]}&" s.d. "&{akhir[1:]}'
+        ws[f'F{r}'] = None
+        ws[f'G{r}'] = None
+        ws.merge_cells(f'E{r}:H{r}')
+        a = copy(ws[f'E{r}'].alignment)
+        ws[f'E{r}'].alignment = Alignment(horizontal='left', vertical=a.vertical or 'center', shrink_to_fit=True)
+
+    b = peta['persetujuan']  # template: 29 label, 30 nama, 31 NIP, 32 'Tanda tangan'
+    for (kol, kanan), sumber in zip(peta['blok_ttd'], peta['kolom_ttd']):
+        isi_nama, isi_nip = ws[f'{sumber}{b + 1}'].value, ws[f'{sumber}{b + 2}'].value
+        if not isinstance(isi_nama, str) or not isinstance(isi_nip, str) or not isi_nip.startswith('='):
+            continue
+        gaya = copy(ws[f'{sumber}{b}']._style)
+        ukuran = ws[f'{sumber}{b}'].font.sz or 10
+        # 29 label, 30 'Tanda tangan', 31–33 ruang tanda tangan, 34 nama (tebal bergaris bawah, boleh 2 baris), 35 NIP.
+        isi = {0: 'Guru yang Dinilai' if sumber == peta['kolom_ttd'][0] else 'Penilai', 1: 'Tanda tangan', 2: None, 3: None,
+               4: None, 5: isi_nama, 6: f'="NIP. "&{isi_nip[1:]}'}
+        for i, nilai in isi.items():
+            r = b + i
+            for k in {kol, sumber, kanan}:
+                ws[f'{k}{r}'].value = None
+            sel = ws[f'{kol}{r}']
+            sel._style = copy(gaya)
+            sel.value = nilai
+            sel.font = Font(name=FONT_RESMI, size=ukuran, bold=(i == 5), underline='single' if i == 5 else None)
+            gabung(ws, r, column_index_from_string(kol), column_index_from_string(kanan))
+            # Semua baris blok rata tengah pada sumbu yang sama; nama panjang dibungkus (maks. 2 baris, tidak menempel
+            # garis kotak), baris lain diperkecil bila perlu.
+            sel.alignment = Alignment(horizontal='center', vertical='center', wrap_text=(i == 5), shrink_to_fit=(i != 5))
+            if i == 5:
+                lebar = lebar_rentang_pt(ws, column_index_from_string(kol), column_index_from_string(kanan))
+                f = copy(sel.font)
+                f.sz = bungkus_dua_baris(wb, ws, sel, lebar, ukuran)
+                sel.font = f
+    for i, tinggi in ((0, 24.75), (1, 15.0), (2, 16.0), (3, 16.0), (4, 16.0), (5, 27.0), (6, 13.5)):
+        ws.row_dimensions[b + i].height = tinggi
+    for k in 'BCDEFGH':  # 'Tanggal : ...' di bawah kotak: tanpa garis bawah, seragam dengan isi kotak
+        sel = ws[f'{k}{b + 7}']
+        if isinstance(sel.value, str) and 'Tanggal' in sel.value:
+            f = copy(sel.font)
+            f.u = None
+            sel.font = f
 
 
 def isi_form_instr(wb, identitas: Dict[str, Any]) -> None:
