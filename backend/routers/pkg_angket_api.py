@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from pymongo.errors import DuplicateKeyError
 
 from core import db, get_current_user
+from pkg_identitas import PROYEKSI_NIP, nip_tampil
 from pkg_akses import adalah_kepala, keanggotaan_sk, tolak
 from pkg_angket import (
     JENIS_ANGKET, AngketPenuh, angket_excel, butir_angket, daftar_jenis, responden_guru, skor_360, skor_360_periode,
@@ -48,10 +49,10 @@ async def konteks_pengelola(db_, user: Dict[str, Any], periode_id: Optional[str]
                 cakupan['guru'] is not None and guru_id not in cakupan['guru']):
             raise tolak('bukan_penugasan', 'Guru ini tidak termasuk dalam cakupan Anda.')
         snap = ((sk or {}).get('snapshot_anggota') or {}).get(guru_id) or {}
-        akun = await db_.users.find_one({'id': guru_id}, {'_id': 0, 'full_name': 1, 'nip': 1, 'nip_nuptk': 1, 'tugas_tambahan': 1}) or {}
+        akun = await db_.users.find_one({'id': guru_id}, {'_id': 0, 'full_name': 1, **PROYEKSI_NIP, 'tugas_tambahan': 1}) or {}
         if not snap and not akun:
             raise HTTPException(404, 'Guru tidak ditemukan.')
-        guru = {'id': guru_id, 'nama': snap.get('nama') or akun.get('full_name'), 'nip': snap.get('nip') or akun.get('nip') or akun.get('nip_nuptk'),
+        guru = {'id': guru_id, 'nama': snap.get('nama') or akun.get('full_name'), 'nip': nip_tampil(snap.get('nip'), akun),
                 'mapel': snap.get('mapel'), 'tugas_tambahan': akun.get('tugas_tambahan')}
     return {'periode': periode, 'sk': sk, 'cakupan': cakupan, 'guru': guru}
 

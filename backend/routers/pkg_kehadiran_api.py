@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
 from core import db, get_current_user
+from pkg_identitas import nip_tampil
 from pkg_akses import adalah_kepala, tolak
 from pkg_audit import catat_audit_pkg
 from pkg_kehadiran import kehadiran_guru, kehadiran_periode, simpan_kehadiran
@@ -33,7 +34,7 @@ async def konteks_diri(db_, user: Dict, periode_id: Optional[str]) -> Dict:
     snap = ((sk or {}).get('snapshot_anggota') or {}).get(uid) or {}
     return {'periode': periode, 'sk': sk,
             'guru': {'id': uid, 'nama': snap.get('nama') or user.get('full_name'),
-                     'nip': snap.get('nip') or user.get('nip') or user.get('nip_nuptk'), 'mapel': snap.get('mapel')}}
+                     'nip': nip_tampil(snap.get('nip'), user), 'mapel': snap.get('mapel')}}
 
 
 async def _simpan(ktx: Dict, data: KehadiranRequest, user: Dict, request: Request, mandiri: bool) -> Dict:

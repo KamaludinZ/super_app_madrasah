@@ -43,9 +43,9 @@ def _sekarang() -> str:
 
 
 async def identitas_akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
-    """{user_id: {nama, nip, mapel, ...identitas GTK}} dari akun pengguna saat ini (NIP, atau Peg ID bila NIP kosong;
+    """{user_id: {nama, nip, mapel, ...identitas GTK}} dari akun pengguna saat ini (NIP ASN, atau Peg ID bila NIP kosong;
     tanpa mapel). Identitas GTK (pkg_identitas.FIELD_GTK) ikut disalin ke snapshot periode untuk lampiran cetak."""
-    from pkg_identitas import FIELD_CADANGAN, FIELD_GTK, lengkapi_akun
+    from pkg_identitas import FIELD_CADANGAN, FIELD_GTK, lengkapi_akun, nip_akun
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
         return {}
@@ -54,7 +54,7 @@ async def identitas_akun(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
                                 **{f: 1 for f in (*FIELD_GTK, *FIELD_CADANGAN)}}).to_list(len(ids))
     akun = [lengkapi_akun(u) for u in akun]  # cadangan pangkat/golongan & pendidikan ikut tersalin ke snapshot
     return {u['id']: {**{f: u[f] for f in FIELD_GTK if u.get(f) and f not in ('nip', 'peg_id')},
-                      'nama': u.get('full_name'), 'nip': u.get('nip_nuptk') or u.get('peg_id'), 'mapel': None} for u in akun}
+                      'nama': u.get('full_name'), 'nip': nip_akun(u), 'mapel': None} for u in akun}
 
 
 async def mapel_diampu(db, ids: List[str], semester_id: Optional[str]) -> Dict[str, str]:
@@ -89,9 +89,13 @@ async def sk_tampil_banyak(db, daftar: List[Dict[str, Any]]) -> List[Dict[str, A
     berjalan = {p['sk_id'] for p in await db[KOLEKSI_PENILAIAN].find(
         {'sk_id': {'$in': sk_ids}}, {'_id': 0, 'sk_id': 1}).to_list(5000)} if sk_ids else set()
 
+    from pkg_identitas import nip_asn, nip_tampil
+    nip = await nip_asn(db, semua_id)
+
     def anggota(sk, uid):
         ident = (sk.get('snapshot_anggota') or {}).get(uid) or akun.get(uid) or {}
-        return {'id': uid, 'nama': ident.get('nama') or '(akun tidak ditemukan)', 'nip': ident.get('nip'), 'mapel': ident.get('mapel')}
+        return {'id': uid, 'nama': ident.get('nama') or '(akun tidak ditemukan)', 'nip': nip_tampil(ident.get('nip'), nip.get(uid)),
+                'mapel': ident.get('mapel')}
 
     return [{
         'id': sk['id'],
@@ -265,9 +269,10 @@ async def guru_aktif(db) -> List[Dict[str, Any]]:
     """Akun guru aktif untuk ceklist anggota SK: [{id, full_name, nip, roles}] urut nama."""
     akun = await db.users.find(
         {'roles': {'$in': list(PERAN_GURU_PKG)}, 'is_active': {'$ne': False}},
-        {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1, 'roles': 1},
+        {'_id': 0, 'id': 1, 'full_name': 1, 'nip': 1, 'nip_nuptk': 1, 'peg_id': 1, 'roles': 1},
     ).to_list(2000)
-    hasil = [{'id': u['id'], 'full_name': u.get('full_name'), 'nip': u.get('nip_nuptk'), 'roles': u.get('roles') or []}
+    from pkg_identitas import nip_akun
+    hasil = [{'id': u['id'], 'full_name': u.get('full_name'), 'nip': nip_akun(u), 'roles': u.get('roles') or []}
              for u in akun if set(u.get('roles') or []) & set(PERAN_GURU_PKG)]
     hasil.sort(key=lambda u: (u.get('full_name') or '').lower())
     return hasil

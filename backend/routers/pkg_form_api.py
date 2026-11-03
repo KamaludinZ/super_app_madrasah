@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import db, get_current_user
+from pkg_identitas import PROYEKSI_NIP, nip_tampil
 from pkg_akses import alasan_tolak, keanggotaan_sk, tolak
 from pkg_audit import catat_cetak_gagal, catat_cetak_template
 from pkg_form_kosong import form_kosong_pdf
@@ -32,10 +33,10 @@ async def _orang(db_, sk: Optional[Dict[str, Any]], uid: Optional[str]) -> Optio
     if not uid:
         return None
     snap = ((sk or {}).get('snapshot_anggota') or {}).get(uid) or {}
-    akun = await db_.users.find_one({'id': uid}, {'_id': 0, 'full_name': 1, 'nip': 1, 'nip_nuptk': 1, 'tugas_tambahan': 1}) or {}
+    akun = await db_.users.find_one({'id': uid}, {'_id': 0, 'full_name': 1, **PROYEKSI_NIP, 'tugas_tambahan': 1}) or {}
     if not snap and not akun:
         return None
-    return {'id': uid, 'nama': snap.get('nama') or akun.get('full_name'), 'nip': snap.get('nip') or akun.get('nip') or akun.get('nip_nuptk'),
+    return {'id': uid, 'nama': snap.get('nama') or akun.get('full_name'), 'nip': nip_tampil(snap.get('nip'), akun),
             'mapel': snap.get('mapel'), 'tugas_tambahan': akun.get('tugas_tambahan')}
 
 
