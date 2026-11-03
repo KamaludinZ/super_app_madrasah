@@ -3,6 +3,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from pkg_identitas import PROYEKSI_NIP, nip_tampil
 from pkg_akses import KOLEKSI_PENILAIAN, KOLEKSI_PENUGASAN, PERAN_KEPALA, alasan_tolak
 
 # Urutan kemajuan status penilaian; bila satu guru punya beberapa lembar, yang paling maju dipakai.
@@ -73,7 +74,7 @@ async def tugas_penilaian_saya(db, user: Dict[str, Any], periode: Optional[Dict[
 
     snapshot = penugasan.get('snapshot_guru') or {}
     akun = {u['id']: u for u in await db.users.find(
-        {'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1}).to_list(len(ids))}
+        {'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, **PROYEKSI_NIP}).to_list(len(ids))}
 
     hasil = []
     for gid in ids:
@@ -85,7 +86,7 @@ async def tugas_penilaian_saya(db, user: Dict[str, Any], periode: Optional[Dict[
             'id': gid,
             'penilaian_id': (lembar or {}).get('id'),
             'nama': snap.get('nama') or u.get('full_name') or '(akun tidak ditemukan)',
-            'nip': snap.get('nip') or u.get('nip_nuptk'),
+            'nip': nip_tampil(snap.get('nip'), u),
             'mapel': snap.get('mapel'),
             'status': status,
             'progres': _progres(lembar),

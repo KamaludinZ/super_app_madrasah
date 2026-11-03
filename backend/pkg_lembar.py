@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
+from pkg_identitas import PROYEKSI_NIP, nip_tampil
 from pkg_akses import sk_aktif, tolak
 from pkg_instrumen import instrumen_aktif
 from pymongo.errors import DuplicateKeyError
@@ -64,11 +65,11 @@ async def identitas_guru(db, ktx: Dict[str, Any], guru_id: str) -> Dict[str, Any
     """Identitas guru dari snapshot periode (penugasan, lalu SK) dengan cadangan akun; status akun & rangkap penilai."""
     snap = ((ktx['penugasan'].get('snapshot_guru') or {}).get(guru_id)
             or (ktx['sk'].get('snapshot_anggota') or {}).get(guru_id) or {})
-    akun = await db.users.find_one({'id': guru_id}, {'_id': 0, 'full_name': 1, 'nip_nuptk': 1, 'is_active': 1}) or {}
+    akun = await db.users.find_one({'id': guru_id}, {'_id': 0, 'full_name': 1, **PROYEKSI_NIP, 'is_active': 1}) or {}
     return {
         'id': guru_id,
         'nama': snap.get('nama') or akun.get('full_name') or '(akun tidak ditemukan)',
-        'nip': snap.get('nip') or akun.get('nip_nuptk'),
+        'nip': nip_tampil(snap.get('nip'), akun),
         'mapel': snap.get('mapel'),
         'akun_aktif': bool(akun) and akun.get('is_active') is not False,
         'juga_penilai': guru_id in (ktx['sk'].get('penilai_ids') or []),

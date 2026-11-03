@@ -7,6 +7,7 @@ dari skor_per_indikator lembar terhadap instrumen versi lembar.
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from pkg_identitas import PROYEKSI_NIP, nip_tampil
 from pkg_nilai import hitung_nilai, level_guru, rekap_model_kompetensi
 from pkg_skema import KOLEKSI_INSTRUMEN, KOLEKSI_PENILAIAN, KOLEKSI_REKAP, KOLEKSI_SK
 
@@ -137,7 +138,7 @@ async def agregasi_rekap(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any
     akun = {}
     ids = list(dict.fromkeys([*((sk or {}).get('dinilai_ids') or []), *hasil_akhir]))
     if ids:
-        akun = {u['id']: u for u in await db.users.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, 'nip_nuptk': 1}).to_list(len(ids))}
+        akun = {u['id']: u for u in await db.users.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'full_name': 1, **PROYEKSI_NIP}).to_list(len(ids))}
 
     def nama_dari(uid):
         return (snap.get(uid) or {}).get('nama') or (akun.get(uid) or {}).get('full_name')
@@ -155,7 +156,7 @@ async def agregasi_rekap(db, periode: Dict[str, Any], sk: Optional[Dict[str, Any
         baris.append({
             'guru_id': gid,
             'nama': (r or {}).get('nama') or s.get('nama') or (akun.get(gid) or {}).get('full_name') or '(akun tidak ditemukan)',
-            'nip': (r or {}).get('nip') or s.get('nip') or (akun.get(gid) or {}).get('nip_nuptk'),
+            'nip': nip_tampil((r or {}).get('nip') or s.get('nip'), akun.get(gid)),
             'mapel': (r or {}).get('mapel') or s.get('mapel'),
             'penilai_id': pid,
             'penilai_nama': (r or {}).get('penilai_nama') or (nama_dari(pid) if pid else None),

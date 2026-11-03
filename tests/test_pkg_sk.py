@@ -220,6 +220,30 @@ def test_snapshot_identitas_periode(db):
     assert [a['nama'] for a in tampil['dinilai']] == ['Budi', 'Ani'] and tampil['dinilai'][0]['mapel'] == 'IPA, Matematika'
 
 
+def test_nip_asn_diutamakan_dari_peg_id(db):
+    """ASN yang sudah mengisi NIP tampil dengan NIP, bukan Peg ID; snapshot lama yang terlanjur berisi Peg ID ikut
+    tampil dengan NIP akun saat ini. Non-ASN tanpa NIP tetap memakai Peg ID."""
+    import pkg_identitas
+    _users_guru(db)
+    db['users'].docs[1].update({'nip': '198207152009012003', 'peg_id': 'PEG-1'})  # Budi ASN: NIP + Peg ID
+    db['users'].docs[2]['peg_id'] = 'PEG-9'  # Ani non-ASN
+    sk = _api(api.buat_sk_api, _sk(), Request())
+    _api(api.atur_dinilai_api, sk['id'], DinilaiSkRequest(dinilai_ids=['g1', 'g2']), Request())
+    doc = next(d for d in db['pkg_sk'].docs if d['id'] == sk['id'])
+    assert doc['snapshot_anggota']['g1']['nip'] == '198207152009012003'
+    assert doc['snapshot_anggota']['g2']['nip'] == 'PEG-9'
+
+    doc['snapshot_anggota']['g1']['nip'] = 'PEG-1'  # snapshot lama (sebelum perbaikan) menyimpan Peg ID
+    tampil = next(s for s in _api(api.daftar_sk_api) if s['id'] == sk['id'])
+    nip = {a['id']: a['nip'] for a in tampil['dinilai']}
+    assert nip == {'g1': '198207152009012003', 'g2': 'PEG-9'}
+
+    assert pkg_identitas.nip_akun({'nip': ' ', 'nip_nuptk': '', 'peg_id': 'PEG-3'}) == 'PEG-3'
+    assert pkg_identitas.nip_tampil('PEG-1', {'nip': '1987', 'peg_id': 'PEG-1'}) == '1987'
+    assert pkg_identitas.nip_tampil('PEG-1', {}) == 'PEG-1'
+    assert pkg_identitas.nip_tampil(None, None) is None
+
+
 def test_kunci_susunan_sk_setelah_berjalan(db):
     _users_guru(db)
     sk = _api(api.buat_sk_api, _sk(), Request())

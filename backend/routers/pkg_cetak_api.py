@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from core import db, get_current_user, logger
+from pkg_identitas import nip_asn, nip_tampil
 from pkg_akses import keanggotaan_sk, tolak
 from pkg_penjaga import penjaga_pkg
 from pkg_audit import AKSI_LIHAT_UNDUHAN, URUT_UNDUHAN, catat_audit_pkg_harian, catat_cetak_gagal, catat_cetak_template, daftar_unduhan
@@ -72,11 +73,15 @@ async def siapkan_cetak(db_, user: Dict[str, Any], data: CetakRequest) -> Dict[s
         raise HTTPException(409, 'Lembar penilaian guru ini belum dikirim & dikunci.')
     instrumen = await db_[KOLEKSI_INSTRUMEN].find_one({'id': lembar.get('instrumen_id')}, {'_id': 0})
     snap = (sk or {}).get('snapshot_anggota') or {}
-    penilai = snap.get(lembar.get('penilai_id')) or {}
+    # NIP ASN akun diutamakan (snapshot lama menyimpan Peg ID), lihat pkg_identitas.nip_tampil.
+    nip = await nip_asn(db_, [lembar.get('penilai_id'), data.guru_id])
+    penilai = dict(snap.get(lembar.get('penilai_id')) or {})
     if not penilai:
-        akun = await db_.users.find_one({'id': lembar.get('penilai_id')}, {'_id': 0, 'full_name': 1, 'nip_nuptk': 1}) or {}
-        penilai = {'nama': akun.get('full_name'), 'nip': akun.get('nip_nuptk')}
-    guru = lembar.get('snapshot_guru') or {}
+        akun = await db_.users.find_one({'id': lembar.get('penilai_id')}, {'_id': 0, 'full_name': 1}) or {}
+        penilai = {'nama': akun.get('full_name')}
+    penilai['nip'] = nip_tampil(penilai.get('nip'), nip.get(lembar.get('penilai_id')))
+    guru = dict(lembar.get('snapshot_guru') or {})
+    guru['nip'] = nip_tampil(guru.get('nip'), nip.get(data.guru_id))
     laporan = {
         'guru': guru, 'periode': periode, 'sk': sk or {}, 'penilai': penilai,
         'kepala': {'nama': kepala, 'nip': next((x.get('nip') for x in pengaturan.get('leadership') or []

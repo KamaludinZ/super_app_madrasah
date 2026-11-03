@@ -67,6 +67,36 @@ def pendidikan_dari_riwayat(riwayat: Any) -> Optional[str]:
     return ' '.join(x for x in (str(terbaik['jenjang']).strip(), str(terbaik.get('jurusan') or '').strip()) if x)
 
 
+def _isi(nilai: Any) -> Optional[str]:
+    t = str(nilai or '').strip()
+    return t or None
+
+
+def nip_akun(akun: Optional[Dict[str, Any]]) -> Optional[str]:
+    """NIP tampil dari akun: NIP (ASN) bila diisi, lalu field lama `nip_nuptk`, terakhir Peg ID (non-ASN)."""
+    a = akun or {}
+    return _isi(a.get('nip')) or _isi(a.get('nip_nuptk')) or _isi(a.get('peg_id'))
+
+
+def nip_tampil(nip_snapshot: Any, akun: Optional[Dict[str, Any]]) -> Optional[str]:
+    """NIP untuk tampilan & cetak: NIP ASN di akun selalu diutamakan (snapshot SK/penugasan lama menyimpan Peg ID karena
+    field NIP belum dibaca), lalu NIP snapshot, lalu cadangan akun (nip_nuptk / Peg ID)."""
+    a = akun or {}
+    return _isi(a.get('nip')) or _isi(nip_snapshot) or nip_akun(a)
+
+
+# Proyeksi field akun untuk nip_akun / nip_tampil.
+PROYEKSI_NIP = {'nip': 1, 'nip_nuptk': 1, 'peg_id': 1}
+
+
+async def nip_asn(db, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """{user_id: {nip, nip_nuptk, peg_id}} akun saat ini, untuk nip_tampil pada data snapshot."""
+    ids = [i for i in dict.fromkeys(ids) if i]
+    if not ids:
+        return {}
+    return {u['id']: u for u in await db.users.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, **PROYEKSI_NIP}).to_list(len(ids))}
+
+
 def lengkapi_akun(akun: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Salinan akun dengan cadangan otomatis: pangkat/golongan kosong dipecah dari `pangkat_golongan`, pendidikan
     terakhir kosong diturunkan dari `riwayat_pendidikan`. Isian yang sudah ada tidak ditimpa."""
@@ -126,7 +156,7 @@ def identitas_orang(snap: Optional[Dict[str, Any]], akun: Optional[Dict[str, Any
 
     lahir = ', '.join(x for x in (ambil('birth_place'), tanggal_teks(ambil('birth_date'))) if x) or None
     return {
-        'nama': ambil('nama', 'full_name'), 'nip': ambil('nip', 'nip_nuptk', 'peg_id'),
+        'nama': ambil('nama', 'full_name'), 'nip': nip_tampil(s.get('nip'), a),
         'nuptk': ' / '.join(x for x in (ambil('nuptk'), ambil('nrg')) if x) or None, 'tempat_tanggal_lahir': lahir,
         'pangkat': ambil('pangkat'), 'golongan': ambil('golongan'), 'tmt_golongan': tanggal_teks(ambil('tmt_golongan')),
         'jabatan': ambil('jabatan_fungsional'), 'masa_kerja': masa_kerja(ambil('tmt_guru', 'tmt_pegawai', 'tmt_pns'), per),
