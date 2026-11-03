@@ -9,6 +9,8 @@ import { levelCapaian, predikatJenjang } from '@/lib/pkgAmbang';
 //   GET  /pkg/penilaian/lembar/{guru_id}/riwayat -> jejak aksi lembar (mulai, buka, draf, kirim)
 //   POST /pkg/penilaian/submit { guru_id, isian, catatan_umum } -> lembar terkunci (dengan `hasil`)
 //        belum lengkap 400 -> detail { pesan, galat: { kode_sub: pesan } }
+//   POST /pkg/penilaian/batal-kunci { guru_id, alasan } -> lembar kembali 'draf' (isian tetap, nilai & rekap dihapus
+//        sampai dikunci lagi); hanya penilai lembar & selama masa penilaian (di luar masa 403 di_luar_masa; belum terkunci 409)
 // lembar = { id | null, status: 'belum' | 'draf' | 'terkunci', guru: { id, nama, nip, mapel, akun_aktif, juga_penilai },
 //            periode: { id, nama_periode, tanggal_buka, tanggal_tutup }, dapat_diisi, alasan_tidak_dapat_diisi,
 //            instrumen: { id, versi_template, revisi, kompetensi }, isian: { [sub_kode]: isianSub }, catatan_umum,
@@ -69,6 +71,13 @@ export const riwayatLembar = (guruId) => panggil(() => api.get(`/pkg/penilaian/l
 export const kirimLembar = (guruId, { isian, catatanUmum }) => panggil(
   () => api.post('/pkg/penilaian/submit', { guru_id: guruId, isian: isianBersih(isian), catatan_umum: (catatanUmum || '').slice(0, BATAS_TEKS) }),
   'Gagal mengirim penilaian.',
+);
+
+export const BATAS_ALASAN_BATAL = 300;
+
+export const batalKunciLembar = (guruId, alasan) => panggil(
+  () => api.post('/pkg/penilaian/batal-kunci', { guru_id: guruId, alasan: (alasan || '').trim().slice(0, BATAS_ALASAN_BATAL) }),
+  'Gagal membatalkan kunci penilaian.',
 );
 
 // Skor sub-kompetensi = jumlah indikator (Level 1–5) yang dicentang.

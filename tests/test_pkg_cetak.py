@@ -73,8 +73,87 @@ def test_laporan_pdf_lengkap_dan_cover():
     terlihat = [ws.title for ws in wb.worksheets if ws.sheet_state == 'visible']
     assert terlihat == list(pkg_cetak.LEMBAR_PDF_LENGKAP) and wb.active.title == 'COVER'
     assert 'MODEL-GURU' not in terlihat and 'DUDI' not in terlihat and '00-DATA' not in terlihat
-    assert wb['COVER']['C43'].value == 'kantor kementerian agama kabupaten malang'
+    assert wb['COVER']['C43'].value == 'KANTOR KEMENTERIAN AGAMA KABUPATEN MALANG'
     assert wb['04-RKAP-PKG'].page_setup.fitToHeight == 1 and wb['SISWA'].page_setup.fitToHeight == 0  # SISWA punya pemisah halaman
+
+
+def test_laporan_huruf_kapital_periode_dan_persetujuan():
+    import pkg_instrumen_impor
+    instrumen = {'kompetensi': pkg_instrumen_impor.pratinjau_dari_template()['kompetensi']}
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel({'instrumen': instrumen, 'isian': {}},
+                                                               lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP))))
+    # Font judul kapital: teks huruf kecil template & rumus nama sekolah dijadikan kapital (PDF LibreOffice tanpa font itu).
+    assert wb['COVER']['C43'].value == 'KANTOR KEMENTERIAN AGAMA KOTA MALANG'
+    assert wb['INDEK-HDIR']['B4'].value.startswith('=UPPER(')
+    ws = wb['01-LAPORN']
+    # Periode penilaian satu teks di sel gabungan E17:H17 agar tanggal tidak terpotong.
+    assert 's.d.' in ws['E17'].value and ws['F17'].value is None and ws['G17'].value is None
+    assert 'E17:H17' in {str(m) for m in ws.merged_cells.ranges} and ws['E17'].alignment.shrink_to_fit
+    # Persetujuan: label -> Tanda tangan -> ruang -> nama -> NIP; tiap pihak satu sel gabungan rata tengah (C:D, F:H).
+    gabungan = {str(m) for m in ws.merged_cells.ranges}
+    for kol, kanan, nama, nip in (('C', 'D', '=E5&""', '="NIP. "&E6&""'),
+                                  ('F', 'H', "='00-DATA'!E33&\"\"", "=\"NIP. \"&'00-DATA'!E34&\"\"")):
+        assert ws[f'{kol}30'].value == 'Tanda tangan'
+        assert all(ws[f'{kol}{r}'].value is None for r in (31, 32, 33))
+        # Nama panjang dipindah baris di titik seimbang (rumus tetap merujuk sumber), atau utuh bila muat.
+        assert ws[f'{kol}34'].value in (nama, ) or ws[f'{kol}34'].value.startswith(f'=SUBSTITUTE({nama[1:]},')
+        assert ws[f'{kol}34'].font.b and ws[f'{kol}34'].alignment.wrap_text and ws[f'{kol}35'].value == nip
+        assert all(f'{kol}{r}:{kanan}{r}' in gabungan for r in range(29, 36))
+        assert all(ws[f'{kol}{r}'].alignment.horizontal == 'center' for r in range(29, 36))
+        assert not ws[f'{kol}30'].font.u and not ws[f'{kol}35'].font.u and ws[f'{kol}34'].font.u
+        assert ws[f'{kanan}30'].border.right.style == ws['H24'].border.right.style if kanan == 'H' else True
+    assert (ws['C29'].value, ws['F29'].value, ws['G34'].value) == ('Guru yang Dinilai', 'Penilai', None)
+    # Font resmi seragam di seluruh lembar cetak.
+    assert {sel.font.name for n in pkg_cetak.LEMBAR_PDF_LENGKAP for sel in pkg_cetak.sel_berisi(wb[n])} == {'Arial'}
+
+
+def test_rapikan_cetak_tanda_tangan_dan_teks_panjang():
+    """Nama bergelar panjang tidak terpotong: blok tanda tangan per pihak (gabungan rata tengah, dibungkus bila panjang)
+    dan isian identitas digabung sampai batas area cetak dengan huruf diperkecil secukupnya."""
+    lap = _lap_lengkap()
+    lap['identitas'] = {
+        'guru': {'nama': 'Dr. Hj. Siti Nurhalimah Rahmawati, S.Pd.I., M.Pd.', 'nip': '198207152009012003'},
+        'penilai': {'nama': 'Drs. H. Muhammad Abdurrahman Wahid, M.Pd.I.', 'nip': '196812241995031002'},
+        'kepala': {'nama': 'H. Ahmad Fauzan Hidayatullah, S.Ag., M.Pd.', 'nip': '197003121998031004'},
+        'sekolah': {'nama': 'Madrasah Ibtidaiyah Negeri 2 Kabupaten Malang', 'kota': 'Kabupaten Malang'},
+        'periode': {'mulai': '28 September 2026', 'selesai': '30 November 2026', 'tanggal_penilaian': '25 November 2026'},
+    }
+    wb = load_workbook(io.BytesIO(pkg_cetak.laporan_guru_excel(lap, lembar=list(pkg_cetak.LEMBAR_PDF_LENGKAP))))
+    gab = lambda ws: {str(m) for m in ws.merged_cells.ranges}
+    ws = wb['02-IDNTY']
+    # Isian identitas: E:H sampai batas area cetak, diperkecil bila tetap tidak muat (tidak lagi keluar area cetak).
+    assert 'E6:H6' in gab(ws) and ws['E6'].alignment.shrink_to_fit and 6 <= ws['E6'].font.sz < 10
+    # Tanda tangan: Penilai di B:D, guru di E:H; tempat-tanggal satu teks di pihak kanan.
+    for r in (35, 38, 39):
+        assert {f'B{r}:D{r}', f'E{r}:H{r}'} <= gab(ws)
+        assert ws[f'B{r}'].alignment.horizontal == ws[f'E{r}'].alignment.horizontal == 'center'
+    # Nama bergelar panjang: 2 baris seimbang (CHAR(10) disisipkan, rumus tetap merujuk sel sumber), baris ditinggikan.
+    assert ws['B38'].value == '=SUBSTITUTE(E26&"","Drs. H. Muhammad ","Drs. H. Muhammad"&CHAR(10),1)'
+    assert ws['E38'].value.startswith('=SUBSTITUTE(E6&"",') and 'CHAR(10)' in ws['E38'].value and ws['G38'].value is None
+    assert ws['B38'].alignment.wrap_text and ws.row_dimensions[38].height > 20
+    assert ws['B38'].font.sz == ws['E38'].font.sz  # satu baris, satu ukuran huruf
+    assert 'E34:H34' in gab(ws) and ws['F34'].value is None and ws['G34'].value is None and '", "' in ws['E34'].value
+    # Tiga pihak di rekap & indeks kehadiran.
+    assert {'B50:C50', 'D50:E50', 'F50:H50'} <= gab(wb['04-RKAP-PKG'])
+    assert {'B35:D35', 'E35:H35', 'I35:K35'} <= gab(wb['INDEK-HDIR'])
+    assert {'B52:D52', 'E52:F52', 'B53:D53', 'E53:F53'} <= gab(wb['05-RKAP-PKGR'])
+
+
+def test_nilai_teks_rumus_sederhana():
+    import pkg_cetak_rapi
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'A'
+    data = wb.create_sheet('00-DATA')
+    data['E5'] = 'Budi'
+    ws['B1'] = "='00-DATA'!E5&\"\""
+    ws['B2'] = '="NIP. "&UPPER(B1)'
+    ws['B3'] = '=IF(1,2,3)'
+    assert pkg_cetak_rapi.nilai_teks(wb, ws, ws['B2'].value) == 'NIP. BUDI'
+    assert pkg_cetak_rapi.nilai_teks(wb, ws, ws['B3'].value) is None
+    lebar = max(pkg_cetak_rapi.lebar_teks(t, 10) for t in ('satu dua', 'tiga empat')) + 1
+    assert pkg_cetak_rapi.baris_bungkus('satu dua tiga empat', lebar, 10) == 2
 
 
 def _lap_lengkap():

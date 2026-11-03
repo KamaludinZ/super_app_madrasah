@@ -91,6 +91,9 @@ PETA_CETAK = {
         'rekomendasi': {'sheet': '01-LAPORN', 'baris': 21, 'label': 'C', 'titik_dua': 'D', 'isi': 'E', 'gabung': 'E21:H21',
                         'gaya_dari': 20},
         'cover': {'sheet': 'COVER', 'kantor': 'C43'},
+        # 01-LAPORN: periode penilaian (E17 'S.d' G17) & kotak persetujuan (baris 29 label, 30 nama, 31 NIP, 32 tanda tangan).
+        'laporan': {'sheet': '01-LAPORN', 'periode': 17, 'persetujuan': 29, 'kolom_ttd': ('C', 'G'),
+                    'blok_ttd': (('C', 'D'), ('F', 'H'))},
         'form_instr': {'sheet': 'FORM-INSTR', 'sel': {'nama': 'E4', 'nip': 'E5', 'pangkat': 'E6', 'penilai': 'E7',
                                                       'nip_penilai': 'E8', 'tempat_tanggal': 'E9'}},
         # INDEK-HDIR: 12 baris bulan mulai baris 16; F/G/I/J/K serta jumlah (28) & indeks (K29) dihitung rumus template.
@@ -101,6 +104,9 @@ PETA_CETAK = {
                     ('INDEK-HDIR', 'C13'): 'Bulan dan Tahun', ('INDEK-HDIR', 'H13'): 'Tanpa Keterangan',
                     ('INDEK-HDIR', 'C28'): 'Jumlah', ('01-LAPORN', 'C20'): 'Deskripsi Capaian',
                     ('01-LAPORN', 'E23'): 'PERSETUJUAN', ('COVER', 'C43'): 'kantor kementerian agama',
+                    ('01-LAPORN', 'C17'): 'Periode Penilaian', ('01-LAPORN', 'F17'): 'S.d',
+                    ('01-LAPORN', 'C29'): 'Nama Guru', ('01-LAPORN', 'G29'): 'Nama Penilai',
+                    ('01-LAPORN', 'C32'): 'Tanda tangan', ('01-LAPORN', 'G32'): 'Tanda tangan',
                     ('FORM-INSTR', 'D4'): 'Nama Guru', ('FORM-INSTR', 'D9'): 'Tempat dan Tanggal',
                     ('SEJAWAT', 'X6'): 'Hasil Nilai', ('SISWA', 'X6'): 'Hasil Nilai', ('ORTU', 'X6'): 'Hasil Nilai'},
     },

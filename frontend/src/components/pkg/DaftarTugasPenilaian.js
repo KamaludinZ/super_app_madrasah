@@ -9,7 +9,8 @@ import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import TombolCetakOffline from '@/components/pkg/TombolCetakOffline';
 import { cetakFormKosong } from '@/lib/pkgCetak';
 import DialogLengkapiIdentitas from '@/components/pkg/DialogLengkapiIdentitas';
-import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye, ContactRound } from 'lucide-react';
+import DialogBatalKunci from '@/components/pkg/DialogBatalKunci';
+import { ClipboardList, Search, FileBadge, ShieldAlert, Play, PencilLine, Eye, ContactRound, LockOpen } from 'lucide-react';
 
 // Tombol aksi per status lembar (badge status: BadgeStatusPenilaian).
 const AKSI_TUGAS = {
@@ -28,10 +29,13 @@ const FILTER = [
 // Tugas Penilaian Saya: guru yang dibagikan kepala madrasah kepada pengguna (penilai) pada SK aktif.
 // Lembar penilaian baru bisa dibuka setelah penilai disupervisi atau diberi izin menilai oleh kepala madrasah.
 // `tugas` = [{ id, nama, nip, mapel, status, progres }], `keanggotaan` = { nomor_sk, peran, supervisi_selesai, izin_menilai }.
-export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
+// Lembar terkunci dapat dibatalkan kuncinya (kembali draf, alasan wajib) selama masa penilaian (`dalamMasa`);
+// `onBerubah()` memuat ulang daftar sesudahnya.
+export default function DaftarTugasPenilaian({ tugas = [], keanggotaan, dalamMasa = true, onBerubah }) {
   const [cari, setCari] = useState('');
   const [filter, setFilter] = useState('semua');
   const [identitasGuru, setIdentitasGuru] = useState(null);
+  const [batalKunciGuru, setBatalKunciGuru] = useState(null);
   const penilai = keanggotaan?.peran !== 'dinilai';
   // Lembar terbuka bila penilai sudah disupervisi atau diberi izin menilai oleh kepala.
   const bolehMenilai = !!(keanggotaan?.supervisi_selesai || keanggotaan?.izin_menilai);
@@ -136,6 +140,14 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
                     <ContactRound className="h-3.5 w-3.5 mr-1" /> Lengkapi identitas
                   </Button>
                   <TombolCetakOffline ambil={() => cetakFormKosong({ jenis: 'paket', guruId: t.id })} testId={`pkg-tugas-cetak-form-${t.id}`}>Cetak form</TombolCetakOffline>
+                  {t.status === 'terkunci' && penilai && (
+                    <Button size="sm" variant="outline" className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                      onClick={() => setBatalKunciGuru(t)} disabled={!dalamMasa}
+                      title={dalamMasa ? 'Kembalikan lembar menjadi draf untuk diperbaiki' : 'Hanya dapat dibatalkan selama masa penilaian'}
+                      data-testid={`pkg-tugas-batal-kunci-${t.id}`}>
+                      <LockOpen className="h-3.5 w-3.5 mr-1" /> Batalkan kunci
+                    </Button>
+                  )}
                   {terbuka ? (
                     <Button asChild size="sm" variant={t.status === 'terkunci' ? 'outline' : 'default'} className={t.status === 'terkunci' ? 'shrink-0' : 'shrink-0 bg-[#006837] hover:bg-[#005830]'}>
                       <Link to={`/pkg/penilaian/${t.id}`} data-testid={`pkg-tugas-aksi-${t.id}`}>
@@ -155,6 +167,8 @@ export default function DaftarTugasPenilaian({ tugas = [], keanggotaan }) {
       </CardContent>
       <DialogLengkapiIdentitas open={!!identitasGuru} onOpenChange={(v) => !v && setIdentitasGuru(null)}
         guruId={identitasGuru?.id} nama={identitasGuru?.nama} />
+      <DialogBatalKunci open={!!batalKunciGuru} onOpenChange={(v) => !v && setBatalKunciGuru(null)}
+        guru={batalKunciGuru} onBerhasil={() => onBerubah?.()} />
     </Card>
   );
 }

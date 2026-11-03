@@ -78,7 +78,8 @@ function IsiHalamanPenilaian() {
         ))}
       </div>
 
-      <DaftarTugasPenilaian tugas={data.tugas} keanggotaan={keanggotaan} />
+      <DaftarTugasPenilaian tugas={data.tugas} keanggotaan={keanggotaan}
+        dalamMasa={data.alasan_tidak_dapat_diisi !== 'di_luar_masa'} onBerubah={muat} />
     </div>
   );
 }

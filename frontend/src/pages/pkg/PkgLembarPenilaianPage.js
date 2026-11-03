@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, Send, UserX, Repeat, CalendarX } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle, RotateCw, UserRound, Send, UserX, Repeat, CalendarX, LockOpen } from 'lucide-react';
 import PenjagaMenuPkg from '@/components/pkg/PenjagaMenuPkg';
 import PesanTolakPkg from '@/components/pkg/PesanTolakPkg';
 import KartuSubPenilaian from '@/components/pkg/KartuSubPenilaian';
@@ -13,6 +13,7 @@ import StatusSimpanDraf from '@/components/pkg/StatusSimpanDraf';
 import BadgeStatusPenilaian from '@/components/pkg/BadgeStatusPenilaian';
 import HasilAkhirPenilaian from '@/components/pkg/HasilAkhirPenilaian';
 import RiwayatAksiPenilaian from '@/components/pkg/RiwayatAksiPenilaian';
+import DialogBatalKunci from '@/components/pkg/DialogBatalKunci';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import useAutosaveDraf from '@/hooks/useAutosaveDraf';
 import { labelVersi } from '@/lib/pkgInstrumen';
@@ -36,6 +37,7 @@ function IsiLembar() {
   // Galat kelengkapan dari server saat kirim (kode_sub -> pesan); dihapus untuk sub yang kemudian diubah.
   const [galatServer, setGalatServer] = useState({});
   const [galat, setGalat] = useState(null);
+  const [batalKunci, setBatalKunci] = useState(false);
 
   const muat = useCallback(async () => {
     setGalat(null);
@@ -169,6 +171,17 @@ function IsiLembar() {
       )}
 
       {lembar.status === 'terkunci' && <HasilAkhirPenilaian hasil={lembar.hasil} kompetensi={lembar.instrumen.kompetensi} isian={isian} />}
+      {lembar.status === 'terkunci' && keanggotaan?.dalam_masa_penilaian !== false && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between" data-testid="pkg-lembar-batal-kunci">
+          <span>Perlu memperbaiki penilaian? Batalkan kunci agar lembar kembali menjadi draf.</span>
+          <Button size="sm" variant="outline" className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100" onClick={() => setBatalKunci(true)}
+            data-testid="pkg-lembar-tombol-batal-kunci">
+            <LockOpen className="h-3.5 w-3.5 mr-1" /> Batalkan kunci
+          </Button>
+        </div>
+      )}
+      <DialogBatalKunci open={batalKunci} onOpenChange={setBatalKunci} guru={lembar.guru}
+        onBerhasil={muat} />
 
       <div className="sticky top-0 z-10 rounded-xl border border-emerald-200 bg-emerald-50/95 p-3 backdrop-blur" data-testid="pkg-lembar-ringkasan">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">

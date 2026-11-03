@@ -535,6 +535,20 @@ class DrafPenilaianRequest(IsianPkg):
         return (v or '').strip()
 
 
+class BatalKunciPenilaianRequest(IsianPkg):
+    """Batalkan kunci lembar (kembali ke draf) oleh penilainya selama masa penilaian; alasan wajib (tercatat di audit)."""
+    guru_id: str = Field(..., pattern=POLA_ID)
+    alasan: str = Field(..., min_length=5, max_length=300)
+
+    @field_validator('alasan')
+    @classmethod
+    def _alasan(cls, v):
+        v = ' '.join((v or '').split())
+        if len(v) < 5:
+            raise ValueError('alasan minimal 5 karakter')
+        return v
+
+
 class KirimPenilaianRequest(DrafPenilaianRequest):
     """Kirim & kunci lembar: isian terakhir ikut dikirim dan divalidasi kelengkapannya di server."""
 

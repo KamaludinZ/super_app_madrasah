@@ -180,8 +180,32 @@ async def kirim_dan_kunci(db, ktx: Dict[str, Any], data: KirimPenilaianRequest, 
     return terkunci
 
 
+async def batal_kunci(db, ktx: Dict[str, Any], alasan: str, aktor: Dict[str, Any]) -> Dict[str, Any]:
+    """Batalkan kunci lembar milik penilai ini: status kembali 'draf' (isian tetap), nilai resmi dihapus, baris rekap
+    dihapus sampai lembar dikunci lagi, dan riwayat pembatalan disimpan di lembar. Hanya selama masa penilaian."""
+    lembar = ktx['lembar']
+    if not lembar or lembar.get('status') != 'terkunci':
+        raise HTTPException(409, 'Lembar penilaian ini belum dikunci.')
+    if not ktx['keanggotaan'].get('dalam_masa_penilaian'):
+        raise tolak('di_luar_masa', 'Kunci hanya dapat dibatalkan selama masa penilaian berjalan.')
+    sekarang = datetime.now(timezone.utc).isoformat()
+    jejak = {'oleh': aktor.get('id'), 'nama': aktor.get('full_name') or aktor.get('username'), 'pada': sekarang,
+             'alasan': alasan, **{k: lembar.get(k) for k in KUNCI_HASIL}}
+    hasil = await db[KOLEKSI_PENILAIAN].update_one(
+        {'id': lembar['id'], 'status': 'terkunci'},
+        {'$set': {'status': 'draf', 'updated_at': sekarang},
+         '$unset': {k: '' for k in (*KUNCI_HASIL, 'dikirim_pada', 'terkunci_oleh')},
+         '$push': {'riwayat_batal_kunci': jejak}})
+    if getattr(hasil, 'matched_count', 1) == 0:
+        raise HTTPException(409, 'Status lembar sudah berubah. Muat ulang halaman.')
+    from pkg_skema import KOLEKSI_REKAP
+    await db[KOLEKSI_REKAP].delete_one({'id': lembar['id']})
+    dibuka = {k: v for k, v in lembar.items() if k not in (*KUNCI_HASIL, 'dikirim_pada', 'terkunci_oleh')}
+    return {**dibuka, 'status': 'draf', 'updated_at': sekarang}
+
+
 async def riwayat_lembar(db, penilaian_id: Optional[str]) -> list:
-    """Jejak aksi satu lembar (mulai, draf, buka, kirim) dari pkg_audit_log, terbaru dulu."""
+    """Jejak aksi satu lembar (mulai, draf, buka, kirim, batal kunci) dari pkg_audit_log, terbaru dulu."""
     if not penilaian_id:
         return []
     from pkg_audit import LABEL_AKSI
@@ -191,6 +215,7 @@ async def riwayat_lembar(db, penilaian_id: Optional[str]) -> list:
         'aksi': d.get('aksi'), 'label': LABEL_AKSI.get(d.get('aksi'), d.get('aksi')), 'aktor_nama': d.get('aktor_nama'),
         'timestamp': d.get('timestamp'), 'terakhir': d.get('terakhir'), 'jumlah': d.get('jumlah'),
         'progres': (d.get('metadata') or {}).get('progres'), 'nilai_akhir': (d.get('metadata') or {}).get('nilai_akhir'),
+        'alasan': (d.get('metadata') or {}).get('alasan'),
     } for d in docs]
 
 

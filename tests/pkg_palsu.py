@@ -108,6 +108,8 @@ class Koleksi:
                 wadah = wadah.get(b) if isinstance(wadah, dict) else None
             if isinstance(wadah, dict):
                 wadah.pop(daun, None)
+        for k, v in u.get('$push', {}).items():
+            d.setdefault(k, []).append(v)
 
     async def update_one(self, q, u, upsert=False):
         d = next((d for d in self.docs if self._cocok(d, q)), None)

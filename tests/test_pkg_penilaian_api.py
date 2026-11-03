@@ -242,6 +242,60 @@ def test_audit_dan_riwayat_lembar(db):
     assert any(d['aksi'] == 'penilaian_buka' and d['penilaian_id'] is None for d in db['pkg_audit_log'].docs)
 
 
+def _batal(guru, alasan='Salah centang indikator', user='pen'):
+    from pkg_skema import BatalKunciPenilaianRequest
+    async def jalan():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU(user))
+        return await api.batal_kunci_api(BatalKunciPenilaianRequest(guru_id=guru, alasan=alasan), Request(), akses=akses)
+    return asyncio.run(jalan())
+
+
+def test_batal_kunci(db):
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    _kirim('g3', {'1.1': {'centang': [1, 2, 3]}})
+    dok = next(d for d in db['pkg_penilaian'].docs if d['guru_dinilai_id'] == 'g3')
+    assert dok['status'] == 'terkunci' and len(db['pkg_rekap'].docs) == 1
+
+    hasil = _batal('g3', '  Salah   centang indikator  ')
+    assert hasil['status'] == 'draf' and hasil['hasil'] is None and hasil['dapat_diisi'] is True
+    assert hasil['isian']['1.1']['centang'] == [1, 2, 3]  # isian tetap untuk diperbaiki
+    assert dok['status'] == 'draf' and all(k not in dok for k in ('nilai_akhir', 'terkunci_pada', 'terkunci_oleh', 'dikirim_pada'))
+    assert dok['riwayat_batal_kunci'][0]['alasan'] == 'Salah centang indikator' and dok['riwayat_batal_kunci'][0]['nilai_akhir'] == 3
+    assert db['pkg_rekap'].docs == []  # nilai tidak masuk rekap sampai dikunci lagi
+    batal = [d for d in db['pkg_audit_log'].docs if d['aksi'] == 'penilaian_batal_kunci']
+    assert len(batal) == 1 and batal[0]['metadata']['alasan'] == 'Salah centang indikator'
+    assert batal[0]['metadata']['nilai_akhir'] == 3 and batal[0]['kategori'] == 'penilaian'
+
+    # Dapat diperbaiki lalu dikunci ulang dengan nilai baru.
+    _draf('g3', {'1.1': {'centang': [1]}})
+    ulang = _kirim('g3', {'1.1': {'centang': [1, 2]}})
+    assert ulang['status'] == 'terkunci' and ulang['hasil']['nilai_akhir'] == 2 and db['pkg_rekap'].docs[0]['nilai_akhir'] == 2
+
+    async def riwayat():
+        akses = await pkg_penjaga.penjaga_pkg('penilai')(Request(), GURU('pen'))
+        return await api.riwayat_lembar_api('g3', akses=akses)
+    r = {x['aksi']: x for x in asyncio.run(riwayat())}
+    assert r['penilaian_batal_kunci']['label'] == 'Membatalkan kunci penilaian' and r['penilaian_batal_kunci']['alasan']
+
+
+def test_batal_kunci_ditolak(db):
+    from pydantic import ValidationError
+    db['pkg_instrumen'].docs[0]['kompetensi'] = INSTRUMEN_KOMP
+    with pytest.raises(HTTPException) as e:  # lembar draf, belum terkunci
+        _batal('g2')
+    assert e.value.status_code == 409
+    with pytest.raises(HTTPException) as e:  # bukan penilai lembar ini
+        _batal('g1', user='belum')
+    assert e.value.status_code == 403
+    with pytest.raises(ValidationError):  # alasan wajib
+        _batal('g1', alasan='ok')
+    db['pkg_periode'].docs[0]['tanggal_tutup'] = str(HARI_INI - timedelta(days=1))
+    with pytest.raises(HTTPException) as e:  # di luar masa penilaian
+        _batal('g1')
+    assert e.value.detail['alasan'] == 'di_luar_masa'
+    assert next(d for d in db['pkg_penilaian'].docs if d['id'] == 'n1')['status'] == 'terkunci'
+
+
 def test_isian_berbahaya_ditolak_lewat_api(db):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
