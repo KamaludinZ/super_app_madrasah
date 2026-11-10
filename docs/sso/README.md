@@ -151,7 +151,42 @@ Cocokkan dengan `email`; `jenis` dari Super App sama dengan `user_type` untuk gu
 Cocokkan dengan `email`; bila akun siswa dibuat tanpa email, tambahkan kolom `username` atau cocokkan lewat
 data anggota di `cariPengguna()`.
 
-**Perpustakaan (nanti)**: daftarkan di Super App dengan kode `perpustakaan`, lalu pasang penerima yang sama.
+## 3. Perpustakaan SLiMS 9 (`slims9_matsandatama`)
+
+SLiMS bukan Laravel, jadi penerimanya berupa **plugin SLiMS** di folder [`slims/`](slims). Kode inti SLiMS tidak
+diubah. Plugin ini memakai sistem autentikasi bawaan SLiMS 9.8 (`SLiMS\Auth\Validator`), jadi sesi yang terbentuk
+sama persis dengan login biasa, termasuk hak akses grup pustakawan, 2FA, dan status keanggotaan.
+
+Satu tombol "Perpustakaan" di Super App melayani dua jenis akun SLiMS:
+
+| Akun SLiMS | Syarat | Masuk ke |
+| --- | --- | --- |
+| **Pustakawan** (tabel `user`) | peran Super App ada di `peran_pustakawan` (bawaan: `perpustakaan`, `admin`) dan `username`/`email` cocok | halaman admin SLiMS |
+| **Anggota** (tabel `member`) | NISN / NIS / NIP / Peg ID / username cocok dengan `member_id`, atau email cocok dengan `member_email` | area anggota (pinjaman, riwayat, pesan) |
+
+Langkah pemasangan:
+
+1. Di Super App, daftarkan aplikasi:
+   * kode `perpustakaan`;
+   * alamat penerima `https://perpus.madrasah.sch.id/index.php?p=superapp_sso`;
+   * peran siswa, guru, pegawai, dan `perpustakaan`.
+
+   Salin kunci rahasianya.
+2. Salin folder `slims/plugins/superapp_sso/` ke folder `plugins/` SLiMS.
+3. Salin `slims/config/superapp.php` ke folder `config/` SLiMS. Nama filenya harus `superapp.php`, **tanpa garis bawah**, karena SLiMS mengabaikan `config/*_*.php`. Lalu isi `url` dan `kunci`. Jangan masukkan file ini ke git publik.
+4. Login SLiMS sebagai admin, buka **Sistem → Plugin**, lalu aktifkan **Login lewat Super App**.
+5. Sesuaikan pencocokan di `config/superapp.php`:
+   * `anggota`: kolom yang menyimpan ID anggota. Biasanya siswa = NISN/NIS dan guru = NIP.
+   * `pustakawan`: kolom akun petugas.
+6. Uji kunci dari server SLiMS:
+   ```bash
+   curl -H "Authorization: Bearer sso_xxx" https://superapp.madrasah.sch.id/api/sso/cek
+   ```
+
+Catatan SLiMS:
+* Pencocokan hanya dipakai bila hasilnya **tepat satu** akun. Misalnya, email yang dipakai dua anggota dilewati demi keamanan.
+* Pustakawan yang mengaktifkan 2FA tetap diminta kode 2FA setelah datang dari Super App.
+* Gagal masuk diarahkan ke halaman login SLiMS dengan pesannya. Semua percobaan tercatat di log sistem SLiMS.
 
 ## Keamanan
 
