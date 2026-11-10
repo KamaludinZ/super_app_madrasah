@@ -2,6 +2,8 @@ import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const BASE = `${BACKEND_URL}/api`;
+// Alamat dasar API (mis. untuk ditampilkan sebagai alamat yang dipasang di aplikasi lain).
+export const BASE_API = BASE;
 
 export const api = axios.create({
   baseURL: BASE,
