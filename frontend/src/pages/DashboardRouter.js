@@ -14,6 +14,7 @@ import KelasDashboard from './dashboards/KelasDashboard';
 import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 import PublicPagesSection from '@/components/PublicPagesSection';
 import NotificationPermissionBanner from '@/components/NotificationPermissionBanner';
+import KartuAplikasiTerhubung from '@/components/sso/KartuAplikasiTerhubung';
 
 /**
  * Wrapper that shows common sections (announcements, public pages) at top of dashboard,
@@ -99,6 +100,8 @@ export default function DashboardRouter() {
       {!isAdmin && <NotificationPermissionBanner />}
 
       {!isAdmin && <AnnouncementsCard />}
+      {/* Aplikasi madrasah lain yang dibuka dengan login Super App (tidak tampil bila tidak ada) */}
+      {activeRole !== 'kelas' && <KartuAplikasiTerhubung />}
       <DashboardComponent />
       {!isAdmin && <PublicPagesSection />}
     </div>

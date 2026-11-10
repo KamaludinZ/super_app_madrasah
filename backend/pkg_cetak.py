@@ -331,7 +331,9 @@ def rapikan_laporan_evaluasi(wb) -> None:
             gabung(ws, r, column_index_from_string(kol), column_index_from_string(kanan))
             # Semua baris blok rata tengah pada sumbu yang sama; nama panjang dibungkus (maks. 2 baris, tidak menempel
             # garis kotak), baris lain diperkecil bila perlu.
-            sel.alignment = Alignment(horizontal='center', vertical='center', wrap_text=(i == 5), shrink_to_fit=(i != 5))
+            # Nama menempel ke bawah barisnya & NIP ke atas barisnya agar keduanya rapat.
+            sel.alignment = Alignment(horizontal='center', vertical={5: 'bottom', 6: 'top'}.get(i, 'center'),
+                                      wrap_text=(i == 5), shrink_to_fit=(i != 5))
             if i == 5:
                 lebar = lebar_rentang_pt(ws, column_index_from_string(kol), column_index_from_string(kanan))
                 f = copy(sel.font)
@@ -397,9 +399,10 @@ def isi_rekomendasi(wb, teks: Optional[str]) -> None:
 
 # Lembar laporan lengkap untuk PDF, urut seperti berkas resmi. Tidak dicetak: 00-DATA (lembar isian), DUDI (khusus SMK),
 # FORM-360-GR (angket kosong; dicetak terpisah lewat Cetak Angket), FORM-INSTR (formulir instrumen kosong), dan
-# MODEL-GURU (halaman menu navigasi template: tombol tautan antarsheet & banner, tanpa data penilaian).
+# MODEL-GURU (halaman menu navigasi template: tombol tautan antarsheet & banner, tanpa data penilaian), dan RUBRIK-CAPAIAN
+# (tabel acuan deskripsi level; tetap dibaca rumus 01-LAPORN dari lembar tersembunyi).
 LEMBAR_PDF_LENGKAP = ('COVER', '01-LAPORN', '02-IDNTY', 'KOMP-1', 'KOMP (2)', 'KOMP (3)', 'KOMP (4)', '04-RKAP-PKG',
-                      '05-RKAP-PKGR', 'INDEK-HDIR', 'SEJAWAT', 'SISWA', 'ORTU', 'RUBRIK-CAPAIAN')
+                      '05-RKAP-PKGR', 'INDEK-HDIR', 'SEJAWAT', 'SISWA', 'ORTU')
 
 
 # Lembar angket 360° berlanjut ke beberapa halaman (tinggi bebas, kepala tabel diulang); lembar lain dicetak 1 halaman

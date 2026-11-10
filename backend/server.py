@@ -66,6 +66,7 @@ from routers import (
     sarpras,
     schedules,
     school_apps,
+    sso,
     semesters,
     student_detail_upload,
     student_records,
@@ -141,6 +142,7 @@ api_router.include_router(uji_notifikasi.router)
 api_router.include_router(events.router)
 api_router.include_router(rkam.router)
 api_router.include_router(school_apps.router)
+api_router.include_router(sso.router)
 api_router.include_router(waka_kurikulum.router)
 api_router.include_router(bk.router)
 api_router.include_router(perpus.router)
@@ -332,6 +334,15 @@ async def startup_event():
             logger.error(f"Index mobile gagal: {gagal}")
     except Exception as e:
         logger.error(f"Failed to ensure mobile indexes: {e}")
+
+    # Index login lewat tiket (SSO): kode aplikasi & hash kunci unik, tiket kedaluwarsa dihapus otomatis
+    try:
+        from sso import ensure_sso_indexes
+        gagal = await ensure_sso_indexes(db)
+        if gagal:
+            logger.error(f"Index SSO gagal: {gagal}")
+    except Exception as e:
+        logger.error(f"Failed to ensure SSO indexes: {e}")
 
     # Index notifikasi pribadi (kotak masuk per pengguna, kedaluwarsa 90 hari)
     try:

@@ -16,7 +16,7 @@ import {
   HeartHandshake, ClipboardCheck, AlertTriangle, Home, School, FileBarChart,
   Stethoscope, Pill, ClipboardPlus, HeartPulse, Syringe,
   Package, DoorOpen, Trash, Handshake, CalendarClock, BookOpenCheck, Wrench, AlertOctagon, MapPin,
-  MapPinned, UserRoundCog,
+  MapPinned, UserRoundCog, AppWindow,
 } from 'lucide-react';
 import ViewContextDialog from './ViewContextDialog';
 import { menuTatib } from '@/lib/aksesTatib';
@@ -566,6 +566,7 @@ function navForRoleDasar(role, userRoles = []) {
           { to: '/admin/master-wilayah', label: 'Master Wilayah', icon: MapPin, testid: 'nav-admin-master-wilayah' },
           { to: '/admin/pencocokan-wilayah', label: 'Pencocokan Wilayah', icon: MapPinned, testid: 'nav-admin-pencocokan-wilayah' },
           { to: '/admin/backup', label: 'Backup & Restore', icon: Database, testid: 'nav-admin-backup' },
+          { to: '/admin/aplikasi-terhubung', label: 'Aplikasi Terhubung (SSO)', icon: AppWindow, testid: 'nav-admin-sso' },
           { to: '/admin/audit-logs', label: 'Log Aktivitas', icon: ShieldCheck, testid: 'nav-audit' },
           { to: '/admin/settings', label: 'Pengaturan', icon: Settings, testid: 'nav-settings' },
         ],
