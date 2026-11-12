@@ -15,7 +15,7 @@ export type ItemMenuPkg = { key: string; label: string; to: string; akses: boole
 export const JUDUL_GRUP_PKG = 'Penilaian Kinerja';
 
 // Peran tanpa menu PKG (sama dengan PERAN_NON_GTK di frontend/src/lib/menuUmum.js).
-const PERAN_NON_GTK = ['siswa', 'kelas', 'orang_tua', 'alumni'];
+const PERAN_NON_GTK = ['siswa', 'kelas', 'orang_tua', 'alumni', 'satpam'];
 export const perluMenuPkg = (role: string | null | undefined) => !!role && !PERAN_NON_GTK.includes(role);
 
 // Sub-menu yang halamannya sudah dibangun di web (RUTE_PKG_TERSEDIA di frontend/src/lib/pkg.js).

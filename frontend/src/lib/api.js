@@ -87,6 +87,7 @@ export const ROLE_LABELS = {
   musrifah_mahad: 'Musrifah Mahad',
   murabbi_mahad: 'Murabbi Mahad',
   bendahara_mahad: 'Bendahara Mahad',
+  satpam: 'Satpam',
 };
 
 export const DAY_LABELS = {

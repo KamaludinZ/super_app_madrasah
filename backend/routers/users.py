@@ -38,6 +38,14 @@ router = APIRouter()
 # seluruh tendik termasuk Kepala TU (core.PERAN_GTK).
 GTK_ACCOUNT_ROLES = set(PERAN_GTK)
 
+
+def pesan_peran_bukan_gtk(invalid) -> str:
+    """Pesan baris impor Excel GTK yang memuat peran non-GTK. Satpam bukan GTK: akunnya dibuat lewat
+    menu Manajemen Pengguna, sehingga baris satpam tidak pernah masuk data GTK."""
+    if 'satpam' in invalid:
+        return "Satpam bukan GTK — baris dilewati. Buat akun satpam lewat menu Manajemen Pengguna (peran Satpam)."
+    return f"Role tidak valid untuk GTK: {invalid}"
+
 def _norm_name(name: Optional[str]) -> str:
     if not name:
         return ''
@@ -125,7 +133,7 @@ async def users_gtk_initial_import(file: UploadFile = File(...), request: Reques
 
             invalid = [r for r in row['roles'] if r not in allowed_roles]
             if invalid:
-                errors.append({'row': idx, 'error': f"Role tidak valid untuk GTK: {invalid}"})
+                errors.append({'row': idx, 'error': pesan_peran_bukan_gtk(invalid)})
                 continue
 
             nip = (row.get('nip_nuptk') or '').strip()
@@ -238,7 +246,7 @@ async def users_gtk_combined_import(file: UploadFile = File(...), request: Reque
             # Validate roles
             invalid = [r for r in row['roles'] if r not in allowed_roles]
             if invalid:
-                errors.append({'row': idx, 'error': f"Role tidak valid untuk GTK: {invalid}"})
+                errors.append({'row': idx, 'error': pesan_peran_bukan_gtk(invalid)})
                 continue
 
             nip = (row.get('nip_nuptk') or '').strip()

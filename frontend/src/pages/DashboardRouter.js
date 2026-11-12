@@ -1,4 +1,5 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import AdminDashboard from './dashboards/AdminDashboard';
 import GuruDashboard from './dashboards/GuruDashboard';
@@ -15,6 +16,42 @@ import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 import PublicPagesSection from '@/components/PublicPagesSection';
 import NotificationPermissionBanner from '@/components/NotificationPermissionBanner';
 import KartuAplikasiTerhubung from '@/components/sso/KartuAplikasiTerhubung';
+import { BERANDA_SATPAM } from '@/lib/izinKamad';
+
+// Roles that should see admin-style dashboard with stats
+const ADMIN_LIKE_ROLES = [
+  'admin',
+  'kepala_sekolah',
+  'kepala_tata_usaha',
+  'waka_sarpras',
+  'waka_kesiswaan',
+  'waka_kurikulum',
+  'waka_humas',
+  'penjamin_mutu',
+];
+
+/**
+ * Bagian umum di sekitar dashboard peran: banner izin notifikasi, pengumuman, aplikasi terhubung
+ * (atas) dan halaman publik (bawah). Dipakai DashboardRouter dan halaman dashboard tersendiri
+ * (mis. dashboard satpam di /satpam).
+ */
+export function BingkaiDashboard({ children }) {
+  const { activeRole } = useAuth();
+  const isAdmin = ADMIN_LIKE_ROLES.includes(activeRole);
+
+  return (
+    <div className="space-y-4">
+      {/* Notification permission banner for all non-admin users */}
+      {!isAdmin && <NotificationPermissionBanner />}
+
+      {!isAdmin && <AnnouncementsCard />}
+      {/* Aplikasi madrasah lain yang dibuka dengan login Super App (tidak tampil bila tidak ada) */}
+      {activeRole !== 'kelas' && <KartuAplikasiTerhubung />}
+      {children}
+      {!isAdmin && <PublicPagesSection />}
+    </div>
+  );
+}
 
 /**
  * Wrapper that shows common sections (announcements, public pages) at top of dashboard,
@@ -22,36 +59,6 @@ import KartuAplikasiTerhubung from '@/components/sso/KartuAplikasiTerhubung';
  */
 export default function DashboardRouter() {
   const { activeRole } = useAuth();
-
-  // Roles that should see admin-style dashboard with stats
-  const adminLikeRoles = [
-    'admin',
-    'kepala_sekolah',
-    'kepala_tata_usaha',
-    'waka_sarpras',
-    'waka_kesiswaan',
-    'waka_kurikulum',
-    'waka_humas',
-    'penjamin_mutu',
-  ];
-
-  const isAdmin = adminLikeRoles.includes(activeRole);
-
-  // Check if user is a teacher (should see notification banner)
-  const isTeacher = [
-    'guru',
-    'guru_ipa',
-    'guru_ips',
-    'guru_bahasa',
-    'guru_seni',
-    'guru_agama',
-    'guru_tik',
-    'guru_piket',
-    'guru_bk',
-    'guru_tata_tertib',
-    'guru_ekstrakurikuler',
-    'wali_kelas'
-  ].includes(activeRole);
 
   let DashboardComponent;
   switch (activeRole) {
@@ -76,6 +83,9 @@ export default function DashboardRouter() {
       DashboardComponent = WaliKelasDashboard; break;
     case 'kelas':
       DashboardComponent = KelasDashboard; break;
+    case 'satpam':
+      // Satpam punya halaman dashboard sendiri, bukan menumpang dashboard peran lain.
+      return <Navigate to={BERANDA_SATPAM} replace />;
     case 'guru_bk':
       DashboardComponent = GuruBkDashboard; break;
     case 'guru_tata_tertib':
@@ -95,15 +105,8 @@ export default function DashboardRouter() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Notification permission banner for all non-admin users */}
-      {!isAdmin && <NotificationPermissionBanner />}
-
-      {!isAdmin && <AnnouncementsCard />}
-      {/* Aplikasi madrasah lain yang dibuka dengan login Super App (tidak tampil bila tidak ada) */}
-      {activeRole !== 'kelas' && <KartuAplikasiTerhubung />}
+    <BingkaiDashboard>
       <DashboardComponent />
-      {!isAdmin && <PublicPagesSection />}
-    </div>
+    </BingkaiDashboard>
   );
 }

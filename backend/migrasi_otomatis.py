@@ -202,6 +202,11 @@ async def _pkg_audit(db):
     return await migrate(db)
 
 
+async def _izin_kamad(db):
+    from migrations.migrate_izin_kamad import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -226,6 +231,7 @@ MIGRASI = [
     ('2026-10-16_pengaturan_ambang_sp', _pengaturan_ambang_sp),
     ('2026-10-19_pkg_rekap', _pkg_rekap),
     ('2026-10-19_pkg_audit', _pkg_audit),
+    ('2026-11-12_izin_kamad', _izin_kamad),
 ]
 
 

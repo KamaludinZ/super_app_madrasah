@@ -3,6 +3,21 @@
  * Path yang punya layar native diarahkan ke layar aplikasi; sisanya ke modul web (/web?path=…).
  */
 
+/**
+ * Satpam & Izin Kamad (menu web dari lib/menuUmum.js + navForRole satpam) -> layar aplikasi.
+ * Hak buka tiap layar ditegakkan di layarnya & di server (require_role), bukan di pemetaan ini.
+ */
+export const RUTE_IZIN_KAMAD: Record<string, string> = {
+  // Beranda satpam web = Beranda aplikasi; untuk peran satpam menampilkan src/izin/DashboardSatpam.
+  '/satpam': '/(app)/(tabs)',
+  // Pengajuan Izin (kepala TU, guru mapel, tendik, satpam): app/(app)/izin/index.tsx.
+  '/izin': '/izin',
+  // Persetujuan Izin (kepala madrasah): app/(app)/izin/persetujuan.tsx.
+  '/izin/persetujuan': '/izin/persetujuan',
+  // Pemantau Izin Hari Ini (kepala TU): app/(app)/izin/pemantau.tsx.
+  '/izin/pemantau': '/izin/pemantau',
+};
+
 /** Rute native untuk path web tertentu (bergantung peran), atau null. */
 export function nativeRoute(path: string, role?: string | null): string | null {
   const p = path.split('?')[0];
@@ -10,6 +25,8 @@ export function nativeRoute(path: string, role?: string | null): string | null {
   if (/^\/lab\/(ipa|ips|bahasa|seni|agama|komputer)\/(alat-bahan|jadwal|jurnal-penggunaan|jurnal-pengelolaan|peminjaman-alat|kerusakan)$/.test(p)) return p;
   // Dashboard web = Beranda aplikasi (ringkasan per peran, jadwal hari ini, pintasan, pengumuman).
   if (p === '/dashboard') return '/(app)/(tabs)';
+  // Satpam & Izin Kamad: semuanya punya layar native (lihat RUTE_IZIN_KAMAD).
+  if (RUTE_IZIN_KAMAD[p]) return RUTE_IZIN_KAMAD[p];
   if (p === '/jurnal/scan') return '/scan';
   if (p === '/jurnal/riwayat') return '/(app)/(tabs)/jurnal';
   if (p === '/guru-pengganti') return '/(app)/(tabs)/pengganti';

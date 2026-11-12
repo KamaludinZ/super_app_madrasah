@@ -37,6 +37,7 @@ from routers import (
     holidays_tasks,
     impor_data_master,
     indikator_materi,
+    izin_kamad,
     jabatan,
     journals,
     kelas_digital,
@@ -137,6 +138,7 @@ api_router.include_router(tatib.router)
 api_router.include_router(tatib_poin.router)
 api_router.include_router(tatib_tindakan.router)
 api_router.include_router(simpan_akun.router)
+api_router.include_router(izin_kamad.router)
 api_router.include_router(masterplan.router)
 api_router.include_router(uji_notifikasi.router)
 api_router.include_router(events.router)

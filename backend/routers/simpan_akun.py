@@ -23,8 +23,9 @@ from simpan_akun import (
 
 router = APIRouter()
 
-# Peran non-GTK yang tidak memakai Simpan Akun.
-PERAN_NON_GTK = {'siswa', 'kelas', 'orang_tua', 'alumni'}
+# Peran non-GTK yang tidak memakai Simpan Akun (satpam: akun pengguna saja, bukan GTK).
+# HARUS sama dengan PERAN_NON_GTK di frontend/src/lib/menuUmum.js.
+PERAN_NON_GTK = {'siswa', 'kelas', 'orang_tua', 'alumni', 'satpam'}
 CAKUPAN_TOKEN = 'simpan_akun'
 UMUR_TOKEN_MENIT = 15
 

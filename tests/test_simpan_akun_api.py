@@ -95,7 +95,7 @@ def db(monkeypatch):
 
 def test_hanya_gtk():
     assert api.adalah_gtk(_user()) and api.adalah_gtk(_user(peran='kepala_tata_usaha'))
-    for peran in ('siswa', 'kelas', 'orang_tua', 'alumni'):
+    for peran in ('siswa', 'kelas', 'orang_tua', 'alumni', 'satpam'):
         assert not api.adalah_gtk(_user(peran=peran))
     assert not api.adalah_gtk(_user(peran='siswa', roles=['siswa', 'guru']))  # peran aktif siswa
     with pytest.raises(HTTPException) as e:

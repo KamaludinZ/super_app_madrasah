@@ -3,6 +3,8 @@
  * (tanpa wajib jadwal/jam mengajar), Kepala TU termasuk tendik. HARUS sama dengan backend/core.py
  * (PERAN_GURU_GTK, PERAN_TENDIK_GTK) dan frontend/src/lib/jenisGtk.js. Bukan kelompok "guru yang mengajar"
  * (itu GURU_ROLES di ./roles.ts).
+ *
+ * Satpam sengaja TIDAK masuk kedua daftar: akunnya hanya akun pengguna (bukan GTK), sama dengan backend.
  */
 export const PERAN_GURU_GTK = [
   'guru', 'guru_ipa', 'guru_ips', 'guru_bahasa', 'guru_seni', 'guru_agama', 'guru_tik',
@@ -20,4 +22,7 @@ export function jenisGtk(roles: string[] | null | undefined): JenisGtk | null {
   return null;
 }
 
+export const PERAN_SATPAM = 'satpam';
+
 export const adalahTendik = (roles: string[] | null | undefined) => jenisGtk(roles) === 'tendik';
+export const adalahSatpam = (roles: string[] | null | undefined) => (roles ?? []).includes(PERAN_SATPAM);

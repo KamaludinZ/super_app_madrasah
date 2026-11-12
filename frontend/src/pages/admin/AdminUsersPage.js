@@ -42,6 +42,7 @@ const ROLE_TABS = [
   { value: 'waka_kurikulum', label: 'Waka Kurikulum' },
   { value: 'bendahara', label: 'Bendahara' },
   { value: 'perpustakaan', label: 'Perpustakaan' },
+  { value: 'satpam', label: 'Satpam' },
   { value: 'alumni', label: 'Alumni' },
 ];
 

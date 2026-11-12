@@ -4,6 +4,7 @@ import type { IconName } from '@/components/ui/Icon';
 const MAP: Record<string, IconName> = {
   AlertOctagon: 'warning-outline',
   AlertTriangle: 'alert-circle-outline',
+  AppWindow: 'apps-outline',
   ArrowRightLeft: 'swap-horizontal-outline',
   Award: 'ribbon-outline',
   BarChart3: 'stats-chart-outline',
@@ -27,6 +28,7 @@ const MAP: Record<string, IconName> = {
   FileBarChart: 'bar-chart-outline',
   FileText: 'document-text-outline',
   FileUp: 'cloud-upload-outline',
+  Gavel: 'hammer-outline',
   Globe: 'globe-outline',
   GraduationCap: 'school-outline',
   Handshake: 'hand-left-outline',
