@@ -946,6 +946,8 @@ class UserUpdateRequest(BaseModel):
     tmt_guru: Optional[str] = None
     tugas_utama: Optional[str] = None
     tugas_tambahan: Optional[str] = None
+    # NIPM: nomor induk pegawai buatan madrasah (dipakai GTK Non ASN; PNS/PPPK memakai NIP)
+    nipm: Optional[str] = None
     # Status & Riwayat, daftar riwayat, dan arsip berkas GTK (tab-tab halaman detail GTK)
     status_penugasan: Optional[str] = None
     pangkat_golongan: Optional[str] = None

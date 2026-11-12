@@ -89,6 +89,7 @@ Controller contoh mengarahkan kegagalan ke route bernama `login`; sesuaikan bila
     "nip": "198207152009012003",
     "nuptk": null,
     "peg_id": "PEG-123",
+    "nipm": null,
     "nisn": null,
     "nis": null,
     "jenis_kelamin": "L",
@@ -105,6 +106,7 @@ Controller contoh mengarahkan kegagalan ke route bernama `login`; sesuaikan bila
 * `jenis`: `siswa` | `guru` | `pegawai` | `alumni` (kelompok besar, cocok untuk jenis anggota koperasi / tipe
   pengguna PTSP).
 * `kelas`: nama rombel untuk siswa.
+* `nipm`: NIP buatan madrasah untuk GTK Non ASN (PNS/PPPK memakai `nip`).
 * Tidak pernah ada password atau token di data ini.
 
 Galat dikembalikan sebagai `{"detail": {"kode": "...", "pesan": "..."}}`:

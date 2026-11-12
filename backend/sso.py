@@ -118,6 +118,7 @@ def profil_pengguna(user: Dict[str, Any], kelas: Optional[Dict[str, Any]] = None
         'nip': _isi(user.get('nip')) or (nip_nuptk if len(angka) == 18 else None),
         'nuptk': _isi(user.get('nuptk')) or (nip_nuptk if len(angka) == 16 else None),
         'peg_id': _isi(user.get('peg_id')),
+        'nipm': _isi(user.get('nipm')),  # NIP buatan madrasah (GTK Non ASN)
         'nisn': _isi(user.get('nisn')),
         'nis': _isi(user.get('nis')),
         'jenis_kelamin': _isi(user.get('gender')),

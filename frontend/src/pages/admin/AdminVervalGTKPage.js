@@ -116,6 +116,7 @@ export default function AdminVervalGTKPage() {
       phone: 'Nomor Telepon',
       nip_nuptk: 'NIP/NUPTK',
       peg_id: 'Peg ID',
+      nipm: 'NIPM',
       npk: 'NPK',
       nrg: 'NRG',
       address: 'Alamat',

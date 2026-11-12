@@ -131,6 +131,7 @@ KOLOM_DATA_GTK: List[Dict[str, Any]] = [
         ('jenis_ptk', 'Jenis PTK (guru_mapel/guru_bk/kepala_sekolah/tenaga_administrasi/pustakawan/laboran)'),
         ('tmt_pegawai', 'TMT Pegawai (YYYY-MM-DD)'), ('tmt_guru', 'TMT Guru/Tanggal SK PTK (YYYY-MM-DD)'),
         ('tugas_utama', 'Tugas Utama'), ('tugas_tambahan', 'Tugas Tambahan'),
+        ('nipm', 'NIPM (NIP Madrasah, untuk Non ASN)'),
     ]),
 ]
 
