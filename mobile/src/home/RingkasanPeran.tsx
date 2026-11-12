@@ -17,8 +17,8 @@ import { radius, spacing, useTheme } from '@/theme';
 import { T } from '@/components/ui/Text';
 import { Icon, IconName } from '@/components/ui/Icon';
 
-// Peran tanpa absensi GTK (bukan pegawai) atau yang punya ringkasan sendiri.
-const TANPA_ABSENSI = ['siswa', 'kepala_sekolah', 'admin', 'orang_tua', 'parent'];
+// Peran tanpa absensi GTK (bukan pegawai) atau yang punya ringkasan sendiri (satpam: src/izin/DashboardSatpam).
+const TANPA_ABSENSI = ['siswa', 'kepala_sekolah', 'admin', 'orang_tua', 'parent', 'satpam'];
 
 function Tile({ icon, label, value, hint, color, onPress }: { icon: IconName; label: string; value: string; hint?: string; color?: string; onPress?: () => void }) {
   const { colors } = useTheme();

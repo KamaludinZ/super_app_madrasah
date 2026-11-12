@@ -19,6 +19,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/components/ui/Toast';
 import { canPiket, initials, roleLabel } from '@/utils/roles';
+import { PERAN_SATPAM } from '@/utils/gtk';
 import { APP_VERSION, WEB_URL } from '@/config';
 import { cancelAllReminders, unregisterDevice } from '@/notifications';
 import { unregisterBackgroundSync } from '@/offline/sync';
@@ -126,7 +127,7 @@ export default function ProfilScreen() {
       <Section title="Lainnya">
         {activeRole === 'siswa' ? (
           <ListItem icon="id-card-outline" title="Data diri lengkap" subtitle="Data siswa, orang tua, alamat, berkas & kelengkapan" onPress={() => router.push('/profil-siswa')} />
-        ) : activeRole && activeRole !== 'admin' && activeRole !== 'kelas' ? (
+        ) : activeRole && activeRole !== 'admin' && activeRole !== 'kelas' && activeRole !== PERAN_SATPAM ? (
           <ListItem icon="id-card-outline" title="Data diri lengkap" subtitle="Data GTK, kepegawaian, riwayat, berkas & kelengkapan" onPress={() => router.push('/profil-gtk')} />
         ) : null}
         {canPiket(activeRole, user?.roles) ? (

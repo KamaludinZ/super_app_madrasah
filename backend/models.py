@@ -50,6 +50,7 @@ ROLES = [
     'murabbi_mahad',
     'bendahara_mahad',
     'kelas',
+    'satpam',
 ]
 
 ROLE_LABELS = {
@@ -92,6 +93,7 @@ ROLE_LABELS = {
     'murabbi_mahad': 'Murabbi Mahad',
     'bendahara_mahad': 'Bendahara Mahad',
     'kelas': 'Akun Kelas',
+    'satpam': 'Satpam',
 }
 
 # Default teaching slots template (jam ke- format)

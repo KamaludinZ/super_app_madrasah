@@ -83,7 +83,7 @@ export default function SimpanAkunPage() {
     setAplikasi('');
   };
 
-  // Simpan Akun hanya untuk GTK (siswa, akun kelas, orang tua, alumni dialihkan).
+  // Simpan Akun hanya untuk GTK (siswa, akun kelas, orang tua, alumni, satpam dialihkan).
   if (!adalahGtk(activeRole)) return <Navigate to="/dashboard" replace />;
 
   return (

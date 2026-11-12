@@ -263,6 +263,19 @@ PERAN_GURU_GTK = GURU_MAPEL_ROLES + ('wali_kelas', 'guru_piket', 'guru_bk', 'gur
 PERAN_TENDIK_GTK = ('tenaga_kependidikan', 'kepala_tata_usaha')
 PERAN_GTK = PERAN_GURU_GTK + PERAN_TENDIK_GTK
 
+# Satpam: peran tersendiri yang hanya punya akun pengguna. Sengaja TIDAK masuk PERAN_GURU_GTK maupun
+# PERAN_TENDIK_GTK, sehingga jenis_gtk_peran() = None dan satpam tidak muncul di data guru/tendik, rekap
+# absensi GTK, E-Kinerja, UKS, lab, events, maupun impor Excel GTK. Juga termasuk PERAN_NON_GTK Simpan Akun
+# (routers/simpan_akun.py): satpam tidak memakai brankas akun.
+PERAN_SATPAM = 'satpam'
+
+
+def satpam_bukan_gtk(roles) -> bool:
+    """True untuk akun satpam yang tidak merangkap siswa/GTK: tidak boleh masuk data GTK mana pun
+    (mis. pasien GTK UKS). Satpam yang juga punya peran GTK tetap diperlakukan sebagai GTK."""
+    roles = roles or []
+    return PERAN_SATPAM in roles and 'siswa' not in roles and jenis_gtk_peran(roles) is None
+
 
 def jenis_gtk_peran(roles) -> Optional[str]:
     """'guru' | 'tendik' | None (bukan GTK). Guru didahulukan bila merangkap peran tendik."""

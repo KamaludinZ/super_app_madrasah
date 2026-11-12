@@ -23,7 +23,7 @@ from xml.sax.saxutils import escape as xml_escape
 from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
 from ckg_kolom import (KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, info_pasien_form, kolom_template_ckg,
                        lengkapi_identitas_ckg, pemeriksaan_lain)
-from core import PERAN_GURU_GTK, PERAN_TENDIK_GTK, db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
+from core import PERAN_GURU_GTK, PERAN_TENDIK_GTK, db, satpam_bukan_gtk, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
 from journal_core import now_wib
 from routers._shared import sembunyikan_siswa_nonaktif
@@ -336,6 +336,17 @@ async def _get_user_or_404(user_id: str):
     doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password_hash': 0})
     if not doc:
         raise HTTPException(404, "Pengguna tidak ditemukan")
+    return doc
+
+
+PESAN_SATPAM_BUKAN_PASIEN = "Satpam bukan siswa/GTK sehingga tidak dicatat sebagai pasien UKS"
+
+
+async def _get_pasien_or_404(user_id: str):
+    """Pasien UKS = siswa atau GTK; akun satpam (bukan GTK) ditolak."""
+    doc = await _get_user_or_404(user_id)
+    if satpam_bukan_gtk(doc.get('roles')):
+        raise HTTPException(400, PESAN_SATPAM_BUKAN_PASIEN)
     return doc
 
 
@@ -1082,7 +1093,7 @@ async def list_obat_keluar(
 
 @router.post("/uks/obat-keluar")
 async def create_obat_keluar(req: ObatKeluarRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
-    penerima = await _get_user_or_404(req.penerima_id) if req.penerima_id else None
+    penerima = await _get_pasien_or_404(req.penerima_id) if req.penerima_id else None
     doc = await _dispense_obat(
         req.obat_id, req.jumlah, req.tanggal, user,
         kunjungan_id=req.kunjungan_id, penerima=penerima, keterangan=req.keterangan,
@@ -1754,6 +1765,8 @@ async def get_ckg_saya(tahun: Optional[str] = None, user: Dict = Depends(get_cur
     dengan pasien_id = akun ini. Bentuk respons sama dengan riwayat CKG siswa (items, ringkasan, tahun_tersedia)."""
     if user.get('active_role') == 'kelas':
         raise HTTPException(403, "Akun kelas tidak memiliki data CKG")
+    if satpam_bukan_gtk(user.get('roles')):
+        raise HTTPException(403, PESAN_SATPAM_BUKAN_PASIEN)
     data = await _riwayat_ckg(user['id'], tahun)
     kelas_nama = None
     if 'siswa' in (user.get('roles') or []) and user.get('student_class_id'):
@@ -2285,7 +2298,7 @@ def _cek_tanggal_kunjungan(tanggal: str) -> None:
 @router.post("/uks/kunjungan")
 async def create_kunjungan(req: KunjunganUKSRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
     _cek_tanggal_kunjungan(req.tanggal)
-    pasien = await _get_user_or_404(req.pasien_id)
+    pasien = await _get_pasien_or_404(req.pasien_id)
 
     doc = {
         'id': str(uuid.uuid4()),
@@ -2335,7 +2348,7 @@ async def update_kunjungan(kunjungan_id: str, req: KunjunganUKSRequest, user: Di
     update_data['keluhan'] = _clean_keluhan(req.keluhan)
 
     if req.pasien_id != existing.get('pasien_id'):
-        pasien = await _get_user_or_404(req.pasien_id)
+        pasien = await _get_pasien_or_404(req.pasien_id)
         update_data.update(_user_fields('pasien', pasien))
         update_data.update(await _pasien_snapshot(pasien))
 
@@ -2833,7 +2846,7 @@ async def daftar_ckg_kolom_baku(
 
 @router.post("/uks/ckg")
 async def create_ckg(req: CekKesehatanRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
-    pasien = await _get_user_or_404(req.pasien_id)
+    pasien = await _get_pasien_or_404(req.pasien_id)
     doc = {
         'id': str(uuid.uuid4()),
         **req.model_dump(),
@@ -2858,7 +2871,7 @@ async def update_ckg(ckg_id: str, req: CekKesehatanRequest, user: Dict = Depends
     # kesimpulan, dst.) atau field baku yang tidak disertakan klien tetap utuh.
     update_data = req.model_dump(exclude_unset=True)
     if req.pasien_id != existing.get('pasien_id'):
-        pasien = await _get_user_or_404(req.pasien_id)
+        pasien = await _get_pasien_or_404(req.pasien_id)
         update_data.update(_user_fields('pasien', pasien))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 
@@ -2982,6 +2995,8 @@ async def _cari_pasien_impor_ckg(data: Dict[str, str]) -> (Optional[Dict], Optio
     pid = (data.get('pasien_id') or '').strip()
     if pid:
         u = await db.users.find_one({'id': pid}, {'_id': 0, 'password_hash': 0})
+        if u and satpam_bukan_gtk(u.get('roles')):
+            return None, PESAN_SATPAM_BUKAN_PASIEN, 'ID Pasien'
         return (u, None, None) if u else (None, f'ID Pasien {pid} tidak ditemukan', 'ID Pasien')
     nik = re.sub(r'\D', '', data.get('nik') or '')
     if not nik:
@@ -2993,7 +3008,10 @@ async def _cari_pasien_impor_ckg(data: Dict[str, str]) -> (Optional[Dict], Optio
         return None, f'NIK {nik} tidak ditemukan pada data siswa/GTK', 'NIK'
     if len(calon) > 1:
         return None, f'NIK {nik} dimiliki {len(calon)} pengguna; isi kolom ID Pasien', 'NIK'
-    return await db.users.find_one({'id': calon[0]}, {'_id': 0, 'password_hash': 0}), None, None
+    u = await db.users.find_one({'id': calon[0]}, {'_id': 0, 'password_hash': 0})
+    if u and satpam_bukan_gtk(u.get('roles')):
+        return None, PESAN_SATPAM_BUKAN_PASIEN, 'NIK'
+    return u, None, None
 
 
 @router.post("/uks/ckg/import-excel")
@@ -3118,7 +3136,7 @@ async def list_imunisasi(
 
 @router.post("/uks/imunisasi")
 async def create_imunisasi(req: ImunisasiRequest, user: Dict = Depends(require_role(*UKS_ROLES))):
-    pasien = await _get_user_or_404(req.pasien_id)
+    pasien = await _get_pasien_or_404(req.pasien_id)
     doc = {
         'id': str(uuid.uuid4()),
         **req.model_dump(),
@@ -3141,7 +3159,7 @@ async def update_imunisasi(imunisasi_id: str, req: ImunisasiRequest, user: Dict 
 
     update_data = req.model_dump()
     if req.pasien_id != existing.get('pasien_id'):
-        pasien = await _get_user_or_404(req.pasien_id)
+        pasien = await _get_pasien_or_404(req.pasien_id)
         update_data.update(_user_fields('pasien', pasien))
     update_data['updated_at'] = datetime.utcnow().isoformat()
 

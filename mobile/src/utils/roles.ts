@@ -33,6 +33,7 @@ export const ROLE_LABELS: Record<string, string> = {
   penjamin_mutu: 'Penjamin Mutu',
   unit_pengaduan: 'Unit Pengaduan',
   unit_ubudiyah: 'Unit Ubudiyah',
+  satpam: 'Satpam',
 };
 
 export const roleLabel = (r?: string | null) => (r ? ROLE_LABELS[r] || r.replace(/_/g, ' ') : '-');

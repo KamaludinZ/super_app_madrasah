@@ -24,6 +24,7 @@ import { tambahMenuUmum } from '@/lib/menuUmum';
 import { menuPkg, perluMenuPkg, tambahMenuPkg } from '@/lib/menuPkg';
 import { ambilKeanggotaan, ambilMenuPkg } from '@/lib/pkg';
 import { useAuth } from '@/lib/AuthContext';
+import { PERAN_SATPAM } from '@/lib/jenisGtk';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -402,6 +403,13 @@ function navForRoleDasar(role, userRoles = []) {
     items.push({ to: '/admin/siswa', label: 'Data Siswa', icon: GraduationCap, testid: 'nav-unitpel-siswa' });
     items.push({ to: '/unit-pelayanan/kelas', label: 'Kelas', icon: BookOpen, testid: 'nav-unitpel-kelas' });
     items.push({ to: '/prestasi', label: 'Data Prestasi', icon: Trophy, testid: 'nav-prestasi-unitpel' });
+  } else if (role === 'satpam') {
+    // Satpam: beranda sendiri (/satpam = BERANDA_SATPAM di lib/izinKamad.js; ditulis literal agar
+    // terbaca mobile/scripts/sync-web-menu.mjs) berisi papan izin hari ini & pengajuan sendiri.
+    // Menu satpam berikutnya ditambahkan di sini.
+    return [
+      { to: '/satpam', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-satpam-dashboard' },
+    ];
   } else if (role === 'unit_kesehatan') {
     // Unit Kesehatan (petugas UKS) uses grouped menu structure, mirroring admin's Menu UKS group
     return [
@@ -1272,12 +1280,17 @@ export default function AppShell({ children }) {
                   {/* Hide Profile and Change Password for 'kelas' role */}
                   {activeRole !== 'kelas' && (
                     <>
-                      <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
-                        <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => nav('/ckg-saya')} data-testid="menu-ckg-saya">
-                        <HeartPulse className="h-4 w-4 mr-2" /> Hasil CKG Saya
-                      </DropdownMenuItem>
+                      {/* Satpam bukan GTK & bukan pasien UKS: tanpa profil data GTK maupun Hasil CKG. */}
+                      {activeRole !== PERAN_SATPAM && (
+                        <>
+                          <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
+                            <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => nav('/ckg-saya')} data-testid="menu-ckg-saya">
+                            <HeartPulse className="h-4 w-4 mr-2" /> Hasil CKG Saya
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
                         <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password
                       </DropdownMenuItem>

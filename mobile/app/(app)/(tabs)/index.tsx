@@ -8,6 +8,7 @@
  *      slot guru pengganti    → Isi jurnal pengganti (mode substitute)
  *  - Guru piket / admin: kartu Tugas Piket (slot hari ini tanpa jurnal & titipan menunggu) → /piket.
  *  - Ringkasan per peran (src/home/RingkasanPeran): siswa, kepala madrasah, GTK.
+ *  - Satpam: dashboard satpam (src/izin/DashboardSatpam) — papan izin hari ini & pengajuan sendiri.
  *  - Semua peran: pintasan menu peran (sama dengan menu web) & pengumuman terbaru.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -21,6 +22,7 @@ import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { listQueue } from '@/offline/queue';
 import { RingkasanPeran } from '@/home/RingkasanPeran';
+import { DashboardSatpam, useIzinSatpam } from '@/izin/DashboardSatpam';
 import { radius, spacing, useTheme } from '@/theme';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
@@ -40,10 +42,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, activeRole } = useAuth();
   const kind = homeKind(activeRole);
+  const satpam = activeRole === 'satpam';
   const pendingCount = usePrefs((s) => s.pendingCount);
   const failedCount = usePrefs((s) => s.failedCount);
 
-  const today = useCached<ScheduleItem[]>(CacheKeys.myToday, api.schedules.myToday, { enabled: kind !== 'siswa' });
+  // Satpam tidak punya jadwal mengajar (bukan GTK).
+  const today = useCached<ScheduleItem[]>(CacheKeys.myToday, api.schedules.myToday, { enabled: kind !== 'siswa' && !satpam });
+  const izinSatpam = useIzinSatpam(satpam);
   const ann = useCached<Announcement[]>(CacheKeys.announcements, api.announcements.list);
   const menu = useRoleMenu();
   const shortcuts = quickItems(menu, 8);
@@ -107,15 +112,16 @@ export default function HomeScreen() {
     return null;
   };
 
-  const refreshing = today.refreshing || ann.refreshing || piket.refreshing;
+  const refreshing = today.refreshing || ann.refreshing || piket.refreshing || izinSatpam.refreshing;
   const onRefresh = () => {
     void today.refresh(); void ann.refresh();
     if (piketOn) { void piket.refresh(); void piketTasks.refresh(); }
+    if (satpam) izinSatpam.refresh();
   };
   const piketMissing = (piket.data ?? []).filter((x) => !x.has_journal && slotStatus(x.start_time, x.end_time) !== 'upcoming').length;
   const piketPendingTasks = (piketTasks.data ?? []).filter((t) => t.status === 'pending' || t.status === 'accepted').length;
   const latestAnn = (ann.data ?? []).slice(0, 3);
-  const showSchedule = kind !== 'siswa' && (kind === 'guru' || slots.length > 0);
+  const showSchedule = kind !== 'siswa' && !satpam && (kind === 'guru' || slots.length > 0);
 
   return (
     <Screen
@@ -157,7 +163,11 @@ export default function HomeScreen() {
         </Card>
       ) : null}
 
-      <View style={styles.ringkasan}><RingkasanPeran role={activeRole} /></View>
+      {satpam ? (
+        <View style={styles.ringkasan}><DashboardSatpam data={izinSatpam} /></View>
+      ) : (
+        <View style={styles.ringkasan}><RingkasanPeran role={activeRole} /></View>
+      )}
 
       {showSchedule ? (
         <>

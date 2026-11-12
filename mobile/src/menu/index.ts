@@ -68,11 +68,11 @@ export function useRoleMenu(): MenuGroup[] {
   return tambahGrupPkg(menuForRole(activeRole, { canManageGP }), adaPkg ? grupPkg(pkg.data) : null);
 }
 
-/** Pintasan Beranda: item pertama menu peran (tanpa Dashboard & Profil), maksimal `n`. */
+/** Pintasan Beranda: item pertama menu peran (tanpa Dashboard/Beranda & Profil), maksimal `n`. */
 export function quickItems(groups: MenuGroup[], n = 8): MenuItem[] {
   const seen = new Set<string>();
   const all = groups.flatMap((g) => g.items).filter((i) => {
-    if (i.path === '/dashboard' || i.path.startsWith('/profile') || seen.has(i.path)) return false;
+    if (i.path === '/dashboard' || i.href === '/(app)/(tabs)' || i.path.startsWith('/profile') || seen.has(i.path)) return false;
     seen.add(i.path);
     return true;
   });

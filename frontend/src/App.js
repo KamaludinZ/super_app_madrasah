@@ -18,6 +18,11 @@ import useForegroundNotification from '@/hooks/useForegroundNotification';
 import { startSyncListener } from '@/lib/syncManager';
 import { SyncStatusIndicator } from '@/components/offline/SyncStatusIndicator';
 import DashboardRouter from '@/pages/DashboardRouter';
+import BerandaSatpamPage from '@/pages/satpam/BerandaSatpamPage';
+import PengajuanIzinPage from '@/pages/izin/PengajuanIzinPage';
+import PersetujuanIzinPage from '@/pages/izin/PersetujuanIzinPage';
+import PemantauIzinPage from '@/pages/izin/PemantauIzinPage';
+import DetailIzinPage from '@/pages/izin/DetailIzinPage';
 import JurnalScanPage from '@/pages/JurnalScanPage';
 import JurnalHistoryPage from '@/pages/JurnalHistoryPage';
 import JadwalPage from '@/pages/JadwalPage';
@@ -182,6 +187,7 @@ import PanduanPage from '@/pages/PanduanPage';
 import ErrorPage from '@/pages/ErrorPage';
 import MaintenancePage from '@/pages/MaintenancePage';
 import { PublicPageGuard } from '@/components/PublicPageGuard';
+import { adalahSatpam, jenisGtk } from '@/lib/jenisGtk';
 
 // Kelas Digital Pages
 import KelasLoginPage from '@/pages/KelasLoginPage';
@@ -268,6 +274,8 @@ function ProfilePageByRole() {
   const roles = user?.roles || [];
 
   if (roles.includes('siswa')) return <Navigate to="/profile/siswa" replace />;
+  // Satpam bukan GTK: tidak punya profil data GTK.
+  if (adalahSatpam(roles) && jenisGtk(roles) === null) return <Navigate to="/satpam" replace />;
   if (roles.includes('guru') || roles.includes('kepala_sekolah')) return <Navigate to="/profile/guru" replace />;
   if (roles.includes('tenaga_kependidikan') || roles.includes('kepala_tata_usaha')) return <Navigate to="/profile/tendik" replace />;
 
@@ -326,6 +334,11 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
             <Route path="/dashboard" element={<DashboardRouter />} />
+            <Route path="/satpam" element={<BerandaSatpamPage />} />
+            <Route path="/izin" element={<PengajuanIzinPage />} />
+            <Route path="/izin/persetujuan" element={<PersetujuanIzinPage />} />
+            <Route path="/izin/pemantau" element={<PemantauIzinPage />} />
+            <Route path="/izin/:izinId" element={<DetailIzinPage />} />
             <Route path="/jurnal/scan" element={<JurnalScanPage />} />
             <Route path="/jurnal/riwayat" element={<JurnalHistoryPage />} />
             <Route path="/jadwal" element={<JadwalPage />} />

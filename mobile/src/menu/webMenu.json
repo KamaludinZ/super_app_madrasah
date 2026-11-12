@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-25T10:40:17.636Z",
+  "generated_at": "2026-11-12T10:32:25.722Z",
   "source": "frontend/src/components/layout/AppShell.js#navForRole",
   "labels": {
     "admin": "Administrator",
@@ -39,7 +39,8 @@
     "musrif_mahad": "Musrif Mahad",
     "musrifah_mahad": "Musrifah Mahad",
     "murabbi_mahad": "Murabbi Mahad",
-    "bendahara_mahad": "Bendahara Mahad"
+    "bendahara_mahad": "Bendahara Mahad",
+    "satpam": "Satpam"
   },
   "roles": {
     "admin": [
@@ -567,6 +568,11 @@
             "icon": "Database"
           },
           {
+            "to": "/admin/aplikasi-terhubung",
+            "label": "Aplikasi Terhubung (SSO)",
+            "icon": "AppWindow"
+          },
+          {
             "to": "/admin/audit-logs",
             "label": "Log Aktivitas",
             "icon": "ShieldCheck"
@@ -617,6 +623,11 @@
             "to": "/profile/siswa",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -807,6 +818,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -843,6 +859,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -970,6 +991,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1006,6 +1032,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1133,6 +1164,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1169,6 +1205,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1296,6 +1337,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1332,6 +1378,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1459,6 +1510,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1495,6 +1551,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1622,6 +1683,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1658,6 +1724,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1785,6 +1856,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -1810,6 +1886,11 @@
             "to": "/profile/tendik",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/my-agenda",
@@ -1856,6 +1937,11 @@
       {
         "title": "Layanan Umum",
         "items": [
+          {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
           {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
@@ -2467,6 +2553,11 @@
         "title": "Layanan Umum",
         "items": [
           {
+            "to": "/izin/persetujuan",
+            "label": "Persetujuan Izin",
+            "icon": "Gavel"
+          },
+          {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
@@ -2578,6 +2669,16 @@
       {
         "title": "Layanan Umum",
         "items": [
+          {
+            "to": "/izin/pemantau",
+            "label": "Pemantau Izin Hari Ini",
+            "icon": "ShieldCheck"
+          },
+          {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
+          },
           {
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
@@ -3712,6 +3813,28 @@
             "to": "/gtk/simpan-akun",
             "label": "Simpan Akun",
             "icon": "KeyRound"
+          },
+          {
+            "to": "/masterplan",
+            "label": "Masterplan Sekolah",
+            "icon": "MapPinned"
+          }
+        ]
+      }
+    ],
+    "satpam": [
+      {
+        "title": null,
+        "items": [
+          {
+            "to": "/satpam",
+            "label": "Dashboard",
+            "icon": "LayoutDashboard"
+          },
+          {
+            "to": "/izin",
+            "label": "Pengajuan Izin",
+            "icon": "DoorOpen"
           },
           {
             "to": "/masterplan",
