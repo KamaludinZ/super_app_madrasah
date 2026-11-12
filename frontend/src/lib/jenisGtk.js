@@ -22,3 +22,30 @@ export const jenisGtk = (roles) => {
 
 export const adalahTendik = (roles) => jenisGtk(roles) === 'tendik';
 export const adalahGuruGtk = (roles) => jenisGtk(roles) === 'guru';
+
+/**
+ * Label status kepegawaian dari data tersimpan. Form detail GTK & impor menyimpan kode
+ * (pns / pppk / non_asn) di `status_kepegawaian`; data lama memakai `employee_status`
+ * (mis. "PNS"). Keduanya dinormalkan ke label PNS / PPPK / Non ASN.
+ */
+export function labelKepegawaian(u) {
+  const raw = String(u?.status_kepegawaian || u?.employee_status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!raw) return null;
+  if (raw === 'pns') return 'PNS';
+  if (raw === 'pppk' || raw === 'p3k') return 'PPPK';
+  if (['non_asn', 'nonasn', 'honorer', 'gtt', 'ptt', 'gty', 'pty'].includes(raw)) return 'Non ASN';
+  return null;
+}
+
+/**
+ * Isi kolom NIP/NIPM: PNS & PPPK -> field `nip`; Non ASN -> field `nipm` (NIP buatan madrasah, formatnya sama
+ * dengan NIP). Status belum diisi: `nip` bila ada, selain itu `nipm`. Nilai diambil apa adanya.
+ */
+export function nomorIndukGtk(u) {
+  const nip = String(u?.nip || '').trim();
+  const nipm = String(u?.nipm || '').trim();
+  const status = labelKepegawaian(u);
+  if (status === 'PNS' || status === 'PPPK') return nip;
+  if (status === 'Non ASN') return nipm;
+  return nip || nipm;
+}

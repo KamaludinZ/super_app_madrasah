@@ -31,7 +31,7 @@ GURU = {'id': 'g1', 'username': 'budi', 'full_name': 'Budi, S.Pd.', 'roles': ['g
 SISWA = {'id': 's1', 'username': 'ani', 'full_name': 'Ani', 'roles': ['siswa'], 'active_role': 'siswa', 'nisn': '0012345678',
          'nis': '2401', 'student_class_id': 'k7a', 'is_active': True}
 TENDIK = {'id': 't1', 'username': 'cici', 'full_name': 'Cici', 'roles': ['tenaga_kependidikan'], 'active_role': 'tenaga_kependidikan',
-          'nip_nuptk': '1234567890123456', 'peg_id': 'PEG-9', 'is_active': True}
+          'nip_nuptk': '1234567890123456', 'peg_id': 'PEG-9', 'nipm': 'NIPM-2024-07', 'is_active': True}
 
 
 def jalan(coro):
@@ -190,7 +190,7 @@ def test_profil_siswa_dan_pegawai(db):
     assert (p['jenis'], p['nisn'], p['nis'], p['kelas'], p['nip']) == ('siswa', '0012345678', '2401', '7A', None)
     p = jalan(api.tukar(api.TukarRequest(tiket=_tiket(jalan(api.masuk_aplikasi('koperasi', Req(), TENDIK))['url'])),
                         Req(), _bearer(kunci)))['pengguna']
-    assert (p['jenis'], p['nuptk'], p['nip'], p['peg_id']) == ('pegawai', '1234567890123456', None, 'PEG-9')
+    assert (p['jenis'], p['nuptk'], p['nip'], p['peg_id'], p['nipm']) == ('pegawai', '1234567890123456', None, 'PEG-9', 'NIPM-2024-07')
 
 
 def test_cek_kunci_ubah_kunci_baru_dan_hapus(db):
