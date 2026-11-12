@@ -36,18 +36,16 @@ export function labelKepegawaian(u) {
   if (['non_asn', 'nonasn', 'honorer', 'gtt', 'ptt', 'gty', 'pty'].includes(raw)) return 'Non ASN';
   return null;
 }
+
 /**
- * Nomor induk untuk kolom NIP/NIPM: PNS & PPPK -> NIP; Non ASN -> NIPM (NIP buatan madrasah).
- * Status belum diisi: NIP bila ada, selain itu NIPM. Data lama menyimpan NIP di `nip_nuptk` (18 digit).
+ * Isi kolom NIP/NIPM: PNS & PPPK -> field `nip`; Non ASN -> field `nipm` (NIP buatan madrasah, formatnya sama
+ * dengan NIP). Status belum diisi: `nip` bila ada, selain itu `nipm`. Nilai diambil apa adanya.
  */
 export function nomorIndukGtk(u) {
-  const bersih = (v) => String(v || '').trim();
-  const nipLama = bersih(u?.nip_nuptk).replace(/\D/g, '').length === 18 ? bersih(u?.nip_nuptk) : '';
-  const nip = bersih(u?.nip) || nipLama;
-  const nipm = bersih(u?.nipm);
+  const nip = String(u?.nip || '').trim();
+  const nipm = String(u?.nipm || '').trim();
   const status = labelKepegawaian(u);
-  if (status === 'PNS' || status === 'PPPK') return nip ? { nomor: nip, jenis: 'NIP' } : null;
-  if (status === 'Non ASN') return nipm ? { nomor: nipm, jenis: 'NIPM' } : null;
-  if (nip) return { nomor: nip, jenis: 'NIP' };
-  return nipm ? { nomor: nipm, jenis: 'NIPM' } : null;
+  if (status === 'PNS' || status === 'PPPK') return nip;
+  if (status === 'Non ASN') return nipm;
+  return nip || nipm;
 }

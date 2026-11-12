@@ -267,10 +267,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               </p>
             )}
             <p className="text-sm text-slate-600 mt-1">
-              {(() => {
-                const n = nomorIndukGtk(gtk);
-                return n ? `${n.jenis} ${n.nomor}` : (gtk?.nuptk || gtk?.nip_nuptk || 'Belum ada NIP/NIPM');
-              })()} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
+              {nomorIndukGtk(gtk) || gtk?.nuptk || gtk?.nip_nuptk || 'Belum ada NIP/NIPM'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
             </p>
           </div>
         </div>
@@ -744,7 +741,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                   <div>
                     <Label>NIPM (NIP Madrasah)</Label>
                     <Input value={formPenugasan.nipm || ''} onChange={(e) => setFormPenugasan({...formPenugasan, nipm: e.target.value})}
-                      disabled={!editing} placeholder="Nomor induk pegawai dari madrasah" data-testid="input-nipm" />
+                      disabled={!editing} placeholder="Nomor NIPM" data-testid="input-nipm" />
                     <p className="mt-1 text-[11px] text-slate-500">Diisi untuk GTK Non ASN. PNS & PPPK memakai NIP di tab Kepegawaian.</p>
                   </div>
                   <div>

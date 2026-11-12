@@ -302,12 +302,7 @@ export default function AdminGTKPage() {
                           <TableCell className="font-semibold">{u.full_name}</TableCell>
                           <TableCell className="font-mono text-xs">{u.peg_id || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap font-mono text-xs" data-testid={`gtk-nomor-induk-${u.id}`}>
-                            {(() => {
-                              const n = nomorIndukGtk(u);
-                              return n
-                                ? <span title={n.jenis}>{n.nomor}{n.jenis === 'NIPM' && <span className="ml-1 font-sans text-[10px] text-slate-400">NIPM</span>}</span>
-                                : '-';
-                            })()}
+                            {nomorIndukGtk(u) || '-'}
                           </TableCell>
                           <TableCell>
                             {u.gender === 'L' ? <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">L</Badge> :
