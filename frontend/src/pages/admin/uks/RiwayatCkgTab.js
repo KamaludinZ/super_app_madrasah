@@ -51,7 +51,7 @@ function Stat({ icon: Icon, label, value, hint, tone }) {
  * Isi tab "Riwayat CKG" pada halaman Riwayat UKS siswa. `items` diurutkan
  * terbaru ke terlama; ringkasan membandingkan pemeriksaan terakhir dengan sebelumnya.
  */
-export default function RiwayatCkgTab({ items, loading, canManage = false }) {
+export default function RiwayatCkgTab({ items, loading, canManage = false, pesanKosong = 'Belum ada data pemeriksaan CKG untuk siswa ini.' }) {
   const list = items || [];
 
   if (loading) {
@@ -62,7 +62,7 @@ export default function RiwayatCkgTab({ items, loading, canManage = false }) {
     return (
       <div className="py-10 text-center text-slate-500" data-testid="riwayat-ckg-kosong">
         <Syringe className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-        <div className="font-medium">Belum ada data pemeriksaan CKG untuk siswa ini.</div>
+        <div className="font-medium">{pesanKosong}</div>
         <div className="text-xs mt-1">Hasil Cek Kesehatan Gratis (tinggi/berat badan, tensi, mata, gigi) akan tampil di sini setelah diinput petugas UKS.</div>
         {canManage && (
           <Button asChild size="sm" className="mt-4 gap-2 bg-[#006837] hover:bg-[#005830]">
