@@ -91,8 +91,9 @@ export default function MyAgendaPage() {
 
   const loadData = async () => {
     try {
-      // Backend automatically filters to current user's events for non-admin
-      const { data: agendasData } = await api.get('/staff-events');
+      // Agenda Saya = selalu milik pengguna login. Tanpa milik_saya, kepala sekolah/admin/unit pelayanan
+      // mendapat agenda semua pegawai (untuk halaman pantau Agenda Guru/Tendik).
+      const { data: agendasData } = await api.get('/staff-events', { params: { milik_saya: true } });
       setAgendas(agendasData);
     } catch (e) {
       toast.error('Gagal memuat data');
@@ -104,7 +105,7 @@ export default function MyAgendaPage() {
 
   const loadStats = async () => {
     try {
-      const { data } = await api.get('/staff-events/stats/duration');
+      const { data } = await api.get('/staff-events/stats/duration', { params: { milik_saya: true } });
       setStats(data);
     } catch (e) {
       console.error('Failed to load stats', e);
