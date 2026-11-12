@@ -21,7 +21,8 @@ from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Space
 from xml.sax.saxutils import escape as xml_escape
 
 from ckg_impor import baca_berkas_ckg, dokumen_ckg, validasi_baris_ckg
-from ckg_kolom import KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, kolom_template_ckg, lengkapi_identitas_ckg, pemeriksaan_lain
+from ckg_kolom import (KOLOM_CKG, KOLOM_IDENTITAS_CKG, baris_kolom_baku, info_pasien_form, kolom_template_ckg,
+                       lengkapi_identitas_ckg, pemeriksaan_lain)
 from core import PERAN_GURU_GTK, PERAN_TENDIK_GTK, db, get_active_academic_year, get_current_user, get_settings, require_role, serialize_doc, log_audit
 
 from journal_core import now_wib
@@ -1744,19 +1745,37 @@ async def get_riwayat_ckg_siswa(student_id: str, tahun: Optional[str] = None, us
     membandingkan pemeriksaan terakhir dengan sebelumnya (perubahan TB/BB).
     Akses sama dengan riwayat kunjungan siswa (termasuk wali kelas untuk kelasnya)."""
     siswa = await _get_siswa_for_riwayat(student_id, user)
+    return {'siswa': await _siswa_identitas(siswa), **await _riwayat_ckg(student_id, tahun)}
 
-    query: Dict = {'pasien_id': student_id}
+
+@router.get("/uks/ckg/saya")
+async def get_ckg_saya(tahun: Optional[str] = None, user: Dict = Depends(get_current_user)):
+    """Hasil CKG milik pengguna yang login (siswa maupun GTK): data input manual & hasil impor yang tersimpan
+    dengan pasien_id = akun ini. Bentuk respons sama dengan riwayat CKG siswa (items, ringkasan, tahun_tersedia)."""
+    if user.get('active_role') == 'kelas':
+        raise HTTPException(403, "Akun kelas tidak memiliki data CKG")
+    data = await _riwayat_ckg(user['id'], tahun)
+    kelas_nama = None
+    if 'siswa' in (user.get('roles') or []) and user.get('student_class_id'):
+        cls = await db.classes.find_one({'id': user['student_class_id']}, {'_id': 0, 'name': 1})
+        kelas_nama = (cls or {}).get('name')
+    return {'pasien': {'id': user['id'], 'nama': user.get('full_name'), 'kelas': kelas_nama,
+                       'jenis': 'siswa' if 'siswa' in (user.get('roles') or []) else 'gtk'}, **data}
+
+
+async def _riwayat_ckg(pasien_id: str, tahun: Optional[str]) -> Dict:
+    """Riwayat CKG satu pasien (terbaru dulu, IMT dihitung) + ringkasan pemeriksaan terakhir vs sebelumnya."""
+    query: Dict = {'pasien_id': pasien_id}
     tanggal = _tahun_filter(tahun)
     if tanggal:
         query['tanggal'] = tanggal
     raw = await db.uks_ckg.find(query, {'_id': 0}).sort([('tanggal', -1), ('created_at', -1)]).to_list(2000)
     items = [{**c, 'imt': _hitung_imt(c.get('tinggi_badan'), c.get('berat_badan'))} for c in raw]
 
-    all_dates = await db.uks_ckg.distinct('tanggal', {'pasien_id': student_id})
+    all_dates = await db.uks_ckg.distinct('tanggal', {'pasien_id': pasien_id})
     last = items[0] if items else None
     prev = items[1] if len(items) > 1 else None
     return {
-        'siswa': await _siswa_identitas(siswa),
         'filter': {'tahun': tahun},
         'tahun_tersedia': sorted({d[:4] for d in all_dates if d}, reverse=True),
         'ringkasan': {
@@ -3092,7 +3111,9 @@ async def list_imunisasi(
 
     await sembunyikan_siswa_nonaktif(query, 'pasien_id', db)  # data siswa nonaktif disembunyikan, tidak dihapus
     items = await db.uks_imunisasi.find(query, {'_id': 0}).sort('tanggal', -1).to_list(5000)
-    return [serialize_doc(i) for i in items]
+    # Data pemilih pasien untuk form edit (tingkat/kelas siswa, kategori GTK) & penanda keterhubungan ke akun.
+    form = await info_pasien_form(db, [i.get('pasien_id') for i in items])
+    return [serialize_doc({**i, **(form.get(i.get('pasien_id')) or {'pasien_terhubung': False})}) for i in items]
 
 
 @router.post("/uks/imunisasi")

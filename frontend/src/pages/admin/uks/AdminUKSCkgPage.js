@@ -204,6 +204,32 @@ export default function AdminUKSCkgPage() {
   const kelasOptionsFor = (form) => classes.filter((c) => String(c.grade) === String(form.tingkat));
   const pasienOptionsFor = (form) => (form.jenis_pasien === 'gtk' ? gtkList : students);
 
+  // Isian pemilih pasien dari data tersimpan (form edit): siswa -> tingkat & kelas saat ini (daftar siswa kelas itu
+  // dimuat), GTK -> kategori guru/tendik. `tersimpan` menjaga nama pasien tetap tampil walau tidak ada di daftar
+  // (mis. pindah kelas atau akun tidak lagi terhubung).
+  const pickerDariItem = (item) => {
+    const siswa = item.pasien_tipe ? item.pasien_tipe === 'siswa' : (item.pasien_roles || []).includes('siswa');
+    const tersimpan = {
+      id: item.pasien_id,
+      nama: item.pasien_nama || '(tanpa nama)',
+      kelas: item.pasien_kelas || null,
+      terhubung: item.pasien_terhubung !== false,
+    };
+    if (!siswa) {
+      return { jenis_pasien: 'gtk', gtk_kategori: item.pasien_jenis_gtk === 'tendik' ? 'tenaga_kependidikan' : 'guru', pasien_id: item.pasien_id, tersimpan };
+    }
+    const kelasId = item.pasien_kelas_id || '';
+    const grade = item.pasien_tingkat ?? classes.find((c) => c.id === kelasId)?.grade;
+    if (kelasId) loadStudentsForClass(kelasId); else setStudents([]);
+    return {
+      jenis_pasien: 'siswa',
+      tingkat: grade !== undefined && grade !== null ? String(grade) : '',
+      kelas_id: kelasId,
+      pasien_id: item.pasien_id,
+      tersimpan,
+    };
+  };
+
   // ===== CKG =====
   const openCreateCkg = () => {
     setCkgForm(emptyCkgForm);
@@ -215,8 +241,7 @@ export default function AdminUKSCkgPage() {
   const openEditCkg = (item) => {
     setCkgForm({
       ...emptyCkgForm,
-      jenis_pasien: item.pasien_roles?.includes('siswa') ? 'siswa' : 'gtk',
-      pasien_id: item.pasien_id,
+      ...pickerDariItem(item),
       tanggal: item.tanggal || emptyCkgForm.tanggal,
       tinggi_badan: item.tinggi_badan ?? '',
       berat_badan: item.berat_badan ?? '',
@@ -311,8 +336,7 @@ export default function AdminUKSCkgPage() {
   const openEditImunisasi = (item) => {
     setImunisasiForm({
       ...emptyImunisasiForm,
-      jenis_pasien: item.pasien_roles?.includes('siswa') ? 'siswa' : 'gtk',
-      pasien_id: item.pasien_id,
+      ...pickerDariItem(item),
       tanggal: item.tanggal || emptyImunisasiForm.tanggal,
       jenis_vaksin: item.jenis_vaksin || '',
       dosis_ke: item.dosis_ke || '',
@@ -377,8 +401,20 @@ export default function AdminUKSCkgPage() {
   const adaFilterCkg = search || filterKelas !== FILTER_SEMUA || filterJk !== FILTER_SEMUA;
   const filteredImunisasi = imunisasiList.filter((item) => !search || (item.pasien_nama || '').toLowerCase().includes(search.toLowerCase()) || (item.jenis_vaksin || '').toLowerCase().includes(search.toLowerCase()));
 
+  // Opsi pasien tersimpan bila tidak ada di daftar pilihan (agar nama tetap terpilih saat edit).
+  const opsiTersimpan = (form, daftar) => (
+    form.tersimpan && form.pasien_id === form.tersimpan.id && !daftar.some((p) => p.id === form.pasien_id)
+      ? <SelectItem value={form.tersimpan.id}>{form.tersimpan.nama}{form.tersimpan.kelas ? ` (${form.tersimpan.kelas})` : ''}</SelectItem>
+      : null
+  );
+
   const renderPatientPicker = (form, setForm) => (
     <>
+      {form.tersimpan && !form.tersimpan.terhubung && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800" data-testid="pasien-belum-terhubung">
+          Data ini belum terhubung ke akun siswa/GTK mana pun. Pilih ulang pasiennya lalu simpan agar masuk ke akun yang benar.
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Jenis Pasien <span className="text-rose-500">*</span></Label>
         <div className="flex gap-3">
@@ -417,6 +453,7 @@ export default function AdminUKSCkgPage() {
               <SelectTrigger><SelectValue placeholder="Pilih Nama" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Pilih Nama</SelectItem>
+                {opsiTersimpan(form, pasienOptionsFor(form))}
                 {pasienOptionsFor(form).map((w) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -461,10 +498,12 @@ export default function AdminUKSCkgPage() {
           </div>
           <div className="space-y-2">
             <Label>Nama Siswa <span className="text-rose-500">*</span></Label>
-            <Select value={form.pasien_id || 'none'} onValueChange={(v) => setForm({ ...form, pasien_id: v === 'none' ? '' : v })} disabled={!form.kelas_id}>
-              <SelectTrigger><SelectValue placeholder={form.kelas_id ? 'Pilih Siswa' : 'Pilih kelas dahulu'} /></SelectTrigger>
+            <Select value={form.pasien_id || 'none'} onValueChange={(v) => setForm({ ...form, pasien_id: v === 'none' ? '' : v })}
+              disabled={!form.kelas_id && !(form.tersimpan && form.pasien_id === form.tersimpan.id)}>
+              <SelectTrigger data-testid="pilih-siswa"><SelectValue placeholder={form.kelas_id ? 'Pilih Siswa' : 'Pilih kelas dahulu'} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Pilih Siswa</SelectItem>
+                {opsiTersimpan(form, students)}
                 {students.map((s) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -562,6 +601,9 @@ export default function AdminUKSCkgPage() {
                                   <TableCell key={k.key} className="sticky left-0 z-10 bg-white font-semibold">
                                     {v || '-'}
                                     <div className="text-xs font-normal text-slate-500">{item.tanggal}{item.pasien_kelas ? ` · ${item.pasien_kelas}` : ''}</div>
+                                    {item.pasien_terhubung === false && (
+                                      <Badge className="mt-1 border-amber-200 bg-amber-100 text-[10px] font-normal text-amber-800" data-testid={`ckg-belum-terhubung-${item.id}`}>Belum terhubung ke akun</Badge>
+                                    )}
                                   </TableCell>
                                 );
                               }
@@ -629,7 +671,9 @@ export default function AdminUKSCkgPage() {
                         filteredImunisasi.map((item) => (
                           <TableRow key={item.id}>
                             <TableCell className="font-mono">{item.tanggal}</TableCell>
-                            <TableCell className="font-semibold">{item.pasien_nama}<div className="text-xs text-slate-500 font-normal">{item.pasien_identitas}</div></TableCell>
+                            <TableCell className="font-semibold">{item.pasien_nama}<div className="text-xs text-slate-500 font-normal">{item.pasien_identitas}</div>
+                              {item.pasien_terhubung === false && <Badge className="mt-1 border-amber-200 bg-amber-100 text-[10px] font-normal text-amber-800">Belum terhubung ke akun</Badge>}
+                            </TableCell>
                             <TableCell>{item.jenis_vaksin}</TableCell>
                             <TableCell>{item.dosis_ke || '-'}</TableCell>
                             <TableCell>{item.petugas_pemberi || '-'}</TableCell>

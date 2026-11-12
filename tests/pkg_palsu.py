@@ -26,6 +26,12 @@ class Cursor:
     async def to_list(self, _n):
         return [dict(d) for d in self.docs]
 
+    def __aiter__(self):
+        async def gen():
+            for d in self.docs:
+                yield dict(d)
+        return gen()
+
 
 def cocok_nilai(nilai, syarat):
     if isinstance(syarat, dict):
@@ -80,6 +86,9 @@ class Koleksi:
 
     async def find_one(self, q=None, _proj=None):
         return next((dict(d) for d in self.docs if self._cocok(d, q)), None)
+
+    async def distinct(self, field, q=None):
+        return list(dict.fromkeys(_ambil(d, field) for d in self.docs if self._cocok(d, q) and _ambil(d, field) is not None))
 
     async def count_documents(self, q=None):
         return sum(1 for d in self.docs if self._cocok(d, q))
