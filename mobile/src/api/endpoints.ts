@@ -197,8 +197,9 @@ export const api = {
   },
 
   agenda: {
-    list: () => request<StaffEvent[]>('/staff-events'),
-    stats: () => request<StaffEventStats>('/staff-events/stats/duration'),
+    // Agenda Saya: selalu milik pengguna login (kepala/admin tanpa milik_saya mendapat agenda semua pegawai).
+    list: () => request<StaffEvent[]>('/staff-events', { query: { milik_saya: true } }),
+    stats: () => request<StaffEventStats>('/staff-events/stats/duration', { query: { milik_saya: true } }),
     create: (body: StaffEventInput) => request<StaffEvent>('/staff-events', { method: 'POST', body }),
     update: (id: string, body: StaffEventInput) => request<StaffEvent>(`/staff-events/${id}`, { method: 'PUT', body }),
     remove: (id: string) => request<{ message: string }>(`/staff-events/${id}`, { method: 'DELETE' }),

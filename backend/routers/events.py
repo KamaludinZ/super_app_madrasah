@@ -138,16 +138,22 @@ async def list_staff_events(
     user_id: Optional[str] = None,
     is_active: Optional[bool] = None,
     is_public: Optional[bool] = None,
+    milik_saya: bool = False,
     user: Dict = Depends(get_current_user)
 ):
-    """List staff events - admin can see all, others see only their own."""
+    """List staff events - admin can see all, others see only their own.
+
+    `milik_saya=true` (dipakai Agenda Saya web & aplikasi): selalu hanya agenda pengguna login, termasuk
+    untuk admin, unit pelayanan, dan kepala sekolah yang di halaman pantau boleh melihat semua agenda."""
     q = {}
 
     # Admin, unit_pelayanan, and kepala_sekolah (read-only) can see/filter all data;
     # others only see their own
     roles = user.get('roles', [])
     can_view_all = any(r in roles for r in ('admin', 'unit_pelayanan', 'kepala_sekolah'))
-    if user_id and can_view_all:
+    if milik_saya:
+        q['user_id'] = user['id']
+    elif user_id and can_view_all:
         q['user_id'] = user_id
     elif not can_view_all:
         q['user_id'] = user['id']
@@ -401,15 +407,19 @@ async def get_madrasah_events_duration_stats(
 @router.get("/staff-events/stats/duration")
 async def get_staff_events_duration_stats(
     user_id: Optional[str] = None,
+    milik_saya: bool = False,
     user: Dict = Depends(get_current_user)
 ):
-    """Get duration statistics for staff events - average duration in days and hours."""
+    """Get duration statistics for staff events - average duration in days and hours.
+    `milik_saya=true`: statistik agenda pengguna login saja (Agenda Saya)."""
     q = {}
 
     # Admin and unit_pelayanan can filter by user_id, others only see their own
     is_admin = 'admin' in user.get('roles', [])
     is_unit_pelayanan = 'unit_pelayanan' in user.get('roles', [])
-    if user_id and (is_admin or is_unit_pelayanan):
+    if milik_saya:
+        q['user_id'] = user['id']
+    elif user_id and (is_admin or is_unit_pelayanan):
         q['user_id'] = user_id
     elif not (is_admin or is_unit_pelayanan):
         q['user_id'] = user['id']
