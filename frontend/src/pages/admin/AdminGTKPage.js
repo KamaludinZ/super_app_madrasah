@@ -21,7 +21,7 @@ import { confirmDialog } from '@/components/ui/confirm-dialog';
 import UnduhDataGtkButton from '@/components/staff/UnduhDataGtkButton';
 import ExportTemplateButton from '@/components/students/ExportTemplateButton';
 import { KOLOM_DATA_GTK } from '@/lib/dataGtkKolom';
-import { PERAN_GURU_GTK, PERAN_TENDIK_GTK, jenisGtk } from '@/lib/jenisGtk';
+import { PERAN_GURU_GTK, PERAN_TENDIK_GTK, jenisGtk, labelKepegawaian, nomorIndukGtk } from '@/lib/jenisGtk';
 import KelengkapanGtkCell from '@/components/staff/KelengkapanGtkCell';
 import ImportDataMasterButton from '@/components/students/ImportDataMasterButton';
 
@@ -30,19 +30,6 @@ const TENDIK_ROLES = PERAN_TENDIK_GTK;
 const STATUS_KEPEGAWAIAN_LIST = ['PNS', 'PPPK', 'Non ASN'];
 const BELUM_DIISI = 'Belum diisi';
 
-/**
- * Label status kepegawaian dari data tersimpan. Form detail GTK & impor menyimpan kode
- * (pns / pppk / non_asn) di `status_kepegawaian`; data lama memakai `employee_status`
- * (mis. "PNS"). Keduanya dinormalkan ke label PNS / PPPK / Non ASN.
- */
-export function labelKepegawaian(u) {
-  const raw = String(u?.status_kepegawaian || u?.employee_status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  if (!raw) return null;
-  if (raw === 'pns') return 'PNS';
-  if (raw === 'pppk' || raw === 'p3k') return 'PPPK';
-  if (['non_asn', 'nonasn', 'honorer', 'gtt', 'ptt', 'gty', 'pty'].includes(raw)) return 'Non ASN';
-  return null;
-}
 // Roles that see the same all-GTK admin-style view/filters, but without any
 // account/edit/delete actions (view-only) — only the Detail button remains.
 const VIEW_ONLY_BROAD_ROLES = ['kepala_sekolah'];
@@ -87,6 +74,8 @@ export default function AdminGTKPage() {
       const s = search.toLowerCase();
       return (u.full_name || '').toLowerCase().includes(s) ||
              (u.peg_id || '').toLowerCase().includes(s) ||
+             (u.nip || '').includes(search) ||
+             (u.nipm || '').toLowerCase().includes(s) ||
              (u.nip_nuptk || '').includes(search) ||
              (u.username || '').toLowerCase().includes(s);
     }
@@ -253,7 +242,7 @@ export default function AdminGTKPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Cari nama, Peg ID, NIP/NUPTK..."
+                  placeholder="Cari nama, Peg ID, NIP/NIPM, NUPTK..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -290,6 +279,7 @@ export default function AdminGTKPage() {
                         <TableHead className="w-12 text-center">NO</TableHead>
                         <TableHead>NAMA</TableHead>
                         <TableHead>PEG ID</TableHead>
+                        <TableHead>NIP/NIPM</TableHead>
                         <TableHead>L/P</TableHead>
                         <TableHead>PERAN</TableHead>
                         <TableHead>JABATAN</TableHead>
@@ -311,6 +301,9 @@ export default function AdminGTKPage() {
                           <TableCell className="text-center text-slate-500 font-mono">{i + 1}</TableCell>
                           <TableCell className="font-semibold">{u.full_name}</TableCell>
                           <TableCell className="font-mono text-xs">{u.peg_id || '-'}</TableCell>
+                          <TableCell className="whitespace-nowrap font-mono text-xs" data-testid={`gtk-nomor-induk-${u.id}`}>
+                            {nomorIndukGtk(u) || '-'}
+                          </TableCell>
                           <TableCell>
                             {u.gender === 'L' ? <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">L</Badge> :
                              u.gender === 'P' ? <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-xs">P</Badge> :
@@ -386,7 +379,7 @@ export default function AdminGTKPage() {
                         );
                       })}
                       {filtered.length === 0 && (
-                        <TableRow><TableCell colSpan={10} className="text-center py-12 text-slate-500">
+                        <TableRow><TableCell colSpan={11} className="text-center py-12 text-slate-500">
                           <Briefcase className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                           <div className="font-semibold">Tidak ada data GTK</div>
                         </TableCell></TableRow>

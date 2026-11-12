@@ -78,6 +78,7 @@ export const KOLOM_DATA_GTK = [
     ['tmt_guru', 'TMT Guru/Tanggal SK PTK (YYYY-MM-DD)'],
     ['tugas_utama', 'Tugas Utama'],
     ['tugas_tambahan', 'Tugas Tambahan'],
+    ['nipm', 'NIPM (NIP Madrasah, untuk Non ASN)'],
   ]),
 ];
 

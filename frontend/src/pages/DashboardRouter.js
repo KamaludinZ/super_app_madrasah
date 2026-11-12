@@ -16,6 +16,7 @@ import AnnouncementsCard from '@/components/notifications/AnnouncementsCard';
 import PublicPagesSection from '@/components/PublicPagesSection';
 import NotificationPermissionBanner from '@/components/NotificationPermissionBanner';
 import KartuAplikasiTerhubung from '@/components/sso/KartuAplikasiTerhubung';
+import KartuCkgTerakhir from '@/components/uks/KartuCkgTerakhir';
 import { BERANDA_SATPAM } from '@/lib/izinKamad';
 
 // Roles that should see admin-style dashboard with stats
@@ -47,6 +48,8 @@ export function BingkaiDashboard({ children }) {
       {!isAdmin && <AnnouncementsCard />}
       {/* Aplikasi madrasah lain yang dibuka dengan login Super App (tidak tampil bila tidak ada) */}
       {activeRole !== 'kelas' && <KartuAplikasiTerhubung />}
+      {/* Hasil CKG terakhir milik pengguna (tidak tampil bila belum ada; akun kelas & satpam tidak punya data CKG) */}
+      {activeRole !== 'kelas' && activeRole !== 'satpam' && <KartuCkgTerakhir />}
       {children}
       {!isAdmin && <PublicPagesSection />}
     </div>

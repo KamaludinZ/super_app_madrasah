@@ -88,6 +88,31 @@ def identitas_pasien(user: Optional[Dict], detail: Optional[Dict], kelas: Option
     }
 
 
+async def info_pasien_form(db, pasien_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """{pasien_id: field pemilih pasien di form edit} untuk akun yang ADA: pasien_terhubung, pasien_roles terkini,
+    siswa -> pasien_kelas_id & pasien_tingkat (rombel saat ini), GTK -> pasien_jenis_gtk ('guru' | 'tendik').
+    Pasien yang tidak ada di daftar berarti dokumen tidak terhubung ke akun mana pun."""
+    from core import jenis_gtk_peran
+    ids = [i for i in dict.fromkeys(pasien_ids) if i]
+    if not ids:
+        return {}
+    users = await db.users.find({'id': {'$in': ids}}, {'_id': 0, 'id': 1, 'roles': 1, 'student_class_id': 1}).to_list(len(ids))
+    cids = list({u.get('student_class_id') for u in users if u.get('student_class_id')})
+    kelas = {c['id']: c for c in await db.classes.find(
+        {'id': {'$in': cids}}, {'_id': 0, 'id': 1, 'grade': 1}).to_list(len(cids) or 1)}
+    hasil = {}
+    for u in users:
+        roles = u.get('roles') or []
+        info: Dict[str, Any] = {'pasien_terhubung': True, 'pasien_roles': roles}
+        if 'siswa' in roles:
+            kls = kelas.get(u.get('student_class_id')) or {}
+            info.update(pasien_kelas_id=kls.get('id'), pasien_tingkat=kls.get('grade'))
+        else:
+            info['pasien_jenis_gtk'] = jenis_gtk_peran(roles)
+        hasil[u['id']] = info
+    return hasil
+
+
 async def lengkapi_identitas_ckg(db, items: List[Dict[str, Any]], nama_sekolah: Optional[str]) -> List[Dict[str, Any]]:
     """Tambahkan identitas pasien terkini & nama sekolah pada daftar data CKG (batch, tanpa N+1 query).
     Nilai tersimpan pada dokumen CKG (mis. hasil impor) diutamakan bila identitas pengguna kosong."""
@@ -102,11 +127,13 @@ async def lengkapi_identitas_ckg(db, items: List[Dict[str, Any]], nama_sekolah: 
         {'_id': 0, 'student_id': 1, 'nik': 1, 'alamat_siswa': 1, 'alamat_ayah': 1, 'alamat_ibu': 1, 'alamat_wali': 1}).to_list(len(sids) or 1)}
     cids = list({u.get('student_class_id') for u in users.values() if u.get('student_class_id')})
     kelas = {c['id']: c.get('name') for c in await db.classes.find({'id': {'$in': cids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(cids) or 1)}
+    form = await info_pasien_form(db, ids)
     hasil = []
     for item in items:
         u = users.get(item.get('pasien_id'))
         ident = identitas_pasien(u, details.get(item.get('pasien_id')), kelas.get((u or {}).get('student_class_id'))) if u else {}
         baru = dict(item)
+        baru.update(form.get(item.get('pasien_id')) or {'pasien_terhubung': False})
         for k, v in ident.items():
             if v not in (None, '') or not baru.get(k):
                 baru[k] = v if v not in (None, '') else baru.get(k)

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T06:33:03.262Z",
+  "generated_at": "2026-11-12T10:32:25.722Z",
   "source": "frontend/src/components/layout/AppShell.js#navForRole",
   "labels": {
     "admin": "Administrator",
@@ -625,6 +625,11 @@
             "icon": "UserCircle"
           },
           {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
+          },
+          {
             "to": "/jadwal",
             "label": "Jadwal Saya",
             "icon": "Calendar"
@@ -856,6 +861,11 @@
             "icon": "UserCircle"
           },
           {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
+          },
+          {
             "to": "/jadwal",
             "label": "Jadwal Saya",
             "icon": "Calendar"
@@ -1022,6 +1032,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1192,6 +1207,11 @@
             "icon": "UserCircle"
           },
           {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
+          },
+          {
             "to": "/jadwal",
             "label": "Jadwal Saya",
             "icon": "Calendar"
@@ -1358,6 +1378,11 @@
             "to": "/profile/guru",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/jadwal",
@@ -1528,6 +1553,11 @@
             "icon": "UserCircle"
           },
           {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
+          },
+          {
             "to": "/jadwal",
             "label": "Jadwal Saya",
             "icon": "Calendar"
@@ -1696,6 +1726,11 @@
             "icon": "UserCircle"
           },
           {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
+          },
+          {
             "to": "/jadwal",
             "label": "Jadwal Saya",
             "icon": "Calendar"
@@ -1851,6 +1886,11 @@
             "to": "/profile/tendik",
             "label": "Profil Saya",
             "icon": "UserCircle"
+          },
+          {
+            "to": "/ckg-saya",
+            "label": "Hasil CKG Saya",
+            "icon": "HeartPulse"
           },
           {
             "to": "/my-agenda",

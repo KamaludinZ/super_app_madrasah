@@ -153,6 +153,7 @@ import AdminUKSObatPage from '@/pages/admin/uks/AdminUKSObatPage';
 import AdminUKSBMHPPage from '@/pages/admin/uks/AdminUKSBMHPPage';
 import AdminUKSDiagnosaPage from '@/pages/admin/uks/AdminUKSDiagnosaPage';
 import AdminUKSRiwayatSiswaPage from '@/pages/admin/uks/AdminUKSRiwayatSiswaPage';
+import HasilCkgSayaPage from '@/pages/HasilCkgSayaPage';
 import AdminUKSLaporanBaruPage from '@/pages/admin/uks/AdminUKSLaporanBaruPage';
 import AdminUKSJenisPenangananPage from '@/pages/admin/uks/AdminUKSJenisPenangananPage';
 import AdminUKSDataSiswaGtkPage from '@/pages/admin/uks/AdminUKSDataSiswaGtkPage';
@@ -489,6 +490,7 @@ function App() {
             <Route path="/verval/ajuan-saya" element={<MyVervalRequestsPage />} />
             <Route path="/my-agenda" element={<MyAgendaPage />} />
             <Route path="/profile" element={<ProfilePageByRole />} />
+            <Route path="/ckg-saya" element={<HasilCkgSayaPage />} />
             <Route path="/profile/siswa" element={<ProfilePageSiswa />} />
             <Route path="/profile/guru" element={<ProfilePageGuru />} />
             <Route path="/profile/tendik" element={<ProfilePageTendik />} />

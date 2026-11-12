@@ -92,6 +92,7 @@ function navForRoleDasar(role, userRoles = []) {
   if (isSubjectTeacher) {
     items.push({ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' });
     items.push({ to: '/profile/guru', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-guru' });
+    items.push({ to: '/ckg-saya', label: 'Hasil CKG Saya', icon: HeartPulse, testid: 'nav-ckg-saya-guru' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/jadwal/atur', label: 'Atur Jadwal Saya', icon: ClipboardEdit, testid: 'nav-my-schedule' });
     items.push({ to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-guru' });
@@ -257,6 +258,7 @@ function navForRoleDasar(role, userRoles = []) {
     return [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
       { to: '/profile/tendik', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-tendik' },
+      { to: '/ckg-saya', label: 'Hasil CKG Saya', icon: HeartPulse, testid: 'nav-ckg-saya-tendik' },
       { to: '/my-agenda', label: 'Agenda Saya', icon: CalendarDays, testid: 'nav-my-agenda-tendik' },
       { to: '/admin/jadwal-piket', label: 'Jadwal Piket', icon: ShieldAlert, testid: 'nav-piket-tendik' },
       {
@@ -297,6 +299,7 @@ function navForRoleDasar(role, userRoles = []) {
     ];
   } else if (role === 'siswa') {
     items.push({ to: '/profile/siswa', label: 'Profil Saya', icon: UserCircle, testid: 'nav-profile-siswa' });
+    items.push({ to: '/ckg-saya', label: 'Hasil CKG Saya', icon: HeartPulse, testid: 'nav-ckg-saya-siswa' });
     items.push({ to: '/jadwal', label: 'Jadwal Saya', icon: Calendar, testid: 'nav-jadwal' });
     items.push({ to: '/siswa/materi', label: 'Materi Mapel', icon: BookOpen, testid: 'nav-siswa-materi' });
     items.push({ to: '/siswa/tugas', label: 'Tugas', icon: ClipboardList, testid: 'nav-siswa-tugas' });
@@ -1277,11 +1280,16 @@ export default function AppShell({ children }) {
                   {/* Hide Profile and Change Password for 'kelas' role */}
                   {activeRole !== 'kelas' && (
                     <>
-                      {/* Satpam bukan GTK: tanpa profil data GTK. */}
+                      {/* Satpam bukan GTK & bukan pasien UKS: tanpa profil data GTK maupun Hasil CKG. */}
                       {activeRole !== PERAN_SATPAM && (
-                        <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
-                          <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuItem onClick={() => nav('/profile')} data-testid="menu-profile">
+                            <UserCircle className="h-4 w-4 mr-2" /> Profil Saya
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => nav('/ckg-saya')} data-testid="menu-ckg-saya">
+                            <HeartPulse className="h-4 w-4 mr-2" /> Hasil CKG Saya
+                          </DropdownMenuItem>
+                        </>
                       )}
                       <DropdownMenuItem onClick={() => { setPwDialogOpen(true); }} data-testid="menu-change-password">
                         <ShieldCheck className="h-4 w-4 mr-2" /> Ubah Password

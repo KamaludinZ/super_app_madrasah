@@ -23,7 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
-import { adalahTendik } from '@/lib/jenisGtk';
+import { adalahTendik, nomorIndukGtk } from '@/lib/jenisGtk';
 import { VervalDraftAlert, saveVervalDraft, clearVervalDraft, getVervalDraft } from '@/components/verval/VervalDraftAlert';
 
 const formatTanggalId = (teks) => bacaTanggal(teks)?.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) || teks;
@@ -153,6 +153,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
         tmt_guru: data.tmt_guru || '',
         tugas_utama: data.tugas_utama || '',
         tugas_tambahan: data.tugas_tambahan || '',
+        nipm: data.nipm || '',
       });
 
       // Load draft if exists (untuk self-profile non-admin)
@@ -266,7 +267,7 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
               </p>
             )}
             <p className="text-sm text-slate-600 mt-1">
-              {gtk?.nip || gtk?.nuptk || gtk?.nip_nuptk || 'Belum ada NIP/NUPTK'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
+              {nomorIndukGtk(gtk) || gtk?.nuptk || gtk?.nip_nuptk || 'Belum ada NIP/NIPM'} • {gtk?.roles?.map(r => r.toUpperCase()).join(', ')}
             </p>
           </div>
         </div>
@@ -737,6 +738,12 @@ export default function AdminGTKDetailPage({ userIdOverride = null, hideBackButt
                   <CardTitle className="text-lg">Data Penugasan</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>NIPM (NIP Madrasah)</Label>
+                    <Input value={formPenugasan.nipm || ''} onChange={(e) => setFormPenugasan({...formPenugasan, nipm: e.target.value})}
+                      disabled={!editing} placeholder="Nomor NIPM" data-testid="input-nipm" />
+                    <p className="mt-1 text-[11px] text-slate-500">Diisi untuk GTK Non ASN. PNS & PPPK memakai NIP di tab Kepegawaian.</p>
+                  </div>
                   <div>
                     <Label>Jenis PTK</Label>
                     <Select value={formPenugasan.jenis_ptk} onValueChange={(v) => setFormPenugasan({...formPenugasan, jenis_ptk: v})} disabled={!editing}>

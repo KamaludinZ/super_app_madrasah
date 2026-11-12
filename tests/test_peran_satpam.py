@@ -238,3 +238,17 @@ def test_peran_pembaca_catatan_web_aplikasi_sama_dengan_backend():
     assert _daftar_js('frontend/src/lib/izinKamad.js', 'PERAN_PEMBACA_CATATAN') == set(PERAN_PEMBACA_CATATAN)
     assert _daftar_js('mobile/src/izin/api.ts', 'PERAN_PEMBACA_CATATAN') == set(PERAN_PEMBACA_CATATAN)
     assert 'satpam' not in PERAN_PEMBACA_CATATAN
+
+
+def test_hasil_ckg_saya_menolak_satpam():
+    """Fitur Hasil CKG Saya (siswa & GTK) tidak berlaku untuk satpam yang bukan pasien UKS."""
+    import asyncio
+
+    import pytest
+    from fastapi import HTTPException
+
+    from routers import uks
+
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(uks.get_ckg_saya(None, {'id': 's', 'active_role': 'satpam', 'roles': ['satpam']}))
+    assert e.value.status_code == 403 and 'Satpam' in e.value.detail
