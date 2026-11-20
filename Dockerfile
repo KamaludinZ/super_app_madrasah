@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
     libreoffice-calc-nogui \
+    libreoffice-writer-nogui \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements

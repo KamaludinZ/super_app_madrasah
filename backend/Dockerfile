@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-liberation \
     libreoffice-calc-nogui \
+    libreoffice-writer-nogui \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/*

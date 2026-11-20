@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ClipboardEdit, Save, BookOpen, Users, AlertCircle, Info } from 'lucide-react';
+import { ClipboardEdit, Save, BookOpen, Users, AlertCircle, Info, Lock } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import { muatMasaGuru, simpanUasGuru } from '@/lib/ujianNilai';
 
 function computePredicate(avg) {
   if (avg == null || isNaN(avg)) return '';
@@ -33,6 +34,9 @@ export default function GradesInputPage() {
   const [semester, setSemester] = useState('ganjil');
   const [students, setStudents] = useState([]);
   const [grades, setGrades] = useState({});
+  const [masaUas, setMasaUas] = useState(null);
+  const [uasAwal, setUasAwal] = useState({});
+  const bolehUas = !!masaUas?.boleh_ubah;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -110,15 +114,23 @@ export default function GradesInputPage() {
           map[g.student_id] = {
             nilai_pengetahuan: g.nilai_pengetahuan ?? '',
             nilai_keterampilan: g.nilai_keterampilan ?? '',
+            nilai_uas: g.nilai_uas ?? '',
             description: g.description || '',
           };
         });
         setGrades(map);
+        setUasAwal(Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.nilai_uas])));
       } catch (e) {
         toast.error('Gagal memuat data siswa');
       }
     })();
   }, [classId, subjectId, semester]);
+
+  // Nilai UAS diisi panitia ujian; guru pengampu hanya boleh mengubahnya selama masa ujian/remidi yang dibuka panitia.
+  useEffect(() => {
+    if (!classId || !subjectId) { setMasaUas(null); return; }
+    muatMasaGuru(classId, subjectId).then(setMasaUas).catch(() => setMasaUas(null));
+  }, [classId, subjectId]);
 
   const setVal = (sid, field, val) => {
     setGrades({ ...grades, [sid]: { ...(grades[sid] || {}), [field]: val } });
@@ -128,6 +140,14 @@ export default function GradesInputPage() {
     if (!classId || !subjectId) {
       toast.error('Pilih kelas dan mata pelajaran');
       return;
+    }
+    const uasBerubah = bolehUas ? students.filter((st) => String(grades[st.id]?.nilai_uas ?? '') !== String(uasAwal[st.id] ?? '')) : [];
+    for (const st of uasBerubah) {
+      const v = grades[st.id]?.nilai_uas;
+      if (v !== '' && v != null && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 100)) {
+        toast.error(`Nilai UAS ${st.full_name} harus 0–100`);
+        return;
+      }
     }
     const entries = [];
     for (const s of students) {
@@ -142,16 +162,25 @@ export default function GradesInputPage() {
         description: g.description || '',
       });
     }
-    if (entries.length === 0) {
+    if (entries.length === 0 && uasBerubah.length === 0) {
       toast.error('Belum ada nilai yang diisi');
       return;
     }
     setBusy(true);
     try {
-      const { data } = await api.post('/grades/bulk', {
-        class_id: classId, subject_id: subjectId, semester, entries,
-      });
-      toast.success(`Nilai ${data.success || entries.length} siswa disimpan`);
+      if (entries.length) {
+        const { data } = await api.post('/grades/bulk', {
+          class_id: classId, subject_id: subjectId, semester, entries,
+        });
+        toast.success(`Nilai ${data.success || entries.length} siswa disimpan`);
+      }
+      if (uasBerubah.length) {
+        const h = await simpanUasGuru(classId, subjectId, uasBerubah.map((st) => ({
+          student_id: st.id, nilai_uas: grades[st.id]?.nilai_uas === '' ? null : Number(grades[st.id]?.nilai_uas),
+        })));
+        setUasAwal(Object.fromEntries(students.map((st) => [st.id, grades[st.id]?.nilai_uas ?? ''])));
+        toast.success(`Nilai UAS ${h.disimpan} siswa disimpan${h.tiruan ? ' (contoh)' : ''}`);
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Gagal menyimpan');
     } finally {
@@ -233,6 +262,9 @@ export default function GradesInputPage() {
               <Info className="h-4 w-4 text-blue-700" />
               <AlertDescription className="text-blue-900 text-xs">
                 Skala nilai <strong>0-100</strong>. Nilai Akhir = (Pengetahuan + Keterampilan) / 2. Predikat dihitung otomatis: A &ge;88, B &ge;76, C &ge;60, D &lt;60.
+                {' '}Kolom <strong>UAS</strong> diisi panitia ujian{masaUas?.ujian_nama ? ` (${masaUas.ujian_nama})` : ''}; {bolehUas
+                  ? `Anda dapat mengubahnya selama masa ${masaUas?.masa?.jenis === 'remidi' ? 'remidi' : 'ujian'} yang dibuka panitia.`
+                  : (masaUas?.pesan || 'hanya dapat diubah selama masa ujian/remidi yang dibuka panitia.')}
               </AlertDescription>
             </Alert>
             <div className="overflow-x-auto">
@@ -244,6 +276,9 @@ export default function GradesInputPage() {
                     <TableHead>NISN</TableHead>
                     <TableHead className="w-28">Pengetahuan</TableHead>
                     <TableHead className="w-28">Keterampilan</TableHead>
+                    <TableHead className="w-24" title={masaUas?.pesan || 'Nilai UAS dari panitia ujian'}>
+                      <span className="inline-flex items-center gap-1">UAS {!bolehUas && <Lock className="h-3 w-3 text-slate-400" aria-label="terkunci" />}</span>
+                    </TableHead>
                     <TableHead className="w-24">Nilai Akhir</TableHead>
                     <TableHead className="w-20">Predikat</TableHead>
                     <TableHead>Deskripsi</TableHead>
@@ -274,6 +309,17 @@ export default function GradesInputPage() {
                             value={g.nilai_keterampilan ?? ''} onChange={(e) => setVal(s.id, 'nilai_keterampilan', e.target.value)}
                             data-testid={`grade-nk-${s.id}`} />
                         </TableCell>
+                        <TableCell className="text-center">
+                          {bolehUas ? (
+                            <Input type="number" min="0" max="100" step="0.5" className="h-9"
+                              value={g.nilai_uas ?? ''} onChange={(e) => setVal(s.id, 'nilai_uas', e.target.value)}
+                              aria-label={`Nilai UAS ${s.full_name}`} data-testid={`grade-uas-${s.id}`} />
+                          ) : (
+                            <span className="font-mono text-sm text-slate-700" data-testid={`grade-uas-${s.id}`}>
+                              {g.nilai_uas !== '' && g.nilai_uas != null ? Number(g.nilai_uas).toFixed(1) : '-'}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono font-bold text-center">
                           {avg != null ? avg.toFixed(1) : '-'}
                         </TableCell>
@@ -294,7 +340,7 @@ export default function GradesInputPage() {
                     );
                   })}
                   {students.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">Tidak ada siswa di kelas ini</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">Tidak ada siswa di kelas ini</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

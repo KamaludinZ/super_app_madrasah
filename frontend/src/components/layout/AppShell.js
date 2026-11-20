@@ -22,6 +22,8 @@ import ViewContextDialog from './ViewContextDialog';
 import { menuTatib } from '@/lib/aksesTatib';
 import { tambahMenuUmum } from '@/lib/menuUmum';
 import { menuPkg, perluMenuPkg, tambahMenuPkg } from '@/lib/menuPkg';
+import { menuUjian, perluMenuUjian, tambahMenuUjian } from '@/lib/menuUjian';
+import { muatAksesSaya } from '@/lib/ujian';
 import { ambilKeanggotaan, ambilMenuPkg } from '@/lib/pkg';
 import { useAuth } from '@/lib/AuthContext';
 import { PERAN_SATPAM } from '@/lib/jenisGtk';
@@ -998,8 +1000,32 @@ export default function AppShell({ children }) {
     return () => { alive = false; };
   }, [activeRole, user?.id]);
 
+  // Grup menu Ujian Madrasah: pengelola/pimpinan dari peran, panitia otomatis dari jabatannya (diperiksa server).
+  const [itemUjian, setItemUjian] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    setItemUjian([]);
+    if (!perluMenuUjian(activeRole)) return undefined;
+    const muat = () => muatAksesSaya(activeRole)
+      .then((akses) => { if (alive) setItemUjian(menuUjian(akses)); })
+      .catch(() => { /* menu Ujian disembunyikan bila gagal */ });
+    muat();
+    // Jabatan panitia bisa ditetapkan admin kapan saja: periksa lagi saat tab kembali aktif (paling sering 1x/menit).
+    let terakhir = Date.now();
+    const saatKembali = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - terakhir < 60000) return;
+      terakhir = Date.now();
+      muat();
+    };
+    document.addEventListener('visibilitychange', saatKembali);
+    return () => { alive = false; document.removeEventListener('visibilitychange', saatKembali); };
+  }, [activeRole, user?.id]);
+
   // Get base menu items for role
-  const roleItems = tambahMenuPkg(navForRole(activeRole, user?.roles || []), itemPkg);
+  const roleItems = tambahMenuUjian(
+    tambahMenuPkg(navForRole(activeRole, user?.roles || []), itemPkg),
+    itemUjian,
+  );
   const showGuruPengganti = serverCanManageGP ?? canManageGuruPengganti(activeRole);
   const items = showGuruPengganti ? roleItems : withoutGuruPengganti(roleItems);
 
