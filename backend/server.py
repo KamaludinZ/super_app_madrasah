@@ -38,6 +38,15 @@ from routers import (
     impor_data_master,
     indikator_materi,
     izin_kamad,
+    ujian,
+    ujian_ruang,
+    ujian_pengawas,
+    ujian_formulir,
+    ujian_publik,
+    ujian_kehadiran,
+    ujian_berita_acara,
+    ujian_cetak,
+    ujian_nilai,
     jabatan,
     journals,
     kelas_digital,
@@ -139,6 +148,15 @@ api_router.include_router(tatib_poin.router)
 api_router.include_router(tatib_tindakan.router)
 api_router.include_router(simpan_akun.router)
 api_router.include_router(izin_kamad.router)
+api_router.include_router(ujian.router)
+api_router.include_router(ujian_ruang.router)
+api_router.include_router(ujian_pengawas.router)
+api_router.include_router(ujian_formulir.router)
+api_router.include_router(ujian_publik.router)
+api_router.include_router(ujian_kehadiran.router)
+api_router.include_router(ujian_berita_acara.router)
+api_router.include_router(ujian_cetak.router)
+api_router.include_router(ujian_nilai.router)
 api_router.include_router(masterplan.router)
 api_router.include_router(uji_notifikasi.router)
 api_router.include_router(events.router)
