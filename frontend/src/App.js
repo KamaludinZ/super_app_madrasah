@@ -113,6 +113,18 @@ import PkgAngketGuruPage from '@/pages/pkg/PkgAngketGuruPage';
 import PkgKehadiranGuruPage from '@/pages/pkg/PkgKehadiranGuruPage';
 import PkgKehadiranSayaPage from '@/pages/pkg/PkgKehadiranSayaPage';
 import PkgAuditPage from '@/pages/pkg/PkgAuditPage';
+import UjianBerandaPage from '@/pages/ujian/UjianBerandaPage';
+import UjianArsipSemesterPage from '@/pages/ujian/UjianArsipSemesterPage';
+import UjianKepanitiaanPage from '@/pages/ujian/UjianKepanitiaanPage';
+import UjianRuangPage from '@/pages/ujian/UjianRuangPage';
+import UjianPengawasPage from '@/pages/ujian/UjianPengawasPage';
+import UjianFormulirPage from '@/pages/ujian/UjianFormulirPage';
+import UjianDaftarHadirPage from '@/pages/ujian/UjianDaftarHadirPage';
+import UjianCetakArsipPage from '@/pages/ujian/UjianCetakArsipPage';
+import UjianBeritaAcaraPage from '@/pages/ujian/UjianBeritaAcaraPage';
+import UjianNilaiPage from '@/pages/ujian/UjianNilaiPage';
+import PublikDaftarHadirPage from '@/pages/publik/PublikDaftarHadirPage';
+import PublikBeritaAcaraPage from '@/pages/publik/PublikBeritaAcaraPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -330,6 +342,8 @@ function App() {
           <Route path="/public/agenda" element={<PublicPageGuard pageName="agenda"><PublicAgenda /></PublicPageGuard>} />
           <Route path="/public/rkam" element={<PublicPageGuard pageName="rkam"><PublicRKAMPage /></PublicPageGuard>} />
           <Route path="/public/angket-360/:token" element={<PublicAngket360Page />} />
+          <Route path="/publik/ujian/:token/daftar-hadir" element={<PublikDaftarHadirPage />} />
+          <Route path="/publik/ujian/:token/berita-acara" element={<PublikBeritaAcaraPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
@@ -424,6 +438,17 @@ function App() {
             <Route path="/admin/tatib/penanganan" element={<PenjagaTatib><AdminTatibPenangananPage /></PenjagaTatib>} />
             <Route path="/admin/tatib/data" element={<PenjagaTatib><AdminTatibDataPage /></PenjagaTatib>} />
             <Route path="/tatib/rekap" element={<TatibRekapPage />} />
+            <Route path="/ujian" element={<UjianBerandaPage />} />
+            <Route path="/ujian/arsip-semester" element={<UjianArsipSemesterPage />} />
+            <Route path="/ujian/panitia" element={<UjianKepanitiaanPage />} />
+            <Route path="/ujian/ruang" element={<UjianRuangPage />} />
+            <Route path="/ujian/pengawas" element={<UjianPengawasPage />} />
+            <Route path="/ujian/formulir" element={<UjianFormulirPage />} />
+            <Route path="/ujian/daftar-hadir" element={<UjianDaftarHadirPage />} />
+            <Route path="/ujian/berita-acara" element={<UjianBeritaAcaraPage />} />
+            <Route path="/ujian/cetak" element={<UjianCetakArsipPage />} />
+            <Route path="/ujian/nilai" element={<UjianNilaiPage />} />
+            <Route path="/ujian/arsip" element={<UjianCetakArsipPage />} />
             <Route path="/pkg" element={<PkgLayout />}>
               <Route index element={<PkgBerandaPage />} />
               <Route path="keanggotaan" element={<PkgKeanggotaanPage />} />

@@ -79,26 +79,21 @@ export default function RaporPage() {
             };
           }
 
+          // Baris rapor diurutkan server per tahun & semester; nilai kosong di semester berikutnya tidak menimpa nilai
+          // yang sudah ada (mis. UAS ganjil dari modul Ujian tetap tampil walau baris genap belum berisi UAS).
+          const gabung = (lama, g) => ({
+            ulangan: (g.nilai_harian || g.nilai_ulangan) ?? lama.ulangan,
+            uts: g.nilai_uts ?? lama.uts,
+            uas: g.nilai_uas ?? lama.uas,
+          });
           // Determine which class level this grade belongs to
           const classLevel = grade.class_name?.match(/^(\d)/)?.[1];
           if (classLevel === '7') {
-            gradesBySubject[subjectKey].class7 = {
-              ulangan: grade.nilai_harian || grade.nilai_ulangan,
-              uts: grade.nilai_uts,
-              uas: grade.nilai_uas
-            };
+            gradesBySubject[subjectKey].class7 = gabung(gradesBySubject[subjectKey].class7, grade);
           } else if (classLevel === '8') {
-            gradesBySubject[subjectKey].class8 = {
-              ulangan: grade.nilai_harian || grade.nilai_ulangan,
-              uts: grade.nilai_uts,
-              uas: grade.nilai_uas
-            };
+            gradesBySubject[subjectKey].class8 = gabung(gradesBySubject[subjectKey].class8, grade);
           } else if (classLevel === '9') {
-            gradesBySubject[subjectKey].class9 = {
-              ulangan: grade.nilai_harian || grade.nilai_ulangan,
-              uts: grade.nilai_uts,
-              uas: grade.nilai_uas
-            };
+            gradesBySubject[subjectKey].class9 = gabung(gradesBySubject[subjectKey].class9, grade);
           }
         });
 
