@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  FileText, Download, Printer, GraduationCap, BookOpen, TrendingUp,
+  FileText, Download, Printer, GraduationCap, BookOpen,
   Award, Loader2, User as UserIcon, Hash, Calendar as CalendarIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -23,6 +23,14 @@ function PredicateBadge({ p }) {
               'bg-rose-100 text-rose-800 border-rose-200';
   return <Badge className={cls}>{p}</Badge>;
 }
+
+// Rekap nilai per jenjang: tiap jenis berdiri sendiri (ulangan & sumatif = rerata kolom-kolomnya), tanpa nilai gabungan.
+const JENIS_REKAP = [['ulangan', 'Ulangan'], ['sumatif', 'Sumatif'], ['uts', 'UTS'], ['uas', 'UAS']];
+const TINGKAT_REKAP = [
+  { kunci: 'class7', label: 'Kelas 7', latar: 'bg-blue-50', isi: 'bg-blue-50/30' },
+  { kunci: 'class8', label: 'Kelas 8', latar: 'bg-green-50', isi: 'bg-green-50/30' },
+  { kunci: 'class9', label: 'Kelas 9', latar: 'bg-amber-50', isi: 'bg-amber-50/30' },
+];
 
 export default function RaporPage() {
   const { user, activeRole, settings } = useAuth();
@@ -82,7 +90,8 @@ export default function RaporPage() {
           // Baris rapor diurutkan server per tahun & semester; nilai kosong di semester berikutnya tidak menimpa nilai
           // yang sudah ada (mis. UAS ganjil dari modul Ujian tetap tampil walau baris genap belum berisi UAS).
           const gabung = (lama, g) => ({
-            ulangan: (g.nilai_harian || g.nilai_ulangan) ?? lama.ulangan,
+            ulangan: (g.nilai_harian ?? g.nilai_ulangan) ?? lama.ulangan,
+            sumatif: g.nilai_sumatif ?? lama.sumatif,
             uts: g.nilai_uts ?? lama.uts,
             uas: g.nilai_uas ?? lama.uas,
           });
@@ -211,7 +220,6 @@ export default function RaporPage() {
                 <InfoRow icon={GraduationCap} label="Kelas" value={rapor.class?.name} />
                 <InfoRow icon={CalendarIcon} label="Tahun Pelajaran" value={rapor.academic_year?.name} />
                 <InfoRow icon={BookOpen} label="Semester" value={(semester || '').charAt(0).toUpperCase() + (semester || '').slice(1)} />
-                <InfoRow icon={TrendingUp} label="Nilai Rata-rata" value={rapor.average ? rapor.average.toFixed(2) : '-'} highlight />
               </div>
             </CardContent>
           </Card>
@@ -232,20 +240,14 @@ export default function RaporPage() {
                     <TableRow>
                       <TableHead rowSpan={2} className="align-middle border-r text-center w-12">No</TableHead>
                       <TableHead rowSpan={2} className="align-middle border-r min-w-[180px]">Mata Pelajaran</TableHead>
-                      <TableHead colSpan={3} className="text-center border-r bg-blue-50">Kelas 7</TableHead>
-                      <TableHead colSpan={3} className="text-center border-r bg-green-50">Kelas 8</TableHead>
-                      <TableHead colSpan={3} className="text-center bg-amber-50">Kelas 9</TableHead>
+                      {TINGKAT_REKAP.map((t, ti) => (
+                        <TableHead key={t.kunci} colSpan={JENIS_REKAP.length} className={`text-center ${t.latar} ${ti < TINGKAT_REKAP.length - 1 ? 'border-r' : ''}`}>{t.label}</TableHead>
+                      ))}
                     </TableRow>
                     <TableRow>
-                      <TableHead className="text-center text-xs bg-blue-50">Ulangan</TableHead>
-                      <TableHead className="text-center text-xs bg-blue-50">UTS</TableHead>
-                      <TableHead className="text-center text-xs border-r bg-blue-50">UAS</TableHead>
-                      <TableHead className="text-center text-xs bg-green-50">Ulangan</TableHead>
-                      <TableHead className="text-center text-xs bg-green-50">UTS</TableHead>
-                      <TableHead className="text-center text-xs border-r bg-green-50">UAS</TableHead>
-                      <TableHead className="text-center text-xs bg-amber-50">Ulangan</TableHead>
-                      <TableHead className="text-center text-xs bg-amber-50">UTS</TableHead>
-                      <TableHead className="text-center text-xs bg-amber-50">UAS</TableHead>
+                      {TINGKAT_REKAP.map((t, ti) => JENIS_REKAP.map(([j, label], ji) => (
+                        <TableHead key={`${t.kunci}-${j}`} className={`text-center text-xs ${t.latar} ${ji === JENIS_REKAP.length - 1 && ti < TINGKAT_REKAP.length - 1 ? 'border-r' : ''}`}>{label}</TableHead>
+                      )))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -253,43 +255,15 @@ export default function RaporPage() {
                       <TableRow key={subjectId} data-testid={`rapor-comprehensive-row-${i}`}>
                         <TableCell className="text-center text-slate-500 border-r">{i + 1}</TableCell>
                         <TableCell className="font-medium border-r">{data.subject_name || '-'}</TableCell>
-
-                        {/* Kelas 7 */}
-                        <TableCell className="font-mono text-center text-sm bg-blue-50/30">
-                          {data.class7?.ulangan != null ? data.class7.ulangan.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm bg-blue-50/30">
-                          {data.class7?.uts != null ? data.class7.uts.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm border-r bg-blue-50/30">
-                          {data.class7?.uas != null ? data.class7.uas.toFixed(1) : '-'}
-                        </TableCell>
-
-                        {/* Kelas 8 */}
-                        <TableCell className="font-mono text-center text-sm bg-green-50/30">
-                          {data.class8?.ulangan != null ? data.class8.ulangan.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm bg-green-50/30">
-                          {data.class8?.uts != null ? data.class8.uts.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm border-r bg-green-50/30">
-                          {data.class8?.uas != null ? data.class8.uas.toFixed(1) : '-'}
-                        </TableCell>
-
-                        {/* Kelas 9 */}
-                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
-                          {data.class9?.ulangan != null ? data.class9.ulangan.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
-                          {data.class9?.uts != null ? data.class9.uts.toFixed(1) : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-center text-sm bg-amber-50/30">
-                          {data.class9?.uas != null ? data.class9.uas.toFixed(1) : '-'}
-                        </TableCell>
+                        {TINGKAT_REKAP.map((t, ti) => JENIS_REKAP.map(([j], ji) => (
+                          <TableCell key={`${t.kunci}-${j}`} className={`font-mono text-center text-sm ${t.isi} ${ji === JENIS_REKAP.length - 1 && ti < TINGKAT_REKAP.length - 1 ? 'border-r' : ''}`}>
+                            {data[t.kunci]?.[j] != null ? Number(data[t.kunci][j]).toFixed(1) : '-'}
+                          </TableCell>
+                        )))}
                       </TableRow>
                     ))}
                     {(!allGrades || Object.keys(allGrades).length === 0) && (
-                      <TableRow><TableCell colSpan={11} className="text-center py-12 text-slate-500">
+                      <TableRow><TableCell colSpan={2 + TINGKAT_REKAP.length * JENIS_REKAP.length} className="text-center py-12 text-slate-500">
                         <FileText className="h-10 w-10 mx-auto text-slate-300 mb-3" />
                         <div className="font-semibold">Belum ada nilai tercatat</div>
                         <div className="text-sm mt-1">Data nilai belum tersedia.</div>
@@ -343,19 +317,6 @@ export default function RaporPage() {
             </CardContent>
           </Card>
 
-          {/* Legenda Predikat */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">Keterangan Predikat</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <PredicateLegend p="A" range="88 - 100" label="Sangat Baik" />
-                <PredicateLegend p="B" range="76 - 87" label="Baik" />
-                <PredicateLegend p="C" range="60 - 75" label="Cukup" />
-                <PredicateLegend p="D" range="&lt; 60" label="Kurang" />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Tanda Tangan - Print only */}
           <Card className="hidden print:block">
             <CardContent className="p-6">
@@ -399,18 +360,3 @@ function InfoRow({ icon: Icon, label, value, highlight, mono }) {
   );
 }
 
-function PredicateLegend({ p, range, label }) {
-  const cls = p === 'A' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-              p === 'B' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-              p === 'C' ? 'bg-amber-100 text-amber-800 border-amber-200' :
-              'bg-rose-100 text-rose-800 border-rose-200';
-  return (
-    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
-      <Badge className={cls + ' h-7 w-7 flex items-center justify-center font-bold rounded-md'}>{p}</Badge>
-      <div>
-        <div className="text-xs text-slate-700 font-mono">{range}</div>
-        <div className="text-xs text-slate-500">{label}</div>
-      </div>
-    </div>
-  );
-}

@@ -312,7 +312,8 @@ async def simpan_nilai(ujian: Dict[str, Any], mapel_id: str, isian: List[Any], s
 @router.get("/grades/student/{student_id}")
 async def nilai_rapor_siswa(student_id: str, user: Dict = Depends(get_current_user)):
     """Seluruh baris rapor satu siswa lintas tahun (dipakai tabel "Nilai Kelas 7–9" di halaman Rapor): mapel, kelas,
-    nilai UAS hasil sinkron modul ujian serta nilai lain. Akses sama dengan /grades/rapor: admin, siswa itu sendiri, wali kelasnya."""
+    nilai UAS hasil sinkron modul ujian, serta rerata ulangan (nilai_harian), rerata sumatif (nilai_sumatif) dan UTS dari
+    Input Nilai guru mapel. Akses sama dengan /grades/rapor: admin, siswa itu sendiri, wali kelasnya."""
     siswa = await db.users.find_one({'id': student_id}, {'_id': 0, 'id': 1, 'student_class_id': 1})
     if not siswa:
         raise HTTPException(404, "Siswa tidak ditemukan")
@@ -330,7 +331,7 @@ async def nilai_rapor_siswa(student_id: str, user: Dict = Depends(get_current_us
     for b in baris:
         hasil.append({**{k: b.get(k) for k in ('id', 'subject_id', 'class_id', 'academic_year_id', 'semester', 'nilai_pengetahuan',
                                                'nilai_keterampilan', 'nilai_akhir', 'predicate', 'nilai_uas', 'nilai_uas_sumber')},
-                      'nilai_uts': b.get('nilai_uts'), 'nilai_harian': b.get('nilai_harian'),
+                      'nilai_uts': b.get('nilai_uts'), 'nilai_harian': b.get('nilai_harian'), 'nilai_sumatif': b.get('nilai_sumatif'),
                       'subject_name': (mapel.get(b.get('subject_id')) or {}).get('name'), 'subject_code': (mapel.get(b.get('subject_id')) or {}).get('code'),
                       'class_name': (kelas.get(b.get('class_id')) or {}).get('name'), 'jenjang': (kelas.get(b.get('class_id')) or {}).get('grade'),
                       'tahun_pelajaran': tahun.get(b.get('academic_year_id'))})
