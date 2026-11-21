@@ -4,16 +4,47 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Armchair, ArrowLeft, Download, Eye, IdCard, Loader2, PenLine, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Armchair, ArrowLeft, Camera, CameraOff, Download, Eye, IdCard, Loader2, PenLine, RefreshCw } from 'lucide-react';
 import AksesDitolak from '@/components/security/AksesDitolak';
 import PilihUjian from '@/components/ujian/PilihUjian';
 import PratinjauDokumenDialog from '@/components/ujian/PratinjauDokumenDialog';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { HALAMAN_KARTU, JENIS_KARTU, jenisDariPath, jumlahHalaman, muatPilihanKartu, unduhKartu } from '@/lib/ujianKartu';
+import { FOTO_BAWAAN, HALAMAN_KARTU, JENIS_KARTU, OPSI_FOTO, jenisDariPath, jumlahHalaman, muatPilihanKartu, unduhKartu } from '@/lib/ujianKartu';
 
 const IKON = { peserta: IdCard, meja: Armchair };
+const IKON_FOTO = { pakai: Camera, tanpa: CameraOff };
 const SEMUA = '';
+
+/** Pengaturan foto kartu: "Pakai foto" atau "Tanpa foto". */
+function OpsiFoto({ nilai, onUbah, adaFoto, total }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Foto di kartu</p>
+      <div className="inline-flex w-full rounded-lg border border-slate-200 bg-white p-1 sm:w-auto" role="radiogroup" aria-label="Foto di kartu" data-testid="opsi-foto-kartu">
+        {Object.entries(OPSI_FOTO).map(([k, o]) => {
+          const Ikon = IKON_FOTO[k];
+          const aktif = nilai === k;
+          return (
+            <button key={k} type="button" role="radio" aria-checked={aktif} onClick={() => onUbah(k)} data-testid={`opsi-foto-${k}`}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006837] sm:flex-none ${
+                aktif ? 'bg-[#006837] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
+              <Ikon className="h-4 w-4 shrink-0" /> {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-slate-500">
+        {OPSI_FOTO[nilai].ket}
+        {nilai === 'pakai' && total > 0 && (
+          <> <span className={adaFoto < total ? 'text-amber-700' : 'text-emerald-700'} data-testid="info-jumlah-foto">
+            {adaFoto} dari {total} peserta sudah punya pas foto
+          </span> (diambil dari dokumen Pas Foto siswa).</>
+        )}
+      </p>
+    </div>
+  );
+}
 
 /** Kartu pilihan ruang (atau "Semua Ruang"): jumlah peserta, halaman A4, dan peserta yang belum bernomor. */
 function KartuRuang({ judul, sub, peserta, halaman, tanpaNomor, aktif, onPilih, testid }) {
@@ -52,6 +83,8 @@ export default function UjianKartuPage() {
   }, [lokasi.pathname, lokasi.search, navigasi]);
   const [proses, setProses] = useState(null);
   const [pratinjau, setPratinjau] = useState(null);
+  const [fotoPilih, setFotoPilih] = useState({});
+  const foto = fotoPilih[jenis] || pilihan?.foto_bawaan || FOTO_BAWAAN[jenis];
 
   const muat = useCallback(async (u, j) => {
     if (!u) { setPilihan(null); return; }
@@ -80,13 +113,14 @@ export default function UjianKartuPage() {
   const dipilih = ruangId ? ruangList.filter((r) => r.id === ruangId) : terisi;
   const totalPeserta = dipilih.reduce((n, r) => n + r.peserta, 0);
   const tanpaNomor = dipilih.reduce((n, r) => n + (r.tanpa_nomor || 0), 0);
+  const adaFoto = dipilih.reduce((n, r) => n + (r.ada_foto || 0), 0);
   const namaRuang = ruangId ? dipilih[0]?.nama_ruang : '';
-  const judulDok = `${JENIS_KARTU[jenis].label} · ${ruangId ? `Ruang ${namaRuang}` : 'Semua Ruang'}`;
+  const judulDok = `${JENIS_KARTU[jenis].label} · ${ruangId ? `Ruang ${namaRuang}` : 'Semua Ruang'} · ${OPSI_FOTO[foto].label}`;
 
   const ambil = async (aksi) => {
     setProses(aksi);
     try {
-      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang);
+      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang, foto);
       if (aksi === 'lihat' && !h.tiruan) setPratinjau({ blob: h.blob, nama: h.nama, judul: judulDok });
       else {
         simpanBerkas(h.blob, h.nama);
@@ -167,6 +201,7 @@ export default function UjianKartuPage() {
                     ))}
                   </div>
                 </div>
+                <OpsiFoto nilai={foto} onUbah={(f) => setFotoPilih((x) => ({ ...x, [jenis]: f }))} adaFoto={adaFoto} total={totalPeserta} />
                 {tanpaNomor > 0 && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-tanpa-nomor">
                     {tanpaNomor} peserta belum punya nomor peserta — kartunya tetap dicetak dengan nomor "-". Lengkapi di{' '}

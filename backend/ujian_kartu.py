@@ -4,20 +4,28 @@ Satu halaman A4 tegak memuat 8 kartu (2 kolom x 4 baris, ukuran tiap kartu 92 x 
 mengikuti garis tepinya. Dicetak per ruang: peserta satu ruang urut nomor peserta; bila beberapa ruang dicetak
 sekaligus, setiap ruang mulai di halaman baru.
 
-- Kartu Peserta: kop (logo Kemenag & madrasah, nama kegiatan + tahun ajaran), kotak pas foto 3x4, nomor peserta,
-  nama, kelas, NISN, ruang, dan tanda tangan Ketua Panitia ujian itu.
-- Kartu Meja: ditempel di meja — nomor peserta berukuran besar, nama, kelas, dan ruang.
+- Kartu Peserta: kop (logo Kemenag & madrasah, nama kegiatan + tahun ajaran), pas foto 3x4, nomor peserta, nama,
+  kelas, NISN, ruang, dan tanda tangan Ketua Panitia ujian itu.
+- Kartu Meja: ditempel di meja — nomor peserta berukuran besar, nama, kelas, ruang, dan (opsional) pas foto.
 
-Data masukan (dict) dari `data_kartu`:
-  { template: {kop_madrasah, singkatan_ujian, nama_kegiatan, ...}, tahun_pelajaran,
-    ketua: {nama, nip} | None, ruang: [{ nama_ruang, peserta: [{nomor_peserta, nama, kelas, nisn, nis}] }] }
+Opsi foto (`data['foto']`): True = "pakai foto" — pas foto siswa dari dokumen siswa (Pas Foto) atau foto profil
+tercetak di kartu; siswa tanpa foto mendapat kotak kosong untuk ditempel. False = "tanpa foto" — tanpa kotak foto,
+isian kartu melebar.
+
+Data masukan (dict):
+  { template: {kop_madrasah, singkatan_ujian, nama_kegiatan, ...}, tahun_pelajaran, foto: bool,
+    ketua: {nama, nip} | None, ruang: [{ nama_ruang, peserta: [{nomor_peserta, nama, kelas, nisn, nis, foto: JPEG|None}] }] }
 """
+import base64
 import io
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
+
+from PIL import Image, ImageOps
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.lib.utils import simpleSplit
+from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
@@ -32,6 +40,10 @@ JENIS_KARTU = {
 KOLOM, BARIS = 2, 4
 KARTU_PER_HALAMAN = KOLOM * BARIS
 MARGIN, JARAK_X, JARAK_Y = 10 * mm, 6 * mm, 5 * mm
+OPSI_FOTO = {'pakai': True, 'tanpa': False}
+FOTO_BAWAAN = {'peserta': 'pakai', 'meja': 'tanpa'}
+UKURAN_FOTO_PX = (180, 240)  # 3:4, cukup tajam untuk kotak 22 x 28 mm
+EKSTENSI_FOTO = ('.jpg', '.jpeg', '.png')
 LEBAR_HAL, TINGGI_HAL = A4
 LEBAR_KARTU = (LEBAR_HAL - 2 * MARGIN - (KOLOM - 1) * JARAK_X) / KOLOM
 TINGGI_KARTU = (TINGGI_HAL - 2 * MARGIN - (BARIS - 1) * JARAK_Y) / BARIS
@@ -69,6 +81,68 @@ def _slot(i: int):
     return x, y
 
 
+def siapkan_foto(isi: Optional[bytes]) -> Optional[bytes]:
+    """Gambar pas foto -> JPEG 3:4 kecil (dipotong di tengah, orientasi EXIF dibetulkan); None bila bukan gambar sah."""
+    if not isi:
+        return None
+    try:
+        with Image.open(io.BytesIO(isi)) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode in ('RGBA', 'LA', 'P'):
+                im = im.convert('RGBA')
+                latar = Image.new('RGB', im.size, (255, 255, 255))
+                latar.paste(im, mask=im.split()[-1])
+                im = latar
+            im = ImageOps.fit(im.convert('RGB'), UKURAN_FOTO_PX, Image.LANCZOS)
+            out = io.BytesIO()
+            im.save(out, 'JPEG', quality=82)
+            return out.getvalue()
+    except Exception:  # noqa: BLE001 — berkas rusak / bukan gambar: kartu memakai kotak kosong
+        return None
+
+
+def ada_foto(akun: Optional[Dict[str, Any]]) -> bool:
+    """Akun siswa punya pas foto gambar (dokumen Pas Foto jpg/png atau foto profil data URI)."""
+    a = akun or {}
+    url = str(a.get('dokumen_pas_foto') or '')
+    return url.lower().endswith(EKSTENSI_FOTO) or str(a.get('photo_url') or '').startswith('data:image/')
+
+
+def baca_foto_siswa(akun: Optional[Dict[str, Any]], folder_dokumen: str) -> Optional[bytes]:
+    """Bytes pas foto siswa: dokumen Pas Foto (berkas di folder unggahan dokumen siswa) lebih dulu, lalu foto profil
+    berbentuk data URI. Nama berkas diambil dari bagian akhir URL (tanpa path) agar tidak keluar folder."""
+    a = akun or {}
+    url = str(a.get('dokumen_pas_foto') or '')
+    if url.lower().endswith(EKSTENSI_FOTO):
+        path = os.path.join(folder_dokumen, os.path.basename(url.split('/')[-1]))
+        if os.path.isfile(path):
+            with open(path, 'rb') as f:
+                return f.read()
+    foto = str(a.get('photo_url') or '')
+    if foto.startswith('data:image/') and ',' in foto:
+        try:
+            return base64.b64decode(foto.split(',', 1)[1], validate=False)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _foto(c: canvas.Canvas, png: Optional[bytes], x: float, y: float, w: float, h: float) -> None:
+    """Pas foto pada kotak (x, y, w, h); tanpa foto -> kotak putus-putus bertuliskan 'Pas Foto 3 x 4'."""
+    if png:
+        c.drawImage(ImageReader(io.BytesIO(png)), x, y, width=w, height=h)
+        c.setLineWidth(0.4)
+        c.rect(x, y, w, h)
+        return
+    c.setLineWidth(0.5)
+    c.setDash(2, 2)
+    c.rect(x, y, w, h)
+    c.setDash()
+    c.setFont(_FONT['biasa'], 6.5)
+    c.drawCentredString(x + w / 2, y + h / 2 + 1 * mm, 'Pas Foto')
+    c.drawCentredString(x + w / 2, y + h / 2 - 2 * mm, '3 x 4')
+
+
 def _kop(c: canvas.Canvas, data: Dict[str, Any], x: float, y: float, w: float, h: float, judul: str, logo) -> float:
     """Kop kartu peserta; mengembalikan y garis bawah kop."""
     f, fb = _FONT['biasa'], _FONT['tebal']
@@ -97,17 +171,11 @@ def _kartu_peserta(c: canvas.Canvas, data: Dict[str, Any], ruang: Dict[str, Any]
     c.setLineWidth(0.8)
     c.roundRect(x, y, w, h, 2.5 * mm)
     garis = _kop(c, data, x, y, w, h, JENIS_KARTU['peserta']['judul'], logo)
-    # Kotak pas foto 3x4.
-    fx, fy, fw, fh = x + 4 * mm, garis - 31 * mm, 22 * mm, 28 * mm
-    c.setLineWidth(0.5)
-    c.setDash(2, 2)
-    c.rect(fx, fy, fw, fh)
-    c.setDash()
-    c.setFont(f, 6.5)
-    c.drawCentredString(fx + fw / 2, fy + fh / 2 + 1 * mm, 'Pas Foto')
-    c.drawCentredString(fx + fw / 2, fy + fh / 2 - 2 * mm, '3 x 4')
-    # Isian.
-    lx, vx = x + 30 * mm, x + 51 * mm
+    if data.get('foto', True):  # pas foto 3x4 di kiri, isian di kanannya
+        _foto(c, p.get('foto'), x + 4 * mm, garis - 31 * mm, 22 * mm, 28 * mm)
+        lx, vx = x + 30 * mm, x + 51 * mm
+    else:  # tanpa foto: isian melebar dari tepi kiri
+        lx, vx = x + 6 * mm, x + 27 * mm
     lebar_nilai = x + w - 3 * mm - vx
     yy = garis - 5 * mm
     nisn = p.get('nisn') or p.get('nis') or '-'
@@ -164,12 +232,17 @@ def _kartu_meja(c: canvas.Canvas, data: Dict[str, Any], ruang: Dict[str, Any], p
     c.setLineWidth(0.8)
     c.roundRect(x, y, w, h, 2.5 * mm)
     c.line(x, y + h - pita, x + w, y + h - pita)
+    # Pas foto (opsional) di kiri; nomor & nama di tengah area sisanya.
+    lebar_isi = w - 8 * mm
+    if data.get('foto'):
+        _foto(c, p.get('foto'), x + 4 * mm, y + h - pita - 29 * mm, 20 * mm, 26 * mm)
+        tengah, lebar_isi = x + 26 * mm + (w - 28 * mm) / 2, w - 30 * mm
     # Nomor peserta besar.
     c.setFont(f, 7)
     c.drawCentredString(tengah, y + h - pita - 5 * mm, 'NOMOR PESERTA')
-    _teks_muat(c, p.get('nomor_peserta') or '-', tengah, y + h - pita - 15.5 * mm, fb, 28, w - 8 * mm, 14, tengah=True)
+    _teks_muat(c, p.get('nomor_peserta') or '-', tengah, y + h - pita - 15.5 * mm, fb, 28, lebar_isi, 14, tengah=True)
     # Nama (paling banyak 2 baris) & NISN.
-    baris, uk = _baris_nama(p.get('nama') or '-', fb, 12, w - 8 * mm, 8)
+    baris, uk = _baris_nama(p.get('nama') or '-', fb, 12, lebar_isi, 8)
     c.setFont(fb, uk)
     ny = y + h - pita - 23 * mm
     for i, b in enumerate(baris):
@@ -231,5 +304,8 @@ def ringkas_ketua(akun: Dict[str, Any], panitia: Dict[str, Any]) -> Dict[str, st
     return {'nama': akun.get('full_name') or panitia.get('nama') or akun.get('username') or '', 'nip': nip or ''}
 
 
-def peserta_kartu(peserta: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [{k: p.get(k) for k in ('nomor_peserta', 'nama', 'kelas', 'nisn', 'nis')} for p in peserta]
+def peserta_kartu(peserta: List[Dict[str, Any]], foto: Optional[Dict[str, bytes]] = None) -> List[Dict[str, Any]]:
+    """Isian kartu tiap peserta; `foto` = {siswa_id: JPEG siap cetak}."""
+    foto = foto or {}
+    return [{**{k: p.get(k) for k in ('nomor_peserta', 'nama', 'kelas', 'nisn', 'nis')}, 'foto': foto.get(p.get('siswa_id'))}
+            for p in peserta]
