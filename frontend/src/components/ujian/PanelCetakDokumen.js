@@ -6,9 +6,10 @@ import { Eye, FileText, Loader2, Printer } from 'lucide-react';
 import { formatWIB } from '@/lib/datetime';
 import { pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { FORMAT_CETAK, JENIS_DOKUMEN, cetakDokumen, muatKesiapanCetak, pratinjauDokumen } from '@/lib/ujianCetak';
+import { FORMAT_CETAK, JENIS_DOKUMEN, cetakDokumen, kesiapanRuang, labelJenjang, mapelCetak, muatKesiapanCetak, pratinjauDokumen } from '@/lib/ujianCetak';
 import PratinjauDokumenDialog from '@/components/ujian/PratinjauDokumenDialog';
 import PemilihRuangJenjang from '@/components/ujian/PemilihRuangJenjang';
+import PemilihRuang from '@/components/ujian/PemilihRuang';
 
 export const labelSesi = (s) => (s ? `${formatWIB(s.tanggal, 'Date', { weekday: 'short', day: 'numeric', month: 'short' })} · Sesi ${s.sesi_ke} · ${s.jam_mulai}–${s.jam_selesai}` : '');
 
@@ -25,10 +26,13 @@ function Pilih({ id, label, value, onChange, children, testid }) {
 }
 
 /**
- * Panel Cetak Dokumen: pilih ruang -> jenjang (hanya jenjang ruang itu) -> sesi -> format, lalu cetak Daftar Hadir atau
- * Berita Acara untuk satu jenjang pada satu ruang. Hasil cetak diunduh & tersimpan otomatis di arsip.
+ * Panel Cetak Dokumen dalam dua mode (`mode`):
+ * - 'jenjang' (Per Jenjang per Ruang): pilih kombinasi ruang–jenjang; dokumen hanya memuat satu jenjang.
+ * - 'ruang' (Per Ruang): pilih ruang; seluruh jenjang ruang itu dicetak dalam satu dokumen.
+ * Lalu sesi & format, cetak Daftar Hadir atau Berita Acara. Hasil cetak diunduh & tersimpan otomatis di arsip.
  */
-export default function PanelCetakDokumen({ ujian, pilihan }) {
+export default function PanelCetakDokumen({ ujian, pilihan, mode = 'jenjang' }) {
+  const perRuang = mode === 'ruang';
   const [ruangId, setRuangId] = useState('');
   const [jenjang, setJenjang] = useState('');
   const [sesiId, setSesiId] = useState('');
@@ -48,16 +52,23 @@ export default function PanelCetakDokumen({ ujian, pilihan }) {
       .catch(() => { if (hidup) setKesiapan({}); });
     return () => { hidup = false; };
   }, [ujian, sesiId]);
-  const siap = kesiapan[`${ruang?.id}:${jenjang}`];
+  const siap = perRuang ? kesiapanRuang(kesiapan, ruang) : kesiapan[`${ruang?.id}:${jenjang}`];
+  const daftarJenjang = perRuang ? (ruang?.jenjang || []) : (jenjang ? [Number(jenjang)] : []);
+  const kelas = labelJenjang(daftarJenjang);
+  const mapel = mapelCetak(sesi, daftarJenjang);
+  const bisaCetak = perRuang ? daftarJenjang.length > 0 : !!jenjang;
 
   const [pratinjau, setPratinjau] = useState(null);
-  const isiCetak = (jenis) => ({ jenis, ruang_id: ruang.id, nama_ruang: ruang.nama_ruang, jenjang: Number(jenjang), sesi_id: sesiId, sesi_label: labelSesi(sesi), format });
+  const isiCetak = (jenis) => ({
+    jenis, mode, ruang_id: ruang.id, nama_ruang: ruang.nama_ruang, jenjang: perRuang ? null : Number(jenjang), jenjang_daftar: daftarJenjang,
+    sesi_id: sesiId, sesi_label: labelSesi(sesi), format,
+  });
 
   const lihat = async (jenis) => {
     setProses(`lihat-${jenis}`);
     try {
       const h = await pratinjauDokumen(ujian.id, isiCetak(jenis));
-      setPratinjau({ jenis, blob: h.blob, mesin: h.mesin, judul: `${JENIS_DOKUMEN[jenis].label} · Ruang ${ruang.nama_ruang} · Kelas ${jenjang}` });
+      setPratinjau({ jenis, blob: h.blob, mesin: h.mesin, judul: `${JENIS_DOKUMEN[jenis].label} · Ruang ${ruang.nama_ruang} · Kelas ${kelas}${perRuang ? ' (per ruang)' : ''}` });
     } catch (e) {
       toast.error(pesanGalat(e, 'Gagal membuat pratinjau.'));
     } finally {
@@ -71,7 +82,7 @@ export default function PanelCetakDokumen({ ujian, pilihan }) {
       const h = await cetakDokumen(ujian.id, isiCetak(jenis));
       setPratinjau(null);
       simpanBerkas(h.blob, h.nama);
-      toast.success(`${JENIS_DOKUMEN[jenis].label} Ruang ${ruang.nama_ruang} kelas ${jenjang} diunduh${h.tiruan ? ' (contoh)' : ' dan tersimpan di arsip'}`);
+      toast.success(`${JENIS_DOKUMEN[jenis].label} Ruang ${ruang.nama_ruang} kelas ${kelas}${perRuang ? ' (per ruang)' : ''} diunduh${h.tiruan ? ' (contoh)' : ' dan tersimpan di arsip'}`);
     } catch (e) {
       toast.error(pesanGalat(e, 'Gagal mencetak dokumen.'));
     } finally {
@@ -88,9 +99,9 @@ export default function PanelCetakDokumen({ ujian, pilihan }) {
   }
 
   return (
-    <Card data-testid="panel-cetak">
+    <Card data-testid="panel-cetak" data-mode={mode}>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4 text-[#006837]" /> Cetak per Jenjang per Ruang</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4 text-[#006837]" /> {perRuang ? 'Cetak per Ruang' : 'Cetak per Jenjang per Ruang'}</CardTitle>
         <p className="text-xs text-slate-500">
           Mesin cetak: {pilihan.mesin?.identik ? 'LibreOffice — hasil identik dengan template madrasah' : 'ReportLab (cadangan) — tata letak meniru template'}.
         </p>
@@ -105,11 +116,20 @@ export default function PanelCetakDokumen({ ujian, pilihan }) {
           </Pilih>
         </div>
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ruang & jenjang</p>
-          <PemilihRuangJenjang ruangList={pilihan.ruang} kesiapan={kesiapan} nilai={`${ruang?.id}:${jenjang}`}
-            onPilih={(r, j) => { setRuangId(r.id); setJenjang(String(j)); }} />
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{perRuang ? 'Ruang' : 'Ruang & jenjang'}</p>
+          {perRuang ? (
+            <PemilihRuang ruangList={pilihan.ruang} kesiapan={kesiapan} nilai={ruang?.id} onPilih={(r) => setRuangId(r.id)} />
+          ) : (
+            <PemilihRuangJenjang ruangList={pilihan.ruang} kesiapan={kesiapan} nilai={`${ruang?.id}:${jenjang}`}
+              onPilih={(r, j) => { setRuangId(r.id); setJenjang(String(j)); }} />
+          )}
         </div>
-        {sesi?.mapel?.[jenjang] && <p className="text-xs text-slate-500">Mata pelajaran kelas {jenjang} pada sesi ini: <strong>{sesi.mapel[jenjang]}</strong></p>}
+        {perRuang && daftarJenjang.length > 1 && (
+          <p className="text-xs text-slate-500" data-testid="info-per-ruang">
+            Ruang {ruang.nama_ruang} memuat kelas {kelas}: daftar hadir dan berita acara dicetak dalam <strong>satu dokumen</strong> untuk seluruh peserta ruang.
+          </p>
+        )}
+        {mapel && <p className="text-xs text-slate-500">Mata pelajaran kelas {kelas} pada sesi ini: <strong>{mapel}</strong></p>}
         {siap && !siap.dh_lengkap && (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Daftar hadir belum lengkap ({siap.belum} peserta) — dokumen tetap dapat dicetak; baris yang belum terisi dicetak kosong.
@@ -118,10 +138,10 @@ export default function PanelCetakDokumen({ ujian, pilihan }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {Object.entries(JENIS_DOKUMEN).map(([jenis, j]) => (
             <div key={jenis} className="flex gap-2 rounded-xl border border-slate-200 p-2">
-              <Button variant="outline" onClick={() => lihat(jenis)} disabled={!!proses || !jenjang} className="h-11 flex-1 gap-2" data-testid={`btn-pratinjau-${jenis}`}>
+              <Button variant="outline" onClick={() => lihat(jenis)} disabled={!!proses || !bisaCetak} className="h-11 flex-1 gap-2" data-testid={`btn-pratinjau-${jenis}`}>
                 {proses === `lihat-${jenis}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} Pratinjau
               </Button>
-              <Button onClick={() => cetak(jenis)} disabled={!!proses || !jenjang} className="h-11 flex-[2] gap-2 bg-[#006837] hover:bg-[#00552d]" data-testid={`btn-cetak-${jenis}`}>
+              <Button onClick={() => cetak(jenis)} disabled={!!proses || !bisaCetak} className="h-11 flex-[2] gap-2 bg-[#006837] hover:bg-[#00552d]" data-testid={`btn-cetak-${jenis}`}>
                 {proses === jenis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} Cetak {j.singkat}
               </Button>
             </div>

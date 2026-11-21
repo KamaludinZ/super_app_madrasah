@@ -90,7 +90,13 @@ def pdf_daftar_hadir(data: Dict[str, Any]) -> bytes:
             yy = y - (i % 2) * 5.5 * mm
             c.drawString(x0, yy, lab)
             c.drawString(x0 + 34 * mm, yy, ':')
-            c.drawString(x0 + 37 * mm, yy, str(nilai or ''))
+            # Isian panjang (mis. mapel per ruang campuran "Matematika (kelas 7); IPA (kelas 8)") dikecilkan agar muat.
+            teks, uk = str(nilai or ''), 11.0
+            while uk > 6 and pdfmetrics.stringWidth(teks, f, uk) > 50 * mm:
+                uk -= 0.5
+            c.setFont(f, uk)
+            c.drawString(x0 + 37 * mm, yy, teks)
+            c.setFont(f, 11)
             c.setDash(1, 1)
             c.line(x0 + 37 * mm, yy - 1, x0 + 80 * mm, yy - 1)
             c.setDash()

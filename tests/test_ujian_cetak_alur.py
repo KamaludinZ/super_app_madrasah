@@ -224,3 +224,53 @@ def test_cari_dan_buka_arsip(klien):
     assert d['arsip']['id'] == 'a1' and [t['id'] for t in d['terkait']] == ['a2']
     assert klien('guru1', 'guru', 'GET', '/ujian/arsip/b1').status_code == 403
     assert klien('admin', 'admin', 'GET', '/ujian/arsip/tidak-ada').status_code == 404
+
+
+def test_cetak_per_ruang_semua_jenjang_satu_dokumen(klien_cetak):
+    """Mode per ruang: satu daftar hadir & satu berita acara untuk seluruh jenjang ruang campuran; arsip bermode 'ruang'."""
+    import ujian_cetak_docx as cd
+    from ujian_dasar import HARI_INI
+    k, db = klien_cetak, klien_cetak.db
+    pr = {p['siswa_id']: p['id'] for p in db.peserta_ruang.docs}
+    k('admin', 'admin', 'PUT', f"/ujian/uas/ruang/{k.r1['id']}/nomor-peserta", json={'items': [
+        {'peserta_id': pr['s-k7a-1'], 'nomor_peserta': '01-001'}, {'peserta_id': pr['s-k7a-2'], 'nomor_peserta': '01-002'},
+        {'peserta_id': pr['s-k8a-1'], 'nomor_peserta': '01-003'}]})
+    k('admin', 'admin', 'PUT', '/ujian/uas/daftar-hadir/status', json={'peserta_id': pr['s-k8a-1'], 'tanggal': HARI_INI, 'status': 'sakit', 'catatan': 'Demam'})
+    isi = {'mode': 'ruang', 'ruang_id': k.r1['id'], 'sesi_id': k.sesi['id'], 'format': 'docx'}
+    r = k('guru1', 'guru', 'POST', '/ujian/uas/cetak', json={'jenis': 'daftar_hadir', **isi})
+    assert r.status_code == 200, r.text
+    assert 'ruang_01_kelas_7-8_per_ruang_' in r.headers['content-disposition']
+    teks = cd.teks_dokumen(r.content)
+    for s in ('Siswa 7A 1', 'Siswa 7A 2', 'Siswa 8A 1', 'Matematika (kelas 7); IPA (kelas 8)'):
+        assert s in teks, s
+    r = k('guru1', 'guru', 'POST', '/ujian/uas/cetak', json={'jenis': 'berita_acara', **isi})
+    teks = cd.teks_dokumen(r.content)
+    for s in ('kelas 7 dan 8 Tahun Ajaran', '3 (tiga)', '01-003', 'Matematika (kelas 7); IPA (kelas 8)'):
+        assert s in teks, s
+    # Arsip: mode ruang, jenjang kosong, daftar jenjang ruang; saringan mode & dokumen terkait.
+    a = db.arsip_ujian.docs[-1]
+    assert (a['mode'], a['jenjang'], a['jenjang_daftar']) == ('ruang', None, [7, 8])
+    _cetak(k, 'daftar_hadir')  # per jenjang (kelas 7)
+    semua = k('admin', 'admin', 'GET', '/ujian/uas/arsip').json()['items']
+    assert sorted(x['mode'] for x in semua) == ['jenjang', 'ruang', 'ruang']
+    assert len(k('admin', 'admin', 'GET', '/ujian/uas/arsip', params={'mode': 'ruang'}).json()['items']) == 2
+    per_jenjang = k('admin', 'admin', 'GET', '/ujian/uas/arsip', params={'mode': 'jenjang'}).json()['items']
+    assert [(x['jenjang'], x['jenjang_daftar']) for x in per_jenjang] == [(7, [7])]
+    d = k('admin', 'admin', 'GET', f"/ujian/arsip/{a['id']}").json()
+    assert [t['mode'] for t in d['terkait']] == ['ruang']  # pasangan DH per ruang, bukan cetakan per jenjang
+    assert [x['id'] for x in k('admin', 'admin', 'GET', '/ujian/arsip/cari', params={'q': 'per ruang kelas 7 dan 8'}).json()['items']] \
+        == [x['id'] for x in semua if x['mode'] == 'ruang']
+    # PDF cadangan (ReportLab) & pratinjau juga jalan; mode per jenjang tetap wajib jenjang.
+    r = k('guru1', 'guru', 'POST', '/ujian/uas/cetak', json={'jenis': 'daftar_hadir', **isi, 'format': 'pdf', 'pratinjau': True})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF') and 'x-arsip-id' not in r.headers
+    r = k('guru1', 'guru', 'POST', '/ujian/uas/cetak', json={'jenis': 'berita_acara', **isi, 'format': 'pdf'})
+    assert r.status_code == 200 and r.content.startswith(b'%PDF')
+    assert k('guru1', 'guru', 'POST', '/ujian/uas/cetak', json={'jenis': 'daftar_hadir', 'ruang_id': k.r1['id'], 'sesi_id': k.sesi['id']}).status_code == 400
+
+
+def test_arsip_lama_tanpa_mode_dianggap_per_jenjang(klien):
+    db = klien.db
+    _arsip(db, 'uas', 'a1', '2026-12-02T10:00:00+07:00')
+    it = klien('admin', 'admin', 'GET', '/ujian/uas/arsip').json()['items'][0]
+    assert (it['mode'], it['jenjang_daftar']) == ('jenjang', [7])
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/arsip', params={'mode': 'ruang'}).json()['items'] == []

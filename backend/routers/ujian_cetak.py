@@ -4,7 +4,7 @@ Cetak (menu 'cetak'): admin, panitia ujian itu, kepala madrasah & waka kurikulum
 Arsip (menu 'arsip', AKSES TERBATAS): admin, waka kurikulum, kepala madrasah, serta ketua & sekretaris panitia ujian
 itu — jabatan diperiksa PADA ujian pemilik arsip (bendahara/penanggung jawab dan GTK lain ditolak 403).
 """
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -18,10 +18,10 @@ from routers.ujian_ruang import per_jenjang_ruang
 from ujian import KOLEKSI_FORMULIR, KOLEKSI_RUANG, boleh_akses_ujian
 from ujian_berita_acara import KOLEKSI_BA, rekap_ruang_sesi
 from ujian_ruang import urut_nama_ruang
-from ujian_arsip import ambil_berkas_arsip, dokumen_arsip, nama_berkas_cetak, ringkas_arsip, simpan_arsip
+from ujian_arsip import ambil_berkas_arsip, daftar_jenjang_arsip, dokumen_arsip, mode_arsip, nama_berkas_cetak, ringkas_arsip, simpan_arsip
 from ujian_berita_acara import KOLEKSI_ARSIP
 from ujian_cetak import MIME, buat_dokumen, kemampuan_cetak
-from ujian_cetak_data import PERAKIT
+from ujian_cetak_data import PERAKIT, label_jenjang
 from ujian_cetak_docx import hari_tanggal
 
 router = APIRouter()
@@ -33,8 +33,10 @@ async def akses_arsip(user: Dict[str, Any], ujian_id: str) -> Dict[str, Any]:
 
 
 @router.get("/ujian/{ujian_id}/arsip")
-async def daftar_arsip(ujian_id: str, jenis: str = '', ruang_id: str = '', jenjang: int = 0, user: Dict = Depends(get_current_user)):
-    """Arsip administrasi satu ujian, terbaru dulu; dapat disaring jenis dokumen, ruang, dan jenjang."""
+async def daftar_arsip(ujian_id: str, jenis: str = '', ruang_id: str = '', jenjang: int = 0, mode: str = '',
+                       user: Dict = Depends(get_current_user)):
+    """Arsip administrasi satu ujian, terbaru dulu; dapat disaring jenis dokumen, ruang, jenjang, dan mode dokumen
+    ('jenjang' = per jenjang per ruang, 'ruang' = per ruang)."""
     await akses_arsip(user, ujian_id)
     q: Dict[str, Any] = {'ujian_id': ujian_id}
     if jenis:
@@ -44,7 +46,7 @@ async def daftar_arsip(ujian_id: str, jenis: str = '', ruang_id: str = '', jenja
     if jenjang:
         q['jenjang'] = jenjang
     docs = await db[KOLEKSI_ARSIP].find(q, {'_id': 0}).sort('waktu', -1).to_list(2000)
-    return {'items': [ringkas_arsip(d) for d in docs]}
+    return {'items': [ringkas_arsip(d) for d in docs if not mode or mode_arsip(d) == mode]}
 
 
 # PERHATIAN: /ujian/arsip/cari harus terdaftar sebelum /ujian/arsip/{arsip_id}.
@@ -72,7 +74,8 @@ async def cari_arsip(q: str = '', jenis: str = '', user: Dict = Depends(get_curr
     hasil = []
     for d in docs:
         u = nama_ujian.get(d['ujian_id'], {})
-        teks = f"{u.get('nama', '')} {u.get('jenis', '')} {u.get('tahun_pelajaran', '')} ruang {d.get('nama_ruang')} kelas {d.get('jenjang')} " \
+        per_ruang = ' per ruang' if mode_arsip(d) == 'ruang' else ''
+        teks = f"{u.get('nama', '')} {u.get('jenis', '')} {u.get('tahun_pelajaran', '')} ruang {d.get('nama_ruang')} kelas {label_jenjang(daftar_jenjang_arsip(d))}{per_ruang} " \
                f"{d.get('sesi_label', '')} {d.get('nama_berkas', '')} {d.get('jenis_dokumen', '').replace('_', ' ')}".lower()
         if all(k in teks for k in kata):
             hasil.append({**ringkas_arsip(d), 'ujian_nama': u.get('nama'), 'tahun_pelajaran': u.get('tahun_pelajaran')})
@@ -81,7 +84,7 @@ async def cari_arsip(q: str = '', jenis: str = '', user: Dict = Depends(get_curr
 
 @router.get("/ujian/arsip/{arsip_id}")
 async def buka_arsip(arsip_id: str, user: Dict = Depends(get_current_user)):
-    """Rincian satu arsip beserta dokumen terkait (ruang, jenjang, dan sesi yang sama — pasangan daftar hadir/berita acara
+    """Rincian satu arsip beserta dokumen terkait (mode, ruang, jenjang, dan sesi yang sama — pasangan daftar hadir/berita acara
     serta cetakan ulang). Hak akses diperiksa terhadap ujian pemilik arsip."""
     meta = await db[KOLEKSI_ARSIP].find_one({'id': arsip_id}, {'_id': 0})
     if not meta:
@@ -89,7 +92,7 @@ async def buka_arsip(arsip_id: str, user: Dict = Depends(get_current_user)):
     await akses_arsip(user, meta['ujian_id'])
     terkait = await db[KOLEKSI_ARSIP].find({'ujian_id': meta['ujian_id'], 'ruang_id': meta['ruang_id'], 'jenjang': meta['jenjang'],
                                            'sesi_id': meta['sesi_id']}, {'_id': 0}).sort('waktu', -1).to_list(100)
-    return {'arsip': ringkas_arsip(meta), 'terkait': [ringkas_arsip(t) for t in terkait if t['id'] != arsip_id]}
+    return {'arsip': ringkas_arsip(meta), 'terkait': [ringkas_arsip(t) for t in terkait if t['id'] != arsip_id and mode_arsip(t) == mode_arsip(meta)]}
 
 
 @router.get("/ujian/arsip/{arsip_id}/berkas")
@@ -142,8 +145,10 @@ async def kesiapan_cetak(ujian_id: str, sesi_id: str, user: Dict = Depends(get_c
 
 class CetakIn(BaseModel):
     jenis: Literal['daftar_hadir', 'berita_acara']
+    # 'jenjang' = per jenjang per ruang (wajib isi jenjang); 'ruang' = per ruang: seluruh jenjang ruang dalam satu dokumen.
+    mode: Literal['jenjang', 'ruang'] = 'jenjang'
     ruang_id: str = Field(..., min_length=1, max_length=64)
-    jenjang: int = Field(..., ge=7, le=9)
+    jenjang: Optional[int] = Field(None, ge=7, le=9)
     sesi_id: str = Field(..., min_length=1, max_length=64)
     format: Literal['pdf', 'docx'] = 'pdf'
     pratinjau: bool = False
@@ -153,11 +158,15 @@ def label_sesi(sesi: Dict[str, Any]) -> str:
     return f"{hari_tanggal(sesi['tanggal'])} · Sesi {sesi.get('sesi_ke')} · {sesi.get('jam_mulai')}–{sesi.get('jam_selesai')}"
 
 
-async def _sumber_cetak(ujian_id: str, ruang_id: str, jenjang: int, sesi_id: str):
+async def _sumber_cetak(ujian_id: str, ruang_id: str, jenjang: Optional[int], sesi_id: str):
+    """jenjang None = per ruang (ruang harus memuat minimal satu jenjang)."""
     ruang = await db[KOLEKSI_RUANG].find_one({'id': ruang_id, 'ujian_id': ujian_id}, {'_id': 0})
     if not ruang:
         raise HTTPException(404, "Ruang tidak ditemukan pada ujian ini")
-    if jenjang not in (ruang.get('jenjang') or []):
+    if jenjang is None:
+        if not ruang.get('jenjang'):
+            raise HTTPException(400, f"Ruang {ruang.get('nama_ruang')} belum memuat jenjang apa pun")
+    elif jenjang not in (ruang.get('jenjang') or []):
         raise HTTPException(400, f"Ruang {ruang.get('nama_ruang')} tidak memuat kelas {jenjang}")
     sesi = await db['jadwal_ujian'].find_one({'id': sesi_id, 'ujian_id': ujian_id}, {'_id': 0})
     if not sesi:
@@ -167,28 +176,32 @@ async def _sumber_cetak(ujian_id: str, ruang_id: str, jenjang: int, sesi_id: str
 
 @router.post("/ujian/{ujian_id}/cetak")
 async def cetak_dokumen(ujian_id: str, body: CetakIn, request: Request, user: Dict = Depends(get_current_user)):
-    """Cetak Daftar Hadir / Berita Acara untuk SATU jenjang pada SATU ruang dan satu sesi, dengan template & pola TTD
-    ujian. Setiap cetakan (bukan pratinjau) OTOMATIS direkam ke Arsip Administrasi Ujian (header X-Arsip-Id).
+    """Cetak Daftar Hadir / Berita Acara pada SATU ruang dan satu sesi, dengan template & pola TTD ujian:
+    mode 'jenjang' = satu jenjang (ruang campuran dicetak per jenjang); mode 'ruang' = seluruh jenjang ruang dalam satu
+    dokumen. Setiap cetakan (bukan pratinjau) OTOMATIS direkam ke Arsip Administrasi Ujian (header X-Arsip-Id).
     Pratinjau selalu PDF dan tidak diarsipkan."""
     a = await akses_ujian(user, ujian_id, 'cetak')
     ujian = a['ujian']
-    ruang, sesi = await _sumber_cetak(ujian_id, body.ruang_id, body.jenjang, body.sesi_id)
+    if body.mode == 'jenjang' and body.jenjang is None:
+        raise HTTPException(400, "Pilih jenjang untuk cetak per jenjang per ruang")
+    jenjang = body.jenjang if body.mode == 'jenjang' else None
+    ruang, sesi = await _sumber_cetak(ujian_id, body.ruang_id, jenjang, body.sesi_id)
     formulir = await db[KOLEKSI_FORMULIR].find_one({'ujian_id': ujian_id}, {'_id': 0})
-    data = await PERAKIT[body.jenis](db, ujian, formulir, ruang, body.jenjang, sesi)
+    data = await PERAKIT[body.jenis](db, ujian, formulir, ruang, jenjang, sesi)
     fmt = 'pdf' if body.pratinjau else body.format
     isi, mesin = await buat_dokumen(body.jenis, data, fmt)
-    nama = nama_berkas_cetak(body.jenis, ujian, ruang, body.jenjang, sesi, fmt)
+    nama = nama_berkas_cetak(body.jenis, ujian, ruang, jenjang, sesi, fmt)
     header = {'Content-Disposition': f'attachment; filename="{nama}"', 'X-Mesin-Cetak': mesin,
               'Access-Control-Expose-Headers': 'Content-Disposition, X-Arsip-Id, X-Mesin-Cetak'}
     if not body.pratinjau:
-        meta = dokumen_arsip(ujian_id, body.jenis, fmt, ruang, body.jenjang, sesi, label_sesi(sesi), nama, len(isi), mesin, user)
+        meta = dokumen_arsip(ujian_id, body.jenis, fmt, ruang, jenjang, sesi, label_sesi(sesi), nama, len(isi), mesin, user)
         try:
             await simpan_arsip(db, meta, isi)
             header['X-Arsip-Id'] = meta['id']
         except ValueError as e:
             raise HTTPException(413, str(e)) from e
         await log_audit(user, 'ujian_cetak', KOLEKSI_ARSIP, meta['id'], {
-            'ujian_id': ujian_id, 'jenis': body.jenis, 'ruang_id': ruang['id'], 'jenjang': body.jenjang, 'sesi_id': sesi['id'], 'format': fmt,
+            'ujian_id': ujian_id, 'jenis': body.jenis, 'mode': body.mode, 'ruang_id': ruang['id'], 'jenjang': jenjang, 'sesi_id': sesi['id'], 'format': fmt,
         }, request=request)
     return Response(isi, media_type=MIME[fmt], headers=header)
 

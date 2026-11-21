@@ -7,13 +7,14 @@ import { Download, FileText, Link2, Loader2 } from 'lucide-react';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { JENIS_DOKUMEN, ukuranBerkas, unduhArsip } from '@/lib/ujianCetak';
+import { JENIS_DOKUMEN, MODE_DOKUMEN, labelKelasArsip, modeArsip, ukuranBerkas, unduhArsip } from '@/lib/ujianCetak';
 
 const MESIN = { libreoffice: 'LibreOffice (identik template)', reportlab: 'ReportLab (cadangan)', docx: 'Word .docx', contoh: 'Contoh' };
 
-/** Dokumen terkait: arsip lain untuk ruang, jenjang, dan sesi yang sama (pasangan DH–BA & cetakan ulang), terbaru dulu. */
+/** Dokumen terkait: arsip lain untuk mode, ruang, jenjang, dan sesi yang sama (pasangan DH–BA & cetakan ulang), terbaru dulu. */
 export const dokumenTerkait = (arsip, semua = []) => semua
-  .filter((a) => a.id !== arsip.id && a.ruang_id === arsip.ruang_id && a.jenjang === arsip.jenjang && a.sesi_id === arsip.sesi_id)
+  .filter((a) => a.id !== arsip.id && modeArsip(a) === modeArsip(arsip) && a.ruang_id === arsip.ruang_id
+    && (a.jenjang ?? null) === (arsip.jenjang ?? null) && a.sesi_id === arsip.sesi_id)
   .sort((a, b) => (b.waktu || '').localeCompare(a.waktu || ''));
 
 /**
@@ -46,7 +47,7 @@ export default function DetailArsipSheet({ arsip, semua, ujian, onTutup, onPilih
 
   const terkait = arsip ? dokumenTerkait(arsip, semua) : [];
   const baris = arsip ? [
-    ['Ujian', ujian?.nama], ['Dokumen', JENIS_DOKUMEN[arsip.jenis_dokumen]?.label], ['Ruang', arsip.nama_ruang], ['Kelas', arsip.jenjang],
+    ['Ujian', ujian?.nama], ['Dokumen', JENIS_DOKUMEN[arsip.jenis_dokumen]?.label], ['Mode dokumen', MODE_DOKUMEN[modeArsip(arsip)].label], ['Ruang', arsip.nama_ruang], ['Kelas', labelKelasArsip(arsip).replace(/^Kelas /, '')],
     ['Sesi', arsip.sesi_label], ['Format', arsip.format?.toUpperCase()], ['Mesin cetak', MESIN[arsip.mesin] || arsip.mesin],
     ['Ukuran', ukuranBerkas(arsip.ukuran)], ['Dicetak oleh', arsip.dibuat_oleh_nama], ['Waktu', formatWIBPanjang(arsip.waktu)], ['Nama berkas', arsip.nama_berkas],
   ] : [];
@@ -56,7 +57,7 @@ export default function DetailArsipSheet({ arsip, semua, ujian, onTutup, onPilih
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl" data-testid="detail-arsip">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-[#006837]" /> {JENIS_DOKUMEN[arsip?.jenis_dokumen]?.label}</SheetTitle>
-          <SheetDescription>Ruang {arsip?.nama_ruang} · Kelas {arsip?.jenjang} · {arsip?.sesi_label}</SheetDescription>
+          <SheetDescription>Ruang {arsip?.nama_ruang} · {arsip ? labelKelasArsip(arsip) : ''} · {arsip?.sesi_label}</SheetDescription>
         </SheetHeader>
         <dl className="mt-4 grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
           {baris.map(([k, v]) => (
