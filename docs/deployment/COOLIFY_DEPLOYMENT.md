@@ -151,20 +151,32 @@ Env frontend:
 
 ### 4.0a Healthcheck frontend di Coolify
 Image frontend (`frontend/Dockerfile` dan `frontend/Dockerfile.traefik`) sudah memiliki `HEALTHCHECK` sendiri:
-`wget http://127.0.0.1/healthz` setiap 30 detik. `/healthz` membalas `200 ok` selama Nginx hidup dan hasil build React
-ada (`503` bila build hilang), dan **tidak bergantung pada backend**, sehingga frontend tidak ikut dianggap rusak saat
-backend sedang redeploy.
+`wget http://127.0.0.1/healthz` setiap 10 detik (status `healthy` muncul ±10 detik setelah container start).
+`/healthz` membalas `200 ok` selama Nginx hidup dan hasil build React ada (`503` bila build hilang), dan **tidak
+bergantung pada backend**, sehingga frontend tidak ikut dianggap rusak saat backend sedang redeploy.
 
-Bila Healthcheck di menu Coolify (tab **Healthcheck** pada resource frontend) diaktifkan, isi:
+Cara kerja Coolify (Dockerfile build pack):
+- Tab **Healthcheck** resource frontend **dimatikan** (disarankan): Coolify memakai `HEALTHCHECK` dari Dockerfile di
+  atas dan menunggu container `healthy` sebelum menggantikan versi lama.
+- Tab **Healthcheck** **diaktifkan**: Coolify MENGGANTI healthcheck Dockerfile dengan perintahnya sendiri
+  (`curl … http://<host>:<port><path> || wget …`). Port diambil dari **Health Check Port**, atau bila kosong dari
+  entri pertama **Ports Exposes**. Isian yang benar:
 
 | Isian | Nilai |
 | --- | --- |
-| Path | `/healthz` |
-| Port | `80` |
-| Host | `localhost` (atau `127.0.0.1`) |
-| Scheme | `http` |
+| Ports Exposes (General) | `80` |
+| Path | `/healthz` (atau `/`) |
+| Port | `80` (atau kosongkan agar mengikuti Ports Exposes) |
+| Host | `localhost` |
+| Scheme / Method | `http` / `GET` |
 | Return code | `200` |
-| Start period | `20` detik |
+| Interval / Timeout / Retries / Start period | `10` / `5` / `3` / `10` |
+
+Bila port diisi selain `80` (mis. bawaan `3000`), healthcheck pasti gagal karena Nginx hanya mendengarkan port 80,
+dan Coolify akan membatalkan deploy versi baru ("New container is not healthy").
+
+Bila memakai **Docker Compose** (Opsi A), healthcheck frontend sudah ada di `docker-compose.yml` (`/healthz`, interval
+10 detik); tidak perlu diatur di UI.
 
 Hal yang membuat healthcheck sebelumnya sering gagal, dan kini sudah ditangani:
 - Image Dockerfile frontend belum punya `HEALTHCHECK`.

@@ -94,10 +94,10 @@ services:
       - "traefik.http.routers.frontend.priority=1"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 10s
 
 volumes:
   mongodb_data:

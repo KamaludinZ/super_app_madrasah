@@ -42,9 +42,12 @@ ENV BACKEND_UPSTREAM=http://127.0.0.1:65535/api/
 
 EXPOSE 80
 
-# Healthcheck: dipakai docker compose & Coolify. Memakai 127.0.0.1 (bukan localhost) agar tidak tersesat ke ::1, dan
-# wget bawaan image alpine (busybox). /healthz tidak bergantung pada backend.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# Healthcheck: dipakai docker compose & Coolify (bila tab Healthcheck Coolify dimatikan, Coolify memakai HEALTHCHECK
+# ini dan menunggu container "healthy" sebelum menggantikan versi lama). Memakai 127.0.0.1 (bukan localhost) agar tidak
+# tersesat ke ::1, dan wget bawaan image alpine (busybox). /healthz tidak bergantung pada backend. Interval 10 detik
+# agar status "healthy" sudah ada ~10 detik setelah start (cek pertama Docker berjalan setelah satu interval), masih
+# dalam batas tunggu deploy Coolify.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
