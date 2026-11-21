@@ -40,7 +40,7 @@ Prinsip production:
 - `docker-compose.yml` → 3 service: `mongodb`, `backend`, `frontend`
 - `backend/Dockerfile` → image backend production
 - `frontend/Dockerfile` → build React + serve via Nginx
-- `frontend/nginx.conf` → proxy `/api/` ke `http://backend:8000/api/`
+- `frontend/nginx.conf` → proxy `/api/` ke alamat di env `BACKEND_UPSTREAM` (bawaan compose: `http://backend:8000/api/`), plus `/healthz` untuk healthcheck
 - `.env.example` → env gabungan untuk docker compose
 - `backend/.env.example` → env backend
 - `frontend/.env.example` → env frontend
@@ -146,6 +146,37 @@ Env backend wajib (jangan pakai default dummy di production):
 
 Env frontend:
 - Tetap kosongkan `REACT_APP_BACKEND_URL` jika memakai proxy `/api` (disarankan).
+- `BACKEND_UPSTREAM` = alamat backend yang dapat dijangkau dari container frontend, diakhiri `/api/`.
+  Contoh: `http://backend:8000/api/` (satu stack/network) atau `https://api.domainanda.com/api/`.
+
+### 4.0a Healthcheck frontend di Coolify
+Image frontend (`frontend/Dockerfile` dan `frontend/Dockerfile.traefik`) sudah memiliki `HEALTHCHECK` sendiri:
+`wget http://127.0.0.1/healthz` setiap 30 detik. `/healthz` membalas `200 ok` selama Nginx hidup dan hasil build React
+ada (`503` bila build hilang), dan **tidak bergantung pada backend**, sehingga frontend tidak ikut dianggap rusak saat
+backend sedang redeploy.
+
+Bila Healthcheck di menu Coolify (tab **Healthcheck** pada resource frontend) diaktifkan, isi:
+
+| Isian | Nilai |
+| --- | --- |
+| Path | `/healthz` |
+| Port | `80` |
+| Host | `localhost` (atau `127.0.0.1`) |
+| Scheme | `http` |
+| Return code | `200` |
+| Start period | `20` detik |
+
+Hal yang membuat healthcheck sebelumnya sering gagal, dan kini sudah ditangani:
+- Image Dockerfile frontend belum punya `HEALTHCHECK`.
+- Nginx hanya mendengarkan IPv4, padahal di banyak server `localhost` di-resolve ke `::1` (IPv6) lebih dulu
+  sehingga cek ke `localhost` ditolak. Kini `listen [::]:80` ditambahkan otomatis bila server mendukung IPv6
+  (`docker/30-superapp-listen-ipv6.sh`).
+- Nginx langsung mati (`host not found in upstream "backend"`) bila nama host backend belum bisa di-resolve saat
+  frontend start, lalu container restart terus. Kini nama host di-resolve saat ada permintaan
+  (`docker/15-superapp-upstream.envsh` + `resolver`): Nginx tetap hidup dan sehat, `/api/` membalas `502` sampai
+  backend dapat dijangkau, lalu tersambung sendiri tanpa restart.
+
+Cek manual dari terminal Coolify (container frontend): `wget -qO- http://127.0.0.1/healthz` → `ok`.
 
 ### 4.1 Checklist anti-gagal koneksi saat deploy/redeploy
 1. Backend log harus menunjukkan startup selesai dan health 200.
@@ -153,8 +184,9 @@ Env frontend:
 3. Cek dari browser:
    - `https://app.domainanda.com` terbuka
    - request `/api/health` dari frontend berhasil.
-4. Jika frontend terbuka tapi API gagal:
-   - pastikan `frontend/nginx.conf` masih `proxy_pass http://backend:8000/api/;`
+4. Jika frontend terbuka tapi API gagal (`/api/...` membalas 502):
+   - cek log frontend: baris `15-superapp-upstream: /api/ -> ...` menunjukkan alamat backend yang dipakai;
+   - pastikan env `BACKEND_UPSTREAM` benar (mis. `http://backend:8000/api/`) dan backend satu network dengan frontend;
    - pastikan service backend bernama `backend` di compose.
 5. Jika backend gagal konek Mongo:
    - verifikasi `MONGO_URL` menggunakan host `mongodb` (bukan localhost).
@@ -248,7 +280,7 @@ Jika pakai Atlas:
 
 2. **Frontend ↔ Backend**:
    - lewat Nginx `location /api/` di `frontend/nginx.conf`
-   - `proxy_pass http://backend:8000/api/;`
+   - tujuan diatur env `BACKEND_UPSTREAM` (bawaan compose `http://backend:8000/api/`), di-resolve saat request
 
 3. **Browser ↔ Frontend**:
    - user akses domain frontend

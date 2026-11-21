@@ -32,10 +32,19 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Salin konfigurasi nginx template (akan di-render dengan envsubst saat container start)
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 
+# Skrip start: pecah BACKEND_UPSTREAM untuk proxy ber-resolver (nginx tetap hidup walau backend belum siap) dan
+# listen IPv6 otomatis bila tersedia (healthcheck ke "localhost" yang di-resolve ke ::1 tetap berhasil).
+COPY --chmod=755 docker/15-superapp-upstream.envsh docker/30-superapp-listen-ipv6.sh /docker-entrypoint.d/
+
 # Default upstream untuk backend (WAJIB dioverride di Coolify env frontend)
-# Contoh: https://api.domain-anda.com/api/
+# Contoh: http://backend:8000/api/ (satu stack compose) atau https://api.domain-anda.com/api/
 ENV BACKEND_UPSTREAM=http://127.0.0.1:65535/api/
 
 EXPOSE 80
+
+# Healthcheck: dipakai docker compose & Coolify. Memakai 127.0.0.1 (bukan localhost) agar tidak tersesat ke ::1, dan
+# wget bawaan image alpine (busybox). /healthz tidak bergantung pada backend.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

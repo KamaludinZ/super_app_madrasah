@@ -93,7 +93,7 @@ services:
       # Priority rendah agar backend /api/* match terlebih dahulu
       - "traefik.http.routers.frontend.priority=1"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
