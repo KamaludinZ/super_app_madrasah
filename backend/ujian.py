@@ -66,6 +66,8 @@ MENU_UJIAN = (
     ('daftar_hadir', 'Daftar Hadir', '/ujian/daftar-hadir', 'Pantau kehadiran, izin & sakit'),
     ('berita_acara', 'Berita Acara', '/ujian/berita-acara', 'Berita acara pengawas per ruang'),
     ('cetak', 'Cetak Dokumen', '/ujian/cetak', 'Daftar hadir & berita acara per jenjang'),
+    ('kartu_peserta', 'Kartu Peserta', '/ujian/kartu-peserta', 'Cetak kartu peserta per ruang · A4'),
+    ('kartu_meja', 'Kartu Meja', '/ujian/kartu-meja', 'Cetak kartu meja peserta per ruang · A4'),
     ('arsip', 'Arsip Administrasi', '/ujian/arsip', 'Dokumen ujian tercetak · akses terbatas'),
     ('nilai', 'Nilai UAS', '/ujian/nilai', 'Template & impor nilai UAS'),
 )
@@ -77,6 +79,8 @@ AKSES_MENU_UJIAN = {
     'daftar_hadir': {'pimpinan': True, 'jabatan': JABATAN_PANITIA},
     'berita_acara': {'pimpinan': True, 'jabatan': JABATAN_PANITIA},
     'cetak': {'pimpinan': True, 'jabatan': JABATAN_PANITIA},
+    'kartu_peserta': {'pimpinan': True, 'jabatan': JABATAN_PANITIA},
+    'kartu_meja': {'pimpinan': True, 'jabatan': JABATAN_PANITIA},
     'arsip': {'pimpinan': True, 'jabatan': ('ketua', 'sekretaris')},
     'nilai': {'pimpinan': False, 'jabatan': ('ketua', 'sekretaris')},
 }

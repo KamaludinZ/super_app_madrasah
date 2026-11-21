@@ -1,6 +1,6 @@
 import {
   ClipboardList, UsersRound, DoorClosed, UserCheck, SlidersHorizontal, ClipboardCheck, FileSignature, Printer, Archive,
-  FileSpreadsheet,
+  FileSpreadsheet, IdCard, Armchair,
 } from 'lucide-react';
 import { PERAN_PENGELOLA_UJIAN, PERAN_PIMPINAN_UJIAN, RUTE_UJIAN_TERSEDIA, mungkinPanitia } from '@/lib/ujian';
 
@@ -19,6 +19,8 @@ export const IKON_MENU_UJIAN = {
   daftar_hadir: ClipboardCheck,
   berita_acara: FileSignature,
   cetak: Printer,
+  kartu_peserta: IdCard,
+  kartu_meja: Armchair,
   arsip: Archive,
   nilai: FileSpreadsheet,
 };

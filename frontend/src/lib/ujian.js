@@ -100,6 +100,8 @@ export const MENU_UJIAN = [
   { key: 'daftar_hadir', label: 'Daftar Hadir', to: '/ujian/daftar-hadir', keterangan: 'Pantau kehadiran, izin & sakit' },
   { key: 'berita_acara', label: 'Berita Acara', to: '/ujian/berita-acara', keterangan: 'Berita acara pengawas per ruang' },
   { key: 'cetak', label: 'Cetak Dokumen', to: '/ujian/cetak', keterangan: 'Daftar hadir & berita acara per jenjang' },
+  { key: 'kartu_peserta', label: 'Kartu Peserta', to: '/ujian/kartu-peserta', keterangan: 'Cetak kartu peserta per ruang · A4' },
+  { key: 'kartu_meja', label: 'Kartu Meja', to: '/ujian/kartu-meja', keterangan: 'Cetak kartu meja peserta per ruang · A4' },
   { key: 'arsip', label: 'Arsip Administrasi', to: '/ujian/arsip', keterangan: 'Dokumen ujian tercetak · akses terbatas' },
   { key: 'nilai', label: 'Nilai UAS', to: '/ujian/nilai', keterangan: 'Template & impor nilai UAS' },
 ];
@@ -114,12 +116,14 @@ export const AKSES_MENU_UJIAN = {
   daftar_hadir: { pimpinan: true, jabatan: SEMUA_JABATAN },
   berita_acara: { pimpinan: true, jabatan: SEMUA_JABATAN },
   cetak: { pimpinan: true, jabatan: SEMUA_JABATAN },
+  kartu_peserta: { pimpinan: true, jabatan: SEMUA_JABATAN },
+  kartu_meja: { pimpinan: true, jabatan: SEMUA_JABATAN },
   arsip: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] },
   nilai: { pimpinan: false, jabatan: ['ketua', 'sekretaris'] },
 };
 
 // Rute sub-menu yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai']);
+export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai', '/ujian/kartu-peserta', '/ujian/kartu-meja']);
 export const HALAMAN_ARSIP_SEMESTER = '/ujian/arsip-semester';
 
 /** Menu kepanitiaan untuk pengguna: akses dari peran pengelola/pimpinan atau jabatan panitia (gabungan). */

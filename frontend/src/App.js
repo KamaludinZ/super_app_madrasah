@@ -121,6 +121,7 @@ import UjianPengawasPage from '@/pages/ujian/UjianPengawasPage';
 import UjianFormulirPage from '@/pages/ujian/UjianFormulirPage';
 import UjianDaftarHadirPage from '@/pages/ujian/UjianDaftarHadirPage';
 import UjianCetakArsipPage from '@/pages/ujian/UjianCetakArsipPage';
+import UjianKartuPage from '@/pages/ujian/UjianKartuPage';
 import UjianBeritaAcaraPage from '@/pages/ujian/UjianBeritaAcaraPage';
 import UjianNilaiPage from '@/pages/ujian/UjianNilaiPage';
 import PublikDaftarHadirPage from '@/pages/publik/PublikDaftarHadirPage';
@@ -449,6 +450,8 @@ function App() {
             <Route path="/ujian/cetak" element={<UjianCetakArsipPage />} />
             <Route path="/ujian/nilai" element={<UjianNilaiPage />} />
             <Route path="/ujian/arsip" element={<UjianCetakArsipPage />} />
+            <Route path="/ujian/kartu-peserta" element={<UjianKartuPage />} />
+            <Route path="/ujian/kartu-meja" element={<UjianKartuPage />} />
             <Route path="/pkg" element={<PkgLayout />}>
               <Route index element={<PkgBerandaPage />} />
               <Route path="keanggotaan" element={<PkgKeanggotaanPage />} />

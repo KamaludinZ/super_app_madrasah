@@ -46,6 +46,7 @@ from routers import (
     ujian_kehadiran,
     ujian_berita_acara,
     ujian_cetak,
+    ujian_kartu,
     ujian_nilai,
     jabatan,
     journals,
@@ -156,6 +157,7 @@ api_router.include_router(ujian_publik.router)
 api_router.include_router(ujian_kehadiran.router)
 api_router.include_router(ujian_berita_acara.router)
 api_router.include_router(ujian_cetak.router)
+api_router.include_router(ujian_kartu.router)
 api_router.include_router(ujian_nilai.router)
 api_router.include_router(masterplan.router)
 api_router.include_router(uji_notifikasi.router)
