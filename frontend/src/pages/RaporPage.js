@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  FileText, Download, Printer, GraduationCap, BookOpen, TrendingUp,
+  FileText, Download, Printer, GraduationCap, BookOpen,
   Award, Loader2, User as UserIcon, Hash, Calendar as CalendarIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -220,7 +220,6 @@ export default function RaporPage() {
                 <InfoRow icon={GraduationCap} label="Kelas" value={rapor.class?.name} />
                 <InfoRow icon={CalendarIcon} label="Tahun Pelajaran" value={rapor.academic_year?.name} />
                 <InfoRow icon={BookOpen} label="Semester" value={(semester || '').charAt(0).toUpperCase() + (semester || '').slice(1)} />
-                <InfoRow icon={TrendingUp} label="Nilai Rata-rata" value={rapor.average ? rapor.average.toFixed(2) : '-'} highlight />
               </div>
             </CardContent>
           </Card>
@@ -318,19 +317,6 @@ export default function RaporPage() {
             </CardContent>
           </Card>
 
-          {/* Legenda Predikat */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">Keterangan Predikat</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <PredicateLegend p="A" range="88 - 100" label="Sangat Baik" />
-                <PredicateLegend p="B" range="76 - 87" label="Baik" />
-                <PredicateLegend p="C" range="60 - 75" label="Cukup" />
-                <PredicateLegend p="D" range="&lt; 60" label="Kurang" />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Tanda Tangan - Print only */}
           <Card className="hidden print:block">
             <CardContent className="p-6">
@@ -374,18 +360,3 @@ function InfoRow({ icon: Icon, label, value, highlight, mono }) {
   );
 }
 
-function PredicateLegend({ p, range, label }) {
-  const cls = p === 'A' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-              p === 'B' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-              p === 'C' ? 'bg-amber-100 text-amber-800 border-amber-200' :
-              'bg-rose-100 text-rose-800 border-rose-200';
-  return (
-    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
-      <Badge className={cls + ' h-7 w-7 flex items-center justify-center font-bold rounded-md'}>{p}</Badge>
-      <div>
-        <div className="text-xs text-slate-700 font-mono">{range}</div>
-        <div className="text-xs text-slate-500">{label}</div>
-      </div>
-    </div>
-  );
-}
