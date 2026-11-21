@@ -4,13 +4,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Armchair, ArrowLeft, Camera, CameraOff, Download, Eye, IdCard, Loader2, PenLine, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Armchair, ArrowLeft, Camera, CameraOff, Download, Eye, IdCard, Loader2, RefreshCw } from 'lucide-react';
 import AksesDitolak from '@/components/security/AksesDitolak';
 import PilihUjian from '@/components/ujian/PilihUjian';
 import PratinjauDokumenDialog from '@/components/ujian/PratinjauDokumenDialog';
+import OpsiTtdKartu from '@/components/ujian/OpsiTtdKartu';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { FOTO_BAWAAN, HALAMAN_KARTU, JENIS_KARTU, OPSI_FOTO, jenisDariPath, jumlahHalaman, muatPilihanKartu, unduhKartu } from '@/lib/ujianKartu';
+import { FOTO_BAWAAN, HALAMAN_KARTU, JENIS_KARTU, OPSI_FOTO, OPSI_TTD, TTD_BAWAAN, jenisDariPath, jumlahHalaman, muatPilihanKartu, unduhKartu } from '@/lib/ujianKartu';
 
 const IKON = { peserta: IdCard, meja: Armchair };
 const IKON_FOTO = { pakai: Camera, tanpa: CameraOff };
@@ -85,6 +86,10 @@ export default function UjianKartuPage() {
   const [pratinjau, setPratinjau] = useState(null);
   const [fotoPilih, setFotoPilih] = useState({});
   const foto = fotoPilih[jenis] || pilihan?.foto_bawaan || FOTO_BAWAAN[jenis];
+  const [ttdPilih, setTtdPilih] = useState({});
+  const ttd = ttdPilih[jenis] || pilihan?.ttd_bawaan || TTD_BAWAAN[jenis];
+  const ubahStatusTtd = (penanda, info) => setPilihan((x) => (x?.penanda?.[penanda]
+    ? { ...x, penanda: { ...x.penanda, [penanda]: { ...x.penanda[penanda], ttd: info } } } : x));
 
   const muat = useCallback(async (u, j) => {
     if (!u) { setPilihan(null); return; }
@@ -115,12 +120,12 @@ export default function UjianKartuPage() {
   const tanpaNomor = dipilih.reduce((n, r) => n + (r.tanpa_nomor || 0), 0);
   const adaFoto = dipilih.reduce((n, r) => n + (r.ada_foto || 0), 0);
   const namaRuang = ruangId ? dipilih[0]?.nama_ruang : '';
-  const judulDok = `${JENIS_KARTU[jenis].label} · ${ruangId ? `Ruang ${namaRuang}` : 'Semua Ruang'} · ${OPSI_FOTO[foto].label}`;
+  const judulDok = `${JENIS_KARTU[jenis].label} · ${ruangId ? `Ruang ${namaRuang}` : 'Semua Ruang'} · ${OPSI_FOTO[foto].label} · TTD ${OPSI_TTD[ttd].label}`;
 
   const ambil = async (aksi) => {
     setProses(aksi);
     try {
-      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang, foto);
+      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang, foto, ttd);
       if (aksi === 'lihat' && !h.tiruan) setPratinjau({ blob: h.blob, nama: h.nama, judul: judulDok });
       else {
         simpanBerkas(h.blob, h.nama);
@@ -178,16 +183,6 @@ export default function UjianKartuPage() {
               </p>
             ) : (
               <>
-                {jenis === 'peserta' && (pilihan.ketua ? (
-                  <p className="flex items-start gap-2 text-xs text-slate-600" data-testid="info-ketua-kartu">
-                    <PenLine className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#006837]" />
-                    <span>Ditandatangani Ketua Panitia: <strong>{pilihan.ketua.nama}</strong>{pilihan.ketua.nip ? ` · NIP ${pilihan.ketua.nip}` : ''}</span>
-                  </p>
-                ) : (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-ketua-kosong">
-                    Ketua Panitia ujian ini belum ditetapkan — nama penanda tangan kartu dicetak titik-titik. Tetapkan di menu Kepanitiaan.
-                  </p>
-                ))}
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ruang</p>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4" role="radiogroup" aria-label="Ruang" data-testid="pilih-ruang-kartu">
@@ -202,6 +197,8 @@ export default function UjianKartuPage() {
                   </div>
                 </div>
                 <OpsiFoto nilai={foto} onUbah={(f) => setFotoPilih((x) => ({ ...x, [jenis]: f }))} adaFoto={adaFoto} total={totalPeserta} />
+                <OpsiTtdKartu ujianId={ujian?.id} nilai={ttd} onUbah={(t) => setTtdPilih((x) => ({ ...x, [jenis]: t }))}
+                  penanda={pilihan.penanda || {}} bolehUbah={!!pilihan.boleh_ubah_ttd} tiruan={!!pilihan.tiruan} onBerubah={ubahStatusTtd} />
                 {tanpaNomor > 0 && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-tanpa-nomor">
                     {tanpaNomor} peserta belum punya nomor peserta — kartunya tetap dicetak dengan nomor "-". Lengkapi di{' '}
