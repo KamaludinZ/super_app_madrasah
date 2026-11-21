@@ -1,10 +1,12 @@
-"""Perakit data lembar cetak ujian (Daftar Hadir & Berita Acara) untuk SATU ruang, SATU jenjang, SATU sesi.
+"""Perakit data lembar cetak ujian (Daftar Hadir & Berita Acara) untuk SATU ruang dan SATU sesi, dalam dua mode:
+- per jenjang per ruang (`jenjang` = 7/8/9): hanya peserta jenjang itu (ruang campuran dicetak per jenjang);
+- per ruang (`jenjang` = None): SELURUH jenjang di ruang itu dalam satu dokumen (kelas "7 dan 8", mapel per jenjang).
 
 Sumber: pengaturan formulir (template teks & pola TTD), jadwal sesi (tanggal, jam, mapel per jenjang), peserta ruang
 (penetapan sekali untuk seluruh ujian), daftar hadir (kiriman + TTD peserta, tanda izin/sakit), dan berita acara
 pengawas (nama, NIP, catatan, TTD, rekap tersalin). Keluaran = dict masukan ujian_cetak_docx / ujian_cetak_pdf.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ujian_berita_acara import KOLEKSI_BA, ambil_ttd_ba
 from ujian_cetak_docx import hari_tanggal, jam_titik, tanggal_panjang
@@ -25,6 +27,27 @@ async def _pengawas(db, ujian_id: str, ruang_id: str, sesi_id: str) -> Dict[str,
                                    'ttd_png': await ambil_ttd_ba(db, ba['id'])}}
 
 
+def label_jenjang(jenjang: List[int]) -> str:
+    """[7] -> '7'; [7, 8] -> '7 dan 8'; [7, 8, 9] -> '7, 8 dan 9'."""
+    j = [str(x) for x in jenjang]
+    return ' dan '.join([', '.join(j[:-1]), j[-1]]) if len(j) > 1 else ''.join(j)
+
+
+def jenjang_cetak(ruang: Dict[str, Any], jenjang: Optional[int]) -> List[int]:
+    """Jenjang yang masuk dokumen: satu jenjang (mode per jenjang) atau seluruh jenjang ruang (mode per ruang)."""
+    return [jenjang] if jenjang is not None else sorted(ruang.get('jenjang') or [])
+
+
+def mapel_cetak(sesi: Dict[str, Any], jenjang: List[int]) -> str:
+    """Mapel sesi untuk jenjang dokumen. Beberapa jenjang dengan mapel berbeda -> 'Matematika (kelas 7); IPA (kelas 8)'."""
+    m = sesi.get('mapel') or {}
+    nilai = [(j, m.get(str(j)) or '') for j in jenjang]
+    unik = list(dict.fromkeys(v for _, v in nilai if v))
+    if len(unik) <= 1:
+        return unik[0] if unik else ''
+    return '; '.join(f"{v or '-'} (kelas {j})" for j, v in nilai)
+
+
 def _dasar(ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     f = formulir or {}
     return {
@@ -34,8 +57,9 @@ def _dasar(ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]]) -> Dict[st
     }
 
 
-async def data_daftar_hadir(db, ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]], ruang: Dict[str, Any], jenjang: int,
+async def data_daftar_hadir(db, ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]], ruang: Dict[str, Any], jenjang: Optional[int],
                             sesi: Dict[str, Any]) -> Dict[str, Any]:
+    """jenjang None = per ruang: seluruh peserta ruang (semua jenjang) urut nomor peserta dalam satu daftar hadir."""
     peserta = await peserta_ruang_ujian(db, ujian['id'], ruang['id'], jenjang=jenjang)
     status = await ambil_status_sesi(db, ujian['id'], sesi, [p['id'] for p in peserta])
     ids_hadir = {status[p['id']]['kehadiran']['id']: p['id'] for p in peserta
@@ -49,7 +73,7 @@ async def data_daftar_hadir(db, ujian: Dict[str, Any], formulir: Optional[Dict[s
     return {
         **d,
         'hari_tanggal': hari_tanggal(sesi['tanggal']), 'pukul': _pukul(sesi),
-        'mapel': (sesi.get('mapel') or {}).get(str(jenjang)) or '', 'ruang': ruang.get('nama_ruang') or '',
+        'mapel': mapel_cetak(sesi, jenjang_cetak(ruang, jenjang)), 'ruang': ruang.get('nama_ruang') or '',
         'kota_tanggal': f"{d['template'].get('kota_ttd') or ''}, {tanggal_panjang(sesi['tanggal'])}",
         'pengawas': p_ba['pengawas'],
         'peserta': [{'nomor_peserta': p['nomor_peserta'] or '', 'nama': p['nama'], 'kelas': p['kelas'], 'ttd_png': ttd.get(p['id'])}
@@ -57,20 +81,27 @@ async def data_daftar_hadir(db, ujian: Dict[str, Any], formulir: Optional[Dict[s
     }
 
 
-async def data_berita_acara(db, ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]], ruang: Dict[str, Any], jenjang: int,
+async def data_berita_acara(db, ujian: Dict[str, Any], formulir: Optional[Dict[str, Any]], ruang: Dict[str, Any], jenjang: Optional[int],
                             sesi: Dict[str, Any]) -> Dict[str, Any]:
+    """jenjang None = per ruang: satu berita acara untuk seluruh jenjang ruang (jumlah & nomor peserta digabung)."""
     p_ba = await _pengawas(db, ujian['id'], ruang['id'], sesi['id'])
     ba = p_ba['ba']
-    r = (ba or {}).get('rekap', {}).get(str(jenjang))  # rekap tersalin saat berita acara dikirim
-    if r is None:
+    daftar = jenjang_cetak(ruang, jenjang)
+    tersalin = (ba or {}).get('rekap') or {}  # rekap tersalin saat berita acara dikirim
+    if not all(str(j) in tersalin for j in daftar):
         peserta = await peserta_ruang_ujian(db, ujian['id'], ruang['id'], jenjang=jenjang)
         status = await ambil_status_sesi(db, ujian['id'], sesi, [p['id'] for p in peserta])
-        r = rekap_jenjang(peserta, status).get(jenjang, {'total': 0, 'nomor_hadir': [], 'nomor_tidak_hadir': []})
+        hitung = rekap_jenjang(peserta, status)
+        tersalin = {**{str(j): v for j, v in hitung.items()}, **tersalin}
+    kosong = {'total': 0, 'nomor_hadir': [], 'nomor_tidak_hadir': []}
+    rekap = [tersalin.get(str(j)) or kosong for j in daftar]
     return {
         **_dasar(ujian, formulir),
-        'tanggal': sesi['tanggal'], 'jenjang': jenjang, 'jam_mulai': sesi.get('jam_mulai'), 'jam_selesai': sesi.get('jam_selesai'),
-        'ruang': ruang.get('nama_ruang') or '', 'mapel': (sesi.get('mapel') or {}).get(str(jenjang)) or '',
-        'jumlah_peserta': r.get('total') or 0, 'hadir': r.get('nomor_hadir') or [], 'tidak_hadir': r.get('nomor_tidak_hadir') or [],
+        'tanggal': sesi['tanggal'], 'jenjang': label_jenjang(daftar), 'jam_mulai': sesi.get('jam_mulai'), 'jam_selesai': sesi.get('jam_selesai'),
+        'ruang': ruang.get('nama_ruang') or '', 'mapel': mapel_cetak(sesi, daftar),
+        'jumlah_peserta': sum(r.get('total') or 0 for r in rekap),
+        'hadir': [n for r in rekap for n in (r.get('nomor_hadir') or [])],
+        'tidak_hadir': [n for r in rekap for n in (r.get('nomor_tidak_hadir') or [])],
         'catatan': (ba or {}).get('catatan') or '', 'pengawas': p_ba['pengawas'],
     }
 

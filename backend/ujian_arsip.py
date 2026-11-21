@@ -9,27 +9,43 @@ migrate_ujian_berita_acara):
 import re
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ujian import sekarang_wib
 from ujian_berita_acara import KOLEKSI_ARSIP, KOLEKSI_ARSIP_BERKAS
 
-FIELD_ARSIP = ('id', 'ujian_id', 'ruang_id', 'nama_ruang', 'jenjang', 'sesi_id', 'sesi_label', 'jenis_dokumen', 'format',
-               'nama_berkas', 'ukuran', 'mesin', 'dibuat_oleh_nama', 'waktu')
+FIELD_ARSIP = ('id', 'ujian_id', 'ruang_id', 'nama_ruang', 'jenjang', 'jenjang_daftar', 'mode', 'sesi_id', 'sesi_label', 'jenis_dokumen',
+               'format', 'nama_berkas', 'ukuran', 'mesin', 'dibuat_oleh_nama', 'waktu')
+# Mode dokumen: 'jenjang' = per jenjang per ruang (satu jenjang); 'ruang' = per ruang (seluruh jenjang ruang, jenjang None).
+MODE_DOKUMEN = ('jenjang', 'ruang')
 MIME = {'pdf': 'application/pdf', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
 ARSIP_MAKS_BYTE = 15 * 1024 * 1024  # batas aman di bawah 16 MB dokumen MongoDB
 
 
-def nama_berkas_cetak(jenis: str, ujian: Dict[str, Any], ruang: Dict[str, Any], jenjang: int, sesi: Dict[str, Any], fmt: str) -> str:
-    """mis. berita_acara_ASAS_Ganjil_2026_2027_ruang_01_kelas_7_2026-12-02_sesi_1.pdf"""
-    dasar = f"{jenis}_{ujian.get('nama') or 'ujian'}_ruang_{ruang.get('nama_ruang')}_kelas_{jenjang}_{sesi.get('tanggal')}_sesi_{sesi.get('sesi_ke')}"
+def mode_arsip(doc: Dict[str, Any]) -> str:
+    """Arsip lama (sebelum ada mode per ruang) selalu per jenjang."""
+    return 'ruang' if doc.get('mode') == 'ruang' else 'jenjang'
+
+
+def daftar_jenjang_arsip(doc: Dict[str, Any]) -> List[int]:
+    return list(doc.get('jenjang_daftar') or ([doc['jenjang']] if doc.get('jenjang') is not None else []))
+
+
+def nama_berkas_cetak(jenis: str, ujian: Dict[str, Any], ruang: Dict[str, Any], jenjang: Optional[int], sesi: Dict[str, Any], fmt: str) -> str:
+    """mis. berita_acara_ASAS_Ganjil_2026_2027_ruang_01_kelas_7_2026-12-02_sesi_1.pdf; per ruang (jenjang None):
+    ..._ruang_01_kelas_7-8_per_ruang_..."""
+    kelas = jenjang if jenjang is not None else '-'.join(str(j) for j in sorted(ruang.get('jenjang') or [])) + '_per_ruang'
+    dasar = f"{jenis}_{ujian.get('nama') or 'ujian'}_ruang_{ruang.get('nama_ruang')}_kelas_{kelas}_{sesi.get('tanggal')}_sesi_{sesi.get('sesi_ke')}"
     return re.sub(r'_+', '_', re.sub(r'[^\w.-]+', '_', dasar)).strip('_') + f'.{fmt}'
 
 
-def dokumen_arsip(ujian_id: str, jenis: str, fmt: str, ruang: Dict[str, Any], jenjang: int, sesi: Dict[str, Any], sesi_label: str,
+def dokumen_arsip(ujian_id: str, jenis: str, fmt: str, ruang: Dict[str, Any], jenjang: Optional[int], sesi: Dict[str, Any], sesi_label: str,
                   nama_berkas: str, ukuran: int, mesin: str, oleh: Dict[str, Any], waktu: datetime = None) -> Dict[str, Any]:
+    """jenjang None = dokumen per ruang (seluruh jenjang ruang, tercatat di jenjang_daftar)."""
     return {
         'id': str(uuid.uuid4()), 'ujian_id': ujian_id, 'ruang_id': ruang['id'], 'nama_ruang': ruang.get('nama_ruang'), 'jenjang': jenjang,
+        'jenjang_daftar': [jenjang] if jenjang is not None else sorted(ruang.get('jenjang') or []),
+        'mode': 'jenjang' if jenjang is not None else 'ruang',
         'sesi_id': sesi['id'], 'sesi_label': sesi_label, 'jenis_dokumen': jenis, 'format': fmt, 'nama_berkas': nama_berkas,
         'ukuran': ukuran, 'mesin': mesin, 'dibuat_oleh': oleh.get('id'), 'dibuat_oleh_nama': oleh.get('full_name') or oleh.get('username'),
         'waktu': (waktu or sekarang_wib()).isoformat(),
@@ -52,4 +68,4 @@ async def ambil_berkas_arsip(db, arsip_id: str) -> Optional[Tuple[Dict[str, Any]
 
 
 def ringkas_arsip(doc: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: doc.get(k) for k in FIELD_ARSIP}
+    return {**{k: doc.get(k) for k in FIELD_ARSIP}, 'mode': mode_arsip(doc), 'jenjang_daftar': daftar_jenjang_arsip(doc)}

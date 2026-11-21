@@ -7,21 +7,25 @@ import AksesDitolak from '@/components/security/AksesDitolak';
 import PilihUjian from '@/components/ujian/PilihUjian';
 import PanelCetakDokumen from '@/components/ujian/PanelCetakDokumen';
 import PanelArsipUjian from '@/components/ujian/PanelArsipUjian';
+import TabModeDokumen from '@/components/ujian/TabModeDokumen';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
-import { HALAMAN_ARSIP, HALAMAN_CETAK, muatPilihanCetak } from '@/lib/ujianCetak';
+import { HALAMAN_ARSIP, HALAMAN_CETAK, modeDariParam, muatPilihanCetak } from '@/lib/ujianCetak';
 
 // Sama dengan pembuka arsip di backend/ujian.py (JABATAN_PEMBUKA_ARSIP + pengelola + pimpinan).
 const PEMBUKA_ARSIP = 'admin, waka kurikulum, kepala madrasah, serta ketua dan sekretaris panitia';
 
 /**
- * Cetak & Arsip (/ujian/cetak dan /ujian/arsip, ?ujian=<id>): cetak Daftar Hadir & Berita Acara satu jenjang pada satu
- * ruang untuk satu sesi (format template madrasah) dan telusuri arsip administrasi ujian. Tab Arsip hanya untuk admin,
- * waka kurikulum, kepala madrasah, ketua & sekretaris panitia.
+ * Cetak & Arsip (/ujian/cetak dan /ujian/arsip, ?ujian=<id>&mode=jenjang|ruang): cetak Daftar Hadir & Berita Acara satu
+ * sesi (format template madrasah) dan telusuri arsip administrasi ujian. Di bawah kedua tab ada tab mode dokumen:
+ * "Per Jenjang per Ruang" (satu jenjang pada satu ruang) dan "Per Ruang" (seluruh jenjang satu ruang dalam satu dokumen);
+ * mode tersimpan di URL (?mode=) dan sama untuk kedua tab. Tab Arsip hanya untuk admin, waka kurikulum, kepala madrasah,
+ * ketua & sekretaris panitia.
  */
 export default function UjianCetakArsipPage() {
   const lokasi = useLocation();
   const navigasi = useNavigate();
   const tab = lokasi.pathname.startsWith(HALAMAN_ARSIP) ? 'arsip' : 'cetak';
+  const mode = modeDariParam(new URLSearchParams(lokasi.search).get('mode'));
   const [ujian, setUjian] = useState(null);
   const [pilihan, setPilihan] = useState(null);
   const [memuat, setMemuat] = useState(false);
@@ -44,6 +48,12 @@ export default function UjianCetakArsipPage() {
   }, []);
   const gantiUjian = useCallback((u) => { setUjian(u); muat(u); }, [muat]);
   const gantiTab = (t) => navigasi(`${t === 'arsip' ? HALAMAN_ARSIP : HALAMAN_CETAK}${lokasi.search}`, { replace: true });
+  const gantiMode = (m) => {
+    const q = new URLSearchParams(lokasi.search);
+    if (m === 'ruang') q.set('mode', 'ruang'); else q.delete('mode');
+    const s = q.toString();
+    navigasi(`${lokasi.pathname}${s ? `?${s}` : ''}`, { replace: true });
+  };
 
   return (
     <div className="space-y-6" data-testid="ujian-cetak-arsip">
@@ -56,7 +66,7 @@ export default function UjianCetakArsipPage() {
             <Printer className="h-7 w-7 text-[#006837]" /> Cetak & Arsip
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            Cetak daftar hadir dan berita acara per jenjang per ruang sesuai format madrasah. Setiap hasil cetak tersimpan di arsip.
+            Cetak daftar hadir dan berita acara per jenjang per ruang atau per ruang sesuai format madrasah. Setiap hasil cetak tersimpan di arsip.
           </p>
         </div>
         <Button variant="outline" onClick={() => muat(ujian)} disabled={memuat || !ujian} className="gap-2 self-start sm:self-auto" data-testid="btn-muat-ulang-cetak">
@@ -79,15 +89,17 @@ export default function UjianCetakArsipPage() {
               {pilihan.boleh_arsip === false ? <Lock className="h-4 w-4" /> : <Archive className="h-4 w-4" />} Arsip Administrasi
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="cetak" className="mt-4">
-            <PanelCetakDokumen ujian={ujian} pilihan={pilihan} />
+          <TabsContent value="cetak" className="mt-4 space-y-4">
+            <TabModeDokumen mode={mode} onUbah={gantiMode} bagian="cetak" />
+            <PanelCetakDokumen ujian={ujian} pilihan={pilihan} mode={mode} />
           </TabsContent>
-          <TabsContent value="arsip" className="mt-4">
+          <TabsContent value="arsip" className="mt-4 space-y-4">
+            {pilihan.boleh_arsip !== false && <TabModeDokumen mode={mode} onUbah={gantiMode} bagian="arsip" />}
             {pilihan.boleh_arsip === false ? (
               <AksesDitolak halaman="Arsip Administrasi Ujian" untuk={PEMBUKA_ARSIP}
                 pesan={`Arsip administrasi ujian bersifat terbatas: hanya ${PEMBUKA_ARSIP} yang dapat membukanya. Anda tetap dapat mencetak dokumen di tab Cetak Dokumen.`}
                 peranBerhak={['admin', 'waka_kurikulum', 'kepala_sekolah']} />
-            ) : <PanelArsipUjian ujian={ujian} ruangList={pilihan.ruang} />}
+            ) : <PanelArsipUjian ujian={ujian} ruangList={pilihan.ruang} mode={mode} />}
           </TabsContent>
         </Tabs>
       )}

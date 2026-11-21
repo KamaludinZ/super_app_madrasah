@@ -9,14 +9,15 @@ import DetailArsipSheet from '@/components/ujian/DetailArsipSheet';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { aksesDitolak, pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { JENIS_DOKUMEN, muatArsip, ukuranBerkas, unduhArsip } from '@/lib/ujianCetak';
+import { JENIS_DOKUMEN, MODE_DOKUMEN, labelKelasArsip, modeArsip, muatArsip, ukuranBerkas, unduhArsip } from '@/lib/ujianCetak';
 import AksesDitolak from '@/components/security/AksesDitolak';
 
 /**
  * Arsip Administrasi Ujian: dokumen ujian yang pernah dicetak (terbaru dulu) dan dapat diunduh ulang. Ujian dapat dicari
  * di antara semester ini dan semester-semester lalu; dokumen dapat disaring menurut teks (jenis, ruang, kelas, sesi).
+ * `mode` menampilkan arsip satu mode dokumen saja: 'jenjang' (per jenjang per ruang) atau 'ruang' (per ruang).
  */
-export default function PanelArsipUjian({ ujian: ujianAwal }) {
+export default function PanelArsipUjian({ ujian: ujianAwal, mode = 'jenjang' }) {
   const [ujianPilih, setUjianPilih] = useState(null);
   const ujian = ujianPilih || ujianAwal;
   const [cari, setCari] = useState('');
@@ -50,18 +51,19 @@ export default function PanelArsipUjian({ ujian: ujianAwal }) {
     }
   };
 
+  const diMode = useMemo(() => (data?.items || []).filter((a) => modeArsip(a) === mode), [data, mode]);
   const tampil = useMemo(() => {
     const q = cari.toLowerCase().trim();
-    if (!q || !data) return data?.items || [];
-    return data.items.filter((a) => `${JENIS_DOKUMEN[a.jenis_dokumen]?.label || ''} ruang ${a.nama_ruang} kelas ${a.jenjang} ${a.sesi_label} ${a.nama_berkas} ${a.dibuat_oleh_nama}`
+    if (!q) return diMode;
+    return diMode.filter((a) => `${JENIS_DOKUMEN[a.jenis_dokumen]?.label || ''} ruang ${a.nama_ruang} ${labelKelasArsip(a)} ${a.sesi_label} ${a.nama_berkas} ${a.dibuat_oleh_nama}`
       .toLowerCase().includes(q));
-  }, [data, cari]);
+  }, [diMode, cari]);
 
   if (ditolak) return <AksesDitolak halaman="Arsip Administrasi Ujian" untuk="admin, waka kurikulum, kepala madrasah, serta ketua dan sekretaris panitia" pesan={ditolak} />;
   return (
-    <Card data-testid="panel-arsip">
+    <Card data-testid="panel-arsip" data-mode={mode}>
       <CardHeader className="space-y-3 pb-3">
-        <CardTitle className="text-base flex items-center gap-2"><Archive className="h-4 w-4 text-[#006837]" /> Arsip Administrasi Ujian</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2"><Archive className="h-4 w-4 text-[#006837]" /> Arsip Administrasi Ujian · {MODE_DOKUMEN[mode].label}</CardTitle>
         <div className="flex flex-col gap-2 sm:flex-row">
           <CariUjianArsip nilai={ujian} onPilih={setUjianPilih} />
           <div className="relative flex-1">
@@ -73,13 +75,13 @@ export default function PanelArsipUjian({ ujian: ujianAwal }) {
       <CardContent>
         {data?.tiruan && <p className="mb-2 text-xs text-amber-700">Data contoh.</p>}
         {!data ? <div className="p-6 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-[#006837]" /></div>
-          : data.items.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">Belum ada dokumen yang dicetak untuk ujian ini.</p>
+          : diMode.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">Belum ada dokumen {MODE_DOKUMEN[mode].label.toLowerCase()} yang dicetak untuk ujian ini.</p>
           : tampil.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">Tidak ada dokumen yang cocok dengan saringan.</p> : (
             <ul className="divide-y divide-slate-100" data-testid="daftar-arsip">
               {tampil.map((a) => (
                 <li key={a.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center" data-testid={`arsip-${a.id}`}>
                   <button type="button" onClick={() => setDetail(a)} className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#006837]" data-testid={`buka-detail-${a.id}`}>
-                    <div className="text-sm font-medium text-slate-900 hover:text-[#006837]">{JENIS_DOKUMEN[a.jenis_dokumen]?.label || a.jenis_dokumen} · Ruang {a.nama_ruang} · Kelas {a.jenjang}</div>
+                    <div className="text-sm font-medium text-slate-900 hover:text-[#006837]">{JENIS_DOKUMEN[a.jenis_dokumen]?.label || a.jenis_dokumen} · Ruang {a.nama_ruang} · {labelKelasArsip(a)}</div>
                     <div className="text-xs text-slate-500">{a.sesi_label} · {a.format?.toUpperCase()} · {ukuranBerkas(a.ukuran)} · {a.dibuat_oleh_nama} · {formatWIBPanjang(a.waktu)}</div>
                   </button>
                   <Button variant="outline" size="sm" onClick={() => ambil(a)} disabled={unduh === a.id} className="shrink-0 gap-1 self-start sm:self-auto">

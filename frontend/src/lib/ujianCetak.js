@@ -1,6 +1,7 @@
 /**
- * Ujian Madrasah — Cetak & Arsip: cetak Daftar Hadir & Berita Acara per jenjang per ruang per sesi (format template
- * madrasah), setiap hasil cetak tersimpan otomatis ke Arsip Administrasi Ujian yang dapat ditelusuri per ujian.
+ * Ujian Madrasah — Cetak & Arsip: cetak Daftar Hadir & Berita Acara per sesi (format template madrasah) dalam dua mode
+ * dokumen — per jenjang per ruang (satu jenjang) atau per ruang (seluruh jenjang ruang dalam satu dokumen); setiap hasil
+ * cetak tersimpan otomatis ke Arsip Administrasi Ujian yang dapat ditelusuri per ujian dan per mode.
  *
  * Kontrak server (backend menyusul; koleksi `arsip_ujian`):
  *   GET  /ujian/{ujian_id}/cetak/pilihan
@@ -9,16 +10,18 @@
  *        (admin, panitia ujian itu, kepala madrasah & waka kurikulum — menu 'cetak')
  *   GET  /ujian/{ujian_id}/cetak/kesiapan?sesi_id=
  *     -> { items: [{ ruang_id, jenjang, peserta, dh_lengkap, belum, ba_terisi }] }   (kesiapan tiap ruang-jenjang pada sesi)
- *   POST /ujian/{ujian_id}/cetak { jenis: 'daftar_hadir'|'berita_acara', ruang_id, jenjang, sesi_id, format: 'pdf'|'docx',
- *                                  pratinjau: bool }
+ *   POST /ujian/{ujian_id}/cetak { jenis: 'daftar_hadir'|'berita_acara', mode: 'jenjang'|'ruang', ruang_id,
+ *                                  jenjang (wajib pada mode 'jenjang'; diabaikan pada mode 'ruang'), sesi_id,
+ *                                  format: 'pdf'|'docx', pratinjau: bool }
  *     -> berkas (Content-Disposition), header X-Arsip-Id & X-Mesin-Cetak; salinannya masuk arsip_ujian
  *        (pratinjau: true -> selalu PDF dan TIDAK diarsipkan)
- *   GET  /ujian/{ujian_id}/arsip?jenis=&ruang_id=&jenjang=
+ *   GET  /ujian/{ujian_id}/arsip?jenis=&ruang_id=&jenjang=&mode=
  *     -> { items: [Arsip] }   (hanya admin, waka kurikulum, kepala madrasah, ketua & sekretaris panitia)
  *   GET  /ujian/arsip/{arsip_id}/berkas -> berkas tersimpan
  *
- *   Arsip = { id, ujian_id, ruang_id, nama_ruang, jenjang, sesi_id, sesi_label, jenis_dokumen, format, nama_berkas,
- *             ukuran, mesin, dibuat_oleh_nama, waktu }
+ *   Arsip = { id, ujian_id, ruang_id, nama_ruang, jenjang (null pada mode 'ruang'), jenjang_daftar: [7, 8],
+ *             mode: 'jenjang'|'ruang', sesi_id, sesi_label, jenis_dokumen, format, nama_berkas, ukuran, mesin,
+ *             dibuat_oleh_nama, waktu }
  */
 import { api } from '@/lib/api';
 import { denganTiruan } from '@/lib/ujian';
@@ -33,6 +36,43 @@ export const JENIS_DOKUMEN = {
   berita_acara: { label: 'Berita Acara', singkat: 'Berita Acara' },
 };
 export const FORMAT_CETAK = { pdf: 'PDF (siap cetak)', docx: 'Word .docx (dapat disunting)' };
+
+/** Mode dokumen cetak & arsip. */
+export const MODE_DOKUMEN = {
+  jenjang: { label: 'Per Jenjang per Ruang', ket: 'Satu dokumen untuk satu jenjang pada satu ruang (ruang campuran dicetak per jenjang).' },
+  ruang: { label: 'Per Ruang', ket: 'Satu dokumen untuk seluruh peserta satu ruang — semua jenjang di ruang itu digabung.' },
+};
+export const modeDariParam = (m) => (m === 'ruang' ? 'ruang' : 'jenjang');
+/** Arsip lama tanpa `mode` = per jenjang. */
+export const modeArsip = (a) => (a?.mode === 'ruang' ? 'ruang' : 'jenjang');
+
+/** [7, 8] -> '7 dan 8'; [7, 8, 9] -> '7, 8 dan 9'. */
+export const labelJenjang = (daftar = []) => {
+  const j = daftar.map(String);
+  return j.length > 1 ? `${j.slice(0, -1).join(', ')} dan ${j[j.length - 1]}` : (j[0] || '');
+};
+/** Kelas pada arsip: 'Kelas 7' atau 'Kelas 7 dan 8'. */
+export const labelKelasArsip = (a) => `Kelas ${labelJenjang(a?.jenjang_daftar?.length ? a.jenjang_daftar : (a?.jenjang != null ? [a.jenjang] : []))}`;
+
+/** Mapel sesi untuk satu atau beberapa jenjang (sama dengan backend ujian_cetak_data.mapel_cetak). */
+export const mapelCetak = (sesi, daftar = []) => {
+  const nilai = daftar.map((j) => [j, sesi?.mapel?.[j] || sesi?.mapel?.[String(j)] || '']);
+  const unik = [...new Set(nilai.map(([, v]) => v).filter(Boolean))];
+  if (unik.length <= 1) return unik[0] || '';
+  return nilai.map(([j, v]) => `${v || '-'} (kelas ${j})`).join('; ');
+};
+
+/** Kesiapan per ruang dari kesiapan per ruang–jenjang: { peserta, dh_lengkap, belum, ba_terisi } atau undefined. */
+export const kesiapanRuang = (kesiapan = {}, ruang) => {
+  const it = (ruang?.jenjang || []).map((j) => kesiapan[`${ruang.id}:${j}`]).filter(Boolean);
+  if (!it.length) return undefined;
+  return {
+    peserta: it.reduce((n, x) => n + (x.peserta || 0), 0),
+    dh_lengkap: it.every((x) => x.dh_lengkap),
+    belum: it.reduce((n, x) => n + (x.belum || 0), 0),
+    ba_terisi: it.some((x) => x.ba_terisi),
+  };
+};
 
 // ---- Data tiruan ----
 let arsipContoh = null;
@@ -57,10 +97,13 @@ export function arsipTiruan() {
   if (!arsipContoh) {
     const t = hariIniWIB();
     arsipContoh = [
-      { id: 'contoh-a1', ruang_id: 'contoh-r01', nama_ruang: '01', jenjang: 7, sesi_id: 'contoh-sesi-1', sesi_label: `${t} · Sesi 1`, jenis_dokumen: 'daftar_hadir', format: 'pdf',
+      { id: 'contoh-a1', ruang_id: 'contoh-r01', nama_ruang: '01', jenjang: 7, jenjang_daftar: [7], mode: 'jenjang', sesi_id: 'contoh-sesi-1', sesi_label: `${t} · Sesi 1`, jenis_dokumen: 'daftar_hadir', format: 'pdf',
         nama_berkas: 'daftar_hadir_ruang_01_kelas_7_sesi_1.pdf', ukuran: 84213, mesin: 'libreoffice', dibuat_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T10:05:00+07:00` },
-      { id: 'contoh-a2', ruang_id: 'contoh-r01', nama_ruang: '01', jenjang: 7, sesi_id: 'contoh-sesi-1', sesi_label: `${t} · Sesi 1`, jenis_dokumen: 'berita_acara', format: 'pdf',
+      { id: 'contoh-a2', ruang_id: 'contoh-r01', nama_ruang: '01', jenjang: 7, jenjang_daftar: [7], mode: 'jenjang', sesi_id: 'contoh-sesi-1', sesi_label: `${t} · Sesi 1`, jenis_dokumen: 'berita_acara', format: 'pdf',
         nama_berkas: 'berita_acara_ruang_01_kelas_7_sesi_1.pdf', ukuran: 42118, mesin: 'libreoffice', dibuat_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T10:06:00+07:00` },
+      { id: 'contoh-a3', ruang_id: 'contoh-r01', nama_ruang: '01', jenjang: null, jenjang_daftar: [7, 8], mode: 'ruang', sesi_id: 'contoh-sesi-1', sesi_label: `${t} · Sesi 1`,
+        jenis_dokumen: 'berita_acara', format: 'pdf', nama_berkas: 'berita_acara_ruang_01_kelas_7-8_per_ruang_sesi_1.pdf', ukuran: 45210, mesin: 'libreoffice',
+        dibuat_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T10:07:00+07:00` },
     ];
   }
   return { items: arsipContoh.map((a) => ({ ...a })) };
@@ -89,15 +132,18 @@ async function blobDariRespons(res, cadanganNama) {
 
 /** Cetak satu dokumen -> { blob, nama, arsipId, mesin, tiruan }. Server menyimpannya ke arsip. */
 export async function cetakDokumen(ujianId, isi) {
-  const nama = `${isi.jenis}_ruang_${isi.nama_ruang || ''}_kelas_${isi.jenjang}.${isi.format}`;
+  const perRuang = isi.mode === 'ruang';
+  const daftar = perRuang ? (isi.jenjang_daftar || []) : [isi.jenjang];
+  const nama = `${isi.jenis}_ruang_${isi.nama_ruang || ''}_kelas_${daftar.join('-')}${perRuang ? '_per_ruang' : ''}.${isi.format}`;
   try {
     const res = await api.post(`/ujian/${ujianId}/cetak`, isi, { responseType: 'blob' });
     return { ...(await blobDariRespons(res, nama)), tiruan: false };
   } catch (e) {
     if (await blobEndpointBelumAda(e)) {
-      const teks = `Contoh ${JENIS_DOKUMEN[isi.jenis].label} — server cetak belum tersedia.\nRuang ${isi.nama_ruang}, kelas ${isi.jenjang}.`;
+      const teks = `Contoh ${JENIS_DOKUMEN[isi.jenis].label} — server cetak belum tersedia.\nRuang ${isi.nama_ruang}, kelas ${labelJenjang(daftar)}.`;
       arsipTiruan();
-      arsipContoh.unshift({ id: `contoh-a-${Date.now()}`, ruang_id: isi.ruang_id, nama_ruang: isi.nama_ruang, jenjang: isi.jenjang, sesi_id: isi.sesi_id,
+      arsipContoh.unshift({ id: `contoh-a-${Date.now()}`, ruang_id: isi.ruang_id, nama_ruang: isi.nama_ruang, jenjang: perRuang ? null : isi.jenjang,
+        jenjang_daftar: daftar, mode: perRuang ? 'ruang' : 'jenjang', sesi_id: isi.sesi_id,
         sesi_label: isi.sesi_label, jenis_dokumen: isi.jenis, format: isi.format, nama_berkas: nama, ukuran: teks.length, mesin: 'contoh',
         dibuat_oleh_nama: 'Anda (contoh)', waktu: new Date().toISOString() });
       return { blob: new Blob([teks], { type: 'text/plain' }), nama: nama.replace(/\.\w+$/, '.txt'), arsipId: null, mesin: 'contoh', tiruan: true };
