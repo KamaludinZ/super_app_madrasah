@@ -88,8 +88,11 @@ export default function UjianKartuPage() {
   const foto = fotoPilih[jenis] || pilihan?.foto_bawaan || FOTO_BAWAAN[jenis];
   const [ttdPilih, setTtdPilih] = useState({});
   const ttd = ttdPilih[jenis] || pilihan?.ttd_bawaan || TTD_BAWAAN[jenis];
-  const ubahStatusTtd = (penanda, info) => setPilihan((x) => (x?.penanda?.[penanda]
-    ? { ...x, penanda: { ...x.penanda, [penanda]: { ...x.penanda[penanda], ttd: info } } } : x));
+  const [stempel, setStempel] = useState('pakai');
+  const ubahStatusTtd = (penanda, berkas, info) => setPilihan((x) => (x?.penanda?.[penanda]
+    ? { ...x, penanda: { ...x.penanda, [penanda]: { ...x.penanda[penanda], [berkas]: info } } } : x));
+  const penandaAktif = ttd !== 'tanpa' ? pilihan?.penanda?.[ttd] : null;
+  const pakaiStempel = penandaAktif?.stempel && stempel === 'pakai' ? 'pakai' : 'tanpa';
 
   const muat = useCallback(async (u, j) => {
     if (!u) { setPilihan(null); return; }
@@ -125,7 +128,7 @@ export default function UjianKartuPage() {
   const ambil = async (aksi) => {
     setProses(aksi);
     try {
-      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang, foto, ttd);
+      const h = await unduhKartu(ujian.id, jenis, ruangId, namaRuang, foto, ttd, pakaiStempel);
       if (aksi === 'lihat' && !h.tiruan) setPratinjau({ blob: h.blob, nama: h.nama, judul: judulDok });
       else {
         simpanBerkas(h.blob, h.nama);
@@ -198,7 +201,8 @@ export default function UjianKartuPage() {
                 </div>
                 <OpsiFoto nilai={foto} onUbah={(f) => setFotoPilih((x) => ({ ...x, [jenis]: f }))} adaFoto={adaFoto} total={totalPeserta} />
                 <OpsiTtdKartu ujianId={ujian?.id} nilai={ttd} onUbah={(t) => setTtdPilih((x) => ({ ...x, [jenis]: t }))}
-                  penanda={pilihan.penanda || {}} bolehUbah={!!pilihan.boleh_ubah_ttd} tiruan={!!pilihan.tiruan} onBerubah={ubahStatusTtd} />
+                  penanda={pilihan.penanda || {}} bolehUbah={!!pilihan.boleh_ubah_ttd} tiruan={!!pilihan.tiruan} onBerubah={ubahStatusTtd}
+                  stempel={stempel} onStempel={setStempel} />
                 {tanpaNomor > 0 && (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-tanpa-nomor">
                     {tanpaNomor} peserta belum punya nomor peserta — kartunya tetap dicetak dengan nomor "-". Lengkapi di{' '}

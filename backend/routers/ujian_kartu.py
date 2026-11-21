@@ -2,10 +2,10 @@
 ditandatangani Ketua Panitia, Kepala Madrasah, atau tanpa tanda tangan.
 
 Menu 'kartu_peserta' & 'kartu_meja': admin, pimpinan (kepala madrasah & waka kurikulum), dan panitia ujian itu.
-Unggah/hapus berkas tanda tangan PNG kartu: admin, pimpinan, serta ketua & sekretaris panitia ujian itu.
+Unggah/hapus berkas tanda tangan & stempel PNG kartu: admin, pimpinan, serta ketua & sekretaris panitia ujian itu.
 
-Koleksi `ttd_kartu_ujian`: { ujian_id, penanda: 'ketua'|'kepala', png (bytes, transparan), ukuran, diunggah_oleh,
-diunggah_oleh_nama, diunggah_pada } — satu berkas per penanda per ujian.
+Koleksi `ttd_kartu_ujian` (tanda tangan) & `stempel_kartu_ujian` (stempel): { ujian_id, penanda: 'ketua'|'kepala',
+png (bytes, transparan), ukuran, diunggah_oleh, diunggah_oleh_nama, diunggah_pada } — satu berkas per penanda per ujian.
 """
 import re
 from typing import Any, Dict, List, Literal, Optional
@@ -20,8 +20,8 @@ from ujian import KOLEKSI_FORMULIR, KOLEKSI_PANITIA, KOLEKSI_RUANG, sekarang_wib
 from ujian_cetak_data import _dasar
 from penyimpanan import folder_unggahan
 from ujian_kartu import (
-    FOTO_BAWAAN, OPSI_FOTO, PENANDA_TTD, TTD_BAWAAN, TTD_UNGGAH_MAKS_BYTE, ada_foto, baca_foto_siswa, olah_ttd_unggahan, pdf_kartu,
-    peserta_kartu, ringkas_kepala, ringkas_ketua, siapkan_foto,
+    BERKAS_KARTU, FOTO_BAWAAN, OPSI_FOTO, OPSI_STEMPEL, PENANDA_TTD, TTD_BAWAAN, TTD_UNGGAH_MAKS_BYTE, ada_foto, baca_foto_siswa,
+    olah_ttd_unggahan, pdf_kartu, peserta_kartu, ringkas_kepala, ringkas_ketua, siapkan_foto,
 )
 from ujian_ruang import peserta_ruang_ujian, urut_nama_ruang
 
@@ -29,6 +29,7 @@ router = APIRouter()
 
 KUNCI_MENU = {'peserta': 'kartu_peserta', 'meja': 'kartu_meja'}
 KOLEKSI_TTD_KARTU = 'ttd_kartu_ujian'
+KOLEKSI_BERKAS_KARTU = {'ttd': KOLEKSI_TTD_KARTU, 'stempel': 'stempel_kartu_ujian'}
 JABATAN_UBAH_TTD = ('ketua', 'sekretaris')
 
 
@@ -36,7 +37,7 @@ async def _akses_ubah_ttd(user: Dict, ujian_id: str) -> Dict[str, Any]:
     """Pengelola, pimpinan, serta ketua & sekretaris panitia ujian itu boleh mengunggah/menghapus tanda tangan kartu."""
     a = await akses_ujian(user, ujian_id, 'kartu_peserta')
     if not (a['pengelola'] or a['pimpinan'] or a['jabatan'] in JABATAN_UBAH_TTD):
-        raise HTTPException(403, 'Unggah tanda tangan kartu hanya untuk admin, pimpinan, serta ketua dan sekretaris panitia')
+        raise HTTPException(403, 'Unggah tanda tangan & stempel kartu hanya untuk admin, pimpinan, serta ketua dan sekretaris panitia')
     return a
 
 
@@ -45,23 +46,24 @@ async def _kepala():
     return ringkas_kepala(await akun_kepala(db), pengaturan)
 
 
-async def _meta_ttd(ujian_id: str) -> Dict[str, Dict[str, Any]]:
-    """{penanda: {ukuran, diunggah_oleh_nama, diunggah_pada}} berkas tanda tangan yang sudah diunggah (tanpa isi)."""
-    docs = await db[KOLEKSI_TTD_KARTU].find({'ujian_id': ujian_id}, {'_id': 0, 'png': 0}).to_list(10)
+async def _meta_berkas(ujian_id: str, berkas: str) -> Dict[str, Dict[str, Any]]:
+    """{penanda: {ukuran, diunggah_oleh_nama, diunggah_pada}} berkas tanda tangan/stempel yang sudah diunggah (tanpa isi)."""
+    docs = await db[KOLEKSI_BERKAS_KARTU[berkas]].find({'ujian_id': ujian_id}, {'_id': 0, 'png': 0}).to_list(10)
     return {d['penanda']: {k: d.get(k) for k in ('ukuran', 'diunggah_oleh_nama', 'diunggah_pada')} for d in docs}
 
 
-async def _png_ttd(ujian_id: str, penanda: str) -> Optional[bytes]:
-    d = await db[KOLEKSI_TTD_KARTU].find_one({'ujian_id': ujian_id, 'penanda': penanda}, {'_id': 0, 'png': 1})
+async def _png_berkas(ujian_id: str, penanda: str, berkas: str = 'ttd') -> Optional[bytes]:
+    d = await db[KOLEKSI_BERKAS_KARTU[berkas]].find_one({'ujian_id': ujian_id, 'penanda': penanda}, {'_id': 0, 'png': 1})
     return bytes(d['png']) if d and d.get('png') else None
 
 
 async def _penanda(ujian_id: str) -> Dict[str, Optional[Dict[str, Any]]]:
-    """Calon penanda tangan kartu: {ketua: {jabatan, nama, nip, ttd} | None, kepala: {...} | None}."""
-    meta = await _meta_ttd(ujian_id)
+    """Calon penanda tangan kartu: {ketua: {jabatan, nama, nip, ttd, stempel} | None, kepala: {...} | None}; `ttd` &
+    `stempel` = info berkas PNG yang sudah diunggah (None bila belum)."""
+    meta = {b: await _meta_berkas(ujian_id, b) for b in BERKAS_KARTU}
     hasil = {}
     for kunci, orang in (('ketua', await _ketua(ujian_id)), ('kepala', await _kepala())):
-        hasil[kunci] = {'jabatan': PENANDA_TTD[kunci], **orang, 'ttd': meta.get(kunci)} if orang else None
+        hasil[kunci] = {'jabatan': PENANDA_TTD[kunci], **orang, **{b: meta[b].get(kunci) for b in BERKAS_KARTU}} if orang else None
     return hasil
 PROYEKSI_FOTO = {'_id': 0, 'id': 1, 'dokumen_pas_foto': 1, 'photo_url': 1}
 
@@ -118,53 +120,59 @@ async def pilihan_kartu(ujian_id: str, jenis: Literal['peserta', 'meja'] = 'pese
             'boleh_ubah_ttd': bool(a['pengelola'] or a['pimpinan'] or a['jabatan'] in JABATAN_UBAH_TTD)}
 
 
-@router.get("/ujian/{ujian_id}/kartu/ttd/{penanda}")
-async def lihat_ttd_kartu(ujian_id: str, penanda: Literal['ketua', 'kepala'], user: Dict = Depends(get_current_user)):
-    """Pratinjau berkas tanda tangan PNG kartu (transparan) untuk penanda ini."""
+@router.get("/ujian/{ujian_id}/kartu/{jenis_berkas}/{penanda}")
+async def lihat_berkas_kartu(ujian_id: str, jenis_berkas: Literal['ttd', 'stempel'], penanda: Literal['ketua', 'kepala'],
+                             user: Dict = Depends(get_current_user)):
+    """Pratinjau berkas tanda tangan / stempel PNG kartu (transparan) untuk penanda ini."""
     await akses_ujian(user, ujian_id, 'kartu_peserta')
-    png = await _png_ttd(ujian_id, penanda)
+    png = await _png_berkas(ujian_id, penanda, jenis_berkas)
     if not png:
-        raise HTTPException(404, 'Tanda tangan belum diunggah')
+        raise HTTPException(404, f"{BERKAS_KARTU[jenis_berkas]['label']} belum diunggah")
     return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store'})
 
 
-@router.post("/ujian/{ujian_id}/kartu/ttd/{penanda}")
-async def unggah_ttd_kartu(ujian_id: str, penanda: Literal['ketua', 'kepala'], request: Request, berkas: UploadFile = File(...),
-                           user: Dict = Depends(get_current_user)):
-    """Unggah berkas tanda tangan PNG (maks. 2 MB) Ketua Panitia / Kepala Madrasah untuk kartu ujian ini. Latar putih
-    dibuat transparan, tepi kosong dipangkas, dan gambar dikecilkan; berkas lama diganti."""
+@router.post("/ujian/{ujian_id}/kartu/{jenis_berkas}/{penanda}")
+async def unggah_berkas_kartu(ujian_id: str, jenis_berkas: Literal['ttd', 'stempel'], penanda: Literal['ketua', 'kepala'],
+                              request: Request, berkas: UploadFile = File(...), user: Dict = Depends(get_current_user)):
+    """Unggah berkas tanda tangan / stempel PNG (maks. 2 MB) Ketua Panitia / Kepala Madrasah untuk kartu ujian ini.
+    Latar putih dibuat transparan, tepi kosong dipangkas, dan gambar dikecilkan; berkas lama diganti."""
     await _akses_ubah_ttd(user, ujian_id)
     isi = await berkas.read(TTD_UNGGAH_MAKS_BYTE + 1)
     try:
-        png = olah_ttd_unggahan(isi)
+        png = olah_ttd_unggahan(isi, jenis_berkas)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     meta = {'ukuran': len(png), 'diunggah_oleh': user.get('id'), 'diunggah_oleh_nama': user.get('full_name') or user.get('username'),
             'diunggah_pada': sekarang_wib().isoformat()}
-    await db[KOLEKSI_TTD_KARTU].update_one({'ujian_id': ujian_id, 'penanda': penanda},
-                                           {'$set': {'ujian_id': ujian_id, 'penanda': penanda, 'png': png, **meta}}, upsert=True)
-    await log_audit(user, 'ujian_kartu_ttd_unggah', KOLEKSI_TTD_KARTU, ujian_id, {'penanda': penanda, 'ukuran': len(png)}, request=request)
-    return {'penanda': penanda, 'ttd': {k: meta[k] for k in ('ukuran', 'diunggah_oleh_nama', 'diunggah_pada')}}
+    koleksi = KOLEKSI_BERKAS_KARTU[jenis_berkas]
+    await db[koleksi].update_one({'ujian_id': ujian_id, 'penanda': penanda},
+                                 {'$set': {'ujian_id': ujian_id, 'penanda': penanda, 'png': png, **meta}}, upsert=True)
+    await log_audit(user, f'ujian_kartu_{jenis_berkas}_unggah', koleksi, ujian_id, {'penanda': penanda, 'ukuran': len(png)}, request=request)
+    return {'penanda': penanda, 'berkas': jenis_berkas, jenis_berkas: {k: meta[k] for k in ('ukuran', 'diunggah_oleh_nama', 'diunggah_pada')}}
 
 
-@router.delete("/ujian/{ujian_id}/kartu/ttd/{penanda}")
-async def hapus_ttd_kartu(ujian_id: str, penanda: Literal['ketua', 'kepala'], request: Request, user: Dict = Depends(get_current_user)):
-    """Hapus berkas tanda tangan PNG kartu; kartu kembali mencetak ruang tanda tangan kosong (tanda tangan basah)."""
+@router.delete("/ujian/{ujian_id}/kartu/{jenis_berkas}/{penanda}")
+async def hapus_berkas_kartu(ujian_id: str, jenis_berkas: Literal['ttd', 'stempel'], penanda: Literal['ketua', 'kepala'],
+                             request: Request, user: Dict = Depends(get_current_user)):
+    """Hapus berkas tanda tangan / stempel PNG kartu. Tanpa tanda tangan, ruang tanda tangan dicetak kosong (tanda
+    tangan basah); tanpa stempel, kartu dicetak tanpa cap."""
     await _akses_ubah_ttd(user, ujian_id)
-    await db[KOLEKSI_TTD_KARTU].delete_many({'ujian_id': ujian_id, 'penanda': penanda})
-    await log_audit(user, 'ujian_kartu_ttd_hapus', KOLEKSI_TTD_KARTU, ujian_id, {'penanda': penanda}, request=request)
-    return {'penanda': penanda, 'ttd': None}
+    koleksi = KOLEKSI_BERKAS_KARTU[jenis_berkas]
+    await db[koleksi].delete_many({'ujian_id': ujian_id, 'penanda': penanda})
+    await log_audit(user, f'ujian_kartu_{jenis_berkas}_hapus', koleksi, ujian_id, {'penanda': penanda}, request=request)
+    return {'penanda': penanda, 'berkas': jenis_berkas, jenis_berkas: None}
 
 
 @router.get("/ujian/{ujian_id}/kartu/{jenis}")
 async def cetak_kartu(ujian_id: str, jenis: Literal['peserta', 'meja'], request: Request, ruang_id: str = '',
                       foto: Optional[Literal['pakai', 'tanpa']] = None, ttd: Optional[Literal['ketua', 'kepala', 'tanpa']] = None,
-                      user: Dict = Depends(get_current_user)):
+                      stempel: Literal['pakai', 'tanpa'] = 'pakai', user: Dict = Depends(get_current_user)):
     """PDF A4 kartu peserta / kartu meja: satu ruang (`ruang_id`) atau semua ruang (kosong; tiap ruang mulai halaman
     baru). Peserta urut nomor peserta; 8 kartu per halaman. `foto`: 'pakai' (pas foto siswa; kotak kosong bila belum
     ada) atau 'tanpa' (tanpa kotak foto); bawaan kartu peserta 'pakai', kartu meja 'tanpa'. `ttd`: 'ketua' (Ketua
     Panitia), 'kepala' (Kepala Madrasah), atau 'tanpa'; bawaan kartu peserta 'ketua', kartu meja 'tanpa'. Bila berkas
-    tanda tangan PNG penanda itu sudah diunggah, gambarnya ikut tercetak; bila belum, ruang tanda tangan dibiarkan kosong."""
+    tanda tangan PNG penanda itu sudah diunggah, gambarnya ikut tercetak; bila belum, ruang tanda tangan dibiarkan kosong.
+    `stempel`: 'pakai' (bawaan; stempel PNG penanda itu ikut tercetak bila sudah diunggah) atau 'tanpa'."""
     foto = foto or FOTO_BAWAAN[jenis]
     ttd = ttd or TTD_BAWAAN[jenis]
     a = await akses_ujian(user, ujian_id, KUNCI_MENU[jenis])
@@ -182,14 +190,15 @@ async def cetak_kartu(ujian_id: str, jenis: Literal['peserta', 'meja'], request:
     blok_ttd = None
     if ttd != 'tanpa':
         orang = await _ketua(ujian_id) if ttd == 'ketua' else await _kepala()
-        blok_ttd = {'jabatan': PENANDA_TTD[ttd], 'nama': '', 'nip': '', **(orang or {}), 'png': await _png_ttd(ujian_id, ttd)}
+        blok_ttd = {'jabatan': PENANDA_TTD[ttd], 'nama': '', 'nip': '', **(orang or {}), 'png': await _png_berkas(ujian_id, ttd, 'ttd'),
+                    'stempel': await _png_berkas(ujian_id, ttd, 'stempel') if OPSI_STEMPEL[stempel] else None}
     data = {**_dasar(ujian, formulir), 'ttd': blok_ttd, 'ruang': isi_ruang, 'foto': OPSI_FOTO[foto]}
     isi = pdf_kartu(jenis, data)
     bagian = f"ruang_{pilih[0].get('nama_ruang')}" if ruang_id else 'semua_ruang'
     dasar = f"kartu_{jenis}_{ujian.get('nama') or 'ujian'}_{bagian}_{'dengan' if OPSI_FOTO[foto] else 'tanpa'}_foto"
     nama = re.sub(r'_+', '_', re.sub(r'[^\w.-]+', '_', dasar)).strip('_') + '.pdf'
     await log_audit(user, 'ujian_cetak_kartu', KOLEKSI_RUANG, ruang_id or ujian_id, {
-        'ujian_id': ujian_id, 'jenis': jenis, 'ruang_id': ruang_id or None, 'foto': foto, 'ttd': ttd,
+        'ujian_id': ujian_id, 'jenis': jenis, 'ruang_id': ruang_id or None, 'foto': foto, 'ttd': ttd, 'stempel': stempel,
         'peserta': sum(len(r['peserta']) for r in isi_ruang), 'dengan_foto': len(foto_siswa)}, request=request)
     return Response(isi, media_type='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="{nama}"', 'Access-Control-Expose-Headers': 'Content-Disposition'})

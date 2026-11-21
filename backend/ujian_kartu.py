@@ -9,9 +9,10 @@ sekaligus, setiap ruang mulai di halaman baru.
 - Kartu Meja: ditempel di meja — nomor peserta berukuran besar, nama, kelas, ruang, dan (opsional) pas foto & tanda
   tangan.
 
-Opsi tanda tangan (`data['ttd']`): Ketua Panitia ujian itu atau Kepala Madrasah — {jabatan, nama, nip, png} dengan
-`png` = berkas tanda tangan PNG yang diunggah (transparan; None = ruang tanda tangan kosong untuk ditandatangani
-basah) — atau None = tanpa tanda tangan.
+Opsi tanda tangan (`data['ttd']`): Ketua Panitia ujian itu atau Kepala Madrasah — {jabatan, nama, nip, png, stempel}
+dengan `png` = berkas tanda tangan PNG yang diunggah (transparan; None = ruang tanda tangan kosong untuk ditandatangani
+basah) dan `stempel` = berkas stempel PNG (transparan, dicetak menimpa sisi kiri tanda tangan; None = tanpa stempel) —
+atau None = tanpa tanda tangan.
 
 Opsi foto (`data['foto']`): True = "pakai foto" — pas foto siswa dari dokumen siswa (Pas Foto) atau foto profil
 tercetak di kartu; siswa tanpa foto mendapat kotak kosong untuk ditempel. False = "tanpa foto" — tanpa kotak foto,
@@ -59,35 +60,46 @@ TTD_BAWAAN = {'peserta': 'ketua', 'meja': 'tanpa'}
 TTD_UNGGAH_MAKS_BYTE = 2 * 1024 * 1024
 TTD_UNGGAH_MAKS_SISI = 4000
 TTD_SIMPAN_MAKS = (800, 300)  # piksel; cukup tajam untuk tinggi cetak 6–7 mm
+# Berkas penanda tangan yang dapat diunggah: tanda tangan & stempel. Stempel disimpan persegi lebih besar dan sedikit
+# transparan (seperti tinta cap) agar tanda tangan di bawahnya tetap terbaca.
+BERKAS_KARTU = {
+    'ttd': {'label': 'Tanda tangan', 'maks': TTD_SIMPAN_MAKS, 'alfa': 1.0},
+    'stempel': {'label': 'Stempel', 'maks': (600, 600), 'alfa': 0.85},
+}
+OPSI_STEMPEL = {'pakai': True, 'tanpa': False}
 
 
-def olah_ttd_unggahan(isi: bytes) -> bytes:
-    """Berkas tanda tangan PNG unggahan -> PNG transparan siap cetak: latar putih/terang dibuat transparan, tepi kosong
-    dipangkas, dikecilkan, dan metadata dibuang. ValueError bila bukan PNG sah, terlalu besar, atau kosong."""
+def olah_ttd_unggahan(isi: bytes, berkas: str = 'ttd') -> bytes:
+    """Berkas tanda tangan / stempel PNG unggahan -> PNG transparan siap cetak: latar putih/terang dibuat transparan,
+    tepi kosong dipangkas, dikecilkan, dan metadata dibuang. ValueError bila bukan PNG sah, terlalu besar, atau kosong."""
+    aturan = BERKAS_KARTU[berkas]
+    label = aturan['label']
     if not isi or len(isi) > TTD_UNGGAH_MAKS_BYTE:
-        raise ValueError('Berkas tanda tangan maksimal 2 MB.')
+        raise ValueError(f'Berkas {label.lower()} maksimal 2 MB.')
     if not isi.startswith(b'\x89PNG\r\n\x1a\n'):
-        raise ValueError('Berkas tanda tangan harus berformat PNG.')
+        raise ValueError(f'Berkas {label.lower()} harus berformat PNG.')
     try:
         with Image.open(io.BytesIO(isi)) as uji:
             uji.verify()
         with Image.open(io.BytesIO(isi)) as im:
             if max(im.size) > TTD_UNGGAH_MAKS_SISI:
-                raise ValueError('Ukuran gambar tanda tangan terlalu besar (maks. 4000 piksel).')
+                raise ValueError(f'Ukuran gambar {label.lower()} terlalu besar (maks. 4000 piksel).')
             rgba = im.convert('RGBA')
     except ValueError:
         raise
     except Exception as e:  # noqa: BLE001 — PIL melempar beragam galat untuk berkas rusak
-        raise ValueError('Berkas tanda tangan tidak terbaca.') from e
+        raise ValueError(f'Berkas {label.lower()} tidak terbaca.') from e
     # Latar terang (hasil pindai/foto kertas putih) -> transparan; goresan gelap tetap.
     gelap = rgba.convert('L').point(lambda v: 0 if v > 200 else 255)
     alfa = ImageChops.darker(rgba.getchannel('A'), gelap)
-    rgba.putalpha(alfa)
     kotak = alfa.getbbox()
     if not kotak:
-        raise ValueError('Tanda tangan masih kosong (tidak ada goresan).')
+        raise ValueError(f'{label} masih kosong (tidak ada goresan).')
+    if aturan['alfa'] < 1:
+        alfa = alfa.point(lambda v: int(v * aturan['alfa']))
+    rgba.putalpha(alfa)
     rgba = rgba.crop(kotak)
-    rgba.thumbnail(TTD_SIMPAN_MAKS, Image.LANCZOS)
+    rgba.thumbnail(aturan['maks'], Image.LANCZOS)
     keluar = io.BytesIO()
     rgba.save(keluar, format='PNG', optimize=True)
     return keluar.getvalue()
@@ -213,6 +225,15 @@ def _blok_ttd(c: canvas.Canvas, ttd: Dict[str, Any], tx: float, y: float, lebar:
             h_img = w_img * ih / max(iw, 1)
             c.drawImage(img, tx - w_img / 2, y_nama + 2.2 * mm, width=w_img, height=h_img, mask='auto')
         except Exception:  # noqa: BLE001 — PNG rusak: kartu tetap tercetak tanpa gambar tanda tangan
+            pass
+    stempel = ttd.get('stempel')
+    if stempel:  # cap menimpa sisi kiri tanda tangan & nama, seperti stempel basah
+        try:
+            d = (12 if kecil else 16) * mm
+            cx = tx - lebar * 0.3  # pusat cap di sepertiga kiri blok
+            c.drawImage(ImageReader(io.BytesIO(stempel)), cx - d / 2, y_nama - 1.5 * mm, width=d, height=d, mask='auto',
+                        preserveAspectRatio=True, anchor='c')
+        except Exception:  # noqa: BLE001 — PNG rusak: kartu tetap tercetak tanpa stempel
             pass
     nama = ttd.get('nama') or '.' * 30
     uk = _ukuran_muat(nama, fb, uk_nama, lebar, 5)

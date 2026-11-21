@@ -6,13 +6,16 @@
  *   GET /ujian/{ujian_id}/kartu/pilihan?jenis=peserta|meja
  *     -> { ujian, ruang: [{ id, nama_ruang, jenjang, peserta, tanpa_nomor, ada_foto }], ketua: { nama, nip } | null,
  *          kartu_per_halaman, foto_bawaan: 'pakai'|'tanpa', ttd_bawaan: 'ketua'|'kepala'|'tanpa', boleh_ubah_ttd,
- *          penanda: { ketua|kepala: { jabatan, nama, nip, ttd: { ukuran, diunggah_oleh_nama, diunggah_pada } | null } | null } }
- *   GET /ujian/{ujian_id}/kartu/{peserta|meja}?ruang_id=&foto=pakai|tanpa&ttd=ketua|kepala|tanpa   (ruang_id kosong = semua ruang) -> PDF
+ *          penanda: { ketua|kepala: { jabatan, nama, nip, ttd: Info | null, stempel: Info | null } | null } }
+ *          Info = { ukuran, diunggah_oleh_nama, diunggah_pada }
+ *   GET /ujian/{ujian_id}/kartu/{peserta|meja}?ruang_id=&foto=pakai|tanpa&ttd=ketua|kepala|tanpa&stempel=pakai|tanpa -> PDF
+ *     (ruang_id kosong = semua ruang)
  *     foto 'pakai': pas foto siswa (dokumen Pas Foto / foto profil); siswa tanpa foto -> kotak kosong untuk ditempel.
  *     ttd: penanda tangan kartu; bila berkas TTD PNG-nya sudah diunggah, gambarnya ikut tercetak.
- *   GET    /ujian/{ujian_id}/kartu/ttd/{ketua|kepala} -> PNG tanda tangan (404 bila belum ada)
- *   POST   /ujian/{ujian_id}/kartu/ttd/{ketua|kepala}  multipart `berkas` (PNG, maks. 2 MB) -> { penanda, ttd }
- *   DELETE /ujian/{ujian_id}/kartu/ttd/{ketua|kepala} -> { penanda, ttd: null }
+ *     stempel 'pakai' (bawaan): stempel PNG penanda itu ikut tercetak bila sudah diunggah.
+ *   GET    /ujian/{ujian_id}/kartu/{ttd|stempel}/{ketua|kepala} -> PNG (404 bila belum ada)
+ *   POST   /ujian/{ujian_id}/kartu/{ttd|stempel}/{ketua|kepala}  multipart `berkas` (PNG, maks. 2 MB) -> { penanda, berkas, [berkas]: Info }
+ *   DELETE /ujian/{ujian_id}/kartu/{ttd|stempel}/{ketua|kepala} -> { penanda, berkas, [berkas]: null }
  *     Unggah/hapus: admin, pimpinan, serta ketua & sekretaris panitia ujian itu.
  *   Akses: admin, kepala madrasah & waka kurikulum, serta panitia ujian itu (menu kartu_peserta / kartu_meja).
  */
@@ -38,6 +41,10 @@ export const OPSI_TTD = {
 };
 export const TTD_BAWAAN = { peserta: 'ketua', meja: 'tanpa' };
 export const TTD_MAKS_BYTE = 2 * 1024 * 1024;
+export const BERKAS_TTD = {
+  ttd: { label: 'Tanda tangan', singkat: 'TTD' },
+  stempel: { label: 'Stempel', singkat: 'Stempel' },
+};
 
 export const pilihanKartuTiruan = () => ({
   ujian: null,
@@ -48,8 +55,8 @@ export const pilihanKartuTiruan = () => ({
   ketua: { nama: 'Siti Aminah, S.Pd. (contoh)', nip: '198001012005012001' },
   kartu_per_halaman: 8,
   penanda: {
-    ketua: { jabatan: 'Ketua Panitia', nama: 'Siti Aminah, S.Pd. (contoh)', nip: '198001012005012001', ttd: null },
-    kepala: { jabatan: 'Kepala Madrasah', nama: 'H. Kepala Madrasah, M.Pd. (contoh)', nip: '197001011995031001', ttd: null },
+    ketua: { jabatan: 'Ketua Panitia', nama: 'Siti Aminah, S.Pd. (contoh)', nip: '198001012005012001', ttd: null, stempel: null },
+    kepala: { jabatan: 'Kepala Madrasah', nama: 'H. Kepala Madrasah, M.Pd. (contoh)', nip: '197001011995031001', ttd: null, stempel: null },
   },
   boleh_ubah_ttd: true,
 });
@@ -64,11 +71,11 @@ export const muatPilihanKartu = (ujianId, jenis) => denganTiruan(
 export const jumlahHalaman = (ruangList = [], perHalaman = 8) => ruangList.reduce((n, r) => n + Math.ceil((r.peserta || 0) / perHalaman), 0);
 
 /** PDF kartu -> { blob, nama, tiruan }. `ruangId` kosong = semua ruang; `foto` = 'pakai' | 'tanpa';
- * `ttd` = 'ketua' | 'kepala' | 'tanpa'. */
-export async function unduhKartu(ujianId, jenis, ruangId = '', namaRuang = '', foto = FOTO_BAWAAN[jenis], ttd = TTD_BAWAAN[jenis]) {
+ * `ttd` = 'ketua' | 'kepala' | 'tanpa'; `stempel` = 'pakai' | 'tanpa'. */
+export async function unduhKartu(ujianId, jenis, ruangId = '', namaRuang = '', foto = FOTO_BAWAAN[jenis], ttd = TTD_BAWAAN[jenis], stempel = 'pakai') {
   const cadangan = `kartu_${jenis}_${ruangId ? `ruang_${namaRuang}` : 'semua_ruang'}_${foto === 'pakai' ? 'dengan' : 'tanpa'}_foto.pdf`;
   try {
-    const params = { foto, ttd, ...(ruangId ? { ruang_id: ruangId } : {}) };
+    const params = { foto, ttd, stempel, ...(ruangId ? { ruang_id: ruangId } : {}) };
     const res = await api.get(`/ujian/${ujianId}/kartu/${jenis}`, { params, responseType: 'blob' });
     const cd = res.headers?.['content-disposition'] || '';
     return { blob: res.data, nama: /filename="?([^";]+)"?/i.exec(cd)?.[1] || cadangan, tiruan: false };
@@ -80,22 +87,22 @@ export async function unduhKartu(ujianId, jenis, ruangId = '', namaRuang = '', f
   }
 }
 
-/** Gambar tanda tangan PNG penanda (untuk pratinjau) -> Blob | null bila belum diunggah. */
-export async function ambilTtdKartu(ujianId, penanda) {
+/** Gambar tanda tangan / stempel PNG penanda (untuk pratinjau) -> Blob | null bila belum diunggah. */
+export async function ambilTtdKartu(ujianId, penanda, berkas = 'ttd') {
   try {
-    return (await api.get(`/ujian/${ujianId}/kartu/ttd/${penanda}`, { responseType: 'blob' })).data;
+    return (await api.get(`/ujian/${ujianId}/kartu/${berkas}/${penanda}`, { responseType: 'blob' })).data;
   } catch (e) {
     if (e?.response?.status === 404) return null;
     throw await galatDariBlob(e);
   }
 }
 
-/** Unggah berkas tanda tangan PNG (maks. 2 MB) -> { penanda, ttd }. */
-export async function unggahTtdKartu(ujianId, penanda, berkas) {
+/** Unggah berkas tanda tangan / stempel PNG (maks. 2 MB) -> { penanda, berkas, [berkas]: Info }. */
+export async function unggahTtdKartu(ujianId, penanda, file, berkas = 'ttd') {
   const form = new FormData();
-  form.append('berkas', berkas);
-  return (await api.post(`/ujian/${ujianId}/kartu/ttd/${penanda}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  form.append('berkas', file);
+  return (await api.post(`/ujian/${ujianId}/kartu/${berkas}/${penanda}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
 }
 
-/** Hapus berkas tanda tangan -> { penanda, ttd: null }. */
-export const hapusTtdKartu = async (ujianId, penanda) => (await api.delete(`/ujian/${ujianId}/kartu/ttd/${penanda}`)).data;
+/** Hapus berkas tanda tangan / stempel -> { penanda, berkas, [berkas]: null }. */
+export const hapusTtdKartu = async (ujianId, penanda, berkas = 'ttd') => (await api.delete(`/ujian/${ujianId}/kartu/${berkas}/${penanda}`)).data;
