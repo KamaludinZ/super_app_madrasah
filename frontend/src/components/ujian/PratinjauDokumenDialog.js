@@ -7,7 +7,7 @@ import { Loader2, Printer } from 'lucide-react';
  * Pratinjau PDF daftar hadir / berita acara sebelum dicetak (pratinjau tidak masuk arsip). Tombol "Cetak & Arsipkan"
  * membuat berkas final sesuai format pilihan yang otomatis tersimpan ke arsip. `pratinjau` = { blob, judul, mesin }.
  */
-export default function PratinjauDokumenDialog({ pratinjau, onTutup, onCetak, mencetak }) {
+export default function PratinjauDokumenDialog({ pratinjau, onTutup, onCetak, mencetak, labelCetak = 'Cetak & Arsipkan' }) {
   const url = useMemo(() => (pratinjau ? URL.createObjectURL(pratinjau.blob) : null), [pratinjau]);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
   return (
@@ -25,7 +25,7 @@ export default function PratinjauDokumenDialog({ pratinjau, onTutup, onCetak, me
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onTutup} disabled={mencetak}>Tutup</Button>
           <Button onClick={onCetak} disabled={mencetak} className="gap-2 bg-[#006837] hover:bg-[#00552d]" data-testid="btn-cetak-dari-pratinjau">
-            {mencetak ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} Cetak & Arsipkan
+            {mencetak ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} {labelCetak}
           </Button>
         </DialogFooter>
       </DialogContent>
