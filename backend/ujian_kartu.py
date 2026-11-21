@@ -5,8 +5,14 @@ mengikuti garis tepinya. Dicetak per ruang: peserta satu ruang urut nomor pesert
 sekaligus, setiap ruang mulai di halaman baru.
 
 - Kartu Peserta: kop (logo Kemenag & madrasah, nama kegiatan + tahun ajaran), pas foto 3x4, nomor peserta, nama,
-  kelas, NISN, ruang, dan tanda tangan Ketua Panitia ujian itu.
-- Kartu Meja: ditempel di meja — nomor peserta berukuran besar, nama, kelas, ruang, dan (opsional) pas foto.
+  kelas, NISN, ruang, dan tanda tangan.
+- Kartu Meja: ditempel di meja — nomor peserta berukuran besar, nama, kelas, ruang, dan (opsional) pas foto & tanda
+  tangan.
+
+Opsi tanda tangan (`data['ttd']`): Ketua Panitia ujian itu atau Kepala Madrasah — {jabatan, nama, nip, png, stempel}
+dengan `png` = berkas tanda tangan PNG yang diunggah (transparan; None = ruang tanda tangan kosong untuk ditandatangani
+basah) dan `stempel` = berkas stempel PNG (transparan, dicetak menimpa sisi kiri tanda tangan; None = tanpa stempel) —
+atau None = tanpa tanda tangan.
 
 Opsi foto (`data['foto']`): True = "pakai foto" — pas foto siswa dari dokumen siswa (Pas Foto) atau foto profil
 tercetak di kartu; siswa tanpa foto mendapat kotak kosong untuk ditempel. False = "tanpa foto" — tanpa kotak foto,
@@ -14,14 +20,14 @@ isian kartu melebar.
 
 Data masukan (dict):
   { template: {kop_madrasah, singkatan_ujian, nama_kegiatan, ...}, tahun_pelajaran, foto: bool,
-    ketua: {nama, nip} | None, ruang: [{ nama_ruang, peserta: [{nomor_peserta, nama, kelas, nisn, nis, foto: JPEG|None}] }] }
+    ttd: {jabatan, nama, nip, png} | None, ruang: [{ nama_ruang, peserta: [{nomor_peserta, nama, kelas, nisn, nis, foto: JPEG|None}] }] }
 """
 import base64
 import io
 import os
 from typing import Any, Dict, List, Optional
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -47,6 +53,66 @@ EKSTENSI_FOTO = ('.jpg', '.jpeg', '.png')
 LEBAR_HAL, TINGGI_HAL = A4
 LEBAR_KARTU = (LEBAR_HAL - 2 * MARGIN - (KOLOM - 1) * JARAK_X) / KOLOM
 TINGGI_KARTU = (TINGGI_HAL - 2 * MARGIN - (BARIS - 1) * JARAK_Y) / BARIS
+# Penanda tangan kartu: Ketua Panitia ujian itu atau Kepala Madrasah; 'tanpa' = kartu tanpa blok tanda tangan.
+PENANDA_TTD = {'ketua': 'Ketua Panitia', 'kepala': 'Kepala Madrasah'}
+OPSI_TTD = ('ketua', 'kepala', 'tanpa')
+TTD_BAWAAN = {'peserta': 'ketua', 'meja': 'tanpa'}
+TTD_UNGGAH_MAKS_BYTE = 2 * 1024 * 1024
+TTD_UNGGAH_MAKS_SISI = 4000
+TTD_SIMPAN_MAKS = (800, 300)  # piksel; cukup tajam untuk tinggi cetak 6–7 mm
+# Berkas penanda tangan yang dapat diunggah: tanda tangan & stempel. Stempel disimpan persegi lebih besar dan sedikit
+# transparan (seperti tinta cap) agar tanda tangan di bawahnya tetap terbaca.
+BERKAS_KARTU = {
+    'ttd': {'label': 'Tanda tangan', 'maks': TTD_SIMPAN_MAKS, 'alfa': 1.0},
+    'stempel': {'label': 'Stempel', 'maks': (600, 600), 'alfa': 0.85},
+}
+OPSI_STEMPEL = {'pakai': True, 'tanpa': False}
+
+
+def olah_ttd_unggahan(isi: bytes, berkas: str = 'ttd') -> bytes:
+    """Berkas tanda tangan / stempel PNG unggahan -> PNG transparan siap cetak: latar putih/terang dibuat transparan,
+    tepi kosong dipangkas, dikecilkan, dan metadata dibuang. ValueError bila bukan PNG sah, terlalu besar, atau kosong."""
+    aturan = BERKAS_KARTU[berkas]
+    label = aturan['label']
+    if not isi or len(isi) > TTD_UNGGAH_MAKS_BYTE:
+        raise ValueError(f'Berkas {label.lower()} maksimal 2 MB.')
+    if not isi.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise ValueError(f'Berkas {label.lower()} harus berformat PNG.')
+    try:
+        with Image.open(io.BytesIO(isi)) as uji:
+            uji.verify()
+        with Image.open(io.BytesIO(isi)) as im:
+            if max(im.size) > TTD_UNGGAH_MAKS_SISI:
+                raise ValueError(f'Ukuran gambar {label.lower()} terlalu besar (maks. 4000 piksel).')
+            rgba = im.convert('RGBA')
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 — PIL melempar beragam galat untuk berkas rusak
+        raise ValueError(f'Berkas {label.lower()} tidak terbaca.') from e
+    # Latar terang (hasil pindai/foto kertas putih) -> transparan; goresan gelap tetap.
+    gelap = rgba.convert('L').point(lambda v: 0 if v > 200 else 255)
+    alfa = ImageChops.darker(rgba.getchannel('A'), gelap)
+    kotak = alfa.getbbox()
+    if not kotak:
+        raise ValueError(f'{label} masih kosong (tidak ada goresan).')
+    if aturan['alfa'] < 1:
+        alfa = alfa.point(lambda v: int(v * aturan['alfa']))
+    rgba.putalpha(alfa)
+    rgba = rgba.crop(kotak)
+    rgba.thumbnail(aturan['maks'], Image.LANCZOS)
+    keluar = io.BytesIO()
+    rgba.save(keluar, format='PNG', optimize=True)
+    return keluar.getvalue()
+
+
+def ttd_data(data: Dict[str, Any], jenis: str) -> Optional[Dict[str, Any]]:
+    """Blok tanda tangan kartu: `data['ttd']` bila ada (None = tanpa tanda tangan); data lama tanpa kunci 'ttd' memakai
+    Ketua Panitia (kartu peserta) atau tanpa tanda tangan (kartu meja)."""
+    if 'ttd' in data:
+        return data['ttd']
+    if jenis == 'peserta':
+        return {'jabatan': PENANDA_TTD['ketua'], **(data.get('ketua') or {})}
+    return None
 
 
 def _ukuran_muat(teks: str, font: str, ukuran: float, lebar: float, minimum: float) -> float:
@@ -143,6 +209,43 @@ def _foto(c: canvas.Canvas, png: Optional[bytes], x: float, y: float, w: float, 
     c.drawCentredString(x + w / 2, y + h / 2 - 2 * mm, '3 x 4')
 
 
+def _blok_ttd(c: canvas.Canvas, ttd: Dict[str, Any], tx: float, y: float, lebar: float, kecil: bool = False) -> None:
+    """Blok tanda tangan berpusat di tx: "<Jabatan>,", gambar tanda tangan (bila diunggah), nama bergaris bawah, NIP."""
+    f, fb = _FONT['biasa'], _FONT['tebal']
+    uk_label, uk_nama, uk_nip = (6, 6.5, 5.5) if kecil else (7, 7, 6.5)
+    y_label, y_nama, y_nip = (y + 15 * mm, y + 4.8 * mm, y + 2 * mm) if kecil else (y + 15.5 * mm, y + 5.5 * mm, y + 2.5 * mm)
+    _teks_muat(c, f"{ttd.get('jabatan') or ''},", tx, y_label, f, uk_label, lebar, 5, tengah=True)
+    png = ttd.get('png')
+    if png:
+        try:
+            img = ImageReader(io.BytesIO(png))
+            iw, ih = img.getSize()
+            tinggi = (6 if kecil else 7) * mm
+            w_img = min(lebar, tinggi * iw / max(ih, 1))
+            h_img = w_img * ih / max(iw, 1)
+            c.drawImage(img, tx - w_img / 2, y_nama + 2.2 * mm, width=w_img, height=h_img, mask='auto')
+        except Exception:  # noqa: BLE001 — PNG rusak: kartu tetap tercetak tanpa gambar tanda tangan
+            pass
+    stempel = ttd.get('stempel')
+    if stempel:  # cap menimpa sisi kiri tanda tangan & nama, seperti stempel basah
+        try:
+            d = (12 if kecil else 16) * mm
+            cx = tx - lebar * 0.3  # pusat cap di sepertiga kiri blok
+            c.drawImage(ImageReader(io.BytesIO(stempel)), cx - d / 2, y_nama - 1.5 * mm, width=d, height=d, mask='auto',
+                        preserveAspectRatio=True, anchor='c')
+        except Exception:  # noqa: BLE001 — PNG rusak: kartu tetap tercetak tanpa stempel
+            pass
+    nama = ttd.get('nama') or '.' * 30
+    uk = _ukuran_muat(nama, fb, uk_nama, lebar, 5)
+    c.setFont(fb, uk)
+    c.drawCentredString(tx, y_nama, nama)
+    if ttd.get('nama'):
+        lebar_nama = pdfmetrics.stringWidth(nama, fb, uk)
+        c.setLineWidth(0.4)
+        c.line(tx - lebar_nama / 2, y_nama - 0.5 * mm, tx + lebar_nama / 2, y_nama - 0.5 * mm)
+    _teks_muat(c, f"NIP {ttd.get('nip') or '-'}", tx, y_nip, f, uk_nip, lebar, 4.5, tengah=True)
+
+
 def _kop(c: canvas.Canvas, data: Dict[str, Any], x: float, y: float, w: float, h: float, judul: str, logo) -> float:
     """Kop kartu peserta; mengembalikan y garis bawah kop."""
     f, fb = _FONT['biasa'], _FONT['tebal']
@@ -193,19 +296,10 @@ def _kartu_peserta(c: canvas.Canvas, data: Dict[str, Any], ruang: Dict[str, Any]
         else:
             _teks_muat(c, str(nilai), vx, yy, fb if label == 'No. Peserta' else f, 9 if label == 'No. Peserta' else 7.5, lebar_nilai, 5.5)
         yy -= 4.6 * mm
-    # Tanda tangan Ketua Panitia.
-    ketua = data.get('ketua') or {}
-    tx = x + w - 24 * mm
-    c.setFont(f, 7)
-    c.drawCentredString(tx, y + 15.5 * mm, 'Ketua Panitia,')
-    nama_ketua = ketua.get('nama') or '.' * 30
-    _teks_muat(c, nama_ketua, tx, y + 5.5 * mm, fb, 7, 42 * mm, 5, tengah=True)
-    if ketua.get('nama'):
-        lebar = pdfmetrics.stringWidth(nama_ketua, fb, _ukuran_muat(nama_ketua, fb, 7, 42 * mm, 5))
-        c.setLineWidth(0.4)
-        c.line(tx - lebar / 2, y + 5 * mm, tx + lebar / 2, y + 5 * mm)
-    c.setFont(f, 6.5)
-    c.drawCentredString(tx, y + 2.5 * mm, f"NIP {ketua.get('nip') or '-'}")
+    # Tanda tangan (Ketua Panitia / Kepala Madrasah / tanpa).
+    ttd = ttd_data(data, 'peserta')
+    if ttd:
+        _blok_ttd(c, ttd, x + w - 24 * mm, y, 42 * mm)
     c.setFont(f, 5.5)
     c.drawString(x + 4 * mm, y + 3 * mm, '*Kartu wajib dibawa selama ujian')
 
@@ -251,8 +345,12 @@ def _kartu_meja(c: canvas.Canvas, data: Dict[str, Any], ruang: Dict[str, Any], p
     if nisn:
         c.setFont(f, 7)
         c.drawCentredString(tengah, ny - (len(baris) - 1) * (uk + 1.5) - 4 * mm, f'NISN {nisn}')
-    # Kotak kelas & ruang.
-    kw, kh = (w - 10 * mm) / 2, 9.5 * mm
+    # Kotak kelas & ruang (menyempit ke kiri bila ada blok tanda tangan di kanan).
+    ttd = ttd_data(data, 'meja')
+    lebar_ttd = 38 * mm if ttd else 0
+    if ttd:
+        _blok_ttd(c, ttd, x + w - 2 * mm - lebar_ttd / 2, y, lebar_ttd - 2 * mm, kecil=True)
+    kw, kh = (w - 10 * mm - lebar_ttd) / 2, 9.5 * mm
     for i, (label, nilai) in enumerate((('KELAS', p.get('kelas') or '-'), ('RUANG', ruang.get('nama_ruang') or '-'))):
         kx = x + 4 * mm + i * (kw + 2 * mm)
         c.setLineWidth(0.6)
@@ -296,6 +394,18 @@ def pdf_kartu(jenis: str, data: Dict[str, Any]) -> bytes:
         c.drawCentredString(LEBAR_HAL / 2, TINGGI_HAL / 2, 'Belum ada peserta pada ruang yang dipilih.')
     c.save()
     return buf.getvalue()
+
+
+def ringkas_kepala(akun: Optional[Dict[str, Any]], pengaturan: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """{nama, nip} Kepala Madrasah: nama dari Pengaturan (headmaster_name) atau akun kepala madrasah; NIP dari daftar
+    pimpinan di Pengaturan atau akun (aturan tampil NIP). None bila tidak ada keduanya."""
+    a = akun or {}
+    nama = pengaturan.get('headmaster_name') or a.get('full_name') or a.get('username')
+    if not nama:
+        return None
+    nip = next((x.get('nip') for x in pengaturan.get('leadership') or []
+                if 'kepala' in (x.get('position') or '').lower() and x.get('nip')), None)
+    return {'nama': nama, 'nip': nip or nip_tampil(None, a) or str(a.get('nipm') or '').strip() or ''}
 
 
 def ringkas_ketua(akun: Dict[str, Any], panitia: Dict[str, Any]) -> Dict[str, str]:

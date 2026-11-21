@@ -75,7 +75,8 @@ def test_cetak_kartu_per_ruang_dan_semua_ruang(klien, monkeypatch):
     jenis, data = tangkap[-1]
     assert jenis == 'peserta' and [x['nama_ruang'] for x in data['ruang']] == ['01']
     assert [p['nomor_peserta'] for p in data['ruang'][0]['peserta']][:3] == ['01-001', '01-002', '01-003']  # urut nomor
-    assert data['ketua']['nip'] == '198001012005012001' and data['template']['singkatan_ujian'] and data['tahun_pelajaran']
+    assert data['ttd']['nip'] == '198001012005012001' and data['ttd']['jabatan'] == 'Ketua Panitia'
+    assert data['template']['singkatan_ujian'] and data['tahun_pelajaran']
 
     # Semua ruang: tiap ruang mulai halaman baru (01: 2 halaman, 02: 1 halaman).
     r = klien('admin', 'admin', 'GET', '/ujian/uas/kartu/meja')
@@ -177,3 +178,157 @@ def test_siapkan_foto_potong_3x4_dan_tolak_rusak():
                                          {'nomor_peserta': '01-002', 'nama': 'B', 'kelas': '7A', 'foto': None}]}]}
     for jenis in uk.JENIS_KARTU:
         assert uk.pdf_kartu(jenis, data).startswith(b'%PDF')
+
+
+def _png_ttd(latar=(255, 255, 255, 255), goresan=True, ukuran=(600, 200)):
+    import io
+
+    from PIL import Image, ImageDraw
+    im = Image.new('RGBA', ukuran, latar)
+    if goresan:
+        ImageDraw.Draw(im).line([(40, 150), (200, 40), (380, 160), (560, 60)], fill=(10, 10, 60, 255), width=8)
+    b = io.BytesIO()
+    im.save(b, 'PNG')
+    return b.getvalue()
+
+
+def test_olah_ttd_unggahan_latar_putih_jadi_transparan():
+    import io
+
+    from PIL import Image
+    png = uk.olah_ttd_unggahan(_png_ttd())
+    with Image.open(io.BytesIO(png)) as im:
+        assert im.mode == 'RGBA' and im.getpixel((0, 0))[3] == 0  # latar putih -> transparan, tepi dipangkas
+        assert max(im.size) <= max(uk.TTD_SIMPAN_MAKS) and im.getchannel('A').getbbox()
+    for salah, pesan in ((b'bukan png', 'PNG'), (_gambar((255, 255, 255), fmt='JPEG'), 'PNG'), (_png_ttd(goresan=False), 'kosong'),
+                         (b'\x89PNG\r\n\x1a\n' + b'0' * (uk.TTD_UNGGAH_MAKS_BYTE + 1), '2 MB'), (b'\x89PNG\r\n\x1a\nrusak', 'terbaca')):
+        with pytest.raises(ValueError, match=pesan):
+            uk.olah_ttd_unggahan(salah)
+
+
+def test_pilihan_ttd_ketua_atau_kepala_dan_unggah_png(klien, monkeypatch):
+    import routers.ujian_kartu as rk
+    db = klien.db
+    db.settings.docs.append({'id': 'global_config', 'headmaster_name': 'H. Kepala Madrasah, M.Pd.',
+                             'leadership': [{'position': 'Kepala Madrasah', 'nip': '197001011995031001'}]})
+    d = klien('guru1', 'guru', 'GET', '/ujian/uas/kartu/pilihan').json()
+    assert d['ttd_bawaan'] == 'ketua' and d['boleh_ubah_ttd'] is True
+    assert d['penanda']['ketua'] == {'jabatan': 'Ketua Panitia', 'nama': 'Bu Siti', 'nip': '198001012005012001', 'ttd': None, 'stempel': None}
+    kepala = {'jabatan': 'Kepala Madrasah', 'nama': 'H. Kepala Madrasah, M.Pd.', 'nip': '197001011995031001', 'ttd': None, 'stempel': None}
+    assert d['penanda']['kepala'] == kepala
+    meja = klien('tu1', 'tenaga_kependidikan', 'GET', '/ujian/uas/kartu/pilihan', params={'jenis': 'meja'}).json()
+    assert meja['ttd_bawaan'] == 'tanpa' and meja['boleh_ubah_ttd'] is False
+
+    # Unggah: ketua panitia boleh; bendahara & guru lain ditolak; berkas salah 400.
+    berkas = {'berkas': ('ttd.png', _png_ttd(), 'image/png')}
+    r = klien('guru1', 'guru', 'POST', '/ujian/uas/kartu/ttd/kepala', files=berkas)
+    assert r.status_code == 200, r.text
+    assert r.json()['ttd']['diunggah_oleh_nama'] == 'Bu Siti' and r.json()['ttd']['ukuran'] > 0
+    assert klien('tu1', 'tenaga_kependidikan', 'POST', '/ujian/uas/kartu/ttd/ketua', files=berkas).status_code == 403
+    assert klien('guru2', 'guru', 'POST', '/ujian/uas/kartu/ttd/ketua', files=berkas).status_code == 403
+    r = klien('admin', 'admin', 'POST', '/ujian/uas/kartu/ttd/ketua', files={'berkas': ('t.jpg', _gambar((0, 0, 0), fmt='JPEG'), 'image/jpeg')})
+    assert r.status_code == 400 and 'PNG' in r.json()['detail']
+    assert klien('admin', 'admin', 'POST', '/ujian/uas/kartu/ttd/lain', files=berkas).status_code == 422
+    assert klien('kamad', 'kepala_sekolah', 'POST', '/ujian/uas/kartu/ttd/ketua', files=berkas).status_code == 200
+
+    d = klien('tu1', 'tenaga_kependidikan', 'GET', '/ujian/uas/kartu/pilihan').json()
+    assert d['penanda']['kepala']['ttd']['diunggah_oleh_nama'] == 'Bu Siti' and d['penanda']['ketua']['ttd']
+    r = klien('tu1', 'tenaga_kependidikan', 'GET', '/ujian/uas/kartu/ttd/kepala')
+    assert r.status_code == 200 and r.headers['content-type'] == 'image/png' and r.content.startswith(b'\x89PNG')
+    assert klien('guru2', 'guru', 'GET', '/ujian/uas/kartu/ttd/kepala').status_code == 403
+
+    # Cetak memakai penanda pilihan beserta gambar tanda tangannya.
+    tangkap = []
+    asli = rk.pdf_kartu
+    monkeypatch.setattr(rk, 'pdf_kartu', lambda jenis, data: tangkap.append((jenis, data)) or asli(jenis, data))
+    url = f"/ujian/uas/kartu/peserta?ruang_id={klien.r1['id']}"
+    assert klien('admin', 'admin', 'GET', url).status_code == 200
+    ttd = tangkap[-1][1]['ttd']
+    assert (ttd['jabatan'], ttd['nama']) == ('Ketua Panitia', 'Bu Siti') and ttd['png'].startswith(b'\x89PNG')
+    assert klien('admin', 'admin', 'GET', url + '&ttd=kepala').status_code == 200
+    ttd = tangkap[-1][1]['ttd']
+    assert (ttd['jabatan'], ttd['nama'], ttd['nip']) == ('Kepala Madrasah', 'H. Kepala Madrasah, M.Pd.', '197001011995031001') and ttd['png']
+    klien('admin', 'admin', 'GET', url + '&ttd=tanpa')
+    assert tangkap[-1][1]['ttd'] is None
+    klien('admin', 'admin', 'GET', f"/ujian/uas/kartu/meja?ruang_id={klien.r1['id']}")
+    assert tangkap[-1][1]['ttd'] is None  # kartu meja bawaan tanpa tanda tangan
+    r = klien('admin', 'admin', 'GET', f"/ujian/uas/kartu/meja?ruang_id={klien.r1['id']}&ttd=kepala")
+    assert r.status_code == 200 and tangkap[-1][1]['ttd']['jabatan'] == 'Kepala Madrasah'
+    assert klien('admin', 'admin', 'GET', url + '&ttd=lain').status_code == 422
+
+    # Hapus: kembali ruang tanda tangan kosong.
+    assert klien('guru1', 'guru', 'DELETE', '/ujian/uas/kartu/ttd/kepala').status_code == 200
+    assert klien('tu1', 'tenaga_kependidikan', 'DELETE', '/ujian/uas/kartu/ttd/ketua').status_code == 403
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/kartu/ttd/kepala').status_code == 404
+    klien('admin', 'admin', 'GET', url + '&ttd=kepala')
+    assert tangkap[-1][1]['ttd']['png'] is None
+    aksi = [a['action'] for a in db.audit_logs.docs if a['action'].startswith('ujian_kartu_ttd')]
+    assert aksi == ['ujian_kartu_ttd_unggah', 'ujian_kartu_ttd_unggah', 'ujian_kartu_ttd_hapus']
+
+
+def test_kepala_dari_akun_bila_pengaturan_kosong(klien):
+    d = klien('admin', 'admin', 'GET', '/ujian/uas/kartu/pilihan').json()
+    assert d['penanda']['kepala'] == {'jabatan': 'Kepala Madrasah', 'nama': 'Pak Kamad', 'nip': 'NIP-kamad', 'ttd': None, 'stempel': None}
+    assert uk.ringkas_kepala(None, {}) is None
+
+
+def test_pdf_kartu_dengan_ttd_png_dan_tanpa_ttd():
+    png = uk.olah_ttd_unggahan(_png_ttd())
+    peserta = [{'nomor_peserta': '01-001', 'nama': 'Ahmad', 'kelas': '7A', 'nisn': '1', 'foto': None}]
+    for jenis in uk.JENIS_KARTU:
+        for ttd in ({'jabatan': 'Kepala Madrasah', 'nama': 'H. A', 'nip': '1', 'png': png},
+                    {'jabatan': 'Ketua Panitia', 'nama': '', 'nip': '', 'png': None, 'stempel': png},
+                    {'jabatan': 'X', 'png': b'rusak', 'stempel': b'rusak'}, None):
+            data = {'template': {}, 'tahun_pelajaran': '2026/2027', 'ttd': ttd, 'foto': jenis == 'meja',
+                    'ruang': [{'nama_ruang': '01', 'peserta': peserta}]}
+            assert uk.pdf_kartu(jenis, data).startswith(b'%PDF')
+    assert uk.ttd_data({'ketua': {'nama': 'B'}}, 'peserta') == {'jabatan': 'Ketua Panitia', 'nama': 'B'}
+    assert uk.ttd_data({}, 'meja') is None and uk.ttd_data({'ttd': None}, 'peserta') is None
+
+
+def test_stempel_png_kartu(klien, monkeypatch):
+    """Stempel PNG per penanda: diunggah/dihapus terpisah dari tanda tangan, sedikit transparan, ikut tercetak kecuali
+    ?stempel=tanpa."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    import routers.ujian_kartu as rk
+    im = Image.new('RGB', (400, 400), 'white')
+    ImageDraw.Draw(im).ellipse((20, 20, 380, 380), outline=(90, 40, 160), width=18)
+    b = io.BytesIO()
+    im.save(b, 'PNG')
+    cap = b.getvalue()
+
+    r = klien('guru1', 'guru', 'POST', '/ujian/uas/kartu/stempel/ketua', files={'berkas': ('cap.png', cap, 'image/png')})
+    assert r.status_code == 200, r.text
+    assert r.json()['berkas'] == 'stempel' and r.json()['stempel']['ukuran'] > 0
+    d = klien('admin', 'admin', 'GET', '/ujian/uas/kartu/pilihan').json()['penanda']['ketua']
+    assert d['stempel']['diunggah_oleh_nama'] == 'Bu Siti' and d['ttd'] is None  # TTD & stempel terpisah
+    png = klien('admin', 'admin', 'GET', '/ujian/uas/kartu/stempel/ketua').content
+    with Image.open(io.BytesIO(png)) as hasil:
+        alfa = hasil.getchannel('A')
+        assert hasil.getpixel((0, 0))[3] == 0 and alfa.getextrema()[1] <= int(255 * 0.85) + 1  # latar transparan, tinta agak tembus
+    assert klien('tu1', 'tenaga_kependidikan', 'POST', '/ujian/uas/kartu/stempel/ketua', files={'berkas': ('cap.png', cap, 'image/png')}).status_code == 403
+    r = klien('admin', 'admin', 'POST', '/ujian/uas/kartu/stempel/kepala', files={'berkas': ('c.png', _png_ttd(goresan=False), 'image/png')})
+    assert r.status_code == 400 and 'Stempel masih kosong' in r.json()['detail']
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/kartu/stempel/kepala').status_code == 404
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/kartu/lain/ketua').status_code == 422
+
+    tangkap = []
+    asli = rk.pdf_kartu
+    monkeypatch.setattr(rk, 'pdf_kartu', lambda jenis, data: tangkap.append(data) or asli(jenis, data))
+    url = f"/ujian/uas/kartu/peserta?ruang_id={klien.r1['id']}"
+    assert klien('admin', 'admin', 'GET', url).status_code == 200
+    assert tangkap[-1]['ttd']['stempel'].startswith(b'\x89PNG') and tangkap[-1]['ttd']['png'] is None
+    klien('admin', 'admin', 'GET', url + '&stempel=tanpa')
+    assert tangkap[-1]['ttd']['stempel'] is None
+    klien('admin', 'admin', 'GET', url + '&ttd=kepala')
+    assert tangkap[-1]['ttd']['stempel'] is None  # stempel milik ketua tidak dipakai untuk kepala
+    assert klien('admin', 'admin', 'GET', url + '&stempel=lain').status_code == 422
+
+    assert klien('guru1', 'guru', 'DELETE', '/ujian/uas/kartu/stempel/ketua').json() == {'penanda': 'ketua', 'berkas': 'stempel', 'stempel': None}
+    klien('admin', 'admin', 'GET', url)
+    assert tangkap[-1]['ttd']['stempel'] is None
+    aksi = [a['action'] for a in klien.db.audit_logs.docs if a['action'].startswith('ujian_kartu_stempel')]
+    assert aksi == ['ujian_kartu_stempel_unggah', 'ujian_kartu_stempel_hapus']

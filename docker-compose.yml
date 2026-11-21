@@ -69,16 +69,19 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      # Proxy /api ke service backend di stack ini (dapat dioverride dari env Coolify).
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-http://backend:8000/api/}
     ports:
       - "8080:80"
     networks:
       - superapp-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ > /dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mongodb_data:
