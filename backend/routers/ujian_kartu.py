@@ -92,7 +92,8 @@ async def cetak_kartu(ujian_id: str, jenis: Literal['peserta', 'meja'], request:
     data = {**_dasar(ujian, formulir), 'ketua': await _ketua(ujian_id), 'ruang': isi_ruang, 'foto': OPSI_FOTO[foto]}
     isi = pdf_kartu(jenis, data)
     bagian = f"ruang_{pilih[0].get('nama_ruang')}" if ruang_id else 'semua_ruang'
-    nama = re.sub(r'_+', '_', re.sub(r'[^\w.-]+', '_', f"kartu_{jenis}_{ujian.get('nama') or 'ujian'}_{bagian}_{'dengan' if OPSI_FOTO[foto] else 'tanpa'}_foto")).strip('_') + '.pdf'
+    dasar = f"kartu_{jenis}_{ujian.get('nama') or 'ujian'}_{bagian}_{'dengan' if OPSI_FOTO[foto] else 'tanpa'}_foto"
+    nama = re.sub(r'_+', '_', re.sub(r'[^\w.-]+', '_', dasar)).strip('_') + '.pdf'
     await log_audit(user, 'ujian_cetak_kartu', KOLEKSI_RUANG, ruang_id or ujian_id, {
         'ujian_id': ujian_id, 'jenis': jenis, 'ruang_id': ruang_id or None, 'foto': foto,
         'peserta': sum(len(r['peserta']) for r in isi_ruang), 'dengan_foto': len(foto_siswa)}, request=request)
