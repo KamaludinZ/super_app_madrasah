@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import {
-  STATUS_SOAL, bolehKerjakan, ringkasPortal, soalJenjang, sorotanPortal, urlKerjakan,
+  STATUS_SOAL, bolehKerjakan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, urlKerjakan,
 } from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
@@ -14,7 +14,8 @@ const tglPanjang = (t) => formatWIB(t, 'Date', { weekday: 'long', day: 'numeric'
 
 /**
  * Waktu server sekarang (ms) dari `selisih` jam server − jam perangkat, diperbarui tiap `tiap` ms. Status mapel dihitung
- * dari nilai ini, bukan jam perangkat, sehingga mengubah jam ponsel tidak mengubah status.
+ * dari nilai ini, bukan jam perangkat, sehingga mengubah jam ponsel tidak mengubah status. Halaman portal memakai detak
+ * 1 detik saat batas waktu mapel sudah dekat (hitung mundur menit:detik) dan 15 detik selebihnya.
  */
 export function useJamServer(selisih, tiap = 15000) {
   const [kini, setKini] = useState(() => Date.now() + selisih);
@@ -32,8 +33,11 @@ const GAYA_STATUS = {
   ditutup: 'text-slate-500',
 };
 
-/** Keterangan status satu mapel di bawah namanya (jam buka/tutup menurut jam server). */
-function KeteranganStatus({ soal, testId }) {
+/**
+ * Keterangan status satu mapel di bawah namanya: jam buka/tutup menurut jam server dan hitung mundurnya — menuju jam
+ * mulai bila belum dimulai, menuju jam tutup bila sedang berlangsung.
+ */
+function KeteranganStatus({ soal, sekarangMs, testId }) {
   if (!soal.siap) {
     return (
       <p className="inline-flex items-center gap-1 text-xs text-slate-500" data-testid={testId} data-status="belum_siap">
@@ -46,9 +50,15 @@ function KeteranganStatus({ soal, testId }) {
     belum_dimulai: `dibuka ${jam(soal.mulai_at)} WIB`,
     ditutup: null,
   }[soal.status];
+  const mundur = hitungMundurSoal(soal, sekarangMs);
   return (
     <p className={`text-xs ${GAYA_STATUS[soal.status]}`} data-testid={testId} data-status={soal.status}>
       <span className="font-semibold">{STATUS_SOAL[soal.status].label}</span>{rincian && <> · {rincian}</>}
+      {mundur?.teks && (
+        <span className="whitespace-nowrap" data-testid={`${testId}-mundur`} data-menuju={mundur.menuju}>
+          {' · '}{mundur.menuju === 'selesai' ? 'sisa ' : ''}<span className="font-semibold tabular-nums">{mundur.teks}</span>{mundur.menuju === 'mulai' ? ' lagi' : ''}
+        </span>
+      )}
     </p>
   );
 }
@@ -61,7 +71,7 @@ function KeteranganStatus({ soal, testId }) {
 function TombolKerjakan({ soal, token, tiruan, testId }) {
   if (!soal.siap) return null;
   if (!bolehKerjakan(soal)) {
-    const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Dibuka ${jam(soal.mulai_at)} WIB`;
+    const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Belum dimulai — dibuka ${jam(soal.mulai_at)} WIB`;
     return (
       <Button type="button" size="sm" variant="outline" disabled title={alasan} aria-label={`Mengerjakan ${soal.nama} — ${alasan.toLowerCase()}`}
         className="h-9 gap-1.5 px-3" data-testid={testId} data-aktif="tidak">
@@ -84,7 +94,7 @@ function TombolKerjakan({ soal, token, tiruan, testId }) {
   );
 }
 
-function Sorotan({ sorotan, hariIni }) {
+function Sorotan({ sorotan, hariIni, sekarangMs }) {
   if (!sorotan) return null;
   const berlangsung = sorotan.status === 'berlangsung';
   return (
@@ -95,20 +105,24 @@ function Sorotan({ sorotan, hariIni }) {
         <div className={`text-xs font-semibold uppercase tracking-wide ${berlangsung ? 'text-emerald-100' : 'text-[#006837]'}`}>
           {berlangsung ? 'Sedang berlangsung' : 'Ujian berikutnya'}
         </div>
-        {sorotan.soal.map((s) => (
-          <div key={s.id}>
-            <span className="font-bold">{s.nama}</span>
-            <span className={`text-xs ${berlangsung ? 'text-emerald-50' : 'text-slate-600'}`}>
-              {' · '}{berlangsung ? `sampai ${jam(s.selesai_at)} WIB` : `${s.tanggal === hariIni ? 'hari ini' : tglPanjang(s.tanggal)}, ${jam(s.mulai_at)} WIB`}
-            </span>
-          </div>
-        ))}
+        {sorotan.soal.map((s) => {
+          const mundur = hitungMundurSoal(s, sekarangMs);
+          return (
+            <div key={s.id}>
+              <span className="font-bold">{s.nama}</span>
+              <span className={`text-xs ${berlangsung ? 'text-emerald-50' : 'text-slate-600'}`}>
+                {' · '}{berlangsung ? `sampai ${jam(s.selesai_at)} WIB` : `${s.tanggal === hariIni ? 'hari ini' : tglPanjang(s.tanggal)}, ${jam(s.mulai_at)} WIB`}
+                {mundur?.teks && <> · {berlangsung ? 'sisa ' : ''}<span className="font-semibold tabular-nums">{mundur.teks}</span>{berlangsung ? '' : ' lagi'}</>}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function BarisSoal({ soal, jenjang, token, tiruan }) {
+function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs }) {
   const redup = soal.status === 'ditutup' || !soal.siap;
   const berlangsung = soal.siap && soal.status === 'berlangsung';
   return (
@@ -120,7 +134,7 @@ function BarisSoal({ soal, jenjang, token, tiruan }) {
       </div>
       <div className={`min-w-0 flex-1 ${redup ? 'opacity-70' : ''}`}>
         <div className="text-sm font-semibold text-slate-900">{soal.nama}</div>
-        <KeteranganStatus soal={soal} testId={`portal-${jenjang}-${soal.mapel}-status`} />
+        <KeteranganStatus soal={soal} sekarangMs={sekarangMs} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
       <div className="shrink-0">
         <TombolKerjakan soal={soal} token={token} tiruan={tiruan} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
@@ -142,7 +156,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
   }
   return (
     <>
-      <Sorotan sorotan={sorotan} hariIni={hariIni} />
+      <Sorotan sorotan={sorotan} hariIni={hariIni} sekarangMs={sekarangMs} />
       {!sorotan && <p className="mb-3 text-xs text-slate-500" data-testid="portal-selesai">Seluruh ujian {labelJenjang(jenjang)} sudah ditutup.</p>}
       <ol className="space-y-3" data-testid={`portal-jenjang-${jenjang}`}>
         {hari.map((h) => {
@@ -156,7 +170,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
                 {lewat && <span className="text-[11px] text-slate-500">Sudah lewat</span>}
               </div>
               <ul className="divide-y divide-slate-100">
-                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} />)}
+                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} sekarangMs={sekarangMs} />)}
               </ul>
             </li>
           );

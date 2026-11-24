@@ -8,13 +8,15 @@ import DaftarSoalPortal, { useJamServer } from '@/components/ujian/publik/portal
 import { formatWIB } from '@/lib/datetime';
 import { JENJANG_UJIAN } from '@/lib/mapelUjian';
 import { bersihkanToken, galatTautanInfo, msSampai } from '@/lib/ujianInfoPublik';
-import { buatSesi, muatPortalPublik, selisihJamServer } from '@/lib/ujianPortalPublik';
+import { batasBerikutAt, buatSesi, muatPortalPublik, selisihJamServer } from '@/lib/ujianPortalPublik';
 
 const JUDUL = 'Portal Ujian';
 const KUNCI_JENJANG = 'portalUjian:jenjang';
 const SEGARKAN_MS = 60 * 1000; // status & tautan mapel dimuat ulang otomatis tiap menit selama halaman terbuka
 const MUAT_OTOMATIS_MAKS_MS = 12 * 60 * 60 * 1000;
 const PERIKSA_DITUTUP_MS = 2 * 60 * 1000; // portal ditutup sementara: periksa ulang otomatis
+const DETAK_RAPAT_MS = 10 * 60 * 1000; // batas mapel ≤ 10 menit lagi: jam berdetak tiap detik (hitung mundur menit:detik)
+const SUSUL_BATAS_MS = 1500; // muat ulang dari server sesaat setelah mapel dibuka/ditutup agar status dikonfirmasi server
 
 const jenjangSah = (v) => (JENJANG_UJIAN.includes(Number(v)) ? Number(v) : null);
 function jenjangAwal(param) {
@@ -50,7 +52,11 @@ export default function PublikPortalUjianPage() {
   const adaData = useRef(false);
   const sesi = useRef(null); // satu id per pembukaan halaman (log akses)
   if (!sesi.current) sesi.current = buatSesi();
-  const sekarangMs = useJamServer(selisih);
+  const [detak, setDetak] = useState(15000);
+  const sekarangMs = useJamServer(selisih, detak);
+  const batasAt = data ? batasBerikutAt(data.soal, sekarangMs) : null;
+  const detakBaru = batasAt !== null && batasAt - sekarangMs <= DETAK_RAPAT_MS ? 1000 : 15000;
+  useEffect(() => { setDetak(detakBaru); }, [detakBaru]);
 
   // `diam` = muat ulang latar: galat koneksi tidak mengganti tampilan yang sudah ada.
   const muat = useCallback((diam = false) => {
@@ -75,6 +81,16 @@ export default function PublikPortalUjianPage() {
     const t = setInterval(() => muat(true), SEGARKAN_MS);
     return () => clearInterval(t);
   }, [data, tautanGalat, muat]);
+
+  // Tepat setelah satu mapel dibuka/ditutup (menurut jam server), status dimuat ulang dari server: tampilan lokal hanya
+  // perkiraan dari selisih jam, server yang menentukan.
+  useEffect(() => {
+    if (batasAt === null) return undefined;
+    const ms = batasAt - (Date.now() + selisih);
+    if (ms > MUAT_OTOMATIS_MAKS_MS) return undefined;
+    const t = setTimeout(() => muat(true), Math.max(0, ms) + SUSUL_BATAS_MS);
+    return () => clearTimeout(t);
+  }, [batasAt, selisih, muat]);
 
   useEffect(() => {
     if (tautanGalat?.alasan !== 'belum_mulai') return undefined;

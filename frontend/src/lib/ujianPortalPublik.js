@@ -78,6 +78,42 @@ export function statusSoal(soal, sekarangMs) {
   return 'ditutup';
 }
 
+/** Durasi ringkas: "3 hari", "2 jam 15 menit", "45 menit", atau "4:05" (menit:detik) di bawah 10 menit; null bila ≤ 0. */
+export function teksDurasi(ms) {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
+  const detik = Math.ceil(ms / 1000);
+  if (detik < 10 * 60) return `${Math.floor(detik / 60)}:${String(detik % 60).padStart(2, '0')}`;
+  const menit = Math.floor(detik / 60);
+  const jam = Math.floor(menit / 60);
+  if (jam >= 48) return `${Math.floor(jam / 24)} hari`;
+  if (jam >= 1) return `${jam} jam${menit % 60 ? ` ${menit % 60} menit` : ''}`;
+  return `${menit} menit`;
+}
+
+/** Hitung mundur satu mapel pada waktu server `sekarangMs` -> { menuju: 'mulai' | 'selesai', ms, teks } atau null bila sudah ditutup. */
+export function hitungMundurSoal(soal, sekarangMs) {
+  const status = statusSoal(soal, sekarangMs);
+  if (status === 'ditutup') return null;
+  const menuju = status === 'belum_dimulai' ? 'mulai' : 'selesai';
+  const target = parseServerDate(menuju === 'mulai' ? soal.mulai_at : soal.selesai_at)?.getTime();
+  if (!Number.isFinite(target)) return null;
+  const ms = target - sekarangMs;
+  return { menuju, ms, teks: teksDurasi(ms) };
+}
+
+/**
+ * Batas waktu terdekat SESUDAH `sekarangMs` (mulai/selesai mapel mana pun) dalam ms waktu server, atau null. Dipakai
+ * untuk memuat ulang dari server tepat saat status berganti dan mempercepat detak jam ketika batas sudah dekat.
+ */
+export function batasBerikutAt(soal, sekarangMs) {
+  let hasil = null;
+  (soal || []).forEach((s) => [s.mulai_at, s.selesai_at].forEach((w) => {
+    const t = parseServerDate(w)?.getTime();
+    if (Number.isFinite(t) && t > sekarangMs && (hasil === null || t < hasil)) hasil = t;
+  }));
+  return hasil;
+}
+
 // ---- Susunan per jenjang ----
 
 const msWaktu = (iso) => parseServerDate(iso)?.getTime() ?? Infinity;
@@ -147,14 +183,16 @@ export function bersihkanSoalPublik(soal) {
 // ---- Data tiruan (dipakai selama endpoint backend belum ada) ----
 // Token contoh: contoh-ditutup, contoh-belum-mulai, contoh-berakhir, contoh-salah (portal tidak dapat dibuka),
 // contoh-kosong (portal terbuka tetapi jendela pengerjaan belum disusun). Jendela hari ini disusun relatif terhadap
-// jam sekarang: satu mapel sudah ditutup, satu berlangsung, satu menyusul hari ini; sisanya pada hari-hari berikutnya.
+// jam saat halaman pertama dibuka (JANGKAR_CONTOH, tetap selama tab terbuka agar hitung mundur benar-benar habis):
+// satu mapel sudah ditutup, satu berlangsung dan ditutup ±3 menit lagi, satu dibuka ±5 menit lagi, satu menyusul
+// siang hari; sisanya pada hari-hari berikutnya.
 const MENIT = 60 * 1000;
-const bulatkan5Menit = (ms) => Math.floor(ms / (5 * MENIT)) * 5 * MENIT;
+const JANGKAR_CONTOH = Math.floor(Date.now() / MENIT) * MENIT;
 const iso = (ms) => new Date(ms).toISOString();
 
 function soalTiruan() {
-  const kini = bulatkan5Menit(Date.now());
-  const hariIni = [[-150, -60], [-30, 60], [90, 180]]; // menit relatif terhadap sekarang
+  const kini = JANGKAR_CONTOH;
+  const hariIni = [[-150, -90], [-60, 3], [5, 95], [120, 210]]; // menit relatif terhadap jangkar
   const jamBesok = [['07:30', '09:00'], ['09:30', '11:00']];
   const hasil = [];
   JENJANG_UJIAN.forEach((j, ji) => {
