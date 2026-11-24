@@ -206,3 +206,13 @@ def test_rute_info_dan_monitoring_tidak_menyentuh_link_soal():
         teks = (backend / f).read_text(encoding='utf-8')
         for terlarang in ('ujian_link_soal', 'KOLEKSI_LINK_SOAL', 'ujian_portal', 'url_soal'):
             assert terlarang not in teks, (f, terlarang)
+
+
+def test_tautan_tidak_sah_ditandai_belum_siap(klien):
+    """Dokumen lama/hasil impor dengan tautan bukan http(s) tidak pernah dianggap siap — dan bukan "ditahan" (tidak ada
+    tautan sah untuk dibuka) — sehingga tombol tidak tampil."""
+    klien.db.ujian_link_soal.docs[0]['url'] = 'javascript:alert(document.cookie)'
+    s = {(x['jenjang'], x['mapel']): x for x in get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()['soal']}
+    m = s[(7, 'matematika')]
+    assert (m['status'], m['siap'], m['ditahan']) == ('berlangsung', False, False)
+    assert (s[(9, 'pkn')]['siap'], s[(9, 'pkn')]['ditahan']) == (False, True)  # tautan sah + dimatikan admin = ditahan
