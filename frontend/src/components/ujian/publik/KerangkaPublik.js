@@ -6,29 +6,33 @@ export const teksSesi = (sesi) => (sesi
   ? `${formatWIB(sesi.tanggal, 'Date', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · Sesi ${sesi.sesi_ke} · ${sesi.jam_mulai}–${sesi.jam_selesai} WIB`
   : null);
 
-/** Kerangka halaman publik ujian (tanpa login): kop madrasah, judul formulir, nama ujian, dan sesi aktif. */
-export default function KerangkaPublik({ info, judul, children }) {
+/**
+ * Kerangka halaman publik ujian (tanpa login): kop madrasah, judul formulir, nama ujian, dan sesi aktif.
+ * `lebar` = true melebarkan isi untuk halaman dua kolom di layar besar (default: satu kolom sempit untuk formulir).
+ */
+export default function KerangkaPublik({ info, judul, lebar = false, children }) {
   const m = info?.madrasah;
+  const kolom = lebar ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl';
   return (
     <div className="min-h-screen bg-[#FBF7EE]">
       <header className="border-b border-emerald-900/10 bg-[#006837] text-white">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-4">
+        <div className={`mx-auto flex ${kolom} items-center gap-3 px-4 py-4`}>
           {m?.logo_url && <img src={m.logo_url} alt="" className="h-10 w-10 shrink-0 rounded bg-white/95 object-contain p-0.5" />}
           <div className="min-w-0">
             <div className="truncate text-xs font-medium text-emerald-100">{m?.nama || 'Madrasah'}</div>
             <h1 className="text-base font-bold leading-tight sm:text-lg">{judul}</h1>
-            {info?.ujian && <div className="truncate text-xs text-emerald-100">{info.ujian.nama}{info.ujian.tahun_pelajaran ? ` · TP ${info.ujian.tahun_pelajaran}` : ''}</div>}
+            {info?.ujian && <div className="line-clamp-2 text-xs text-emerald-100">{info.ujian.nama}{info.ujian.tahun_pelajaran ? ` · TP ${info.ujian.tahun_pelajaran}` : ''}</div>}
           </div>
         </div>
         {info?.sesi && (
           <div className="border-t border-white/10 bg-black/10">
-            <p className="mx-auto flex max-w-2xl items-center gap-2 px-4 py-2 text-xs text-emerald-50" data-testid="publik-sesi">
+            <p className={`mx-auto flex ${kolom} items-center gap-2 px-4 py-2 text-xs text-emerald-50`} data-testid="publik-sesi">
               <CalendarClock className="h-3.5 w-3.5 shrink-0" /> {teksSesi(info.sesi)}
             </p>
           </div>
         )}
       </header>
-      <main className="mx-auto max-w-2xl space-y-4 px-4 py-5 pb-16">{children}</main>
+      <main className={`mx-auto ${kolom} space-y-4 px-4 py-5 pb-16`}>{children}</main>
     </div>
   );
 }

@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from core import db, get_active_context, get_current_user, log_audit
+from core import db, get_active_context, get_current_user, log_audit, logger
 from ujian import (
     JABATAN_PANITIA, JABATAN_PEMBUKA_ARSIP, KOLEKSI_FORMULIR, KOLEKSI_PANITIA, KOLEKSI_UJIAN, LABEL_JABATAN,
     PESAN_TOLAK_ARSIP, PROYEKSI_PEJABAT, STATUS_FORMULIR, PanitiaIn, UjianIn,
@@ -17,6 +17,7 @@ from ujian import (
     mungkin_panitia, perubahan_terakhir, ringkas_daftar_ujian, ringkas_formulir, ringkas_ujian, susunan_dari_dokumen,
     terapkan_susunan_panitia,
 )
+from ujian_info import inisialisasi_tautan
 
 router = APIRouter()
 
@@ -134,7 +135,16 @@ async def akses_saya(user: Dict = Depends(get_current_user)):
         'pimpinan': akses['pimpinan'],
         'jabatan': akses['jabatan'],
         'menu': menu_panitia_ujian(akses['pengelola'], akses['pimpinan'], akses['jabatan']),
+        'pj_berkas': await _pj_berkas_semester(user, ctx.get('semester_id')),
     }
+
+
+async def _pj_berkas_semester(user: Dict[str, Any], semester_id) -> bool:
+    """Menu "Unggah Berkas Soal": semua GTK (bukan akun siswa/kelas/orang tua/alumni/satpam) bila ada ujian pada semester
+    itu. Tidak ada penugasan PJ — nama guru PJ dipilih dari daftar guru saat mengisi formulir unggah."""
+    if not semester_id or not mungkin_panitia(user):
+        return False
+    return bool(await db[KOLEKSI_UJIAN].find_one({'semester_id': semester_id}, {'_id': 0, 'id': 1}))
 
 
 @router.get("/ujian/arsip-semester")
@@ -209,6 +219,10 @@ async def buat_ujian(body: UjianIn, request: Request, user: Dict = Depends(wajib
     doc = dokumen_ujian_baru(user, body, semester, tahun)
     await db[KOLEKSI_UJIAN].insert_one(dict(doc))
     await log_audit(user, 'ujian_buat', KOLEKSI_UJIAN, doc['id'], {'jenis': doc['jenis'], 'nama': doc['nama']}, request=request)
+    try:  # dua tautan publik (info & monitoring) langsung tersedia dalam keadaan ditutup; gagal di sini tidak membatalkan ujian
+        await inisialisasi_tautan(db, doc['id'], user)
+    except Exception as e:  # noqa: BLE001 — tautan tetap dibuat otomatis saat halaman Tautan Publik dibuka
+        logger.error(f'[ujian] gagal menyiapkan tautan publik ujian {doc["id"]}: {e}')
     return ringkas_ujian(doc, None, hari_ini_wib(), jam_wib())
 
 

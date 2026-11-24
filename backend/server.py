@@ -43,6 +43,11 @@ from routers import (
     ujian_pengawas,
     ujian_formulir,
     ujian_publik,
+    ujian_info_publik,
+    ujian_monitoring_publik,
+    ujian_mapel,
+    ujian_tautan_publik,
+    ujian_berkas,
     ujian_kehadiran,
     ujian_berita_acara,
     ujian_cetak,
@@ -155,6 +160,12 @@ api_router.include_router(ujian_ruang.router)
 api_router.include_router(ujian_pengawas.router)
 api_router.include_router(ujian_formulir.router)
 api_router.include_router(ujian_publik.router)
+api_router.include_router(ujian_info_publik.router)
+api_router.include_router(ujian_monitoring_publik.router)
+api_router.include_router(ujian_mapel.router)
+api_router.include_router(ujian_tautan_publik.router)
+api_router.include_router(ujian_berkas.router)
+api_router.include_router(ujian_berkas.router_unggah)  # unggah: tolak dini permintaan > 10 MB
 api_router.include_router(ujian_kehadiran.router)
 api_router.include_router(ujian_berita_acara.router)
 api_router.include_router(ujian_cetak.router)
@@ -247,8 +258,8 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
-    # Nama berkas & jumlah baris unduhan Excel perlu terbaca frontend lintas origin.
-    expose_headers=["Content-Disposition", "X-Jumlah-Data"],
+    # Nama berkas, jumlah baris unduhan Excel, & penghitung unduhan kisi-kisi publik perlu terbaca frontend lintas origin.
+    expose_headers=["Content-Disposition", "X-Jumlah-Data", "X-Jumlah-Unduh"],
 )
 
 # Security Headers Middleware - Production Hardening
@@ -430,6 +441,16 @@ async def startup_event():
         asyncio.create_task(jalankan_semua(db))
     except Exception as e:
         logger.error(f"Failed to start automatic migrations: {e}")
+
+    # Berkas ujian yatim (sisa unggah yang terputus): dibersihkan di latar belakang, tidak menahan startup.
+    async def _bersihkan_berkas_ujian():
+        try:
+            from ujian_berkas import bersihkan_berkas_yatim
+            await asyncio.sleep(30)
+            await bersihkan_berkas_yatim(db)
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Gagal membersihkan berkas ujian yatim: {e}")
+    asyncio.create_task(_bersihkan_berkas_ujian())
 
     # Start background tasks (both dev and production)
     try:

@@ -124,8 +124,16 @@ import UjianCetakArsipPage from '@/pages/ujian/UjianCetakArsipPage';
 import UjianKartuPage from '@/pages/ujian/UjianKartuPage';
 import UjianBeritaAcaraPage from '@/pages/ujian/UjianBeritaAcaraPage';
 import UjianNilaiPage from '@/pages/ujian/UjianNilaiPage';
+import UjianTautanPublikPage from '@/pages/ujian/UjianTautanPublikPage';
+import UjianUnggahBerkasPage from '@/pages/ujian/UjianUnggahBerkasPage';
+import UjianBerkasSoalPage from '@/pages/ujian/UjianBerkasSoalPage';
+import UjianAuditPublikPage from '@/pages/ujian/UjianAuditPublikPage';
 import PublikDaftarHadirPage from '@/pages/publik/PublikDaftarHadirPage';
 import PublikBeritaAcaraPage from '@/pages/publik/PublikBeritaAcaraPage';
+import PublikInfoUjianPage from '@/pages/publik/PublikInfoUjianPage';
+import PublikMonitoringUjianPage from '@/pages/publik/PublikMonitoringUjianPage';
+import PublikTautanTidakBerlakuPage from '@/pages/publik/PublikTautanTidakBerlakuPage';
+import PublikTautanPendekPage from '@/pages/publik/PublikTautanPendekPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
 import AdminAppInfoPage from '@/pages/admin/AdminAppInfoPage';
 import AdminAlumniPage from '@/pages/admin/AdminAlumniPage';
@@ -345,6 +353,10 @@ function App() {
           <Route path="/public/angket-360/:token" element={<PublicAngket360Page />} />
           <Route path="/publik/ujian/:token/daftar-hadir" element={<PublikDaftarHadirPage />} />
           <Route path="/publik/ujian/:token/berita-acara" element={<PublikBeritaAcaraPage />} />
+          <Route path="/publik/info-ujian/:token" element={<PublikInfoUjianPage />} />
+          <Route path="/publik/monitoring-ujian/:token" element={<PublikMonitoringUjianPage />} />
+          <Route path="/publik/t/:token" element={<PublikTautanPendekPage />} />
+          <Route path="/publik/*" element={<PublikTautanTidakBerlakuPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route element={<RequireAuth />}>
@@ -445,6 +457,10 @@ function App() {
             <Route path="/ujian/ruang" element={<UjianRuangPage />} />
             <Route path="/ujian/pengawas" element={<UjianPengawasPage />} />
             <Route path="/ujian/formulir" element={<UjianFormulirPage />} />
+            <Route path="/ujian/tautan-publik" element={<UjianTautanPublikPage />} />
+            <Route path="/ujian/unggah-berkas" element={<UjianUnggahBerkasPage />} />
+            <Route path="/ujian/berkas-soal" element={<UjianBerkasSoalPage />} />
+            <Route path="/ujian/audit-publik" element={<UjianAuditPublikPage />} />
             <Route path="/ujian/daftar-hadir" element={<UjianDaftarHadirPage />} />
             <Route path="/ujian/berita-acara" element={<UjianBeritaAcaraPage />} />
             <Route path="/ujian/cetak" element={<UjianCetakArsipPage />} />
