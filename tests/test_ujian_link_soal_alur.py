@@ -295,3 +295,24 @@ def test_intensitas_rentang_tanggal_dan_validasi(klien):
                                               ('siswa1', 'siswa', 403)])
 def test_intensitas_akses(klien, uid, peran, status):
     assert klien(uid, peran, 'GET', f'{URL}/intensitas').status_code == status
+
+
+def test_rincian_klik_mapel_dengan_ip(klien):
+    siapkan_klik(klien)
+    for i, (ip, ua) in enumerate([('103.47.12.10', 'Chrome Android'), ('103.47.12.10', 'Chrome Android'), ('114.10.2.3', 'Safari iOS')]):
+        klien.db.ujian_akses_log.docs[i].update({'ip': ip, 'perangkat': ua, 'sesi': f's{i}', 'token': 'RahasiaTokenPortal'})
+    r = klien('admin', 'admin', 'GET', f'{URL}/l-mtk/klik')
+    assert r.status_code == 200, r.text
+    assert r.headers['cache-control'] == 'no-store' and 'RahasiaTokenPortal' not in r.text and 'cbt.id/m' not in r.text
+    d = r.json()
+    assert d['total'] == 3  # klik ditolak (09.05) tidak ikut
+    assert [k['waktu'][11:16] for k in d['klik']] == ['07:50', '07:41', '07:35'] and set(d['klik'][0]) == {'id', 'waktu', 'ip', 'perangkat', 'sesi'}
+    assert d['per_ip'] == [{'ip': '103.47.12.10', 'jumlah': 2}, {'ip': '114.10.2.3', 'jumlah': 1}]
+    assert d['per_perangkat'] == [{'perangkat': 'Chrome Android', 'jumlah': 2}, {'perangkat': 'Safari iOS', 'jumlah': 1}]
+    batas = klien('admin', 'admin', 'GET', f'{URL}/l-mtk/klik', params={'batas': 1}).json()
+    assert batas['total'] == 3 and len(batas['klik']) == 1 and batas['per_ip'][0]['jumlah'] == 2  # ringkasan tetap dari semua klik
+    assert klien('kamad', 'kepala_sekolah', 'GET', f'{URL}/l-mtk/klik').status_code == 200
+    assert klien('guru2', 'guru', 'GET', f'{URL}/l-mtk/klik').status_code == 403
+    assert klien('admin', 'admin', 'GET', f'{URL}/tidak-ada/klik').status_code == 404
+    klien.db.ujian_link_soal.docs[1]['ujian_id'] = 'ujian-lain'
+    assert klien('admin', 'admin', 'GET', f'{URL}/l-ipa/klik').status_code == 404  # link soal ujian lain

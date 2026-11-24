@@ -22,7 +22,7 @@ from ujian_info import (
 )
 from ujian_portal import (
     KOLEKSI_LINK_SOAL, KUERI_KLIK, LOG_KLIK_MAKS, LinkSoalIn, bangun_ulang_klik, dokumen_link_soal, host_url, jendela_jadwal,
-    peringatan_link, ringkas_link_admin, ringkas_tautan_portal, susun_intensitas, susun_link_admin,
+    id_soal_layak, peringatan_link, rincian_klik, ringkas_link_admin, ringkas_tautan_portal, susun_intensitas, susun_link_admin,
 )
 
 router = APIRouter()
@@ -130,3 +130,19 @@ async def intensitas_klik(ujian_id: str, response: Response, dari: Optional[str]
     hasil = susun_intensitas(log, docs, await mapel_semua_jenjang(db), await jadwal_ujian(ujian_id))
     response.headers.update(TANPA_CACHE)
     return {'rentang': {'dari': dari or None, 'sampai': sampai or None}, **hasil}
+
+
+@router.get("/ujian/{ujian_id}/link-soal/{link_soal_id}/klik")
+async def rincian_klik_link_soal(ujian_id: str, link_soal_id: str, response: Response, batas: int = Query(200, ge=1, le=1000),
+                                 user: Dict = Depends(get_current_user)):
+    """Rincian klik "Mengerjakan" SAH satu link soal (admin & pemantau menu link_soal, seperti jejak audit tautan publik):
+    { total, klik: [{ id, waktu, ip, perangkat, sesi }] (terbaru dulu, maks `batas`), per_ip, per_perangkat } — dari
+    ujian_akses_log, untuk menelusuri sumber klik yang janggal. Tanpa token & tanpa tautan soal."""
+    await akses_ujian(user, ujian_id, MENU)
+    if not id_soal_layak(link_soal_id) or not await db[KOLEKSI_LINK_SOAL].find_one({'id': link_soal_id, 'ujian_id': ujian_id}, {'_id': 1}):
+        raise HTTPException(404, 'Link soal tidak ditemukan pada ujian ini.')
+    log = await (db[KOLEKSI_AKSES_LOG].find({'ujian_id': ujian_id, 'link_soal_id': link_soal_id, **KUERI_KLIK},
+                                            {'_id': 0, 'id': 1, 'waktu': 1, 'ip': 1, 'perangkat': 1, 'sesi': 1})
+                 .sort('waktu', -1).to_list(LOG_KLIK_MAKS))
+    response.headers.update(TANPA_CACHE)
+    return rincian_klik(log, batas)

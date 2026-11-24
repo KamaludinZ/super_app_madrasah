@@ -548,3 +548,20 @@ def susun_intensitas(log: Iterable[Dict[str, Any]], docs: Iterable[Dict[str, Any
                       'klik_terakhir_at': max(terakhir, key=baca_waktu) if terakhir else None},
         'intensitas': intensitas,
     }
+
+
+FIELD_RINCIAN_KLIK = ('id', 'waktu', 'ip', 'perangkat', 'sesi')
+
+
+def rincian_klik(log: Iterable[Dict[str, Any]], batas: int) -> Dict[str, Any]:
+    """Rincian klik SAH satu link soal (baris log terbaru dulu) -> { total, klik (≤ batas, hanya FIELD_RINCIAN_KLIK),
+    per_ip, per_perangkat } — per_ip/per_perangkat dari SELURUH klik, terbanyak dulu (seri: urut abjad)."""
+    daftar = list(log or [])
+
+    def per(kunci):
+        hitung: Dict[Any, int] = {}
+        for x in daftar:
+            hitung[x.get(kunci)] = hitung.get(x.get(kunci), 0) + 1
+        return [{kunci: k, 'jumlah': n} for k, n in sorted(hitung.items(), key=lambda kv: (-kv[1], str(kv[0])))]
+    return {'total': len(daftar), 'klik': [{k: x.get(k) for k in FIELD_RINCIAN_KLIK} for x in daftar[:batas]],
+            'per_ip': per('ip'), 'per_perangkat': per('perangkat')}
