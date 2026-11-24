@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Loader2, MousePointerClick, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
+import { KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
-import { labelJenjang } from '@/lib/mapelUjian';
+import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
-import { intensitasJenjang, muatIntensitasKlik, ringkasIntensitas } from '@/lib/ujianLinkSoal';
+import {
+  SARINGAN_INTENSITAS, intensitasJenjang, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
+} from '@/lib/ujianLinkSoal';
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
 const tglPendek = (iso) => formatWIB(iso, 'Date', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -45,22 +47,61 @@ function BarisIntensitas({ baris, jenjang }) {
   );
 }
 
-function IsiJenjang({ data, mapel, jenjang }) {
+/** Saringan mapel (15 mapel baku) & status; berlaku untuk semua tab agar satu mapel mudah dibandingkan antarjenjang. */
+function BarisSaringan({ saringan, onUbah, mapel }) {
+  return (
+    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center" data-testid="intensitas-saringan">
+      <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-slate-600">
+        <span className="shrink-0 font-medium">Mapel</span>
+        <select value={saringan.mapel} onChange={(e) => onUbah({ ...saringan, mapel: e.target.value })} data-testid="intensitas-saring-mapel"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#006837]">
+          <option value="">Semua mata pelajaran</option>
+          {mapel.map((m) => <option key={m.kode} value={m.kode}>{m.nama}</option>)}
+        </select>
+      </label>
+      <div className="flex shrink-0 rounded-lg bg-slate-100 p-0.5" role="group" aria-label="Saring status klik">
+        {SARINGAN_INTENSITAS.map((st) => (
+          <button key={st.kode} type="button" onClick={() => onUbah({ ...saringan, status: st.kode })} aria-pressed={saringan.status === st.kode}
+            data-testid={`intensitas-saring-${st.kode}`}
+            className={`flex-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[#006837] ${saringan.status === st.kode ? 'bg-white text-[#006837] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
   const baris = useMemo(() => intensitasJenjang(data.intensitas, mapel, jenjang), [data.intensitas, mapel, jenjang]);
+  const tampil = useMemo(() => saringIntensitas(baris, saringan), [baris, saringan]);
   const r = ringkasIntensitas(baris.map((b) => b.data).filter(Boolean));
+  const disaring = !!saringan.mapel || saringan.status !== 'semua';
   return (
     <>
       <p className="mb-2 text-xs text-slate-500" data-testid={`ringkas-intensitas-${jenjang}`}>
         <span className="font-semibold text-slate-700">{r.total_klik.toLocaleString('id-ID')} klik</span> pada {r.mapel_diklik} dari {baris.length} mapel {labelJenjang(jenjang)}
+        {disaring && <> · menampilkan {tampil.length} mapel</>}
       </p>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="hidden border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_minmax(0,9rem)] sm:gap-3" aria-hidden="true">
-          <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span><span>Klik terakhir</span>
+      <BarisSaringan saringan={saringan} onUbah={onUbahSaringan} mapel={mapelUntuk(mapel, jenjang)} />
+      {!tampil.length ? (
+        <KosongInfo Ikon={SearchX} judul="Tidak ada mapel yang cocok" testId={`intensitas-kosong-saring-${jenjang}`}>
+          {saringan.status === 'tidak_tersentuh' && !saringan.mapel
+            ? `Semua mapel ${labelJenjang(jenjang)} yang tautannya terpasang sudah pernah dikerjakan.`
+            : `Tidak ada mapel ${labelJenjang(jenjang)} yang sesuai saringan.`}
+          <Button variant="link" size="sm" onClick={() => onUbahSaringan({ mapel: '', status: 'semua' })} className="h-auto p-0 pl-1 text-[#006837]"
+            data-testid="intensitas-hapus-saringan">Hapus saringan</Button>
+        </KosongInfo>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="hidden border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_minmax(0,9rem)] sm:gap-3" aria-hidden="true">
+            <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span><span>Klik terakhir</span>
+          </div>
+          <ul className="divide-y divide-slate-100" data-testid={`daftar-intensitas-${jenjang}`}>
+            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} />)}
+          </ul>
         </div>
-        <ul className="divide-y divide-slate-100" data-testid={`daftar-intensitas-${jenjang}`}>
-          {baris.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} />)}
-        </ul>
-      </div>
+      )}
     </>
   );
 }
@@ -75,6 +116,7 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
   const [data, setData] = useState(null);
   const [memuat, setMemuat] = useState(false);
   const [galat, setGalat] = useState('');
+  const [saringan, setSaringan] = useState({ mapel: '', status: 'semua' });
 
   const muat = useCallback(async () => {
     if (!ujianId) return;
@@ -133,7 +175,7 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
             </p>
           )}
           <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="intensitas" lencana={lencana}
-            isi={(j) => <IsiJenjang data={data} mapel={mapel} jenjang={j} />} />
+            isi={(j) => <IsiJenjang data={data} mapel={mapel} jenjang={j} saringan={saringan} onUbahSaringan={setSaringan} />} />
         </>
       )}
     </section>

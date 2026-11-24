@@ -276,6 +276,26 @@ export function intensitasJenjang(intensitas, mapel, jenjang) {
   return mapelUntuk(mapel, jenjang).map((m, i) => ({ nomor: i + 1, kode: m.kode, nama: m.nama, data: peta.get(m.kode) || null }));
 }
 
+export const SARINGAN_INTENSITAS = [
+  { kode: 'semua', label: 'Semua' },
+  { kode: 'dikerjakan', label: 'Dikerjakan' },
+  { kode: 'tidak_tersentuh', label: 'Tidak tersentuh' },
+];
+
+/**
+ * Saring baris intensitas (hasil intensitasJenjang): `mapel` = kode baku atau '' (semua); `status` = 'semua' |
+ * 'dikerjakan' (ada klik) | 'tidak_tersentuh' (tautan soal sudah terpasang tetapi belum pernah diklik).
+ */
+export function saringIntensitas(baris, { mapel = '', status = 'semua' } = {}) {
+  return (baris || []).filter((b) => {
+    if (mapel && b.kode !== mapel) return false;
+    const n = Number(b.data?.jumlah_klik) || 0;
+    if (status === 'dikerjakan') return n > 0;
+    if (status === 'tidak_tersentuh') return n === 0 && !!b.data?.url_host;
+    return true;
+  });
+}
+
 // Sebaran harian contoh: klik jatuh pada hari sesi mapel itu; sebagian kecil pada hari ujian berikutnya (susulan).
 function harianContoh(l) {
   const n = klikLogContoh(l);
