@@ -219,3 +219,24 @@ def test_url_soal_tolak_pengelabuan_skema():
         assert up.url_soal_aman(salah) is None, repr(salah)
     assert up.url_soal_aman('https://cbt.id/ujian?kelas=7&mapel=ipa#mulai') == 'https://cbt.id/ujian?kelas=7&mapel=ipa#mulai'
     assert up.url_soal_aman('https://xn--ujin-0qa.id/soal') == 'https://xn--ujin-0qa.id/soal'
+
+
+def test_nilai_klik_aturan_klik_sah():
+    doc = {'id': 'l1', 'url': 'https://cbt.id/a', 'aktif': True,
+           'mulai_at': '2026-12-02T07:30:00+07:00', 'selesai_at': '2026-12-02T09:00:00+07:00'}
+    pada = lambda jam: _wib(f'2026-12-02T{jam}+07:00')  # noqa: E731
+    hasil = lambda d, jam: up.nilai_klik(d, pada(jam))['hasil']  # noqa: E731
+    assert up.nilai_klik(doc, pada('08:00:00')) == {'hasil': 'ok', 'pesan': None, 'status_http': 302}
+    assert hasil(doc, '07:30:00') == 'ok' and hasil(doc, '08:59:59') == 'ok'            # [mulai, selesai)
+    assert hasil(doc, '07:29:59') == 'belum_mulai' and hasil(doc, '09:00:00') == 'sudah_selesai'
+    assert 'Dibuka pukul 07.30 WIB' in up.nilai_klik(doc, pada('06:00:00'))['pesan']
+    # prioritas alasan: mapel tidak dikenal -> tautan tidak sah/kosong -> ditahan -> jendela
+    assert up.nilai_klik(None, pada('08:00:00'))['status_http'] == 404
+    assert hasil({**doc, 'url': ''}, '08:00:00') == 'mapel_belum_siap'
+    assert hasil({**doc, 'url': 'javascript:alert(1)', 'aktif': False}, '08:00:00') == 'mapel_belum_siap'
+    assert hasil({**doc, 'aktif': False}, '06:00:00') == 'mapel_ditahan'
+    assert hasil({**doc, 'mulai_at': None}, '08:00:00') == 'mapel_belum_siap'          # jendela tidak lengkap: fail-closed
+    assert hasil({**doc, 'selesai_at': 'kemarin'}, '08:00:00') == 'mapel_belum_siap'
+    # waktu ber-zona lain dibaca sebagai waktu server yang sama
+    assert up.nilai_klik(doc, _wib('2026-12-02T01:00:00+00:00'))['hasil'] == 'ok'
+    assert up.id_soal_layak('3f2a-b_9') and not up.id_soal_layak('a/b') and not up.id_soal_layak('x' * 65) and not up.id_soal_layak('')
