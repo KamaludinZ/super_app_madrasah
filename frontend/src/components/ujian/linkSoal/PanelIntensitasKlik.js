@@ -9,9 +9,9 @@ import {
   SARINGAN_INTENSITAS, intensitasJenjang, keadaanKlik, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
 } from '@/lib/ujianLinkSoal';
 
+// Hanya keadaan yang perlu ditindaklanjuti yang menjadi lencana; "menunggu jadwal" cukup teks redup di kolom klik terakhir.
 const LENCANA_KEADAAN = {
   tidak_tersentuh: { label: 'Tidak tersentuh', kelas: 'border-amber-300 bg-amber-50 text-amber-800' },
-  menunggu: { label: 'Menunggu jadwal', kelas: 'border-slate-200 bg-slate-50 text-slate-500' },
 };
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
@@ -27,18 +27,47 @@ function KartuAngka({ label, nilai, keterangan, testId }) {
   );
 }
 
+const TINGGI_SEBARAN = 24; // px, tinggi area kolom sebaran harian
+
+/**
+ * Sebaran klik harian satu mapel: satu kolom per hari pada `hari` (sumbu yang sama untuk semua mapel di tab ini agar
+ * dapat dibandingkan), tinggi relatif terhadap klik harian terbanyak di tab (`maksHari`). Satu seri satu warna, tanpa
+ * legenda; hari tanpa klik hanya garis dasar. Angka per hari ada di tooltip tiap kolom dan di aria-label (pengganti tabel).
+ */
+function SebaranHarian({ harian, hari, maksHari, testId }) {
+  if (!hari.length) return <span className="text-xs text-slate-400">–</span>;
+  const peta = new Map((harian || []).map((h) => [h.tanggal, Number(h.jumlah) || 0]));
+  const teks = hari.map((t) => `${tglPendek(t)} ${peta.get(t) || 0} klik`).join(', ');
+  return (
+    <span className="inline-flex items-end gap-[2px] border-b border-slate-200" style={{ height: TINGGI_SEBARAN + 1 }}
+      role="img" aria-label={`Sebaran klik harian: ${teks}`} data-testid={testId}>
+      {hari.map((t) => {
+        const n = peta.get(t) || 0;
+        const tinggi = maksHari && n ? Math.max(3, Math.round((n / maksHari) * TINGGI_SEBARAN)) : 0;
+        return (
+          // Slot setinggi area menjadi sasaran hover yang lebih besar dari kolomnya.
+          <span key={t} className="flex h-full w-3 items-end" title={`${formatWIB(t, 'Date', { weekday: 'long', day: 'numeric', month: 'long' })}: ${n.toLocaleString('id-ID')} klik`}
+            data-tanggal={t} data-jumlah={n}>
+            {tinggi > 0 && <span className="w-full rounded-t-[4px] bg-[#006837]" style={{ height: tinggi }} />}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 /**
  * Satu mapel: jendela & host tautan, jumlah klik dengan batang relatif terhadap mapel tersibuk di jenjang itu (`maks`),
- * klik terakhir, dan lencana bila tautannya terpasang tetapi tidak tersentuh / masih menunggu jadwal.
+ * sebaran klik harian, klik terakhir, dan lencana bila tautannya terpasang tetapi tidak tersentuh / masih menunggu jadwal.
  */
-function BarisIntensitas({ baris, jenjang, maks }) {
+function BarisIntensitas({ baris, jenjang, maks, hari, maksHari }) {
   const d = baris.data;
   const n = Number(d?.jumlah_klik) || 0;
   const keadaan = keadaanKlik(d);
   const lencana = LENCANA_KEADAAN[keadaan];
   const persen = maks ? Math.max(n ? 4 : 0, Math.round((n / maks) * 100)) : 0;
   return (
-    <li className="flex flex-col gap-1 px-3 py-2.5 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_minmax(0,9rem)] sm:items-center sm:gap-3"
+    <li className="flex flex-col gap-1 px-3 py-2.5 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_auto_minmax(0,8.5rem)] sm:items-center sm:gap-3"
       data-testid={`intensitas-${jenjang}-${baris.kode}`} data-jumlah={n}>
       <span className="hidden text-right text-xs tabular-nums text-slate-400 sm:block">{baris.nomor}</span>
       <span className="flex flex-wrap items-center gap-1.5">
@@ -64,8 +93,13 @@ function BarisIntensitas({ baris, jenjang, maks }) {
           <span className="block h-full rounded-full bg-[#006837]" style={{ width: `${persen}%` }} />
         </span>
       </span>
+      <span className="flex items-center gap-2 sm:block">
+        <span className="text-xs text-slate-500 sm:hidden">Harian</span>
+        <SebaranHarian harian={d?.harian} hari={hari} maksHari={maksHari} testId={`intensitas-${jenjang}-${baris.kode}-sebaran`} />
+      </span>
       <span className="text-xs text-slate-500" data-testid={`intensitas-${jenjang}-${baris.kode}-terakhir`}>
-        {d?.klik_terakhir_at ? <>Terakhir {tglPendek(d.klik_terakhir_at)} {jam(d.klik_terakhir_at)}</> : 'Belum pernah diklik'}
+        {d?.klik_terakhir_at ? <>Terakhir {tglPendek(d.klik_terakhir_at)} {jam(d.klik_terakhir_at)}</>
+          : <span className="text-slate-400" data-keadaan={keadaan}>{keadaan === 'menunggu' ? 'Menunggu jadwal' : 'Belum pernah diklik'}</span>}
       </span>
     </li>
   );
@@ -102,6 +136,8 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
   const r = ringkasIntensitas(baris.map((b) => b.data).filter(Boolean));
   const maks = Math.max(0, ...baris.map((b) => Number(b.data?.jumlah_klik) || 0));
   const tidakTersentuh = baris.filter((b) => keadaanKlik(b.data) === 'tidak_tersentuh').length;
+  const hari = data.hari || [];
+  const maksHari = Math.max(0, ...baris.flatMap((b) => (b.data?.harian || []).map((h) => Number(h.jumlah) || 0)));
   const disaring = !!saringan.mapel || saringan.status !== 'semua';
   return (
     <>
@@ -121,11 +157,13 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
         </KosongInfo>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="hidden border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_minmax(0,9rem)] sm:gap-3" aria-hidden="true">
-            <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span><span>Klik terakhir</span>
+          <div className="hidden border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_auto_minmax(0,8.5rem)] sm:gap-3" aria-hidden="true">
+            <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span>
+            <span title={hari.length ? `${tglPendek(hari[0])} – ${tglPendek(hari[hari.length - 1])}` : undefined} style={{ minWidth: hari.length * 14 }}>Harian</span>
+            <span>Klik terakhir</span>
           </div>
           <ul className="divide-y divide-slate-100" data-testid={`daftar-intensitas-${jenjang}`}>
-            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} maks={maks} />)}
+            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} maks={maks} hari={hari} maksHari={maksHari} />)}
           </ul>
         </div>
       )}
