@@ -42,7 +42,7 @@ function JadwalBerikutnya({ jadwal }) {
         {jadwal.soal.map((s) => (
           <li key={`${s.jenjang}-${s.mapel}-${s.mulai_at}`} className="flex items-baseline gap-2 py-1.5 text-sm" data-testid={`portal-berikutnya-${s.jenjang}`}>
             <span className="w-16 shrink-0 text-xs font-medium text-slate-500">{labelJenjang(s.jenjang)}</span>
-            <span className="min-w-0 flex-1 font-medium text-slate-800">{namaMapelUjian(s.mapel)}</span>
+            <span className="min-w-0 flex-1 font-medium text-slate-800">{s.nama || namaMapelUjian(s.mapel)}</span>
             <span className="shrink-0 text-xs tabular-nums text-slate-600">{jam(s.mulai_at)}{s.selesai_at ? `–${jam(s.selesai_at)}` : ''}</span>
           </li>
         ))}

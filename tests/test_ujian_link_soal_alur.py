@@ -12,6 +12,7 @@ from ujian_dasar import HARI_INI, buat_klien, ujian_doc  # noqa: E402
 
 URL = '/ujian/uas/link-soal'
 JENDELA = {'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00'}
+BESOK = '2026-12-03'
 
 
 @pytest.fixture
@@ -30,8 +31,12 @@ def klien(monkeypatch):
     k.db.ujian.docs.append(ujian_doc('uas', 'UAS', 'sem-kini', '2026-12-01', '2026-12-06', nama='ASAS Ganjil 2026/2027'))
     k.db.panitia_ujian.docs += [{'id': 'p1', 'ujian_id': 'uas', 'jabatan': 'ketua', 'user_id': 'guru1'},
                                 {'id': 'p2', 'ujian_id': 'uas', 'jabatan': 'bendahara', 'user_id': 'guru2'}]
-    k.db.jadwal_ujian.docs.append({'id': 'j1', 'ujian_id': 'uas', 'tanggal': HARI_INI, 'sesi_ke': 1, 'jam_mulai': '07:30',
-                                   'jam_selesai': '09:00', 'mapel': {'7': 'Matematika', '8': 'IPA', '9': "Al-Qur'an Hadits"}})
+    k.db.jadwal_ujian.docs += [
+        {'id': 'j1', 'ujian_id': 'uas', 'tanggal': HARI_INI, 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00',
+         'mapel': {'7': 'Matematika', '8': 'IPA', '9': "Al-Qur'an Hadits"}},
+        {'id': 'j2', 'ujian_id': 'uas', 'tanggal': BESOK, 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00',
+         'mapel': {'7': 'IPA', '8': 'Simulasi', '9': 'IPA'}},
+    ]
     return k
 
 
@@ -43,18 +48,24 @@ def entri(d, jenjang, mapel):
     return next(x for x in d['link'] if (x['jenjang'], x['mapel']) == (jenjang, mapel))
 
 
-def test_admin_melihat_45_entri_dengan_jendela_dari_jadwal(klien):
+def test_admin_melihat_mapel_jadwal_dengan_jendela_dari_jadwal(klien):
+    """Daftar mapel mengikuti jadwal sesi menu Pengaturan Formulir (urut jadwal), termasuk mapel di luar 15 mapel baku."""
     r = klien('admin', 'admin', 'GET', URL)
     assert r.status_code == 200, r.text
     assert r.headers['cache-control'] == 'no-store'
     d = r.json()
-    assert d['boleh_ubah'] is True and d['ujian']['nama'] == 'ASAS Ganjil 2026/2027' and len(d['mapel']['7']) == 15
-    assert len(d['link']) == 45 and [x['mapel'] for x in d['link'][:2]] == ['bahasa_indonesia', 'akidah_akhlak']
+    assert d['boleh_ubah'] is True and d['ujian']['nama'] == 'ASAS Ganjil 2026/2027'
+    assert d['mapel']['7'] == [{'kode': 'matematika', 'nama': 'Matematika', 'di_jadwal': True, 'jumlah_sesi': 1},
+                               {'kode': 'ipa', 'nama': 'IPA', 'di_jadwal': True, 'jumlah_sesi': 1}]
+    assert [(m['kode'], m['nama']) for m in d['mapel']['8']] == [('ipa', 'IPA'), ('simulasi', 'Simulasi')]
+    assert len(d['link']) == 6 and [x['mapel'] for x in d['link'][:2]] == ['matematika', 'ipa']
+    sim = entri(d, 8, 'simulasi')
+    assert (sim['id'], sim['mulai_at'], sim['jadwal']['tanggal']) == (None, f'{BESOK}T07:30:00+07:00', BESOK)
     m7 = entri(d, 7, 'matematika')
     assert (m7['id'], m7['url'], m7['siap'], m7['versi']) == (None, '', False, None)
     assert (m7['mulai_at'], m7['selesai_at'], m7['jadwal']['sesi_ke']) == (JENDELA['mulai_at'], JENDELA['selesai_at'], 1)
     assert entri(d, 9, 'quran_hadits')['jadwal']['tanggal'] == HARI_INI  # nama jadwal "Al-Qur'an Hadits" dikenali
-    assert entri(d, 7, 'ipa')['mulai_at'] is None  # tidak ada di jadwal
+    assert (7, 'ips') not in {(x['jenjang'], x['mapel']) for x in d['link']}  # mapel baku yang tidak ada di jadwal tidak ikut
     # tautan portal dibuat tertutup bila belum ada (sekaligus info & monitoring)
     assert d['tautan_portal']['jenis'] == 'portal' and d['tautan_portal']['aktif'] is False
     assert d['tautan_portal']['jalur'].startswith('/publik/portal-ujian/') and d['tautan_portal']['alasan'] == 'nonaktif'
@@ -197,10 +208,11 @@ def test_bangun_ulang_klik_dari_jejak_audit(klien):
     d = r.json()
     assert (d['diperiksa'], d['diperbaiki'], d['berubah']) == (3, 2, [])
     assert d['selisih'] == [
-        {'jenjang': 7, 'mapel': 'matematika', 'sebelum': 1, 'sesudah': 3, 'klik_terakhir_at': f'{HARI_INI}T07:50:00+07:00'},
-        {'jenjang': 8, 'mapel': 'ipa', 'sebelum': 5, 'sesudah': 1, 'klik_terakhir_at': f'{HARI_INI}T07:45:00+07:00'},
+        {'jenjang': 7, 'mapel': 'matematika', 'nama_mapel': 'Matematika', 'sebelum': 1, 'sesudah': 3,
+         'klik_terakhir_at': f'{HARI_INI}T07:50:00+07:00'},
+        {'jenjang': 8, 'mapel': 'ipa', 'nama_mapel': 'IPA', 'sebelum': 5, 'sesudah': 1, 'klik_terakhir_at': f'{HARI_INI}T07:45:00+07:00'},
     ]
-    assert entri(d, 7, 'matematika')['jumlah_klik'] == 3 and len(d['link']) == 45
+    assert entri(d, 7, 'matematika')['jumlah_klik'] == 3 and len(d['link']) == 7  # 6 mapel jadwal + IPS 9 tersimpan
     assert klien.db.ujian_akses_log.docs == log_sebelum  # jejak audit tidak diubah
     assert any(a['action'] == 'ujian_link_soal_bangun_ulang_klik' for a in klien.db.audit_logs.docs)
     ulang = klien('admin', 'admin', 'POST', f'{URL}/bangun-ulang-klik').json()
@@ -243,19 +255,45 @@ def test_skrip_bangun_ulang_semua_ujian(klien):
     assert asyncio.run(jalankan(klien.db))['diperbaiki'] == 0
 
 
-def test_mapel_nonaktif_di_master_ikut_hilang(klien):
-    """Master ujian_mapel_baku satu-satunya sumber: mapel yang dinonaktifkan admin tidak tampil di Link Soal, tidak dapat
-    disimpan, dan sama dengan GET /ujian/mapel-baku."""
+def test_mapel_simulasi_dari_jadwal_dapat_disimpan(klien):
+    """Mapel di luar mapel baku yang dipasang di jadwal sesi (mis. "Simulasi") dapat diberi tautan; nama tampilnya ikut
+    tersimpan agar tetap terbaca bila kelak dihapus dari jadwal."""
+    r = simpan(klien, 8, 'simulasi', {'url': 'https://cbt.id/simulasi', 'mulai_at': f'{BESOK}T07:30:00+07:00',
+                                       'selesai_at': f'{BESOK}T09:00:00+07:00'})
+    assert r.status_code == 200, r.text
+    assert r.json()['peringatan'] == [] and r.json()['link']['siap']
+    assert klien.db.ujian_link_soal.docs[0]['nama_mapel'] == 'Simulasi'
+    klien.db.jadwal_ujian.docs[1]['mapel'] = {'7': 'IPA', '9': 'IPA'}  # Simulasi dihapus dari jadwal
+    d = klien('admin', 'admin', 'GET', URL).json()
+    assert d['mapel']['8'][-1] == {'kode': 'simulasi', 'nama': 'Simulasi', 'di_jadwal': False, 'jumlah_sesi': 0}
+    versi = entri(d, 8, 'simulasi')['versi']
+    assert simpan(klien, 8, 'simulasi', {'url': 'https://cbt.id/simulasi', 'aktif': False}, versi=versi).status_code == 200  # tetap dapat diubah
+
+
+def test_mapel_di_luar_jadwal_ditolak_dan_master_nonaktif_tidak_berpengaruh(klien):
+    """Jadwal sesi satu-satunya sumber daftar mapel: mapel yang tidak ada di jadwal (dan belum pernah disimpan) ditolak;
+    mapel baku yang dinonaktifkan di master tetap tampil bila dipasang di jadwal."""
     import asyncio
 
     import ujian_info as ui
+    assert simpan(klien, 7, 'ips', {'url': 'https://cbt.id'}).status_code == 422
+    assert simpan(klien, 7, 'simulasi', {'url': 'https://cbt.id'}).status_code == 422  # Simulasi hanya di jadwal kelas 8
     asyncio.run(ui.seed_mapel_baku(klien.db))
     next(d for d in klien.db.ujian_mapel_baku.docs if d['jenjang'] == 8 and d['kode'] == 'ipa')['aktif'] = False
     d = klien('admin', 'admin', 'GET', URL).json()
-    assert len(d['link']) == 44 and (8, 'ipa') not in {(x['jenjang'], x['mapel']) for x in d['link']}
-    assert d['mapel'] == klien('admin', 'admin', 'GET', '/ujian/mapel-baku').json()['jenjang']
-    assert simpan(klien, 8, 'ipa', {'url': 'https://cbt.id'}).status_code == 422
-    assert simpan(klien, 7, 'ipa', {'url': 'https://cbt.id'}).status_code == 200  # jenjang lain tetap aktif
+    assert d['mapel']['8'][0] == {'kode': 'ipa', 'nama': 'IPA', 'di_jadwal': True, 'jumlah_sesi': 1}
+    assert simpan(klien, 8, 'ipa', {'url': 'https://cbt.id'}).status_code == 200
+
+
+def test_mapel_di_beberapa_sesi_satu_baris_dengan_peringatan(klien):
+    klien.db.jadwal_ujian.docs.append({'id': 'j3', 'ujian_id': 'uas', 'tanggal': '2026-12-04', 'sesi_ke': 1, 'jam_mulai': '07:30',
+                                       'jam_selesai': '09:00', 'mapel': {'8': 'Simulasi'}})
+    d = klien('admin', 'admin', 'GET', URL).json()
+    assert [m['kode'] for m in d['mapel']['8']] == ['ipa', 'simulasi'] and d['mapel']['8'][1]['jumlah_sesi'] == 2
+    sim = entri(d, 8, 'simulasi')
+    assert (sim['jadwal']['tanggal'], sim['jadwal']['jumlah_sesi']) == (BESOK, 2)  # jendela awal = sesi pertama
+    r = simpan(klien, 8, 'simulasi', {'url': 'https://cbt.id/s', 'mulai_at': sim['mulai_at'], 'selesai_at': sim['selesai_at']})
+    assert r.status_code == 200 and any('ada di 2 sesi jadwal' in p for p in r.json()['peringatan'])
 
 
 # ---- Intensitas klik (dari jejak audit) ----
@@ -268,7 +306,7 @@ def test_intensitas_klik_dari_jejak_audit(klien):
     assert r.headers['cache-control'] == 'no-store'
     d = r.json()
     assert d['rentang'] == {'dari': None, 'sampai': None} and d['hari'] == [HARI_INI, '2026-12-03']
-    assert len(d['intensitas']) == 45
+    assert len(d['intensitas']) == 7  # mapel jadwal + link tersimpan di luar jadwal
     x = {(i['jenjang'], i['mapel']): i for i in d['intensitas']}
     mtk = x[(7, 'matematika')]
     assert (mtk['link_soal_id'], mtk['jumlah_klik'], mtk['klik_terakhir_at'], mtk['url_host'], mtk['siap']) == (
@@ -277,6 +315,7 @@ def test_intensitas_klik_dari_jejak_audit(klien):
     assert x[(8, 'ipa')]['jumlah_klik'] == 1  # bukan cache 5; log ujian lain & pembukaan tautan diabaikan
     assert (x[(9, 'ips')]['jumlah_klik'], x[(7, 'ipa')]['jumlah_klik'], x[(7, 'ipa')]['link_soal_id']) == (1, 0, None)
     assert x[(9, 'quran_hadits')]['mulai_at'] == JENDELA['mulai_at']  # mapel belum diatur: jendela dari jadwal
+    assert (x[(9, 'ips')]['di_jadwal'], x[(8, 'simulasi')]['nama'], x[(8, 'simulasi')]['di_jadwal']) == (False, 'Simulasi', True)
     assert d['ringkasan'] == {'total_klik': 6, 'mapel_diklik': 3, 'mapel_siap': 3, 'klik_terakhir_at': '2026-12-03T08:15:00+07:00'}
     assert 'https://cbt.id/m' not in r.text  # tautan soal lengkap tidak dikirim
 

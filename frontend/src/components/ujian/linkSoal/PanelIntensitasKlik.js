@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Link2Off, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
+import { Activity, AlertTriangle, CalendarX2, Link2Off, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import RincianKlikSheet from '@/components/ujian/linkSoal/RincianKlikSheet';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
-import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
+import { labelJenjang } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
 import { waktuRelatif } from '@/lib/ujianMonitoringPublik';
 import {
-  SARINGAN_INTENSITAS, intensitasJenjang, keadaanKlik, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
+  SARINGAN_INTENSITAS, intensitasJenjang, keadaanKlik, mapelLinkSoal, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
 } from '@/lib/ujianLinkSoal';
 
 // Hanya keadaan yang perlu ditindaklanjuti yang menjadi lencana; "menunggu jadwal" cukup teks redup di kolom klik terakhir.
@@ -85,6 +85,12 @@ function BarisIntensitas({ baris, jenjang, maks, hari, maksHari, onRincian }) {
             {lencana.label}
           </span>
         )}
+        {!baris.di_jadwal && (
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold text-slate-500"
+            title="Mapel ini sudah tidak ada di jadwal sesi, sehingga tidak tampil di portal." data-testid={`intensitas-${jenjang}-${baris.kode}-luar-jadwal`}>
+            Tidak ada di jadwal
+          </span>
+        )}
       </span>
       <span className="min-w-0 text-xs text-slate-600">
         {d?.mulai_at && d?.selesai_at
@@ -154,6 +160,13 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
   const hari = data.hari || [];
   const maksHari = Math.max(0, ...baris.flatMap((b) => (b.data?.harian || []).map((h) => Number(h.jumlah) || 0)));
   const disaring = !!saringan.mapel || saringan.status !== 'semua';
+  if (!baris.length) {
+    return (
+      <KosongInfo Ikon={CalendarX2} judul={`Belum ada mapel ${labelJenjang(jenjang)} di jadwal sesi`} testId={`intensitas-kosong-jadwal-${jenjang}`}>
+        Daftar mapel mengikuti jadwal sesi di menu Pengaturan Formulir.
+      </KosongInfo>
+    );
+  }
   return (
     <>
       <p className="mb-2 text-xs text-slate-500" data-testid={`ringkas-intensitas-${jenjang}`}>
@@ -162,7 +175,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
         {disaring && <> · menampilkan {tampil.length} mapel</>}
         {r.klik_terakhir_at && <> · terakhir <Waktu iso={r.klik_terakhir_at} /></>}
       </p>
-      <BarisSaringan saringan={saringan} onUbah={onUbahSaringan} mapel={mapelUntuk(mapel, jenjang)} />
+      <BarisSaringan saringan={saringan} onUbah={onUbahSaringan} mapel={mapelLinkSoal(mapel, jenjang)} />
       {!tampil.length ? (
         <KosongInfo Ikon={SearchX} judul="Tidak ada mapel yang cocok" testId={`intensitas-kosong-saring-${jenjang}`}>
           {saringan.status === 'tidak_tersentuh' && !saringan.mapel
@@ -188,11 +201,11 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
 }
 
 /**
- * Panel intensitas klik "Mengerjakan" untuk admin & pemantau: ringkasan seluruh ujian, lalu per tab jenjang 15 mapel
- * baku dengan jendela pengerjaan, tautan soal (host), jumlah klik, sebaran harian, klik terakhir, dan tombol Rincian
+ * Panel intensitas klik "Mengerjakan" untuk admin & pemantau: ringkasan seluruh ujian, lalu per tab jenjang mapel di
+ * jadwal sesi (termasuk link tersimpan yang sudah tidak ada di jadwal) dengan jendela pengerjaan, tautan soal (host), jumlah klik, sebaran harian, klik terakhir, dan tombol Rincian
  * (sumber klik: IP & perangkat). Angka diagregasi server dari jejak
  * audit (ujian_akses_log), bukan dari cache di portal, sehingga tetap dapat ditelusuri setelah ujian selesai.
- * `mapel` = daftar mapel baku per jenjang dari respons link soal; `jenjang`/`onUbahJenjang` dibagi dengan tampilan pengaturan.
+ * `mapel` = daftar mapel per jenjang dari respons link soal (mengikuti jadwal sesi; lihat mapelLinkSoal); `jenjang`/`onUbahJenjang` dibagi dengan tampilan pengaturan.
  */
 export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJenjang, onKePengaturan }) {
   const [data, setData] = useState(null);

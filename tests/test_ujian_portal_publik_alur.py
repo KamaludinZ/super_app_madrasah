@@ -43,6 +43,8 @@ def klien(monkeypatch):
          'mapel': {'7': 'Matematika', '8': 'IPA', '9': 'PPKn'}},
         {'id': 'j2', 'ujian_id': 'uas', 'tanggal': BESOK, 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00',
          'mapel': {'7': 'Bahasa Indonesia', '8': 'Fiqh', '9': 'IPS'}},
+        {'id': 'j3', 'ujian_id': 'uas', 'tanggal': HARI_INI, 'sesi_ke': 2, 'jam_mulai': '09:30', 'jam_selesai': '11:00',
+         'mapel': {'7': 'IPA'}},
     ]
     db.ujian_link_soal.docs += [
         link(7, 'matematika', '07:30', '09:00', url=URL_RAHASIA, jumlah_klik=12, klik_terakhir_at=f'{HARI_INI}T07:58:00+07:00'),
@@ -66,15 +68,18 @@ def test_portal_tanpa_login_hanya_jadwal_dan_status(klien):
     assert set(d) == {'madrasah', 'ujian', 'tautan', 'waktu_server', 'mapel', 'soal', 'batas_berikutnya_at'}  # tanpa kisi-kisi/berkas/tata tertib
     assert d['batas_berikutnya_at'] == f'{HARI_INI}T09:00:00+07:00'  # matematika & PPKn ditutup pukul 09.00
     assert d['tautan'] == {'jenis': 'portal', 'mulai_at': '2026-12-01T06:00:00+07:00', 'selesai_at': '2026-12-06T16:00:00+07:00'}
-    assert d['waktu_server'] == f'{HARI_INI}T08:00:00+07:00' and len(d['mapel']['7']) == 15
+    assert d['waktu_server'] == f'{HARI_INI}T08:00:00+07:00'
+    # mapel per jenjang = mapel di jadwal sesi (urut jadwal), bukan 15 mapel baku
+    assert d['mapel']['7'] == [{'kode': 'matematika', 'nama': 'Matematika'}, {'kode': 'ipa', 'nama': 'IPA'},
+                               {'kode': 'bahasa_indonesia', 'nama': 'Bahasa Indonesia'}]
     # isolasi: tautan soal tidak pernah ikut payload portal
     assert 'cbt.madrasah.sch.id' not in r.text and all('url' not in s for s in d['soal'])
     s = {(x['jenjang'], x['mapel']): x for x in d['soal']}
     assert s[(7, 'matematika')] == {
-        'id': 'ls-7-matematika', 'jenjang': 7, 'mapel': 'matematika', 'tanggal': HARI_INI, 'sesi_ke': 1,
+        'id': 'ls-7-matematika', 'jenjang': 7, 'mapel': 'matematika', 'nama': 'Matematika', 'tanggal': HARI_INI, 'sesi_ke': 1,
         'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00', 'status': 'berlangsung',
         'hitung_mundur': {'menuju': 'selesai', 'detik': 3600}, 'siap': True, 'ditahan': False, 'jumlah_klik': 12, 'klik_terakhir_at': f'{HARI_INI}T07:58:00+07:00'}
-    assert (s[(7, 'ipa')]['status'], s[(7, 'ipa')]['siap'], s[(7, 'ipa')]['sesi_ke']) == ('belum_dimulai', False, None)
+    assert (s[(7, 'ipa')]['status'], s[(7, 'ipa')]['siap'], s[(7, 'ipa')]['sesi_ke']) == ('belum_dimulai', False, 2)
     assert (s[(8, 'ipa')]['status'], s[(8, 'ipa')]['siap'], s[(8, 'ipa')]['hitung_mundur']) == ('ditutup', True, None)
     assert s[(7, 'ipa')]['hitung_mundur'] == {'menuju': 'mulai', 'detik': 5400}
     assert (s[(9, 'pkn')]['status'], s[(9, 'pkn')]['siap'], s[(9, 'pkn')]['ditahan']) == ('berlangsung', False, True)
@@ -86,6 +91,34 @@ def test_portal_tanpa_login_hanya_jadwal_dan_status(klien):
     assert [(x['jenjang'], x['mapel']) for x in d['soal'] if x['jenjang'] == 7] == [(7, 'matematika'), (7, 'ipa'), (7, 'bahasa_indonesia')]
     log = klien.db.ujian_akses_log.docs
     assert [(x['jenis_tautan'], x['aksi'], x['hasil'], x['perangkat']) for x in log] == [('portal', 'buka_tautan', 'ok', 'HP Siswa')]
+
+
+def test_mapel_simulasi_dari_jadwal_tampil_dan_dapat_dikerjakan(klien):
+    """Mapel di luar 15 mapel baku (mis. "Simulasi" dari menu Mata Pelajaran) yang dipasang di jadwal sesi ikut tampil di
+    portal dan tombolnya dapat dipakai seperti mapel baku."""
+    klien.db.jadwal_ujian.docs.append({'id': 'j4', 'ujian_id': 'uas', 'tanggal': HARI_INI, 'sesi_ke': 3, 'jam_mulai': '07:45',
+                                       'jam_selesai': '08:30', 'mapel': {'8': 'Simulasi CBT'}})
+    klien.db.ujian_link_soal.docs.append({**link(8, 'simulasicbt', '07:45', '08:30', url='https://cbt.madrasah.sch.id/simulasi'),
+                                          'nama_mapel': 'Simulasi CBT'})
+    d = get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()
+    assert {'kode': 'simulasicbt', 'nama': 'Simulasi CBT'} in d['mapel']['8']
+    s = {(x['jenjang'], x['mapel']): x for x in d['soal']}
+    assert (s[(8, 'simulasicbt')]['nama'], s[(8, 'simulasicbt')]['status'], s[(8, 'simulasicbt')]['siap']) == ('Simulasi CBT', 'berlangsung', True)
+    r = kerjakan(klien, 'ls-8-simulasicbt')
+    assert r.status_code == 302 and r.headers['location'] == 'https://cbt.madrasah.sch.id/simulasi'
+    assert [(x['mapel'], x['nama_mapel'], x['hasil']) for x in log_klik(klien)] == [('simulasicbt', 'Simulasi CBT', 'ok')]
+
+
+def test_mapel_yang_dihapus_dari_jadwal_hilang_dari_portal(klien):
+    """Link soal tersimpan yang mapelnya sudah tidak ada di jadwal sesi tidak tampil di portal dan kliknya ditolak."""
+    klien.db.jadwal_ujian.docs[0]['mapel'] = {'8': 'IPA', '9': 'PPKn'}  # Matematika kelas 7 dihapus dari jadwal
+    d = get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()
+    assert (7, 'matematika') not in {(x['jenjang'], x['mapel']) for x in d['soal']}
+    assert 'matematika' not in {m['kode'] for m in d['mapel']['7']}
+    r = kerjakan(klien, 'ls-7-matematika')
+    assert r.status_code == 404 and 'location' not in r.headers and 'tidak ada di portal' in r.text
+    assert [(x['link_soal_id'], x['hasil']) for x in log_klik(klien)] == [('ls-7-matematika', 'tidak_dikenal')]
+    assert klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 12
 
 
 def test_status_mengikuti_waktu_server(klien):
@@ -116,8 +149,9 @@ def test_portal_ditutup_ditolak_dengan_jadwal_berikutnya(klien):
     assert 'soal' not in r.json() and 'cbt.madrasah.sch.id' not in r.text
     # 08.00: matematika (7) & PPKn (9) masih berlangsung, IPA (8) sudah ditutup -> hari ini, mapel pertama yang belum lewat
     assert d['jadwal_berikutnya'] == {'tanggal': HARI_INI, 'soal': [
-        {'jenjang': 7, 'mapel': 'matematika', 'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00'},
-        {'jenjang': 9, 'mapel': 'pkn', 'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00'},
+        {'jenjang': 7, 'mapel': 'matematika', 'nama': 'Matematika', 'mulai_at': f'{HARI_INI}T07:30:00+07:00',
+         'selesai_at': f'{HARI_INI}T09:00:00+07:00'},
+        {'jenjang': 9, 'mapel': 'pkn', 'nama': 'PKN', 'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00'},
     ]}
     assert [x['hasil'] for x in klien.db.ujian_akses_log.docs] == ['nonaktif']
 

@@ -55,7 +55,7 @@ async def daftar_tautan_publik(ujian_id: str, user: Dict = Depends(get_current_u
 FIELD_AKSES_AUDIT = {'_id': 0, 'id': 1, 'jenis_tautan': 1, 'waktu': 1, 'ip': 1, 'ip_rantai': 1, 'perangkat': 1, 'hasil': 1, 'sesi': 1,
                      'terakhir_aktif': 1, 'jumlah_segarkan': 1,
                      # klik "Mengerjakan" portal: mapel tujuan & host (tautan soal lengkap tidak pernah dicatat/dikirim)
-                     'aksi': 1, 'link_soal_id': 1, 'jenjang': 1, 'mapel': 1, 'url_host': 1}  # token (termasuk tebakan salah) tidak pernah dikirim
+                     'aksi': 1, 'link_soal_id': 1, 'jenjang': 1, 'mapel': 1, 'nama_mapel': 1, 'url_host': 1}  # token (termasuk tebakan salah) tidak pernah dikirim
 SARINGAN_AKSI = {'buka_tautan': KUERI_BUKA, 'klik_mengerjakan': {'aksi': AKSI_KLIK}}
 FIELD_PERUBAHAN_AUDIT = {'_id': 0, 'id': 1, 'waktu': 1, 'jenis': 1, 'aksi': 1, 'oleh_nama': 1, 'detail': 1}
 PERUBAHAN_AUDIT_MAKS = 30

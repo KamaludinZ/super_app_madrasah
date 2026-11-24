@@ -2,13 +2,14 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Activity, AlertTriangle, ArrowLeft, CircleDashed, ExternalLink, Info, Link2, Loader2, MonitorPlay, Pencil, PowerOff, RefreshCw, Settings2,
+  Activity, AlertTriangle, ArrowLeft, CalendarX2, CircleDashed, ExternalLink, Info, Link2, Loader2, MonitorPlay, Pencil, PowerOff, RefreshCw,
+  Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import AksesDitolak from '@/components/security/AksesDitolak';
 import PilihUjian from '@/components/ujian/PilihUjian';
-import { TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
+import { KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import { LencanaStatusTautan } from '@/components/ujian/tautan/KartuTautanPublik';
 import DialogLinkSoal from '@/components/ujian/linkSoal/DialogLinkSoal';
 import PanelBangunUlangKlik from '@/components/ujian/linkSoal/PanelBangunUlangKlik';
@@ -16,6 +17,7 @@ import PanelIntensitasKlik from '@/components/ujian/linkSoal/PanelIntensitasKlik
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { JENJANG_UJIAN, labelJenjang } from '@/lib/mapelUjian';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
+import { HALAMAN_FORMULIR } from '@/lib/ujianFormulir';
 import { HALAMAN_TAUTAN_PUBLIK, simpanTautanPublik, statusTautan, urlTautan } from '@/lib/ujianTautanPublik';
 import { barisLinkJenjang, hostUrl, ikutJadwal, muatLinkSoal } from '@/lib/ujianLinkSoal';
 
@@ -107,11 +109,25 @@ function BarisLink({ baris, jenjang, bolehUbah, onAtur }) {
   let tandaJendela = null;
   if (jendela && l?.jadwal) tandaJendela = ikutJadwal(l) ? 'Mengikuti jadwal' : 'Disesuaikan';
   return (
-    <li className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3" data-testid={`link-${jenjang}-${baris.kode}`} data-siap={l?.siap ? 'ya' : 'tidak'}>
+    <li className={`flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 ${baris.di_jadwal ? '' : 'bg-slate-50/70'}`}
+      data-testid={`link-${jenjang}-${baris.kode}`} data-siap={l?.siap ? 'ya' : 'tidak'} data-di-jadwal={baris.di_jadwal ? 'ya' : 'tidak'}>
       <span className="hidden w-6 shrink-0 text-right text-xs tabular-nums text-slate-400 sm:block">{baris.nomor}</span>
       <div className="min-w-0 flex-1 sm:grid sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_minmax(0,12rem)] sm:items-center sm:gap-3">
         <div className="flex items-center justify-between gap-2 sm:block">
-          <div className="text-sm font-semibold text-slate-900">{baris.nama}</div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-900">{baris.nama}</div>
+            {!baris.di_jadwal && (
+              <div className="text-[11px] font-semibold text-amber-700" data-testid={`link-${jenjang}-${baris.kode}-luar-jadwal`}
+                title="Mapel ini sudah dihapus dari jadwal sesi di Pengaturan Formulir. Link-nya tetap tersimpan, tetapi tidak tampil di portal.">
+                Tidak ada di jadwal · tidak tampil di portal
+              </div>
+            )}
+            {baris.jumlah_sesi > 1 && (
+              <div className="text-[11px] text-slate-500" data-testid={`link-${jenjang}-${baris.kode}-sesi-ganda`}>
+                Ada di {baris.jumlah_sesi} sesi · jam ikut sesi pertama
+              </div>
+            )}
+          </div>
           <span className="sm:hidden"><LencanaLink link={l} /></span>
         </div>
         <div className="min-w-0 text-xs text-slate-600" data-testid={`link-${jenjang}-${baris.kode}-jendela`}>
@@ -139,15 +155,29 @@ function BarisLink({ baris, jenjang, bolehUbah, onAtur }) {
   );
 }
 
-function IsiJenjang({ data, jenjang, bolehUbah, onAtur }) {
+function IsiJenjang({ data, jenjang, ujianId, bolehUbah, onAtur }) {
   const { baris, ringkas } = useMemo(() => barisLinkJenjang(data.link, data.mapel, jenjang), [data.link, data.mapel, jenjang]);
   const terakhir = useMemo(() => baris.map((b) => b.link).filter((l) => l?.diperbarui_pada)
     .sort((a, b) => String(b.diperbarui_pada).localeCompare(String(a.diperbarui_pada)))[0], [baris]);
+  if (!baris.length) {
+    return (
+      <KosongInfo Ikon={CalendarX2} judul={`Belum ada mapel ${labelJenjang(jenjang)} di jadwal sesi`} testId={`link-kosong-jadwal-${jenjang}`}>
+        Daftar mapel di sini mengikuti jadwal sesi ujian, termasuk mapel tambahan seperti Simulasi dari menu Mata Pelajaran.
+        {bolehUbah && (
+          <> Isi jadwalnya di{' '}
+            <Link to={`${HALAMAN_FORMULIR}?ujian=${encodeURIComponent(ujianId || '')}`} className="font-semibold text-[#006837] hover:underline"
+              data-testid={`link-ke-formulir-${jenjang}`}>Pengaturan Formulir</Link>.
+          </>
+        )}
+      </KosongInfo>
+    );
+  }
   return (
     <>
       <p className="mb-2 text-xs text-slate-500" data-testid={`ringkas-link-${jenjang}`}>
         <span className="font-semibold text-slate-700">{ringkas.siap}/{ringkas.total}</span> mapel {labelJenjang(jenjang)} siap dikerjakan
         {ringkas.terjadwal < ringkas.total && <> · {ringkas.total - ringkas.terjadwal} belum punya jendela waktu</>}
+        {ringkas.di_luar_jadwal > 0 && <> · {ringkas.di_luar_jadwal} tidak ada di jadwal</>}
         {terakhir && <> · terakhir diubah {formatWIBPanjang(terakhir.diperbarui_pada)}{terakhir.diperbarui_oleh_nama ? ` oleh ${terakhir.diperbarui_oleh_nama}` : ''}</>}
       </p>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -185,8 +215,8 @@ function PilihTampilan({ nilai, onUbah }) {
 
 /**
  * Link Soal (/ujian/link-soal?ujian=<id>&kelas=7|8|9[&tampilan=intensitas]): tautan soal eksternal & jendela waktu tombol "Mengerjakan" per
- * jenjang per mapel baku untuk Portal Ujian siswa. Jendela awalnya mengikuti jadwal ujian; admin boleh
- * mempersempitnya. Tiap baris disimpan sendiri lewat dialog dengan cek versi agar dua admin tidak saling menimpa.
+ * jenjang per mapel untuk Portal Ujian siswa. Daftar mapel mengikuti jadwal sesi ujian (Pengaturan Formulir), termasuk
+ * mapel di luar mapel baku seperti Simulasi; jendela awalnya sesi pertama mapel itu dan admin boleh mengubahnya. Tiap baris disimpan sendiri lewat dialog dengan cek versi agar dua admin tidak saling menimpa.
  * Kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat tanpa alamat soal lengkap. Tampilan
  * "Intensitas klik" menunjukkan jumlah & waktu klik Mengerjakan per mapel dari jejak audit.
  */
@@ -245,7 +275,9 @@ export default function UjianLinkSoalPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
             <MonitorPlay className="h-7 w-7 text-[#006837]" /> Link Soal
           </h1>
-          <p className="mt-1 text-sm text-slate-600">Tautan soal CBT dan jam tombol Mengerjakan per jenjang per mapel di Portal Ujian siswa.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Tautan soal CBT dan jam tombol Mengerjakan per jenjang per mapel di Portal Ujian siswa. Daftar mapel mengikuti jadwal sesi di Pengaturan Formulir.
+          </p>
         </div>
         <Button variant="outline" onClick={() => muat(ujian)} disabled={memuat || !ujian} className="gap-2 self-start sm:self-auto" data-testid="btn-muat-ulang-link">
           {memuat ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Muat Ulang
@@ -280,7 +312,7 @@ export default function UjianLinkSoalPage() {
           {tampilan === 'pengaturan' ? (
             <>
               <TabJenjang nilai={jenjang} onUbah={ubahJenjang} testId="link" lencana={lencana}
-                isi={(j) => <IsiJenjang data={data} jenjang={j} bolehUbah={bolehUbah} onAtur={setSasaran} />} />
+                isi={(j) => <IsiJenjang data={data} jenjang={j} ujianId={ujian?.id} bolehUbah={bolehUbah} onAtur={setSasaran} />} />
               {bolehUbah && (
                 <PanelBangunUlangKlik ujianId={ujian?.id} onSelesai={(link, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, link }))} />
               )}

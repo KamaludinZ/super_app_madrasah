@@ -114,7 +114,7 @@ export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
                 <span className={`rounded px-1.5 py-0.5 font-semibold ${kelasHasil(a.hasil)}`}>{LABEL_HASIL_AKSES[a.hasil] || a.hasil}</span>
                 {a.aksi === 'klik_mengerjakan' && (
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-[#006837]" data-testid={`audit-klik-${a.id}`}>
-                    Klik Mengerjakan{a.mapel ? ` · ${namaMapelUjian(a.mapel)}${a.jenjang ? ` Kelas ${a.jenjang}` : ''}` : ''}
+                    Klik Mengerjakan{a.mapel ? ` · ${a.nama_mapel || namaMapelUjian(a.mapel)}${a.jenjang ? ` Kelas ${a.jenjang}` : ''}` : ''}
                   </span>
                 )}
                 <span className="min-w-0 flex-1 text-slate-600">
