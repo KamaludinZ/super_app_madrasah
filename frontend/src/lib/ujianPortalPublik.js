@@ -38,6 +38,17 @@ import { buatSesi } from '@/lib/ujianMonitoringPublik';
 
 export { buatSesi };
 
+const BASIS_API = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
+
+/**
+ * Alamat tombol "Mengerjakan" satu mapel: rute kerjakan server yang memeriksa jendela waktu, mencatat klik sah, lalu
+ * mengalihkan (302) ke tautan soal eksternal. Tautan soal sendiri tidak pernah ada di halaman.
+ */
+export const urlKerjakan = (token, soalId) => `${BASIS_API}/publik/portal-ujian/${encodeURIComponent(token)}/kerjakan/${encodeURIComponent(soalId)}`;
+
+/** Tombol "Mengerjakan" boleh ditekan: tautan soal sudah disiapkan dan mapel sedang berlangsung menurut jam server. */
+export const bolehKerjakan = (soal) => !!soal?.siap && soal.status === 'berlangsung';
+
 export const STATUS_SOAL = {
   belum_dimulai: { label: 'Belum dimulai' },
   berlangsung: { label: 'Berlangsung' },

@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CircleDashed, Clock, MonitorPlay } from 'lucide-react';
+import { toast } from 'sonner';
+import { CalendarDays, CircleDashed, Clock, ExternalLink, Lock, MonitorPlay } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
-import { STATUS_SOAL, ringkasPortal, soalJenjang, sorotanPortal } from '@/lib/ujianPortalPublik';
+import {
+  STATUS_SOAL, bolehKerjakan, ringkasPortal, soalJenjang, sorotanPortal, urlKerjakan,
+} from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
@@ -23,24 +27,60 @@ export function useJamServer(selisih, tiap = 15000) {
 }
 
 const GAYA_STATUS = {
-  berlangsung: 'bg-amber-100 text-amber-800',
-  belum_dimulai: 'bg-slate-100 text-slate-600',
-  ditutup: 'bg-slate-100 text-slate-500',
+  berlangsung: 'text-amber-700',
+  belum_dimulai: 'text-slate-500',
+  ditutup: 'text-slate-500',
 };
 
-function ChipStatus({ soal, testId }) {
+/** Keterangan status satu mapel di bawah namanya (jam buka/tutup menurut jam server). */
+function KeteranganStatus({ soal, testId }) {
   if (!soal.siap) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
-        data-testid={testId} data-status="belum_siap">
-        <CircleDashed className="h-3 w-3" aria-hidden="true" /> Belum siap
-      </span>
+      <p className="inline-flex items-center gap-1 text-xs text-slate-500" data-testid={testId} data-status="belum_siap">
+        <CircleDashed className="h-3 w-3 shrink-0" aria-hidden="true" /> Belum siap — tautan soal belum disiapkan panitia
+      </p>
     );
   }
+  const rincian = {
+    berlangsung: `ditutup ${jam(soal.selesai_at)} WIB`,
+    belum_dimulai: `dibuka ${jam(soal.mulai_at)} WIB`,
+    ditutup: null,
+  }[soal.status];
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${GAYA_STATUS[soal.status]}`} data-testid={testId} data-status={soal.status}>
-      {STATUS_SOAL[soal.status].label}
-    </span>
+    <p className={`text-xs ${GAYA_STATUS[soal.status]}`} data-testid={testId} data-status={soal.status}>
+      <span className="font-semibold">{STATUS_SOAL[soal.status].label}</span>{rincian && <> · {rincian}</>}
+    </p>
+  );
+}
+
+/**
+ * Tombol "Mengerjakan": aktif hanya saat mapel berlangsung — membuka rute kerjakan server di tab baru tanpa referrer.
+ * Di luar jendela tombol dinonaktifkan dengan alasannya. Mapel yang tautan soalnya belum disiapkan tidak diberi tombol.
+ * Mode contoh (`tiruan`) tidak membuka apa pun: belum ada tautan soal sungguhan.
+ */
+function TombolKerjakan({ soal, token, tiruan, testId }) {
+  if (!soal.siap) return null;
+  if (!bolehKerjakan(soal)) {
+    const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Dibuka ${jam(soal.mulai_at)} WIB`;
+    return (
+      <Button type="button" size="sm" variant="outline" disabled title={alasan} aria-label={`Mengerjakan ${soal.nama} — ${alasan.toLowerCase()}`}
+        className="h-9 gap-1.5 px-3" data-testid={testId} data-aktif="tidak">
+        {soal.status === 'ditutup' ? <Lock aria-hidden="true" /> : <Clock aria-hidden="true" />} Mengerjakan
+      </Button>
+    );
+  }
+  const klikContoh = (e) => {
+    if (!tiruan) return;
+    e.preventDefault();
+    toast.info('Mode contoh: tautan soal sungguhan terbuka setelah server portal siap.');
+  };
+  return (
+    <Button asChild size="sm" className="h-9 gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d]" data-testid={testId} data-aktif="ya">
+      <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klikContoh}
+        aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)`}>
+        <ExternalLink aria-hidden="true" /> Mengerjakan
+      </a>
+    </Button>
   );
 }
 
@@ -68,27 +108,28 @@ function Sorotan({ sorotan, hariIni }) {
   );
 }
 
-function BarisSoal({ soal, jenjang }) {
-  const redup = soal.status === 'ditutup';
+function BarisSoal({ soal, jenjang, token, tiruan }) {
+  const redup = soal.status === 'ditutup' || !soal.siap;
+  const berlangsung = soal.siap && soal.status === 'berlangsung';
   return (
-    <li className={`flex items-center gap-3 px-3 py-2.5 ${redup ? 'opacity-60' : ''}`}
+    <li className={`flex items-center gap-3 px-3 py-2.5 ${berlangsung ? 'bg-amber-50/70' : ''}`}
       data-testid={`portal-${jenjang}-${soal.mapel}`} data-status={soal.siap ? soal.status : 'belum_siap'}>
-      <div className="w-24 shrink-0 text-xs text-slate-500">
+      <div className={`w-20 shrink-0 text-xs text-slate-500 sm:w-24 ${redup ? 'opacity-60' : ''}`}>
         {soal.sesi_ke ? <div className="font-medium text-slate-700">Sesi {soal.sesi_ke}</div> : null}
         <div className="tabular-nums">{jam(soal.mulai_at)}–{jam(soal.selesai_at)}</div>
       </div>
-      <div className="min-w-0 flex-1">
+      <div className={`min-w-0 flex-1 ${redup ? 'opacity-70' : ''}`}>
         <div className="text-sm font-semibold text-slate-900">{soal.nama}</div>
-        {!soal.siap && <p className="text-xs text-slate-500">Tautan soal belum disiapkan panitia.</p>}
+        <KeteranganStatus soal={soal} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
-      <div className="shrink-0" data-testid={`portal-${jenjang}-${soal.mapel}-aksi`}>
-        <ChipStatus soal={soal} testId={`portal-${jenjang}-${soal.mapel}-status`} />
+      <div className="shrink-0">
+        <TombolKerjakan soal={soal} token={token} tiruan={tiruan} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
       </div>
     </li>
   );
 }
 
-function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni }) {
+function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }) {
   const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
@@ -115,7 +156,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni }) {
                 {lewat && <span className="text-[11px] text-slate-500">Sudah lewat</span>}
               </div>
               <ul className="divide-y divide-slate-100">
-                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} />)}
+                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} />)}
               </ul>
             </li>
           );
@@ -131,11 +172,12 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni }) {
 }
 
 /**
- * Daftar mapel ujian portal dalam tiga tab jenjang (Kelas 7/8/9), dikelompokkan per tanggal sesuai jadwal. Tiap tab
+ * Daftar mapel ujian portal dalam tiga tab jenjang (Kelas 7/8/9), dikelompokkan per tanggal sesuai jadwal. Tiap baris:
+ * sesi & jam, nama mapel, keterangan status, dan tombol "Mengerjakan" (aktif hanya saat mapel berlangsung). Tiap tab
  * hanya memuat mapel baku jenjang itu; mapel yang sedang berlangsung (atau berikutnya) disorot di atas. Status dihitung
- * dari `sekarangMs` = waktu server berjalan (useJamServer), bukan jam perangkat.
+ * dari `sekarangMs` = waktu server berjalan (useJamServer), bukan jam perangkat. `token` = token portal (rute kerjakan).
  */
-export default function DaftarSoalPortal({ soal, mapel, jenjang, onUbahJenjang, sekarangMs }) {
+export default function DaftarSoalPortal({ soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false }) {
   const hariIni = useMemo(() => new Date(sekarangMs).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), [sekarangMs]);
   const lencana = (j) => {
     const r = ringkasPortal(soalJenjang(soal, j, mapelUntuk(mapel, j), sekarangMs).hari);
@@ -145,7 +187,7 @@ export default function DaftarSoalPortal({ soal, mapel, jenjang, onUbahJenjang, 
   return (
     <BagianInfo id="portal" Ikon={MonitorPlay} judul="Mata Pelajaran Ujian" keterangan="Semua jam dalam WIB menurut jam server madrasah. Pilih kelasmu.">
       <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="portal" lencana={lencana}
-        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} />} />
+        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} tiruan={tiruan} />} />
     </BagianInfo>
   );
 }
