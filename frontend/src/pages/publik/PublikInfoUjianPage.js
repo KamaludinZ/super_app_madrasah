@@ -20,9 +20,9 @@ const KUNCI_JENJANG = 'infoUjian:jenjang';
 const MUAT_OTOMATIS_MAKS_MS = 12 * 60 * 60 * 1000; // tautan yang dibuka ≤ 12 jam lagi dimuat ulang otomatis saat dibuka
 
 const NAVIGASI = [
-  { id: 'jadwal', label: 'Jadwal' },
   { id: 'tata-tertib', label: 'Tata Tertib' },
   { id: 'panduan-cbt', label: 'Panduan CBT' },
+  { id: 'jadwal', label: 'Jadwal' },
   { id: 'kisi-kisi', label: 'Kisi-kisi' },
 ];
 
@@ -65,8 +65,8 @@ function jenjangAwal(param) {
 }
 
 /**
- * Halaman informasi ujian untuk siswa lewat tautan publik /publik/info-ujian/:token (tanpa login): jadwal per jenjang,
- * tata tertib, panduan CBT, dan unduh kisi-kisi per jenjang dengan penghitung unduhan. Tautan yang tidak dikenal,
+ * Halaman informasi ujian untuk siswa lewat tautan publik /publik/info-ujian/:token (tanpa login), berurutan: tata tertib,
+ * panduan CBT, jadwal per jenjang, dan unduh kisi-kisi per jenjang dengan penghitung unduhan. Tautan yang tidak dikenal,
  * ditutup panitia, atau di luar jendela waktu akses menampilkan halaman "tautan tidak berlaku". Tab jenjang dapat
  * dibuka langsung dengan ?kelas=7|8|9.
  */
@@ -186,14 +186,15 @@ export default function PublikInfoUjianPage() {
 
       <NavigasiBagian />
 
-      {/* Layar besar: jadwal di kolom kiri, sisanya di kanan. Layar kecil: satu kolom berurutan. */}
+      {/* Urutan: tata tertib, panduan CBT, jadwal (tepat di bawah panduan), kisi-kisi. Layar besar: tata tertib di kolom
+          kiri, sisanya berurutan di kanan. Layar kecil: satu kolom dengan urutan yang sama. */}
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div className="space-y-4">
-          <JadwalUjianPublik jadwal={info.jadwal} jenjang={jenjang} onUbahJenjang={ubahJenjang} />
+          <TataTertibUjian teks={info.tata_tertib} />
         </div>
         <div className="space-y-4">
-          <TataTertibUjian teks={info.tata_tertib} />
           <PanduanCbt token={token} panduan={info.panduan_cbt} tiruan={info.tiruan} />
+          <JadwalUjianPublik jadwal={info.jadwal} jenjang={jenjang} onUbahJenjang={ubahJenjang} />
           <KisiKisiPerJenjang kisiKisi={info.kisi_kisi} mapel={info.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang} mengunduh={mengunduh} disorot={disorot} onUnduh={unduh} />
         </div>
       </div>
