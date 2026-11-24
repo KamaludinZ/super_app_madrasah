@@ -18,7 +18,8 @@
  *          soal: [{ id, jenjang: 7|8|9, mapel: kode baku, tanggal: 'YYYY-MM-DD' (WIB), sesi_ke,
  *                   mulai_at, selesai_at,                 (jendela tombol "Mengerjakan"; awalnya dari jadwal ujian)
  *                   status: 'belum_dimulai' | 'berlangsung' | 'ditutup',   (menurut waktu server)
- *                   siap: bool,                           (false = tautan soal belum diisi/dinonaktifkan admin)
+ *                   siap: bool,                           (tautan soal terisi DAN tombol diaktifkan admin)
+ *                   ditahan: bool,                        (tautan terisi tetapi tombol dimatikan admin; siap = false)
  *                   jumlah_klik, klik_terakhir_at }] }    (cache klik sah dari ujian_link_soal)
  *        TIDAK PERNAH memuat `url` tautan soal: tautan baru keluar lewat rute kerjakan di bawah, saat mapel berlangsung.
  *        Mapel baku yang tidak punya entri `soal` = belum dijadwalkan.
@@ -195,7 +196,7 @@ export function galatPortal(e) {
 }
 
 // ---- Isolasi data: whitelist field ----
-const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'jumlah_klik', 'klik_terakhir_at'];
+const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at'];
 
 /**
  * Saring daftar soal dari server: hanya FIELD_SOAL_PUBLIK. Lapisan pertahanan kedua — bila server keliru mengirim `url`
@@ -206,7 +207,7 @@ export function bersihkanSoalPublik(soal) {
     .filter((s) => s && s.mapel && JENJANG_UJIAN.includes(Number(s.jenjang)))
     .map((s) => {
       const b = Object.fromEntries(FIELD_SOAL_PUBLIK.map((k) => [k, s[k] ?? null]));
-      return { ...b, jenjang: Number(b.jenjang), siap: !!b.siap, jumlah_klik: Number(b.jumlah_klik) || 0 };
+      return { ...b, jenjang: Number(b.jenjang), siap: !!b.siap, ditahan: !b.siap && !!b.ditahan, jumlah_klik: Number(b.jumlah_klik) || 0 };
     });
 }
 
@@ -265,8 +266,10 @@ function soalTiruan() {
       hasil.push({
         id, jenjang: j, mapel: m.kode, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
         mulai_at: iso(mulai), selesai_at: iso(selesai), status,
-        // satu mapel per jenjang tautan soalnya belum diisi admin; kelas 8 termasuk mapel yang dibuka sebentar lagi hari ini
-        siap: i !== 4 + ji && !(j === 8 && i === 2),
+        // satu mapel per jenjang tautan soalnya belum diisi admin; kelas 8 termasuk mapel yang dibuka sebentar lagi hari ini.
+        // Kelas 7: satu mapel tautannya sudah ada tetapi tombolnya dimatikan admin (ditahan).
+        siap: i !== 4 + ji && !(j === 8 && i === 2) && !(j === 7 && i === 6),
+        ditahan: j === 7 && i === 6,
         jumlah_klik: klik, klik_terakhir_at: dicatat?.terakhir || (klikAwalAt ? iso(klikAwalAt) : null),
       });
     });
@@ -307,7 +310,7 @@ export function portalTiruan(token) {
 /**
  * Pencatat klik tiruan (meniru rute kerjakan server): klik hanya dihitung bila portal terbuka dan mapel itu sedang
  * berlangsung menurut jam "server" (jam perangkat pada mode contoh) serta tautan soalnya siap. -> { jumlah_klik,
- * klik_terakhir_at }. Di luar jendela melempar galat 403 { alasan: 'di_luar_jendela' | 'belum_siap', pesan } dan
+ * klik_terakhir_at }. Di luar jendela melempar galat 403 { alasan: 'di_luar_jendela' | 'belum_siap' | 'ditahan', pesan } dan
  * penghitung tidak bertambah.
  */
 export function catatKlikTiruan(token, soalId) {
@@ -315,7 +318,7 @@ export function catatKlikTiruan(token, soalId) {
   const s = isi.soal.find((x) => x.id === soalId);
   const tolak = (alasan, pesan) => { const e = new Error('klik'); e.response = { status: 403, data: { detail: { alasan, pesan } } }; return e; };
   if (!s) throw tolak('tidak_dikenal', 'Mapel tidak ditemukan pada portal ini.');
-  if (!s.siap) throw tolak('belum_siap', 'Tautan soal mapel ini belum disiapkan panitia.');
+  if (!s.siap) throw s.ditahan ? tolak('ditahan', 'Tombol mapel ini sedang ditahan panitia.') : tolak('belum_siap', 'Tautan soal mapel ini belum disiapkan panitia.');
   if (statusSoal(s, Date.now()) !== 'berlangsung') throw tolak('di_luar_jendela', 'Di luar jam pengerjaan mapel ini.');
   const c = klikContoh[soalId] || { jumlah: 0, terakhir: null };
   c.jumlah += 1;

@@ -40,15 +40,18 @@ const GAYA_STATUS = {
  */
 function KeteranganStatus({ soal, sekarangMs, testId }) {
   if (!soal.siap) {
-    // Jam ujian sudah berjalan tetapi tautan soal belum dipasang: siswa perlu tahu harus melapor, bukan menunggu diam.
+    // Jam ujian sudah berjalan tetapi tombol belum bisa dipakai: siswa perlu tahu harus melapor, bukan menunggu diam.
     const mendesak = soal.status === 'berlangsung';
+    const teks = soal.ditahan
+      ? (mendesak ? 'Tombol sedang ditahan panitia. Tunggu arahan pengawas ruang.' : 'Tombol ditahan panitia.')
+      : (mendesak ? 'Jam ujian sudah dimulai, tetapi tautan soal belum disiapkan. Laporkan ke pengawas ruang.' : 'Tautan soal belum disiapkan panitia.');
     return (
       <p className={`mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs ${mendesak ? 'text-amber-800' : 'text-slate-500'}`}
-        data-testid={testId} data-status="belum_siap" data-mendesak={mendesak ? 'ya' : 'tidak'}>
+        data-testid={testId} data-status={soal.ditahan ? 'ditahan' : 'belum_siap'} data-mendesak={mendesak ? 'ya' : 'tidak'}>
         <span className={`inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[11px] font-semibold ${mendesak ? 'border-amber-400 bg-amber-50' : 'border-slate-300'}`}>
-          {mendesak ? <AlertTriangle className="h-3 w-3" aria-hidden="true" /> : <CircleDashed className="h-3 w-3" aria-hidden="true" />} Belum siap
+          {mendesak ? <AlertTriangle className="h-3 w-3" aria-hidden="true" /> : <CircleDashed className="h-3 w-3" aria-hidden="true" />} {soal.ditahan ? 'Ditahan' : 'Belum siap'}
         </span>
-        {mendesak ? 'Jam ujian sudah dimulai, tetapi tautan soal belum disiapkan. Laporkan ke pengawas ruang.' : 'Tautan soal belum disiapkan panitia.'}
+        {teks}
       </p>
     );
   }
@@ -161,7 +164,7 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
               {!s.siap && (
                 <span className={`ml-1.5 inline-flex rounded-full border border-dashed px-1.5 text-[11px] font-semibold ${berlangsung ? 'border-white/60 text-white' : 'border-slate-300 text-slate-600'}`}
                   data-testid={`portal-sorotan-belum-siap-${s.mapel}`}>
-                  Belum siap
+                  {s.ditahan ? 'Ditahan' : 'Belum siap'}
                 </span>
               )}
             </div>
@@ -178,7 +181,7 @@ function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKed
   // Di layar sempit tombol aktif turun ke baris sendiri selebar kolom isi agar mudah diketuk; tombol nonaktif tetap ringkas.
   return (
     <li className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:flex-nowrap ${berlangsung ? 'bg-amber-50/70' : ''}`}
-      data-testid={`portal-${jenjang}-${soal.mapel}`} data-status={soal.siap ? soal.status : 'belum_siap'}>
+      data-testid={`portal-${jenjang}-${soal.mapel}`} data-status={soal.siap ? soal.status : (soal.ditahan ? 'ditahan' : 'belum_siap')}>
       <div className={`w-[4.75rem] shrink-0 text-xs text-slate-500 sm:w-24 ${redup ? 'opacity-60' : ''}`}>
         {soal.sesi_ke ? <div className="font-medium text-slate-700">Sesi {soal.sesi_ke}</div> : null}
         <div className="tabular-nums">{jam(soal.mulai_at)}–{jam(soal.selesai_at)}</div>
@@ -235,8 +238,8 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, 
         <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600" data-testid={`portal-belum-siap-${jenjang}`}>
           <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
           <span>
-            {belumSiap.length} mapel belum siap: <span className="font-medium text-slate-800">{belumSiap.map((m) => m.nama).join(', ')}</span>.
-            {' '}Tombol Mengerjakan muncul sendiri setelah panitia memasang tautan soalnya — halaman ini diperbarui otomatis tiap menit.
+            {belumSiap.length} mapel belum siap: <span className="font-medium text-slate-800">{belumSiap.map((m) => (m.ditahan ? `${m.nama} (ditahan)` : m.nama)).join(', ')}</span>.
+            {' '}Tombol Mengerjakan muncul sendiri setelah panitia memasang atau membuka tautan soalnya — halaman ini diperbarui otomatis tiap menit.
           </span>
         </p>
       )}
