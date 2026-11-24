@@ -454,3 +454,51 @@ async def naikkan_klik(db, link_id: str, waktu: datetime) -> None:
 def id_soal_layak(soal_id: Optional[str]) -> bool:
     """Bentuk id link soal masuk akal (dicek sebelum query): uuid / id URL-safe ≤ 64 karakter."""
     return bool(soal_id) and len(soal_id) <= 64 and re.fullmatch(r'[A-Za-z0-9_-]+', soal_id) is not None
+
+
+# ---- Agregasi klik dari jejak audit (sumber kebenaran) & bangun ulang cache ----
+LOG_KLIK_MAKS = 500000
+
+
+async def agregasi_klik(db, ujian_id: str) -> Dict[str, Dict[str, Any]]:
+    """Klik SAH per link soal satu ujian dari ujian_akses_log (KUERI_KLIK) -> { link_soal_id: { jumlah, terakhir } }.
+    Inilah sumber kebenaran penghitung; jumlah_klik di dokumen link soal hanya cache."""
+    hasil: Dict[str, Dict[str, Any]] = {}
+    log = await db[KOLEKSI_AKSES_LOG].find({'ujian_id': ujian_id, **KUERI_KLIK}, {'_id': 0, 'link_soal_id': 1, 'waktu': 1}).to_list(LOG_KLIK_MAKS)
+    for x in log:
+        lid = x.get('link_soal_id')
+        if not lid:
+            continue
+        h = hasil.setdefault(lid, {'jumlah': 0, 'terakhir': None})
+        h['jumlah'] += 1
+        w = x.get('waktu')
+        if w and (h['terakhir'] is None or baca_waktu(w) > baca_waktu(h['terakhir'])):
+            h['terakhir'] = w
+    return hasil
+
+
+async def bangun_ulang_klik(db, ujian_id: str, dry_run: bool = False, waktu: datetime = None) -> Dict[str, Any]:
+    """Hitung ulang cache jumlah_klik & klik_terakhir_at semua link soal satu ujian dari jejak audit. Idempoten; log tidak
+    diubah. Pembaruan bersyarat (cache tidak berubah sejak dibaca): klik yang masuk di tengah proses tidak pernah
+    tertimpa — baris itu dilaporkan di `berubah` dan cukup dijalankan ulang.
+    -> { diperiksa, diperbaiki, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }], berubah, waktu, dry_run }"""
+    agregat = await agregasi_klik(db, ujian_id)
+    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(1000)
+    selisih, berubah = [], []
+    for d in sorted(docs, key=lambda d: (d.get('jenjang') or 0, d.get('mapel') or '')):
+        a = agregat.get(d['id'], {'jumlah': 0, 'terakhir': None})
+        sebelum, terakhir_lama = int(d.get('jumlah_klik') or 0), d.get('klik_terakhir_at')
+        if (sebelum, terakhir_lama) == (a['jumlah'], a['terakhir']):
+            continue
+        baris = {'jenjang': d.get('jenjang'), 'mapel': d.get('mapel'), 'sebelum': sebelum, 'sesudah': a['jumlah'],
+                 'klik_terakhir_at': a['terakhir']}
+        if not dry_run:
+            r = await db[KOLEKSI_LINK_SOAL].update_one(
+                {'id': d['id'], 'jumlah_klik': d.get('jumlah_klik'), 'klik_terakhir_at': terakhir_lama},
+                {'$set': {'jumlah_klik': a['jumlah'], 'klik_terakhir_at': a['terakhir']}})
+            if not r.matched_count:
+                berubah.append({k: baris[k] for k in ('jenjang', 'mapel')})
+                continue
+        selisih.append(baris)
+    return {'diperiksa': len(docs), 'diperbaiki': len(selisih), 'selisih': selisih, 'berubah': berubah,
+            'waktu': (waktu or sekarang_wib()).isoformat(), 'dry_run': dry_run}

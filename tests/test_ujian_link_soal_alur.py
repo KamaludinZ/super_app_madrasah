@@ -163,3 +163,81 @@ def test_versi_berganti_tiap_simpan(klien):
         assert r.status_code == 200, r.text
         versi.append(r.json()['link']['versi'])
     assert len(set(versi)) == 4
+
+
+# ---- Bangun ulang penghitung klik dari jejak audit ----
+def log_klik(link_id, hasil='ok', waktu='07:40', ujian='uas', aksi='klik_mengerjakan'):
+    return {'id': f'log-{link_id}-{hasil}-{waktu}', 'ujian_id': ujian, 'tautan_id': 't-portal', 'jenis_tautan': 'portal', 'aksi': aksi,
+            'hasil': hasil, 'link_soal_id': link_id, 'waktu': f'{HARI_INI}T{waktu}:00+07:00'}
+
+
+def siapkan_klik(k):
+    k.db.ujian_link_soal.docs += [
+        {'id': 'l-mtk', 'ujian_id': 'uas', 'jenjang': 7, 'mapel': 'matematika', 'url': 'https://cbt.id/m', 'aktif': True, **JENDELA,
+         'jumlah_klik': 1, 'klik_terakhir_at': f'{HARI_INI}T07:35:00+07:00', 'diperbarui_pada': 'v1'},   # cache tertinggal
+        {'id': 'l-ipa', 'ujian_id': 'uas', 'jenjang': 8, 'mapel': 'ipa', 'url': 'https://cbt.id/i', 'aktif': True, **JENDELA,
+         'jumlah_klik': 5, 'klik_terakhir_at': f'{HARI_INI}T08:10:00+07:00', 'diperbarui_pada': 'v1'},   # cache berlebih
+        {'id': 'l-ips', 'ujian_id': 'uas', 'jenjang': 9, 'mapel': 'ips', 'url': 'https://cbt.id/s', 'aktif': True, **JENDELA,
+         'jumlah_klik': 1, 'klik_terakhir_at': f'{HARI_INI}T07:31:00+07:00', 'diperbarui_pada': 'v1'},   # sudah sesuai
+    ]
+    k.db.ujian_akses_log.docs += [
+        log_klik('l-mtk', waktu='07:35'), log_klik('l-mtk', waktu='07:50'), log_klik('l-mtk', waktu='07:41'),
+        log_klik('l-mtk', hasil='sudah_selesai', waktu='09:05'),                 # ditolak: tidak dihitung
+        log_klik('l-ipa', waktu='07:45'), log_klik('l-ipa', waktu='07:44', ujian='ujian-lain'),
+        log_klik('l-ipa', hasil='ok', waktu='07:46', aksi='buka_tautan'),         # pembukaan, bukan klik
+        log_klik('l-ips', waktu='07:31'),
+    ]
+
+
+def test_bangun_ulang_klik_dari_jejak_audit(klien):
+    siapkan_klik(klien)
+    log_sebelum = [dict(x) for x in klien.db.ujian_akses_log.docs]
+    r = klien('admin', 'admin', 'POST', f'{URL}/bangun-ulang-klik')
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert (d['diperiksa'], d['diperbaiki'], d['berubah']) == (3, 2, [])
+    assert d['selisih'] == [
+        {'jenjang': 7, 'mapel': 'matematika', 'sebelum': 1, 'sesudah': 3, 'klik_terakhir_at': f'{HARI_INI}T07:50:00+07:00'},
+        {'jenjang': 8, 'mapel': 'ipa', 'sebelum': 5, 'sesudah': 1, 'klik_terakhir_at': f'{HARI_INI}T07:45:00+07:00'},
+    ]
+    assert entri(d, 7, 'matematika')['jumlah_klik'] == 3 and len(d['link']) == 45
+    assert klien.db.ujian_akses_log.docs == log_sebelum  # jejak audit tidak diubah
+    assert any(a['action'] == 'ujian_link_soal_bangun_ulang_klik' for a in klien.db.audit_logs.docs)
+    ulang = klien('admin', 'admin', 'POST', f'{URL}/bangun-ulang-klik').json()
+    assert (ulang['diperbaiki'], ulang['selisih']) == (0, [])  # idempoten
+    # portal membaca cache yang sudah sama dengan log
+    assert klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 3
+
+
+def test_bangun_ulang_tidak_menimpa_klik_yang_masuk_saat_dihitung(klien, monkeypatch):
+    siapkan_klik(klien)
+    koleksi = klien.db.ujian_link_soal
+    asli = koleksi.update_one
+
+    async def sela(q, u, upsert=False):
+        if q.get('id') == 'l-mtk':  # klik siswa masuk di antara penghitungan & penulisan
+            koleksi.docs[0]['jumlah_klik'] += 1
+        return await asli(q, u, upsert=upsert)
+    monkeypatch.setattr(koleksi, 'update_one', sela)
+    d = klien('admin', 'admin', 'POST', f'{URL}/bangun-ulang-klik').json()
+    assert d['berubah'] == [{'jenjang': 7, 'mapel': 'matematika'}] and [s['mapel'] for s in d['selisih']] == ['ipa']
+    assert koleksi.docs[0]['jumlah_klik'] == 2  # klik baru tetap ada; dijalankan ulang untuk disamakan
+
+
+@pytest.mark.parametrize('uid,peran', [('kamad', 'kepala_sekolah'), ('guru1', 'guru'), ('guru2', 'guru')])
+def test_bangun_ulang_hanya_admin(klien, uid, peran):
+    siapkan_klik(klien)
+    assert klien(uid, peran, 'POST', f'{URL}/bangun-ulang-klik').status_code == 403
+    assert klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 1
+
+
+def test_skrip_bangun_ulang_semua_ujian(klien):
+    import asyncio
+
+    from migrations.bangun_ulang_klik_portal import jalankan
+    siapkan_klik(klien)
+    kering = asyncio.run(jalankan(klien.db, dry_run=True))
+    assert (kering['ujian'], kering['diperbaiki'], kering['dry_run']) == (1, 2, True) and klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 1
+    hasil = asyncio.run(jalankan(klien.db, 'uas'))
+    assert hasil['diperbaiki'] == 2 and klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 3
+    assert asyncio.run(jalankan(klien.db))['diperbaiki'] == 0

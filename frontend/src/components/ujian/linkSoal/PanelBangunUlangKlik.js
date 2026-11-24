@@ -63,6 +63,11 @@ export default function PanelBangunUlangKlik({ ujianId, onSelesai }) {
               : `Semua ${hasil.diperiksa} penghitung sudah sesuai`}
             <span className="font-normal text-slate-500">· {formatWIBPanjang(hasil.waktu)}</span>
           </p>
+          {hasil.berubah?.length > 0 && (
+            <p className="mt-1.5 text-amber-700" data-testid="bangun-ulang-berubah">
+              {hasil.berubah.length} mapel menerima klik baru saat dihitung sehingga dilewati — jalankan ulang untuk menyamakannya.
+            </p>
+          )}
           {hasil.selisih?.length > 0 && (
             <ul className="mt-2 divide-y divide-slate-200">
               {hasil.selisih.map((s) => (

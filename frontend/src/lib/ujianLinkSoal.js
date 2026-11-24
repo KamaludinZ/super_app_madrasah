@@ -14,7 +14,8 @@
  *        (admin; menimpa — satu baris per jenjang+mapel. `versi` = link.versi yang dimuat (null bila belum pernah
  *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai -> pesan)
  *   POST /ujian/{ujian_id}/link-soal/bangun-ulang-klik
- *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }], link: [LinkSoal] }
+ *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }],
+ *          berubah: [{ jenjang, mapel }] (menerima klik baru saat dihitung — dilewati, jalankan ulang), link: [LinkSoal] }
  *        (admin; jumlah_klik & klik_terakhir_at tiap link soal dihitung ulang dari ujian_akses_log aksi=klik_mengerjakan —
  *         log adalah sumber kebenaran, angka pada dokumen hanya cache. Log tidak diubah; aman diulang.)
  *   GET /ujian/{ujian_id}/link-soal/intensitas[?dari=YYYY-MM-DD&sampai=YYYY-MM-DD]   (admin & pemantau)
@@ -260,7 +261,7 @@ export const bangunUlangKlik = (ujianId) => denganTiruan(
       l.selisih_log = 0;
     });
     return {
-      diperiksa: daftar.filter((l) => l.id).length, diperbaiki: selisih.length, selisih, waktu: new Date().toISOString(),
+      diperiksa: daftar.filter((l) => l.id).length, diperbaiki: selisih.length, selisih, berubah: [], waktu: new Date().toISOString(),
       link: daftar.map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
     };
   },

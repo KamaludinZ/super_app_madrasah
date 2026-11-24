@@ -5,7 +5,8 @@ Kontrak sama dengan frontend/src/lib/ujianLinkSoal.js.
 Akses: admin (pengelola) mengubah; kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia ujian itu melihat
 (boleh_ubah = false) TANPA alamat soal lengkap (hanya nama host). Simpan per baris (jenjang × mapel) MENIMPA dokumen
 lama dengan cek versi (409 bila admin lain baru mengubah baris itu) — pola PUT /ujian/{id}/info-konten. Penghitung klik
-(jumlah_klik, klik_terakhir_at) tidak pernah ditulis dari sini: klik siswa dapat menaikkannya kapan saja.
+(jumlah_klik, klik_terakhir_at) tidak pernah ditulis saat menyimpan: klik siswa dapat menaikkannya kapan saja; cache itu
+hanya dapat dihitung ulang dari jejak audit lewat POST /ujian/{id}/link-soal/bangun-ulang-klik.
 """
 from typing import Dict
 
@@ -18,8 +19,8 @@ from routers.ujian_formulir import jadwal_ujian
 from ujian import PERAN_BUKAN_PANITIA, sekarang_wib
 from ujian_info import JENJANG_UJIAN, inisialisasi_tautan, mapel_jenjang, mapel_semua_jenjang
 from ujian_portal import (
-    KOLEKSI_LINK_SOAL, LinkSoalIn, dokumen_link_soal, host_url, jendela_jadwal, peringatan_link, ringkas_link_admin,
-    ringkas_tautan_portal, susun_link_admin,
+    KOLEKSI_LINK_SOAL, LinkSoalIn, bangun_ulang_klik, dokumen_link_soal, host_url, jendela_jadwal, peringatan_link,
+    ringkas_link_admin, ringkas_tautan_portal, susun_link_admin,
 )
 
 router = APIRouter()
@@ -91,3 +92,21 @@ async def simpan_link_soal(ujian_id: str, jenjang: int, mapel: str, body: LinkSo
     jd = jendela_jadwal(await jadwal_ujian(ujian_id), jenjang, daftar).get(mapel)
     return {'link': ringkas_link_admin(tersimpan, jenjang, mapel, jd, tampil_url=True),
             'peringatan': peringatan_link(body, a['ujian'], jd)}
+
+
+@router.post("/ujian/{ujian_id}/link-soal/bangun-ulang-klik")
+async def bangun_ulang_penghitung_klik(ujian_id: str, request: Request, response: Response, user: Dict = Depends(get_current_user)):
+    """Bangun ulang penghitung klik (admin): jumlah_klik & klik_terakhir_at tiap link soal dihitung ulang dari jejak audit
+    (ujian_akses_log, klik sah saja) — log adalah sumber kebenaran, angka di portal hanya cache. Log tidak diubah; aman
+    diulang. -> { diperiksa, diperbaiki, selisih, berubah, waktu, link: [LinkSoal] }"""
+    a = await akses_ujian(user, ujian_id, MENU)
+    if not _boleh_ubah(a, user):
+        raise HTTPException(403, PESAN_HANYA_ADMIN)
+    hasil = await bangun_ulang_klik(db, ujian_id, waktu=sekarang_wib())
+    await log_audit(user, 'ujian_link_soal_bangun_ulang_klik', KOLEKSI_LINK_SOAL, ujian_id,
+                    {'ujian_id': ujian_id, 'diperiksa': hasil['diperiksa'], 'diperbaiki': hasil['diperbaiki'],
+                     'selisih': hasil['selisih'][:20], 'berubah': len(hasil['berubah'])}, request=request)
+    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(500)
+    response.headers.update(TANPA_CACHE)
+    return {**{k: hasil[k] for k in ('diperiksa', 'diperbaiki', 'selisih', 'berubah', 'waktu')},
+            'link': susun_link_admin(docs, await mapel_semua_jenjang(db), await jadwal_ujian(ujian_id), tampil_url=True)}
