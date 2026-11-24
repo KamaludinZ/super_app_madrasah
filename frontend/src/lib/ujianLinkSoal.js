@@ -23,6 +23,10 @@
  *                         jumlah_klik, klik_terakhir_at, harian: [{ tanggal, jumlah }] }] }
  *        (diagregasi dari ujian_akses_log aksi=klik_mengerjakan per link_soal_id dalam rentang tanggal WIB — BUKAN dari
  *         cache jumlah_klik — sehingga tetap dapat ditelusuri setelah ujian selesai; satu entri per jenjang × mapel baku)
+ *   GET /ujian/{ujian_id}/link-soal/{link_soal_id}/klik[?batas=200]   (admin & pemantau)
+ *     -> { total, klik: [{ id, waktu, ip, perangkat (user agent), sesi }] (terbaru dulu, maksimal `batas`),
+ *          per_ip: [{ ip, jumlah }], per_perangkat: [{ perangkat, jumlah }] (terbanyak dulu, dari SELURUH klik) }
+ *        (baris ujian_akses_log aksi=klik_mengerjakan link soal itu; untuk menelusuri sumber klik yang janggal)
  *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode baku, url (admin saja; pemantau: '' dan url_host), url_host,
  *                mulai_at, selesai_at, aktif, siap (url terisi & aktif),
  *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at } | null,   (sesi jadwal ujian mapel ini = nilai awal)
@@ -31,7 +35,7 @@
 import { api } from '@/lib/api';
 import { denganTiruan } from '@/lib/ujian';
 import { hariIniWIB } from '@/lib/tanggal';
-import { parseServerDate } from '@/lib/datetime';
+import { parseServerDate, wibDateKey } from '@/lib/datetime';
 import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU, mapelUntuk } from '@/lib/mapelUjian';
 import { tambahHari } from '@/lib/ujianInfoPublik';
 import { dariInputWaktu, keInputWaktu, muatTautanPublik } from '@/lib/ujianTautanPublik';
@@ -331,16 +335,63 @@ export const muatIntensitasKlik = (ujianId, { dari = '', sampai = '' } = {}) => 
     const intensitas = linkContoh(ujianId).map((l) => {
       const harian = harianContoh(l).filter((h) => dalam(h.tanggal));
       const jumlah = harian.reduce((n, h) => n + h.jumlah, 0);
-      const akhir = harian.length ? harian[harian.length - 1].tanggal : null;
+      // klik terakhir = klik terbaru dalam rentang pada daftar klik contoh yang sama dengan panel rincian
+      const terbaru = jumlah ? klikContohLink(l).find((k) => dalam(wibDateKey(k.waktu))) : null;
       return {
         link_soal_id: l.id, jenjang: l.jenjang, mapel: l.mapel, url_host: l.url_host, mulai_at: l.mulai_at, selesai_at: l.selesai_at, siap: l.siap,
-        jumlah_klik: jumlah,
-        klik_terakhir_at: !jumlah ? null : (akhir === l.jadwal?.tanggal ? l.klik_terakhir_at : `${akhir}T08:05:00+07:00`),
-        harian,
+        jumlah_klik: jumlah, klik_terakhir_at: terbaru?.waktu || null, harian,
       };
     });
     const hari = [...new Set(intensitas.flatMap((x) => x.harian.map((h) => h.tanggal)))].sort();
     return { rentang: { dari: dari || null, sampai: sampai || null }, hari, ringkasan: ringkasIntensitas(intensitas), intensitas };
+  },
+);
+
+// ---- Rincian klik satu mapel ----
+const AGEN_KLIK_CONTOH = [
+  'Mozilla/5.0 (Linux; Android 13; SM-A145F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 12; Redmi Note 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+];
+
+/** Kelompokkan & urutkan terbanyak dulu -> [{ [kunci]: nilai, jumlah }]. */
+function hitungPer(klik, kunci) {
+  const peta = new Map();
+  klik.forEach((k) => peta.set(k[kunci], (peta.get(k[kunci]) || 0) + 1));
+  return [...peta.entries()].map(([v, jumlah]) => ({ [kunci]: v, jumlah })).sort((a, b) => b.jumlah - a.jumlah || String(a[kunci]).localeCompare(String(b[kunci])));
+}
+
+// Klik contoh satu link soal: tersebar di jendela sesi tiap hari pada sebaran harian; sebagian besar dari IP jaringan
+// lab sekolah (bersama), sisanya dari IP seluler berbeda-beda.
+function klikContohLink(l) {
+  const hasil = [];
+  harianContoh(l).forEach((h, hi) => {
+    const awal = parseServerDate(h.tanggal === l.jadwal?.tanggal ? l.mulai_at : `${h.tanggal}T08:00:00+07:00`).getTime();
+    for (let i = 0; i < h.jumlah; i += 1) {
+      const s = (i * 7919 + hi * 104729 + l.jenjang * 31) % 997;
+      const lab = s % 3 !== 0;
+      hasil.push({
+        id: `contoh-klik-${l.id}-${hi}-${i}`,
+        waktu: new Date(awal + ((i * 173 + s) % 4800) * 1000).toISOString(),
+        ip: lab ? `103.47.12.${10 + (s % 2)}` : `114.10.${s % 40}.${(s * 7) % 250 + 3}`,
+        perangkat: AGEN_KLIK_CONTOH[(lab ? s % 3 : 3 + (s % 2)) % AGEN_KLIK_CONTOH.length],
+        sesi: (s * 2654435761 % 4294967296).toString(16).padStart(8, '0'),
+      });
+    }
+  });
+  return hasil.sort((a, b) => b.waktu.localeCompare(a.waktu));
+}
+
+/** Rincian klik "Mengerjakan" satu link soal -> { total, klik, per_ip, per_perangkat, tiruan }. */
+export const muatRincianKlik = (ujianId, linkSoalId, { batas = 200 } = {}) => denganTiruan(
+  async () => (await api.get(`/ujian/${ujianId}/link-soal/${encodeURIComponent(linkSoalId)}/klik`, { params: { batas } })).data,
+  () => {
+    const l = linkContoh(ujianId).find((x) => x.id === linkSoalId);
+    if (!l) throw galat(404, 'Link soal tidak ditemukan.');
+    const klik = klikContohLink(l);
+    return { total: klik.length, klik: klik.slice(0, batas), per_ip: hitungPer(klik, 'ip'), per_perangkat: hitungPer(klik, 'perangkat') };
   },
 );
 

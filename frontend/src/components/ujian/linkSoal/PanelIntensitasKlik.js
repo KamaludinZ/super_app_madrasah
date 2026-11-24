@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
+import RincianKlikSheet from '@/components/ujian/linkSoal/RincianKlikSheet';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
@@ -60,7 +61,7 @@ function SebaranHarian({ harian, hari, maksHari, testId }) {
  * Satu mapel: jendela & host tautan, jumlah klik dengan batang relatif terhadap mapel tersibuk di jenjang itu (`maks`),
  * sebaran klik harian, klik terakhir, dan lencana bila tautannya terpasang tetapi tidak tersentuh / masih menunggu jadwal.
  */
-function BarisIntensitas({ baris, jenjang, maks, hari, maksHari }) {
+function BarisIntensitas({ baris, jenjang, maks, hari, maksHari, onRincian }) {
   const d = baris.data;
   const n = Number(d?.jumlah_klik) || 0;
   const keadaan = keadaanKlik(d);
@@ -100,6 +101,13 @@ function BarisIntensitas({ baris, jenjang, maks, hari, maksHari }) {
       <span className="text-xs text-slate-500" data-testid={`intensitas-${jenjang}-${baris.kode}-terakhir`}>
         {d?.klik_terakhir_at ? <>Terakhir {tglPendek(d.klik_terakhir_at)} {jam(d.klik_terakhir_at)}</>
           : <span className="text-slate-400" data-keadaan={keadaan}>{keadaan === 'menunggu' ? 'Menunggu jadwal' : 'Belum pernah diklik'}</span>}
+        {n > 0 && d?.link_soal_id && (
+          <button type="button" onClick={() => onRincian({ jenjang, nama: baris.nama, data: d })}
+            className="ml-2 font-semibold text-[#006837] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#006837] sm:ml-0 sm:block"
+            data-testid={`intensitas-${jenjang}-${baris.kode}-rincian`}>
+            Rincian
+          </button>
+        )}
       </span>
     </li>
   );
@@ -130,7 +138,7 @@ function BarisSaringan({ saringan, onUbah, mapel }) {
   );
 }
 
-function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
+function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian }) {
   const baris = useMemo(() => intensitasJenjang(data.intensitas, mapel, jenjang), [data.intensitas, mapel, jenjang]);
   const tampil = useMemo(() => saringIntensitas(baris, saringan), [baris, saringan]);
   const r = ringkasIntensitas(baris.map((b) => b.data).filter(Boolean));
@@ -163,7 +171,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
             <span>Klik terakhir</span>
           </div>
           <ul className="divide-y divide-slate-100" data-testid={`daftar-intensitas-${jenjang}`}>
-            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} maks={maks} hari={hari} maksHari={maksHari} />)}
+            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} maks={maks} hari={hari} maksHari={maksHari} onRincian={onRincian} />)}
           </ul>
         </div>
       )}
@@ -173,7 +181,8 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
 
 /**
  * Panel intensitas klik "Mengerjakan" untuk admin & pemantau: ringkasan seluruh ujian, lalu per tab jenjang 15 mapel
- * baku dengan jendela pengerjaan, tautan soal (host), jumlah klik, dan klik terakhir. Angka diagregasi server dari jejak
+ * baku dengan jendela pengerjaan, tautan soal (host), jumlah klik, sebaran harian, klik terakhir, dan tombol Rincian
+ * (sumber klik: IP & perangkat). Angka diagregasi server dari jejak
  * audit (ujian_akses_log), bukan dari cache di portal, sehingga tetap dapat ditelusuri setelah ujian selesai.
  * `mapel` = daftar mapel baku per jenjang dari respons link soal; `jenjang`/`onUbahJenjang` dibagi dengan tampilan pengaturan.
  */
@@ -182,6 +191,7 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
   const [memuat, setMemuat] = useState(false);
   const [galat, setGalat] = useState('');
   const [saringan, setSaringan] = useState({ mapel: '', status: 'semua' });
+  const [rincian, setRincian] = useState(null);
 
   const muat = useCallback(async () => {
     if (!ujianId) return;
@@ -240,9 +250,11 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
             </p>
           )}
           <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="intensitas" lencana={lencana}
-            isi={(j) => <IsiJenjang data={data} mapel={mapel} jenjang={j} saringan={saringan} onUbahSaringan={setSaringan} />} />
+            isi={(j) => <IsiJenjang data={data} mapel={mapel} jenjang={j} saringan={saringan} onUbahSaringan={setSaringan}
+              onRincian={(s) => setRincian({ ...s, ujianId })} />} />
         </>
       )}
+      <RincianKlikSheet sasaran={rincian} onTutup={() => setRincian(null)} />
     </section>
   );
 }
