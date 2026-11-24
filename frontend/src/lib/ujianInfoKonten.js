@@ -95,6 +95,8 @@ export const unggahPanduanPdf = (ujianId, file, onProgres = () => {}) => denganT
     const form = new FormData();
     form.append('berkas', file);
     return (await api.post(`/ujian/${ujianId}/info-konten/panduan-pdf`, form, {
+      // Wajib: instance `api` ber-header JSON; tanpa ini axios mengubah FormData menjadi JSON dan berkasnya hilang (422).
+      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => { if (e.total) onProgres(Math.round((e.loaded / e.total) * 100)); },
     })).data;
   },

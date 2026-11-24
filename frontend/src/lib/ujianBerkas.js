@@ -156,6 +156,8 @@ export const unggahBerkas = (ujianId, jenis, { jenjang, mapel, guruPjId }, file,
     form.append('guru_pj_id', guruPjId || '');
     form.append('berkas', file);
     const { data } = await api.post(`/ujian/${ujianId}/berkas/${jenis}`, form, {
+      // Wajib: instance `api` ber-header JSON; tanpa ini axios mengubah FormData menjadi JSON dan berkasnya hilang (422).
+      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => { if (e.total) onProgres(Math.round((e.loaded / e.total) * 100)); },
     });
     return data;
