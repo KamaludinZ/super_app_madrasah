@@ -126,6 +126,7 @@ import UjianBeritaAcaraPage from '@/pages/ujian/UjianBeritaAcaraPage';
 import UjianNilaiPage from '@/pages/ujian/UjianNilaiPage';
 import UjianTautanPublikPage from '@/pages/ujian/UjianTautanPublikPage';
 import UjianInfoUjianPage from '@/pages/ujian/UjianInfoUjianPage';
+import UjianLinkSoalPage from '@/pages/ujian/UjianLinkSoalPage';
 import UjianUnggahBerkasPage from '@/pages/ujian/UjianUnggahBerkasPage';
 import UjianBerkasSoalPage from '@/pages/ujian/UjianBerkasSoalPage';
 import UjianAuditPublikPage from '@/pages/ujian/UjianAuditPublikPage';
@@ -462,6 +463,7 @@ function App() {
             <Route path="/ujian/formulir" element={<UjianFormulirPage />} />
             <Route path="/ujian/tautan-publik" element={<UjianTautanPublikPage />} />
             <Route path="/ujian/info-ujian" element={<UjianInfoUjianPage />} />
+            <Route path="/ujian/link-soal" element={<UjianLinkSoalPage />} />
             <Route path="/ujian/unggah-berkas" element={<UjianUnggahBerkasPage />} />
             <Route path="/ujian/berkas-soal" element={<UjianBerkasSoalPage />} />
             <Route path="/ujian/audit-publik" element={<UjianAuditPublikPage />} />

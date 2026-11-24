@@ -1,0 +1,190 @@
+/**
+ * Ujian Madrasah — menu Link Soal (ber-login; key `link_soal`): admin mengisi tautan soal eksternal (aplikasi CBT) dan
+ * jendela waktu tombol "Mengerjakan" per jenjang per mapel baku untuk Portal Ujian siswa (/publik/portal-ujian/:token).
+ * Jendela awalnya mengikuti sesi jadwal ujian mapel itu (menu Pengaturan Formulir); admin boleh mempersempitnya.
+ * Kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat (boleh_ubah = false) tanpa alamat soal.
+ *
+ * Kontrak server (backend menyusul; koleksi `ujian_link_soal`, unik ujian_id + jenjang + mapel):
+ *   GET /ujian/{ujian_id}/link-soal
+ *     -> { ujian, boleh_ubah, tautan_portal: Tautan | null (lihat ujianTautanPublik.js),
+ *          mapel: { '7': [{ kode, nama }], '8': [...], '9': [...] },   (mapel baku aktif per jenjang)
+ *          link: [LinkSoal] }   (satu entri per jenjang × mapel baku aktif; yang belum diatur: id null, url '')
+ *   PUT /ujian/{ujian_id}/link-soal/{jenjang}/{mapel} { url, mulai_at, selesai_at, aktif, versi } -> { link: LinkSoal }
+ *        (admin; menimpa — satu baris per jenjang+mapel. `versi` = link.versi yang dimuat (null bila belum pernah
+ *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai -> pesan)
+ *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode baku, url (admin saja; pemantau: '' dan url_host), url_host,
+ *                mulai_at, selesai_at, aktif, siap (url terisi & aktif),
+ *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at } | null,   (sesi jadwal ujian mapel ini = nilai awal)
+ *                jumlah_klik, klik_terakhir_at, diperbarui_pada, diperbarui_oleh_nama, versi }
+ */
+import { api } from '@/lib/api';
+import { denganTiruan } from '@/lib/ujian';
+import { hariIniWIB } from '@/lib/tanggal';
+import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU, mapelUntuk } from '@/lib/mapelUjian';
+import { tambahHari } from '@/lib/ujianInfoPublik';
+import { dariInputWaktu, keInputWaktu } from '@/lib/ujianTautanPublik';
+
+export const HALAMAN_LINK_SOAL = '/ujian/link-soal';
+export const URL_SOAL_MAKS = 2000; // sama dengan backend (URL_SOAL_MAKS)
+
+// ---- Validasi ----
+
+/**
+ * Tautan soal yang boleh dipasang: hanya http:// atau https:// dengan nama host, tanpa spasi dan tanpa kredensial
+ * (user@host), ≤ URL_SOAL_MAKS. javascript:, data:, file:, dan skema lain ditolak. -> URL bersih atau null.
+ */
+export function urlSoalAman(url) {
+  const t = String(url || '').trim();
+  // Pola literal lebih dulu: parser URL peramban memaafkan bentuk rusak seperti "http:///x" atau "https:\\host".
+  if (!t || t.length > URL_SOAL_MAKS || /\s/.test(t) || !/^https?:\/\/[^/\\?#@\s]+/i.test(t)) return null;
+  let u;
+  try { u = new URL(t); } catch { return null; }
+  if (!['http:', 'https:'].includes(u.protocol) || !u.hostname || u.username || u.password) return null; // tanpa user:sandi@
+  return t;
+}
+
+/** Nama host untuk ditampilkan ringkas ("quiz.madrasah.sch.id"); '' bila tidak terbaca. */
+export function hostUrl(url) {
+  try { return new URL(String(url || '').trim()).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+/** Isian form dari satu LinkSoal (waktu sebagai nilai input datetime-local WIB). */
+export const isianDariLink = (l) => ({
+  url: l?.url || '',
+  mulai: keInputWaktu(l?.mulai_at || l?.jadwal?.mulai_at),
+  selesai: keInputWaktu(l?.selesai_at || l?.jadwal?.selesai_at),
+  aktif: l?.aktif !== false,
+});
+
+/** Galat isian per field -> { url?, mulai?, selesai? } (kosong = sah). Tautan boleh kosong (mapel ditandai belum siap). */
+export function galatIsianLink(isi) {
+  const g = {};
+  const url = String(isi.url || '').trim();
+  if (url && url.length > URL_SOAL_MAKS) g.url = `Tautan soal maksimal ${URL_SOAL_MAKS.toLocaleString('id-ID')} karakter.`;
+  else if (url && !urlSoalAman(url)) g.url = 'Tautan soal harus diawali http:// atau https:// dan tanpa spasi.';
+  if (!isi.mulai) g.mulai = 'Isi waktu mulai pengerjaan.';
+  if (!isi.selesai) g.selesai = 'Isi waktu tutup pengerjaan.';
+  else if (isi.mulai && isi.selesai <= isi.mulai) g.selesai = 'Waktu tutup harus setelah waktu mulai.';
+  return g;
+}
+
+/**
+ * Peringatan (tidak menghalangi simpan) bila jendela melebar dari sesi jadwal ujian -> pesan atau null. Jadwal adalah
+ * acuan; admin dianjurkan hanya mempersempitnya.
+ */
+export function peringatanJendela(isi, jadwal) {
+  if (!jadwal?.mulai_at || !jadwal?.selesai_at || !isi.mulai || !isi.selesai) return null;
+  const awal = keInputWaktu(jadwal.mulai_at);
+  const akhir = keInputWaktu(jadwal.selesai_at);
+  if (isi.mulai < awal || isi.selesai > akhir) return 'Jendela melebar dari sesi jadwal ujian mapel ini. Pastikan memang disengaja (mis. ujian susulan).';
+  return null;
+}
+
+/** Jendela sama persis dengan sesi jadwal? (untuk lencana "Mengikuti jadwal" / "Dipersempit") */
+export function ikutJadwal(l) {
+  if (!l?.jadwal) return false;
+  return keInputWaktu(l.mulai_at) === keInputWaktu(l.jadwal.mulai_at) && keInputWaktu(l.selesai_at) === keInputWaktu(l.jadwal.selesai_at);
+}
+
+/** Sama dengan yang tersimpan? Dipakai untuk menandai perubahan belum disimpan. */
+export const isianLinkSama = (a, b) => String(a.url || '').trim() === String(b.url || '').trim()
+  && a.mulai === b.mulai && a.selesai === b.selesai && !!a.aktif === !!b.aktif;
+
+/** Isian -> badan PUT. */
+export const badanLink = (isi, versi) => ({
+  url: String(isi.url || '').trim(), mulai_at: dariInputWaktu(isi.mulai), selesai_at: dariInputWaktu(isi.selesai), aktif: !!isi.aktif, versi: versi || null,
+});
+
+// ---- Susunan per jenjang ----
+
+/**
+ * Baris satu jenjang dalam urutan mapel baku: [{ nomor, kode, nama, link: LinkSoal | null }] dan ringkasan
+ * { total, siap, terjadwal } untuk lencana tab.
+ */
+export function barisLinkJenjang(link, mapel, jenjang) {
+  const daftar = mapelUntuk(mapel, jenjang);
+  const peta = new Map((link || []).filter((l) => Number(l.jenjang) === Number(jenjang)).map((l) => [l.mapel, l]));
+  const baris = daftar.map((m, i) => ({ nomor: i + 1, kode: m.kode, nama: m.nama, link: peta.get(m.kode) || null }));
+  return {
+    baris,
+    ringkas: {
+      total: baris.length,
+      siap: baris.filter((b) => b.link?.siap).length,
+      terjadwal: baris.filter((b) => b.link?.mulai_at && b.link?.selesai_at).length,
+    },
+  };
+}
+
+// ---- Data tiruan (selama endpoint belum ada; hanya tersimpan di memori tab ini) ----
+const contoh = {};
+const GURU_CONTOH = 'Administrator (contoh)';
+
+function jadwalContoh(j, i) {
+  // Slot ke-i: hari ujian ke-floor(i/2) mulai besok (Minggu dilewati), sesi 1 07.30–09.00 / sesi 2 09.30–11.00.
+  let tanggal = hariIniWIB();
+  for (let n = 0; n <= Math.floor(i / 2); n += 1) {
+    do { tanggal = tambahHari(tanggal, 1); } while (new Date(`${tanggal}T00:00:00Z`).getUTCDay() === 0);
+  }
+  const sesi = (i % 2) + 1;
+  const [m, s] = sesi === 1 ? ['07:30', '09:00'] : ['09:30', '11:00'];
+  return { tanggal, sesi_ke: sesi, mulai_at: `${tanggal}T${m}:00+07:00`, selesai_at: `${tanggal}T${s}:00+07:00` };
+}
+
+function linkContoh(ujianId) {
+  if (!contoh[ujianId]) {
+    const daftar = [];
+    JENJANG_UJIAN.forEach((j, ji) => {
+      MAPEL_UJIAN_BAKU.forEach((m, i) => {
+        const slot = (i + ji * 4) % MAPEL_UJIAN_BAKU.length; // urutan jadwal berbeda per jenjang
+        const tanpaJadwal = j === 9 && slot === MAPEL_UJIAN_BAKU.length - 1;
+        const jadwal = tanpaJadwal ? null : jadwalContoh(j, slot);
+        const terisi = !tanpaJadwal && (i + j) % 4 !== 0;
+        const dipersempit = terisi && i % 5 === 1;
+        daftar.push({
+          id: terisi ? `contoh-link-${j}-${m.kode}` : null, jenjang: j, mapel: m.kode,
+          url: terisi ? `https://cbt.contoh-madrasah.sch.id/ujian/${j}/${m.kode}` : '', url_host: terisi ? 'cbt.contoh-madrasah.sch.id' : '',
+          mulai_at: jadwal ? (dipersempit ? jadwal.mulai_at.replace(/T(07|09):30/, 'T$1:45') : jadwal.mulai_at) : null,
+          selesai_at: jadwal?.selesai_at || null,
+          aktif: !(terisi && i % 7 === 3), jadwal,
+          jumlah_klik: 0, klik_terakhir_at: null,
+          diperbarui_pada: terisi ? `${hariIniWIB()}T08:${String(10 + i).padStart(2, '0')}:00+07:00` : null,
+          diperbarui_oleh_nama: terisi ? GURU_CONTOH : null, versi: terisi ? `contoh-v1-${j}-${m.kode}` : null,
+        });
+      });
+    });
+    daftar.forEach((l) => { l.siap = !!l.url && l.aktif; });
+    contoh[ujianId] = daftar;
+  }
+  return contoh[ujianId];
+}
+
+const galat = (status, detail) => { const e = new Error(String(status)); e.response = { status, data: { detail } }; return e; };
+
+/** Link soal satu ujian -> { ujian?, boleh_ubah, tautan_portal, mapel, link, tiruan }. */
+export const muatLinkSoal = (ujianId) => denganTiruan(
+  async () => (await api.get(`/ujian/${ujianId}/link-soal`)).data,
+  () => ({
+    boleh_ubah: true,
+    tautan_portal: { jenis: 'portal', jalur: '/publik/portal-ujian/contoh', aktif: true, berlaku: true, alasan: 'ok' },
+    link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
+  }),
+);
+
+/** Simpan satu baris link soal (menimpa) -> { link, tiruan }. 409 bila versi berbeda; 422 isian tidak sah. */
+export const simpanLinkSoal = (ujianId, jenjang, mapel, isi, versi) => denganTiruan(
+  async () => (await api.put(`/ujian/${ujianId}/link-soal/${jenjang}/${encodeURIComponent(mapel)}`, badanLink(isi, versi))).data,
+  () => {
+    const pesan = Object.values(galatIsianLink(isi))[0];
+    if (pesan) throw galat(422, pesan);
+    const l = linkContoh(ujianId).find((x) => x.jenjang === Number(jenjang) && x.mapel === mapel);
+    if (!l) throw galat(404, 'Mapel tidak ditemukan pada jenjang ini.');
+    if ((l.versi || null) !== (versi || null)) throw galat(409, 'Link soal ini baru saja diubah admin lain. Muat ulang untuk melihat isian terbaru.');
+    const b = badanLink(isi, versi);
+    const waktu = new Date().toISOString();
+    Object.assign(l, {
+      id: l.id || `contoh-link-${jenjang}-${mapel}`, url: b.url, url_host: hostUrl(b.url), mulai_at: b.mulai_at, selesai_at: b.selesai_at,
+      aktif: b.aktif, siap: !!b.url && b.aktif, diperbarui_pada: waktu, diperbarui_oleh_nama: GURU_CONTOH, versi: waktu,
+    });
+    return { link: { ...l, jadwal: l.jadwal && { ...l.jadwal } } };
+  },
+);
