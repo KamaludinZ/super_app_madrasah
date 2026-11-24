@@ -502,3 +502,49 @@ async def bangun_ulang_klik(db, ujian_id: str, dry_run: bool = False, waktu: dat
         selisih.append(baris)
     return {'diperiksa': len(docs), 'diperbaiki': len(selisih), 'selisih': selisih, 'berubah': berubah,
             'waktu': (waktu or sekarang_wib()).isoformat(), 'dry_run': dry_run}
+
+
+# ---- Intensitas klik untuk admin ----
+def susun_intensitas(log: Iterable[Dict[str, Any]], docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                     jadwal: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    """Intensitas klik SAH per jenjang × mapel baku dari baris log (sudah tersaring KUERI_KLIK + rentang tanggal) —
+    kontrak GET /ujian/{id}/link-soal/intensitas (frontend/src/lib/ujianLinkSoal.js):
+    { hari: [tanggal WIB yang punya klik, urut], ringkasan: { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at },
+      intensitas: [{ link_soal_id, jenjang, mapel, url_host, mulai_at, selesai_at, siap, jumlah_klik, klik_terakhir_at,
+                     harian: [{ tanggal, jumlah }] }] }. Tanpa tautan soal lengkap."""
+    per_link: Dict[str, Dict[str, Any]] = {}
+    for x in log or []:
+        lid, w = x.get('link_soal_id'), baca_waktu(x.get('waktu'))
+        if not lid or not w:
+            continue
+        p = per_link.setdefault(lid, {'jumlah': 0, 'terakhir': None, 'harian': {}})
+        p['jumlah'] += 1
+        tgl = w.astimezone(WIB_TZ).date().isoformat()
+        p['harian'][tgl] = p['harian'].get(tgl, 0) + 1
+        if p['terakhir'] is None or w > baca_waktu(p['terakhir']):
+            p['terakhir'] = x['waktu']
+    peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
+    jadwal = list(jadwal or [])
+    intensitas = []
+    for j in JENJANG_UJIAN:
+        daftar = mapel_per_jenjang.get(str(j)) or []
+        dari_jadwal = jendela_jadwal(jadwal, j, daftar)
+        for m in daftar:
+            d = peta.get((j, m['kode'])) or {}
+            jd = dari_jadwal.get(m['kode']) or {}
+            p = per_link.get(d.get('id')) or {'jumlah': 0, 'terakhir': None, 'harian': {}}
+            intensitas.append({
+                'link_soal_id': d.get('id'), 'jenjang': j, 'mapel': m['kode'], 'url_host': host_url(d.get('url')) if d.get('url') else '',
+                'mulai_at': d.get('mulai_at') or jd.get('mulai_at'), 'selesai_at': d.get('selesai_at') or jd.get('selesai_at'),
+                'siap': link_siap(d or None), 'jumlah_klik': p['jumlah'], 'klik_terakhir_at': p['terakhir'],
+                'harian': [{'tanggal': t, 'jumlah': n} for t, n in sorted(p['harian'].items())],
+            })
+    terakhir = [x['klik_terakhir_at'] for x in intensitas if x['klik_terakhir_at']]
+    return {
+        'hari': sorted({h['tanggal'] for x in intensitas for h in x['harian']}),
+        'ringkasan': {'total_klik': sum(x['jumlah_klik'] for x in intensitas),
+                      'mapel_diklik': sum(1 for x in intensitas if x['jumlah_klik']),
+                      'mapel_siap': sum(1 for x in intensitas if x['siap']),
+                      'klik_terakhir_at': max(terakhir, key=baca_waktu) if terakhir else None},
+        'intensitas': intensitas,
+    }

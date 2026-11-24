@@ -256,3 +256,42 @@ def test_mapel_nonaktif_di_master_ikut_hilang(klien):
     assert d['mapel'] == klien('admin', 'admin', 'GET', '/ujian/mapel-baku').json()['jenjang']
     assert simpan(klien, 8, 'ipa', {'url': 'https://cbt.id'}).status_code == 422
     assert simpan(klien, 7, 'ipa', {'url': 'https://cbt.id'}).status_code == 200  # jenjang lain tetap aktif
+
+
+# ---- Intensitas klik (dari jejak audit) ----
+def test_intensitas_klik_dari_jejak_audit(klien):
+    siapkan_klik(klien)
+    klien.db.ujian_akses_log.docs.append(log_klik('l-mtk', waktu='08:00'))
+    klien.db.ujian_akses_log.docs[-1]['waktu'] = '2026-12-03T08:15:00+07:00'  # hari berikutnya (susulan)
+    r = klien('admin', 'admin', 'GET', f'{URL}/intensitas')
+    assert r.status_code == 200, r.text
+    assert r.headers['cache-control'] == 'no-store'
+    d = r.json()
+    assert d['rentang'] == {'dari': None, 'sampai': None} and d['hari'] == [HARI_INI, '2026-12-03']
+    assert len(d['intensitas']) == 45
+    x = {(i['jenjang'], i['mapel']): i for i in d['intensitas']}
+    mtk = x[(7, 'matematika')]
+    assert (mtk['link_soal_id'], mtk['jumlah_klik'], mtk['klik_terakhir_at'], mtk['url_host'], mtk['siap']) == (
+        'l-mtk', 4, '2026-12-03T08:15:00+07:00', 'cbt.id', True)  # dari log (bukan cache 1); klik ditolak tidak dihitung
+    assert mtk['harian'] == [{'tanggal': HARI_INI, 'jumlah': 3}, {'tanggal': '2026-12-03', 'jumlah': 1}]
+    assert x[(8, 'ipa')]['jumlah_klik'] == 1  # bukan cache 5; log ujian lain & pembukaan tautan diabaikan
+    assert (x[(9, 'ips')]['jumlah_klik'], x[(7, 'ipa')]['jumlah_klik'], x[(7, 'ipa')]['link_soal_id']) == (1, 0, None)
+    assert x[(9, 'quran_hadits')]['mulai_at'] == JENDELA['mulai_at']  # mapel belum diatur: jendela dari jadwal
+    assert d['ringkasan'] == {'total_klik': 6, 'mapel_diklik': 3, 'mapel_siap': 3, 'klik_terakhir_at': '2026-12-03T08:15:00+07:00'}
+    assert 'https://cbt.id/m' not in r.text  # tautan soal lengkap tidak dikirim
+
+
+def test_intensitas_rentang_tanggal_dan_validasi(klien):
+    siapkan_klik(klien)
+    klien.db.ujian_akses_log.docs.append({**log_klik('l-mtk', waktu='08:00'), 'id': 'besok', 'waktu': '2026-12-03T08:15:00+07:00'})
+    d = klien('admin', 'admin', 'GET', f'{URL}/intensitas', params={'dari': '2026-12-03', 'sampai': '2026-12-03'}).json()
+    assert d['rentang'] == {'dari': '2026-12-03', 'sampai': '2026-12-03'} and d['hari'] == ['2026-12-03']
+    assert d['ringkasan']['total_klik'] == 1
+    for salah in ({'dari': '03-12-2026'}, {'dari': '2026-12-04', 'sampai': '2026-12-03'}, {'sampai': '2026-02-30'}):
+        assert klien('admin', 'admin', 'GET', f'{URL}/intensitas', params=salah).status_code == 422, salah
+
+
+@pytest.mark.parametrize('uid,peran,status', [('kamad', 'kepala_sekolah', 200), ('guru1', 'guru', 200), ('guru2', 'guru', 403),
+                                              ('siswa1', 'siswa', 403)])
+def test_intensitas_akses(klien, uid, peran, status):
+    assert klien(uid, peran, 'GET', f'{URL}/intensitas').status_code == status

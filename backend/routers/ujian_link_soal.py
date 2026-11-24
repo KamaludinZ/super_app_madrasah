@@ -8,19 +8,21 @@ lama dengan cek versi (409 bila admin lain baru mengubah baris itu) — pola PUT
 (jumlah_klik, klik_terakhir_at) tidak pernah ditulis saat menyimpan: klik siswa dapat menaikkannya kapan saja; cache itu
 hanya dapat dihitung ulang dari jejak audit lewat POST /ujian/{id}/link-soal/bangun-ulang-klik.
 """
-from typing import Dict
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pymongo.errors import DuplicateKeyError
 
 from core import db, get_current_user, log_audit
 from routers.ujian import akses_ujian
 from routers.ujian_formulir import jadwal_ujian
 from ujian import PERAN_BUKAN_PANITIA, sekarang_wib
-from ujian_info import JENJANG_UJIAN, inisialisasi_tautan, mapel_jenjang, mapel_semua_jenjang
+from ujian_info import (
+    JENJANG_UJIAN, KOLEKSI_AKSES_LOG, galat_saringan_audit, inisialisasi_tautan, kueri_saringan_audit, mapel_jenjang, mapel_semua_jenjang,
+)
 from ujian_portal import (
-    KOLEKSI_LINK_SOAL, LinkSoalIn, bangun_ulang_klik, dokumen_link_soal, host_url, jendela_jadwal, peringatan_link,
-    ringkas_link_admin, ringkas_tautan_portal, susun_link_admin,
+    KOLEKSI_LINK_SOAL, KUERI_KLIK, LOG_KLIK_MAKS, LinkSoalIn, bangun_ulang_klik, dokumen_link_soal, host_url, jendela_jadwal,
+    peringatan_link, ringkas_link_admin, ringkas_tautan_portal, susun_intensitas, susun_link_admin,
 )
 
 router = APIRouter()
@@ -110,3 +112,21 @@ async def bangun_ulang_penghitung_klik(ujian_id: str, request: Request, response
     response.headers.update(TANPA_CACHE)
     return {**{k: hasil[k] for k in ('diperiksa', 'diperbaiki', 'selisih', 'berubah', 'waktu')},
             'link': susun_link_admin(docs, await mapel_semua_jenjang(db), await jadwal_ujian(ujian_id), tampil_url=True)}
+
+
+@router.get("/ujian/{ujian_id}/link-soal/intensitas")
+async def intensitas_klik(ujian_id: str, response: Response, dari: Optional[str] = Query(None, max_length=10),
+                          sampai: Optional[str] = Query(None, max_length=10), user: Dict = Depends(get_current_user)):
+    """Intensitas klik "Mengerjakan" per jenjang per mapel (admin & pemantau menu link_soal), diagregasi dari jejak audit
+    (ujian_akses_log aksi=klik_mengerjakan, hasil=ok) — BUKAN dari cache jumlah_klik — dalam rentang tanggal WIB
+    inklusif ?dari=&sampai= (YYYY-MM-DD; kosong = seluruhnya). -> { rentang, hari, ringkasan, intensitas }"""
+    pesan = galat_saringan_audit(dari, sampai, None)
+    if pesan:
+        raise HTTPException(422, pesan)
+    await akses_ujian(user, ujian_id, MENU)
+    q = {**kueri_saringan_audit(ujian_id, dari, sampai), **KUERI_KLIK}
+    log = await db[KOLEKSI_AKSES_LOG].find(q, {'_id': 0, 'link_soal_id': 1, 'waktu': 1}).to_list(LOG_KLIK_MAKS)
+    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(500)
+    hasil = susun_intensitas(log, docs, await mapel_semua_jenjang(db), await jadwal_ujian(ujian_id))
+    response.headers.update(TANPA_CACHE)
+    return {'rentang': {'dari': dari or None, 'sampai': sampai or None}, **hasil}
