@@ -81,32 +81,70 @@ async function bacaGalatBlob(e) {
   return e;
 }
 
-// ---- Tata tertib: teks polos -> blok paragraf / daftar bernomor ----
-const BUTIR = /^\s*(?:\d+[.)]|[-•*])\s+/;
+// ---- Tata tertib: teks polos -> blok paragraf / daftar bertingkat ----
+// Penanda butir: angka "1." / "1)" (spasi sesudahnya boleh tidak ada: "1.Peserta"), huruf "a." / "a)" / "A.", atau butir
+// "-", "•", "*", "–". Huruf wajib diikuti spasi agar singkatan seperti "S.Pd." di awal baris tidak dianggap butir.
+const PENANDA = /^(?:(\d{1,3})([.)])(?:\s+|(?=\p{L}))|([a-z])([.)])\s+|([A-Z])([.)])\s+|([-•*–])\s+)(.*)$/u;
+export const TINGKAT_TATA_TERTIB_MAKS = 4;
+
+function bacaPenanda(t) {
+  const m = PENANDA.exec(t);
+  if (!m) return null;
+  if (m[1]) return { jenis: `angka${m[2]}`, label: m[1], tanda: m[2], teks: m[8] };
+  if (m[3]) return { jenis: `huruf${m[4]}`, label: m[3], tanda: m[4], teks: m[8] };
+  if (m[5]) return { jenis: `HURUF${m[6]}`, label: m[5], tanda: m[6], teks: m[8] };
+  return { jenis: 'butir', label: null, tanda: '', teks: m[8] };
+}
 
 /**
- * Pecah teks tata tertib menjadi blok [{ jenis: 'daftar', butir: [..] } | { jenis: 'paragraf', teks }]. Baris "1. …",
- * "2) …", "- …" menjadi butir; baris menjorok melanjutkan butir sebelumnya; baris kosong memisah blok.
+ * Pecah teks tata tertib menjadi blok [{ jenis: 'paragraf', teks } | { jenis: 'daftar', ...Daftar }], dengan
+ * Daftar = { penanda: 'angka.'|'angka)'|'huruf.'|'huruf)'|'HURUF.'|'HURUF)'|'butir', butir: [{ label, tanda, teks, anak: Daftar|null }] }.
+ * Tingkat ditentukan JENIS PENANDA, bukan jumlah spasi (teks tempelan dari Word sering menjorok tidak konsisten):
+ * penanda yang sudah ada di tumpukan kembali ke tingkat itu; penanda jenis baru menjadi sub-daftar butir terakhir
+ * (mis. "1." → "a." → "1)"), maksimal TINGKAT_TATA_TERTIB_MAKS tingkat. Label asli dari teks dipertahankan.
+ * Baris tanpa penanda yang menjorok melanjutkan butir terakhir; yang tidak menjorok menjadi paragraf dan menutup
+ * daftar. Baris kosong hanya memisah paragraf (daftar boleh diselingi baris kosong).
  */
 export function pecahTataTertib(teks) {
   const blok = [];
+  let tumpukan = []; // daftar aktif dari terluar ke terdalam
+  let paragraf = null;
   String(teks || '').split(/\r?\n/).forEach((baris) => {
     const t = baris.trim();
-    const akhir = blok[blok.length - 1];
-    if (!t) { if (akhir) akhir.tutup = true; return; }
-    if (BUTIR.test(t)) {
-      const isi = t.replace(BUTIR, '');
-      if (akhir?.jenis === 'daftar' && !akhir.tutup) akhir.butir.push(isi);
-      else blok.push({ jenis: 'daftar', butir: [isi] });
-    } else if (akhir?.jenis === 'daftar' && !akhir.tutup && /^\s/.test(baris)) {
-      akhir.butir[akhir.butir.length - 1] += ` ${t}`; // baris menjorok = lanjutan butir sebelumnya
-    } else if (akhir?.jenis === 'paragraf' && !akhir.tutup) {
-      akhir.teks += ` ${t}`;
+    if (!t) { paragraf = null; return; }
+    const p = bacaPenanda(t);
+    if (p) {
+      paragraf = null;
+      const butir = { label: p.label, tanda: p.tanda, teks: p.teks.trim(), anak: null };
+      const i = tumpukan.findIndex((d) => d.penanda === p.jenis);
+      if (i >= 0) {
+        tumpukan = tumpukan.slice(0, i + 1);
+        tumpukan[i].butir.push(butir);
+      } else if (tumpukan.length && tumpukan.length < TINGKAT_TATA_TERTIB_MAKS) {
+        const atas = tumpukan[tumpukan.length - 1];
+        const induk = atas.butir[atas.butir.length - 1];
+        induk.anak = { penanda: p.jenis, butir: [butir] };
+        tumpukan.push(induk.anak);
+      } else if (tumpukan.length) {
+        tumpukan[tumpukan.length - 1].butir.push(butir); // melebihi batas tingkat: tetap di tingkat terdalam
+      } else {
+        const d = { jenis: 'daftar', penanda: p.jenis, butir: [butir] };
+        blok.push(d);
+        tumpukan = [d];
+      }
+    } else if (tumpukan.length && /^\s/.test(baris)) {
+      const atas = tumpukan[tumpukan.length - 1];
+      const b = atas.butir[atas.butir.length - 1];
+      b.teks = b.teks ? `${b.teks} ${t}` : t; // baris menjorok = lanjutan butir terakhir
+    } else if (paragraf) {
+      paragraf.teks += ` ${t}`;
     } else {
-      blok.push({ jenis: 'paragraf', teks: t });
+      tumpukan = [];
+      paragraf = { jenis: 'paragraf', teks: t };
+      blok.push(paragraf);
     }
   });
-  return blok.map(({ tutup, ...b }) => b);
+  return blok;
 }
 
 // ---- Jadwal & kisi-kisi per jenjang ----
