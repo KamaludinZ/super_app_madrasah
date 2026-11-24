@@ -217,6 +217,15 @@ export function bersihkanSoalPublik(soal) {
 // satu mapel sudah ditutup, satu berlangsung dan ditutup ±3 menit lagi, satu dibuka ±5 menit lagi, satu menyusul
 // siang hari; sisanya pada hari-hari berikutnya.
 const MENIT = 60 * 1000;
+// Klik "Mengerjakan" contoh disimpan per tab browser agar penghitung tetap bertambah setelah muat ulang (meniru cache
+// jumlah_klik server). { soal_id: { jumlah, terakhir } }
+const KUNCI_KLIK_CONTOH = 'portalUjian:klikContoh';
+const klikContoh = (() => {
+  try { return JSON.parse(sessionStorage.getItem(KUNCI_KLIK_CONTOH)) || {}; } catch { return {}; }
+})();
+const simpanKlikContoh = () => {
+  try { sessionStorage.setItem(KUNCI_KLIK_CONTOH, JSON.stringify(klikContoh)); } catch { /* abaikan */ }
+};
 const JANGKAR_CONTOH = Math.floor(Date.now() / MENIT) * MENIT;
 const iso = (ms) => new Date(ms).toISOString();
 
@@ -247,13 +256,18 @@ function soalTiruan() {
         sesi += 1;
       }
       const status = statusSoal({ mulai_at: iso(mulai), selesai_at: iso(selesai) }, Date.now());
-      const klik = { ditutup: 28 + ((i * 7 + j) % 9), berlangsung: 9 + j, belum_dimulai: 0 }[status];
+      // Klik awal ditetapkan dari keadaan saat jangkar (stabil antar-muat), ditambah klik contoh yang dicatat di tab ini.
+      const awal = statusSoal({ mulai_at: iso(mulai), selesai_at: iso(selesai) }, JANGKAR_CONTOH);
+      const id = `contoh-soal-${j}-${m.kode}`;
+      const dicatat = klikContoh[id];
+      const klik = { ditutup: 28 + ((i * 7 + j) % 9), berlangsung: 9 + j, belum_dimulai: 0 }[awal] + (dicatat?.jumlah || 0);
+      const klikAwalAt = klik ? Math.min(JANGKAR_CONTOH, selesai) - ((i + j) % 5) * MENIT : null;
       hasil.push({
-        id: `contoh-soal-${j}-${m.kode}`, jenjang: j, mapel: m.kode, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
+        id, jenjang: j, mapel: m.kode, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
         mulai_at: iso(mulai), selesai_at: iso(selesai), status,
         // satu mapel per jenjang tautan soalnya belum diisi admin; kelas 8 termasuk mapel yang dibuka sebentar lagi hari ini
         siap: i !== 4 + ji && !(j === 8 && i === 2),
-        jumlah_klik: klik, klik_terakhir_at: klik ? iso(Math.min(Date.now(), selesai) - ((i + j) % 5) * MENIT) : null,
+        jumlah_klik: klik, klik_terakhir_at: dicatat?.terakhir || (klikAwalAt ? iso(klikAwalAt) : null),
       });
     });
   });
@@ -288,6 +302,41 @@ export function portalTiruan(token) {
     waktu_server: new Date().toISOString(),
     soal: token === 'contoh-kosong' ? [] : soalTiruan(),
   };
+}
+
+/**
+ * Pencatat klik tiruan (meniru rute kerjakan server): klik hanya dihitung bila portal terbuka dan mapel itu sedang
+ * berlangsung menurut jam "server" (jam perangkat pada mode contoh) serta tautan soalnya siap. -> { jumlah_klik,
+ * klik_terakhir_at }. Di luar jendela melempar galat 403 { alasan: 'di_luar_jendela' | 'belum_siap', pesan } dan
+ * penghitung tidak bertambah.
+ */
+export function catatKlikTiruan(token, soalId) {
+  const isi = portalTiruan(token); // token contoh yang ditutup/berakhir melempar galat yang sama dengan memuat portal
+  const s = isi.soal.find((x) => x.id === soalId);
+  const tolak = (alasan, pesan) => { const e = new Error('klik'); e.response = { status: 403, data: { detail: { alasan, pesan } } }; return e; };
+  if (!s) throw tolak('tidak_dikenal', 'Mapel tidak ditemukan pada portal ini.');
+  if (!s.siap) throw tolak('belum_siap', 'Tautan soal mapel ini belum disiapkan panitia.');
+  if (statusSoal(s, Date.now()) !== 'berlangsung') throw tolak('di_luar_jendela', 'Di luar jam pengerjaan mapel ini.');
+  const c = klikContoh[soalId] || { jumlah: 0, terakhir: null };
+  c.jumlah += 1;
+  c.terakhir = new Date().toISOString();
+  klikContoh[soalId] = c;
+  simpanKlikContoh();
+  return { jumlah_klik: s.jumlah_klik + 1, klik_terakhir_at: c.terakhir };
+}
+
+/** Halaman soal contoh di tab baru (pengganti tautan soal eksternal pada mode contoh), tanpa opener & referrer. */
+export function bukaSoalContoh(soal, jenjang) {
+  const aman = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const html = `<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Soal contoh · ${aman(soal.nama)}</title><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;color:#0f172a">
+<p style="color:#006837;font-weight:600;font-size:.8rem;letter-spacing:.05em;text-transform:uppercase">Mode contoh</p>
+<h1 style="font-size:1.4rem">${aman(soal.nama)} · Kelas ${aman(jenjang)}</h1>
+<p>Di sini nanti terbuka aplikasi ujian (CBT) dari tautan soal yang dipasang panitia. Klikmu sudah tercatat di portal.</p>
+<p style="color:#64748b;font-size:.85rem">Halaman ini dibuka di tab baru tanpa referrer, sehingga alamat portal tidak terkirim ke aplikasi soal.</p></body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  window.open(url, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ---- API ----

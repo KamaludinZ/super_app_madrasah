@@ -17,6 +17,7 @@ const MUAT_OTOMATIS_MAKS_MS = 12 * 60 * 60 * 1000;
 const PERIKSA_DITUTUP_MS = 2 * 60 * 1000; // portal ditutup sementara: periksa ulang otomatis
 const DETAK_RAPAT_MS = 10 * 60 * 1000; // batas mapel ≤ 10 menit lagi: jam berdetak tiap detik (hitung mundur menit:detik)
 const SUSUL_BATAS_MS = 1500; // muat ulang dari server sesaat setelah mapel dibuka/ditutup agar status dikonfirmasi server
+const KONFIRMASI_KLIK_MS = 4000; // setelah klik Mengerjakan: muat ulang agar jumlah klik mengikuti hitungan server
 
 const jenjangSah = (v) => (JENJANG_UJIAN.includes(Number(v)) ? Number(v) : null);
 function jenjangAwal(param) {
@@ -112,6 +113,17 @@ export default function PublikPortalUjianPage() {
     else if (data?.ujian?.nama) document.title = `${JUDUL} · ${data.ujian.nama}`;
   }, [data, tautanGalat]);
 
+  // Klik sah: angka pada tombol langsung diperbarui; bila masih perkiraan klien, server dimintai angka sebenarnya.
+  const konfirmasiKlik = useRef(null);
+  useEffect(() => () => clearTimeout(konfirmasiKlik.current), []);
+  const klikTercatat = useCallback((soalId, hasil, { sementara = false } = {}) => {
+    setData((d) => (d ? { ...d, soal: d.soal.map((s) => (s.id === soalId ? { ...s, ...hasil } : s)) } : d));
+    if (sementara) {
+      clearTimeout(konfirmasiKlik.current);
+      konfirmasiKlik.current = setTimeout(() => muat(true), KONFIRMASI_KLIK_MS);
+    }
+  }, [muat]);
+
   const ubahJenjang = (j) => {
     setJenjang(j);
     try { localStorage.setItem(KUNCI_JENJANG, String(j)); } catch { /* abaikan */ }
@@ -163,7 +175,8 @@ export default function PublikPortalUjianPage() {
       </div>
 
       <DaftarSoalPortal soal={data.soal} mapel={data.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang} sekarangMs={sekarangMs}
-        token={token} tiruan={data.tiruan} kiniServer={() => Date.now() + selisih} onKedaluwarsa={() => muat(true)} />
+        token={token} tiruan={data.tiruan} kiniServer={() => Date.now() + selisih} onKedaluwarsa={() => muat(true)}
+        onKlik={klikTercatat} />
 
       <p className="flex items-start gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600" data-testid="portal-catatan">
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />

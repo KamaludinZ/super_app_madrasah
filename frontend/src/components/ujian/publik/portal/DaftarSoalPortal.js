@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import {
-  STATUS_SOAL, bolehKerjakan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, statusSoal, urlKerjakan,
+  STATUS_SOAL, bolehKerjakan, bukaSoalContoh, catatKlikTiruan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, statusSoal,
+  urlKerjakan,
 } from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
@@ -69,25 +70,41 @@ function KeteranganStatus({ soal, sekarangMs, testId }) {
   );
 }
 
+/** Jumlah klik sah "Mengerjakan" sebelumnya (per klik, bukan per siswa) di dalam tombol; tidak tampil bila 0. */
+function JumlahKlik({ n, aktif, testId }) {
+  if (!n) return null;
+  return (
+    <span className={`rounded px-1.5 py-px text-[11px] font-semibold tabular-nums ${aktif ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}
+      title={`Tombol ini sudah diklik ${n.toLocaleString('id-ID')} kali`} data-testid={testId} data-jumlah={n}>
+      {n.toLocaleString('id-ID')}<span className="sr-only"> kali diklik</span>
+    </span>
+  );
+}
+
 /**
- * Tombol "Mengerjakan": aktif hanya saat mapel berlangsung — membuka rute kerjakan server di tab baru tanpa referrer.
- * Di luar jendela tombol dinonaktifkan dengan alasannya. Mapel yang tautan soalnya belum disiapkan tidak diberi tombol.
- * Mode contoh (`tiruan`) tidak membuka apa pun: belum ada tautan soal sungguhan.
+ * Tombol "Mengerjakan": aktif hanya saat mapel berlangsung — membuka rute kerjakan server di tab baru tanpa referrer;
+ * server mencatat klik sah lalu mengalihkan ke tautan soal. Jumlah klik sebelumnya tampil di tombol dan langsung
+ * bertambah setelah diklik (sementara, lalu dikonfirmasi server lewat muat ulang). Di luar jendela tombol dinonaktifkan
+ * dengan alasannya; mapel yang tautan soalnya belum disiapkan tidak diberi tombol. Mode contoh (`tiruan`) mencatat
+ * klik ke pencatat tiruan dan membuka halaman soal contoh.
  */
-function TombolKerjakan({ soal, token, tiruan, kiniServer, onKedaluwarsa, testId }) {
+function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwarsa, onKlik, testId }) {
   if (!soal.siap) return null;
+  const n = Number(soal.jumlah_klik) || 0;
   if (!bolehKerjakan(soal)) {
     const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Belum dimulai — dibuka ${jam(soal.mulai_at)} WIB`;
     return (
-      <Button type="button" size="sm" variant="outline" disabled title={alasan} aria-label={`Mengerjakan ${soal.nama} — ${alasan.toLowerCase()}`}
+      <Button type="button" size="sm" variant="outline" disabled title={alasan}
+        aria-label={`Mengerjakan ${soal.nama} — ${alasan.toLowerCase()}${n ? `, sudah diklik ${n} kali` : ''}`}
         className="h-9 gap-1.5 px-3" data-testid={testId} data-aktif="tidak">
         {soal.status === 'ditutup' ? <Lock aria-hidden="true" /> : <Clock aria-hidden="true" />} Mengerjakan
+        <JumlahKlik n={n} testId={`${testId}-klik`} />
       </Button>
     );
   }
   const klik = (e) => {
     // Detak jam di tab latar bisa tertahan peramban: periksa ulang dengan jam server saat ini sebelum membuka soal.
-    // (Server tetap memeriksa jendela waktu pada rute kerjakan.)
+    // (Server tetap memeriksa jendela waktu pada rute kerjakan; klik di luar jendela tidak dihitung.)
     const kini = kiniServer ? kiniServer() : Date.now();
     if (statusSoal(soal, kini) !== 'berlangsung') {
       e.preventDefault();
@@ -95,15 +112,27 @@ function TombolKerjakan({ soal, token, tiruan, kiniServer, onKedaluwarsa, testId
       onKedaluwarsa?.();
       return;
     }
-    if (!tiruan) return;
-    e.preventDefault();
-    toast.info('Mode contoh: tautan soal sungguhan terbuka setelah server portal siap.');
+    if (tiruan) {
+      e.preventDefault();
+      try {
+        const hasil = catatKlikTiruan(token, soal.id);
+        bukaSoalContoh(soal, jenjang);
+        onKlik?.(soal.id, hasil);
+      } catch (err) {
+        toast.error(err?.response?.data?.detail?.pesan || 'Klik tidak dapat dicatat.');
+        onKedaluwarsa?.();
+      }
+      return;
+    }
+    // Tautan dibiarkan terbuka (rute kerjakan); angka dinaikkan sementara sampai server mengonfirmasinya.
+    onKlik?.(soal.id, { jumlah_klik: n + 1, klik_terakhir_at: new Date(kini).toISOString() }, { sementara: true });
   };
   return (
     <Button asChild size="sm" className="h-9 gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d]" data-testid={testId} data-aktif="ya">
       <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
-        aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)`}>
+        aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)${n ? `, sudah diklik ${n} kali` : ''}`}>
         <ExternalLink aria-hidden="true" /> Mengerjakan
+        <JumlahKlik n={n} aktif testId={`${testId}-klik`} />
       </a>
     </Button>
   );
@@ -143,7 +172,7 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
   );
 }
 
-function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKedaluwarsa }) {
+function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKedaluwarsa, onKlik }) {
   const redup = soal.status === 'ditutup' || !soal.siap;
   const berlangsung = soal.siap && soal.status === 'berlangsung';
   return (
@@ -158,13 +187,14 @@ function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKed
         <KeteranganStatus soal={soal} sekarangMs={sekarangMs} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
       <div className="shrink-0">
-        <TombolKerjakan soal={soal} token={token} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
+        <TombolKerjakan soal={soal} jenjang={jenjang} token={token} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa}
+          onKlik={onKlik} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
       </div>
     </li>
   );
 }
 
-function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, kiniServer, onKedaluwarsa }) {
+function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, kiniServer, onKedaluwarsa, onKlik }) {
   const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
@@ -194,7 +224,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, 
               </div>
               <ul className="divide-y divide-slate-100">
                 {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} sekarangMs={sekarangMs}
-                  kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} />)}
+                  kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} onKlik={onKlik} />)}
               </ul>
             </li>
           );
@@ -224,10 +254,11 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, 
  * hanya memuat mapel baku jenjang itu; mapel yang sedang berlangsung (atau berikutnya) disorot di atas. Status dihitung
  * dari `sekarangMs` = waktu server berjalan (useJamServer), bukan jam perangkat. `token` = token portal (rute kerjakan).
  * `kiniServer()` = jam server saat ini (dipakai memeriksa ulang saat tombol ditekan); `onKedaluwarsa()` = muat ulang
- * bila tombol ternyata sudah tidak berlaku.
+ * bila tombol ternyata sudah tidak berlaku; `onKlik(soalId, { jumlah_klik, klik_terakhir_at }, { sementara })` = klik sah
+ * tercatat (sementara = perkiraan klien sebelum server mengonfirmasi).
  */
 export default function DaftarSoalPortal({
-  soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false, kiniServer, onKedaluwarsa,
+  soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false, kiniServer, onKedaluwarsa, onKlik,
 }) {
   const hariIni = useMemo(() => new Date(sekarangMs).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), [sekarangMs]);
   const lencana = (j) => {
@@ -239,7 +270,7 @@ export default function DaftarSoalPortal({
     <BagianInfo id="portal" Ikon={MonitorPlay} judul="Mata Pelajaran Ujian" keterangan="Semua jam dalam WIB menurut jam server madrasah. Pilih kelasmu.">
       <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="portal" lencana={lencana}
         isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} tiruan={tiruan}
-          kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} />} />
+          kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} onKlik={onKlik} />} />
     </BagianInfo>
   );
 }
