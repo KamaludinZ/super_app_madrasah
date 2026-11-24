@@ -102,8 +102,10 @@ JENIS_TAUTAN = ('info', 'monitoring', 'portal')
 JENIS_BERKAS = ('kisi_kisi', 'kartu_soal')
 MODE_UNDUH = ('publik', 'tunggal', 'zip_jenjang')
 # 'kartu_soal_ditolak': percobaan mengunduh kartu soal (rahasia) lewat tautan publik — dijawab 404, dicatat untuk admin.
+# 'mapel_belum_siap' / 'mapel_ditahan': klik "Mengerjakan" portal pada mapel tanpa tautan soal sah / yang tombolnya
+# dimatikan admin (belum_mulai/sudah_selesai juga dipakai untuk klik di luar jendela mapel). Hanya hasil 'ok' yang dihitung.
 AKSI_TAUTAN = ('buat', 'buka', 'tutup', 'jendela', 'ganti_token')
-HASIL_AKSES = ('ok', 'tidak_dikenal', 'nonaktif', 'belum_mulai', 'sudah_selesai', 'kartu_soal_ditolak')
+HASIL_AKSES = ('ok', 'tidak_dikenal', 'nonaktif', 'belum_mulai', 'sudah_selesai', 'kartu_soal_ditolak', 'mapel_belum_siap', 'mapel_ditahan')
 
 TATA_TERTIB_MAKS = 10000
 PANDUAN_KETERANGAN_MAKS = 300
@@ -568,6 +570,25 @@ async def catat_akses(db, tautan: Optional[Dict[str, Any]], token: Optional[str]
         await db[KOLEKSI_AKSES_LOG].insert_one(doc)
     except Exception as e:  # noqa: BLE001 — audit tidak boleh menggagalkan permintaan
         logger.error(f'[ujian_info] gagal mencatat akses tautan: {e}')
+
+
+async def catat_klik(db, tautan: Optional[Dict[str, Any]], token: Optional[str], link: Optional[Dict[str, Any]], hasil: str,
+                     request=None, sesi: Optional[str] = None, waktu: datetime = None) -> Optional[Dict[str, Any]]:
+    """Catat satu klik tombol "Mengerjakan" portal ke ujian_akses_log (aksi 'klik_mengerjakan'), sah maupun ditolak.
+    `link` = { id, jenjang, mapel, url_host } (nama host tujuan saja, bukan tautan lengkap) atau None bila mapel tidak
+    dikenal. Hanya entri ber-hasil 'ok' yang dihitung sebagai klik sah (penghitung & intensitas). -> dokumen log (None
+    bila gagal dicatat — audit tidak boleh menggagalkan permintaan)."""
+    try:
+        ip, perangkat = peminta(request)
+        doc = dokumen_akses_log(tautan, token, hasil, ip, perangkat, waktu=waktu, sesi=sesi, aksi='klik_mengerjakan')
+        l = link or {}
+        doc.update({'link_soal_id': l.get('id'), 'jenjang': l.get('jenjang'), 'mapel': l.get('mapel'), 'url_host': l.get('url_host') or None,
+                    'ip_rantai': ip_peminta(request)[1]})
+        await db[KOLEKSI_AKSES_LOG].insert_one(dict(doc))
+        return doc
+    except Exception as e:  # noqa: BLE001 — audit tidak boleh menggagalkan permintaan
+        logger.error(f'[ujian_info] gagal mencatat klik Mengerjakan: {e}')
+        return None
 
 
 async def catat_segarkan(db, tautan: Dict[str, Any], sesi: Optional[str], waktu: datetime = None) -> bool:

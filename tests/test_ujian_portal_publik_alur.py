@@ -216,3 +216,75 @@ def test_tautan_tidak_sah_ditandai_belum_siap(klien):
     m = s[(7, 'matematika')]
     assert (m['status'], m['siap'], m['ditahan']) == ('berlangsung', False, False)
     assert (s[(9, 'pkn')]['siap'], s[(9, 'pkn')]['ditahan']) == (False, True)  # tautan sah + dimatikan admin = ditahan
+
+
+# ---- Rute kerjakan: klik "Mengerjakan" ----
+def kerjakan(k, soal_id, token=TOKEN_PORTAL, **kw):
+    return k(None, None, 'GET', f'/publik/portal-ujian/{token}/kerjakan/{soal_id}', headers={'user-agent': 'HP Siswa'},
+             follow_redirects=False, **kw)
+
+
+def log_klik(k):
+    return [x for x in k.db.ujian_akses_log.docs if x.get('aksi') == 'klik_mengerjakan']
+
+
+def test_klik_sah_dicatat_dihitung_dan_dialihkan_tanpa_referrer(klien):
+    r = kerjakan(klien, 'ls-7-matematika', params={'sesi': 'sesiPortalA'})
+    assert r.status_code == 302 and r.headers['location'] == URL_RAHASIA
+    assert r.headers['referrer-policy'] == 'no-referrer' and r.headers['cache-control'] == 'no-store'
+    doc = klien.db.ujian_link_soal.docs[0]
+    assert (doc['jumlah_klik'], doc['klik_terakhir_at']) == (13, f'{HARI_INI}T08:00:00+07:00')
+    (log,) = log_klik(klien)
+    assert (log['hasil'], log['link_soal_id'], log['jenjang'], log['mapel'], log['url_host'], log['jenis_tautan'], log['sesi'],
+            log['perangkat'], log['waktu']) == ('ok', 'ls-7-matematika', 7, 'matematika', 'cbt.madrasah.sch.id', 'portal', 'sesiPortalA',
+                                                'HP Siswa', f'{HARI_INI}T08:00:00+07:00')
+    assert not any('rahasia-matematika' in str(v) for v in log.values())  # log hanya menyimpan host, bukan tautan lengkap
+    # klik terakhir tidak mundur bila klik lain yang lebih awal selesai belakangan ($max)
+    klien.kini = datetime.fromisoformat(f'{HARI_INI}T07:59:00+07:00')
+    assert kerjakan(klien, 'ls-7-matematika').status_code == 302
+    assert (doc['jumlah_klik'], doc['klik_terakhir_at']) == (14, f'{HARI_INI}T08:00:00+07:00')
+    # penghitung di portal langsung bertambah
+    s = {x['id']: x for x in get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()['soal']}
+    assert s['ls-7-matematika']['jumlah_klik'] == 14
+
+
+@pytest.mark.parametrize('soal_id,status,hasil,pesan', [
+    ('ls-7-ipa', 403, 'mapel_belum_siap', 'belum disiapkan panitia'),
+    ('ls-9-pkn', 403, 'mapel_ditahan', 'ditahan panitia'),
+    ('ls-8-ipa', 403, 'sudah_selesai', 'sudah ditutup'),
+    ('belum-7-bahasa_indonesia', 404, 'tidak_dikenal', 'tidak ada di portal'),
+    ('ls-9-ips', 404, 'tidak_dikenal', 'tidak ada di portal'),  # milik ujian lain
+    ('bukan id!', 404, 'tidak_dikenal', 'tidak ada di portal'),
+])
+def test_klik_ditolak_tercatat_tanpa_dihitung(klien, soal_id, status, hasil, pesan):
+    sebelum = [d.get('jumlah_klik') for d in klien.db.ujian_link_soal.docs]
+    r = kerjakan(klien, soal_id)
+    assert r.status_code == status and 'location' not in r.headers
+    assert r.headers['content-type'].startswith('text/html') and pesan in r.text and 'cbt.madrasah.sch.id' not in r.text
+    assert [d.get('jumlah_klik') for d in klien.db.ujian_link_soal.docs] == sebelum
+    assert [x['hasil'] for x in log_klik(klien)] == [hasil]
+
+
+def test_klik_sebelum_jam_mulai_dan_tepat_jam_tutup_ditolak(klien):
+    klien.kini = datetime.fromisoformat(f'{HARI_INI}T07:29:59+07:00')
+    r = kerjakan(klien, 'ls-7-matematika')
+    assert r.status_code == 403 and 'Dibuka pukul 07.30 WIB' in r.text
+    klien.kini = datetime.fromisoformat(f'{HARI_INI}T09:00:00+07:00')
+    assert kerjakan(klien, 'ls-7-matematika').status_code == 403
+    klien.kini = datetime.fromisoformat(f'{HARI_INI}T07:30:00+07:00')
+    assert kerjakan(klien, 'ls-7-matematika').status_code == 302
+    assert [x['hasil'] for x in log_klik(klien)] == ['belum_mulai', 'sudah_selesai', 'ok']
+    assert klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 13
+
+
+def test_klik_saat_portal_ditutup_atau_token_salah(klien):
+    klien.db.ujian_tautan_publik.docs[0]['aktif'] = False
+    r = kerjakan(klien, 'ls-7-matematika')
+    assert r.status_code == 403 and 'ditutup panitia' in r.text and 'location' not in r.headers
+    assert [(x['hasil'], x['link_soal_id']) for x in log_klik(klien)] == [('nonaktif', None)]
+    r = kerjakan(klien, 'ls-7-matematika', token='TokenSalahSekali_000000000000000')
+    assert r.status_code == 404 and 'Tautan tidak ditemukan' in r.text
+    assert kerjakan(klien, 'ls-7-matematika', token=TOKEN_INFO).status_code == 404  # token info tidak membuka soal
+    assert klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 12
+    salah = [x for x in klien.db.ujian_akses_log.docs if x['hasil'] == 'tidak_dikenal']
+    assert len(salah) == 1 and salah[0]['jumlah_percobaan'] == 2  # tebakan token dari IP sama digabung

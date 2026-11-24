@@ -41,8 +41,9 @@ AKSI_AKSES = ('buka_tautan', 'klik_mengerjakan')
 AKSI_BUKA = 'buka_tautan'
 AKSI_KLIK = 'klik_mengerjakan'
 
-# Saringan log: klik sah "Mengerjakan" vs pembukaan tautan (termasuk entri lama sebelum field `aksi` ada).
-KUERI_KLIK = {'aksi': AKSI_KLIK}
+# Saringan log: klik SAH "Mengerjakan" (hanya yang dialihkan ke tautan soal) vs pembukaan tautan (termasuk entri lama
+# sebelum field `aksi` ada). Klik yang ditolak tetap tercatat (aksi klik, hasil ≠ ok) tetapi tidak pernah dihitung.
+KUERI_KLIK = {'aksi': AKSI_KLIK, 'hasil': 'ok'}
 KUERI_BUKA = {'aksi': {'$ne': AKSI_KLIK}}
 
 URL_SOAL_MAKS = 2000  # sama dengan URL_SOAL_MAKS di frontend/src/lib/ujianLinkSoal.js
@@ -410,3 +411,46 @@ def peringatan_link(isi: 'LinkSoalIn', ujian: Optional[Dict[str, Any]], jadwal: 
     if isi.url and not isi.aktif:
         hasil.append('Tombol Mengerjakan dimatikan: mapel ini tampil "ditahan panitia" di portal sampai diaktifkan lagi.')
     return hasil
+
+
+
+# ---- Klik "Mengerjakan" ----
+def nilai_klik(doc: Optional[Dict[str, Any]], sekarang: datetime) -> Dict[str, Any]:
+    """Penilaian satu klik "Mengerjakan" menurut WAKTU SERVER -> { hasil (ujian_info.HASIL_AKSES), pesan, status_http }.
+    Sah ('ok') hanya bila mapel dikenal, tautan soal sah, tombol aktif, dan jendela mapel sedang berlangsung."""
+    if not doc:
+        return {'hasil': 'tidak_dikenal', 'pesan': 'Mata pelajaran ini tidak ada di portal. Muat ulang portal ujian.', 'status_http': 404}
+    if not url_soal_aman(doc.get('url')):
+        return {'hasil': 'mapel_belum_siap', 'pesan': 'Tautan soal mata pelajaran ini belum disiapkan panitia. Laporkan ke pengawas ruang.',
+                'status_http': 403}
+    if doc.get('aktif') is False:
+        return {'hasil': 'mapel_ditahan', 'pesan': 'Tombol mata pelajaran ini sedang ditahan panitia. Tunggu arahan pengawas ruang.',
+                'status_http': 403}
+    status = status_jendela(doc.get('mulai_at'), doc.get('selesai_at'), sekarang)
+    if status == 'belum_dimulai':
+        jam = baca_waktu(doc['mulai_at']).astimezone(WIB_TZ).strftime('%H.%M')
+        return {'hasil': 'belum_mulai', 'pesan': f'Soal belum dapat dikerjakan. Dibuka pukul {jam} WIB.', 'status_http': 403}
+    if status != 'berlangsung':
+        return {'hasil': 'sudah_selesai' if status == 'ditutup' else 'mapel_belum_siap',
+                'pesan': 'Waktu pengerjaan mata pelajaran ini sudah ditutup.' if status == 'ditutup'
+                else 'Jadwal pengerjaan mata pelajaran ini belum diatur panitia.', 'status_http': 403}
+    return {'hasil': 'ok', 'pesan': None, 'status_http': 302}
+
+
+def ringkas_link_log(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Identitas link soal untuk log klik: tanpa tautan lengkap (hanya nama host)."""
+    if not doc:
+        return None
+    return {'id': doc.get('id'), 'jenjang': doc.get('jenjang'), 'mapel': doc.get('mapel'), 'url_host': host_url(doc.get('url'))}
+
+
+async def naikkan_klik(db, link_id: str, waktu: datetime) -> None:
+    """Naikkan cache penghitung satu link soal dalam SATU operasi atomik: jumlah_klik +1 ($inc) dan klik_terakhir_at
+    ($max — klik bersamaan yang selesai tidak berurutan tidak memundurkan waktu). Log tetap sumber kebenaran."""
+    await db[KOLEKSI_LINK_SOAL].update_one(
+        {'id': link_id}, {'$inc': {'jumlah_klik': 1}, '$max': {'klik_terakhir_at': waktu.astimezone(WIB_TZ).isoformat()}})
+
+
+def id_soal_layak(soal_id: Optional[str]) -> bool:
+    """Bentuk id link soal masuk akal (dicek sebelum query): uuid / id URL-safe ≤ 64 karakter."""
+    return bool(soal_id) and len(soal_id) <= 64 and re.fullmatch(r'[A-Za-z0-9_-]+', soal_id) is not None

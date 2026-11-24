@@ -110,6 +110,9 @@ class Koleksi:
             wadah[daun] = v
         for k, v in u.get('$inc', {}).items():
             d[k] = d.get(k, 0) + v
+        for k, v in u.get('$max', {}).items():
+            if d.get(k) is None or v > d[k]:
+                d[k] = v
         for k in u.get('$unset', {}):
             *induk, daun = k.split('.')
             wadah = d

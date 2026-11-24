@@ -94,10 +94,12 @@ def test_migrasi_portal():
 
 def test_kueri_aksi_membaca_log_lama_sebagai_buka_tautan():
     from pkg_palsu import cocok_nilai
-    lama, buka, klik = {}, {'aksi': 'buka_tautan'}, {'aksi': 'klik_mengerjakan'}
+    lama, buka = {'hasil': 'ok'}, {'aksi': 'buka_tautan', 'hasil': 'ok'}
+    klik, klik_ditolak = {'aksi': 'klik_mengerjakan', 'hasil': 'ok'}, {'aksi': 'klik_mengerjakan', 'hasil': 'sudah_selesai'}
     cocok = lambda d, q: all(cocok_nilai(d.get(k), v) for k, v in q.items())  # noqa: E731
-    assert [cocok(d, up.KUERI_BUKA) for d in (lama, buka, klik)] == [True, True, False]
-    assert [cocok(d, up.KUERI_KLIK) for d in (lama, buka, klik)] == [False, False, True]
+    assert [cocok(d, up.KUERI_BUKA) for d in (lama, buka, klik, klik_ditolak)] == [True, True, False, False]
+    # hanya klik SAH yang dihitung; klik ditolak tetap tercatat tetapi tidak masuk penghitung/intensitas
+    assert [cocok(d, up.KUERI_KLIK) for d in (lama, buka, klik, klik_ditolak)] == [False, False, True, False]
 
 
 MAPEL7 = [{'kode': k, 'nama': n} for k, n in ui.MAPEL_UJIAN_BAKU]

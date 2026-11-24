@@ -295,8 +295,9 @@ async def add_security_headers(request, call_next):
     # Enable XSS protection (legacy browsers)
     response.headers["X-XSS-Protection"] = "1; mode=block"
 
-    # Referrer policy - don't leak URLs to external sites
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Referrer policy - don't leak URLs to external sites. Rute yang menetapkan kebijakan lebih ketat sendiri (mis. rute
+    # kerjakan portal ujian: no-referrer) tidak ditimpa.
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
 
     # Permissions policy - restrict browser features
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"

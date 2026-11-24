@@ -271,7 +271,7 @@ export const paramSaringanAudit = ({ dari, sampai, cari } = {}) => ({ ...(dari ?
 // ---- Jejak audit akses & perubahan tautan ----
 export const LABEL_HASIL_AKSES = {
   ok: 'Berhasil', tidak_dikenal: 'Token salah', nonaktif: 'Ditutup', belum_mulai: 'Belum dibuka', sudah_selesai: 'Berakhir',
-  kartu_soal_ditolak: 'Coba unduh kartu soal',
+  kartu_soal_ditolak: 'Coba unduh kartu soal', mapel_belum_siap: 'Klik: soal belum siap', mapel_ditahan: 'Klik: tombol ditahan',
 };
 export const LABEL_AKSI_TAUTAN = { buka: 'Membuka tautan', tutup: 'Menutup tautan', jendela: 'Mengubah jendela waktu', ganti_token: 'Mengganti token' };
 
