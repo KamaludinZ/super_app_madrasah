@@ -64,6 +64,7 @@ MENU_UJIAN = (
     ('pengawas', 'Guru Pengawas', '/ujian/pengawas', 'Master pilihan guru pengawas'),
     ('formulir', 'Pengaturan Formulir', '/ujian/formulir', 'Jendela waktu & template cetak'),
     ('tautan_publik', 'Tautan Publik', '/ujian/tautan-publik', 'Info ujian siswa & monitoring pengumpulan soal'),
+    ('info_ujian', 'Info Ujian', '/ujian/info-ujian', 'Tata tertib & panduan CBT untuk siswa'),
     ('berkas_soal', 'Berkas Soal', '/ujian/berkas-soal', 'Status kisi-kisi & kartu soal, PJ, unduh ZIP'),
     ('audit_publik', 'Jejak Audit Publik', '/ujian/audit-publik', 'Riwayat akses tautan & unduhan berkas'),
     ('daftar_hadir', 'Daftar Hadir', '/ujian/daftar-hadir', 'Pantau kehadiran, izin & sakit'),
@@ -81,6 +82,8 @@ AKSES_MENU_UJIAN = {
     'formulir': {'pimpinan': False, 'jabatan': ('ketua', 'sekretaris')},
     # Tautan publik: pimpinan & ketua/sekretaris melihat; mengubah (buka/tutup, jendela, ganti token) admin saja.
     'tautan_publik': {'pimpinan': True, 'jabatan': ('ketua', 'sekretaris')},
+    # Info ujian (tata tertib & panduan CBT halaman siswa): pemantau melihat; mengisi admin saja.
+    'info_ujian': {'pimpinan': True, 'jabatan': ('ketua', 'sekretaris')},
     # Berkas soal: pimpinan & ketua/sekretaris memantau status; isi kartu soal (unduh) admin saja.
     'berkas_soal': {'pimpinan': True, 'jabatan': ('ketua', 'sekretaris')},
     'audit_publik': {'pimpinan': True, 'jabatan': ('ketua', 'sekretaris')},

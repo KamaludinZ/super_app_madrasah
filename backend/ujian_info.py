@@ -264,6 +264,42 @@ class KontenInfoIn(BaseModel):
         return v
 
 
+class SimpanKontenInfoIn(KontenInfoIn):
+    """Isian menu Info Ujian. `versi` = diperbarui_pada yang terakhir dimuat (None bila belum pernah diisi); bila berbeda
+    dengan yang tersimpan, penyimpanan ditolak agar isian admin lain tidak tertimpa diam-diam."""
+    versi: Optional[str] = Field(None, max_length=64)
+
+
+FIELD_KONTEN_TEKS = ('tata_tertib', 'panduan_video_url', 'panduan_keterangan')
+
+
+def nama_berkas_panduan(ujian_id: str) -> str:
+    """Nama acak PDF panduan CBT di folder `ujian_info/` (bukan nama asli; baru tiap unggah sehingga berkas lama tidak
+    tertimpa sebelum DB tercatat)."""
+    aman = re.sub(r'[^A-Za-z0-9_-]', '', str(ujian_id))[:40] or 'ujian'
+    return f'panduan-{aman}-{secrets.token_hex(8)}.pdf'
+
+
+def ringkas_konten_admin(konten: Optional[Dict[str, Any]], ujian_id: str, pdf_ada_di_disk: bool = True) -> Dict[str, Any]:
+    """Konten info untuk menu Info Ujian (ber-login): isian teks, metadata PDF panduan (tanpa nama berkas di disk),
+    dan siapa/kapan terakhir mengubah. `versi` dikirim balik saat menyimpan."""
+    k = {**konten_kosong(ujian_id), **(konten or {})}
+    pdf = k.get('panduan_pdf') or None
+    return {
+        'tata_tertib': k.get('tata_tertib') or '',
+        'panduan_video_url': k.get('panduan_video_url') or '',
+        'panduan_keterangan': k.get('panduan_keterangan') or '',
+        'panduan_pdf': {
+            'nama_file': pdf.get('nama_file') or 'Panduan CBT.pdf', 'ukuran_byte': pdf.get('ukuran_byte'),
+            'diunggah_pada': pdf.get('diunggah_pada'), 'diunggah_oleh_nama': pdf.get('diunggah_oleh_nama'),
+            'ada_di_disk': bool(pdf_ada_di_disk),
+        } if pdf and pdf.get('nama_berkas') else None,
+        'diperbarui_pada': k.get('diperbarui_pada'),
+        'diperbarui_oleh_nama': k.get('diperbarui_oleh_nama'),
+        'versi': k.get('diperbarui_pada'),
+    }
+
+
 def konten_kosong(ujian_id: str) -> Dict[str, Any]:
     return {'ujian_id': ujian_id, 'tata_tertib': '', 'panduan_video_url': None, 'panduan_keterangan': '', 'panduan_pdf': None,
             'diperbarui_pada': None, 'diperbarui_oleh': None, 'diperbarui_oleh_nama': None}

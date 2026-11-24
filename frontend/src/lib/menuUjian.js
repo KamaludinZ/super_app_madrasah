@@ -1,6 +1,6 @@
 import {
   ClipboardList, UsersRound, DoorClosed, UserCheck, SlidersHorizontal, ClipboardCheck, FileSignature, Printer, Archive,
-  FileSpreadsheet, IdCard, Armchair, Link2, FileUp, FolderDown, ShieldCheck,
+  FileSpreadsheet, IdCard, Armchair, Link2, FileUp, FolderDown, ShieldCheck, BookOpenText,
 } from 'lucide-react';
 import { PERAN_PENGELOLA_UJIAN, PERAN_PIMPINAN_UJIAN, RUTE_UJIAN_TERSEDIA, mungkinPanitia } from '@/lib/ujian';
 
@@ -17,6 +17,7 @@ export const IKON_MENU_UJIAN = {
   pengawas: UserCheck,
   formulir: SlidersHorizontal,
   tautan_publik: Link2,
+  info_ujian: BookOpenText,
   berkas_soal: FolderDown,
   audit_publik: ShieldCheck,
   daftar_hadir: ClipboardCheck,

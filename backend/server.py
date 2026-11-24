@@ -48,6 +48,7 @@ from routers import (
     ujian_mapel,
     ujian_tautan_publik,
     ujian_berkas,
+    ujian_info_konten,
     ujian_kehadiran,
     ujian_berita_acara,
     ujian_cetak,
@@ -166,6 +167,8 @@ api_router.include_router(ujian_mapel.router)
 api_router.include_router(ujian_tautan_publik.router)
 api_router.include_router(ujian_berkas.router)
 api_router.include_router(ujian_berkas.router_unggah)  # unggah: tolak dini permintaan > 10 MB
+api_router.include_router(ujian_info_konten.router)
+api_router.include_router(ujian_info_konten.router_unggah)  # unggah PDF panduan CBT: tolak dini > 10 MB
 api_router.include_router(ujian_kehadiran.router)
 api_router.include_router(ujian_berita_acara.router)
 api_router.include_router(ujian_cetak.router)

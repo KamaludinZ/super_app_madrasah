@@ -47,9 +47,9 @@ def test_beranda_hanya_semester_aktif_dan_akses(klien):
     assert klien('kamad', 'kepala_sekolah', 'GET', '/ujian/beranda').json()['akses']['pimpinan']
     wk = klien('wakakur', 'waka_kurikulum', 'GET', '/ujian/beranda').json()
     assert wk['akses']['pimpinan'] and not wk['akses']['pengelola']
-    # pimpinan juga memantau Tautan Publik & Berkas Soal (hanya melihat; mengubah/unduh kartu soal tetap admin)
+    # pimpinan juga memantau Tautan Publik, Info Ujian & Berkas Soal (hanya melihat; mengubah/unduh kartu soal tetap admin)
     assert {m['key'] for m in wk['menu'] if m['akses']} == {'daftar_hadir', 'berita_acara', 'cetak', 'kartu_peserta', 'kartu_meja', 'arsip',
-                                                          'tautan_publik', 'berkas_soal', 'audit_publik'}
+                                                          'tautan_publik', 'info_ujian', 'berkas_soal', 'audit_publik'}
 
     # GTK bukan panitia & siswa ditolak dengan pesan spesifik.
     r = klien('guru2', 'guru', 'GET', '/ujian/beranda')
