@@ -87,10 +87,25 @@ export function keInputWaktu(iso) {
 export const dariInputWaktu = (v) => (v ? `${v}:00+07:00` : null);
 
 /**
- * Status berlaku tautan (cermin ujian_info.cek_tautan di backend) -> { berlaku, alasan, pesan }.
- * Batas yang terisi tetapi tidak terbaca membuat tautan ditolak (fail-closed).
+ * Jendela efektif tautan: untuk PORTAL, batas yang kosong mengikuti masa ujian (`masa` = { mulai, selesai }
+ * 'YYYY-MM-DD'; mulai 00.00 WIB s.d. akhir hari terakhir) — cermin ujian_portal.jendela_portal di backend, karena server
+ * selalu mengunci portal di luar masa ujian. Jenis lain apa adanya.
  */
-export function statusTautan(t, sekarang = new Date()) {
+export function jendelaEfektif(t, masa) {
+  if (!t || t.jenis !== 'portal' || !masa) return t;
+  return {
+    ...t,
+    mulai_at: t.mulai_at || (masa.mulai ? `${masa.mulai}T00:00:00+07:00` : null),
+    selesai_at: t.selesai_at || (masa.selesai ? `${geserHari(masa.selesai, 1)}T00:00:00+07:00` : null),
+  };
+}
+
+/**
+ * Status berlaku tautan (cermin ujian_info.cek_tautan di backend) -> { berlaku, alasan, pesan }.
+ * Batas yang terisi tetapi tidak terbaca membuat tautan ditolak (fail-closed). `masa` = masa ujian (lihat jendelaEfektif).
+ */
+export function statusTautan(tautan, sekarang = new Date(), masa = null) {
+  const t = jendelaEfektif(tautan, masa);
   if (!t) return { berlaku: false, alasan: 'tidak_dikenal', pesan: 'Tautan belum dibuat.' };
   if (!t.aktif) return { berlaku: false, alasan: 'nonaktif', pesan: 'Ditutup — pengunjung melihat "tautan sedang ditutup".' };
   const mulai = parseServerDate(t.mulai_at);
@@ -145,7 +160,8 @@ function teksDurasi(ms) {
 }
 
 /** Keterangan waktu relatif status tautan, mis. "Dibuka otomatis dalam 2 hari", "Berakhir dalam 5 jam", atau null. */
-export function keteranganWaktu(t, sekarang = new Date()) {
+export function keteranganWaktu(tautan, sekarang = new Date(), masa = null) {
+  const t = jendelaEfektif(tautan, masa);
   const mulai = parseServerDate(t?.mulai_at);
   const selesai = parseServerDate(t?.selesai_at);
   const st = statusTautan(t, sekarang);
@@ -181,7 +197,7 @@ export function peringatanTautan(t, masaUjian, sekarang = new Date()) {
     hasil.push({ kode: 'portal_tutup_saat_ujian', pesan: 'Masa ujian sedang berlangsung tetapi portal ditutup — siswa tidak dapat membuka soal.' });
   }
   if (t.jenis === 'portal' && t.aktif && (!t.mulai_at || !t.selesai_at)) {
-    hasil.push({ kode: 'portal_tanpa_batas', pesan: 'Portal dibuka tanpa jendela waktu lengkap — batasi pada masa ujian agar portal terkunci di luar waktu ujian.' });
+    hasil.push({ kode: 'portal_ikut_masa_ujian', pesan: 'Portal dibuka tanpa jendela waktu lengkap: batas yang kosong mengikuti masa ujian, sehingga portal tetap terkunci di luar masa ujian.' });
   }
   if (t.jenis === 'monitoring' && t.aktif && !t.selesai_at) {
     hasil.push({ kode: 'monitoring_tanpa_batas', pesan: 'Tautan monitoring terbuka tanpa batas akhir — pertimbangkan menutupnya setelah pengumpulan selesai.' });

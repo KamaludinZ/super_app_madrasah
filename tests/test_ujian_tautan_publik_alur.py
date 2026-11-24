@@ -255,3 +255,42 @@ def test_api_jejak_akses_filter_tanggal_cari(klien):
     for salah in ({'dari': 'kemarin'}, {'dari': '2026-12-09', 'sampai': '2026-12-01'}, {'cari': 'x' * 61}):
         r = a('GET', url, params=salah)
         assert r.status_code == 422 and isinstance(r.json()['detail'], str)
+
+
+# ---- Sakelar portal ujian (terpisah dari info & monitoring) ----
+def test_sakelar_portal_terpisah_dan_status_ikut_masa_ujian(klien):
+    d = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik').json()['tautan']
+    portal = d['portal']
+    assert portal['jalur'] == f"/publik/portal-ujian/{portal['token']}" and (portal['aktif'], portal['alasan']) == (False, 'nonaktif')
+    assert len({d[j]['token'] for j in ('info', 'monitoring', 'portal')}) == 3
+    sebelum = {t['jenis']: dict(t) for t in klien.db.ujian_tautan_publik.docs}
+
+    r = klien('admin', 'admin', 'PUT', '/ujian/uas/tautan-publik/portal', json={'aktif': True})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert (j['tautan']['aktif'], j['tautan']['berlaku'], j['tautan']['alasan']) == (True, True, 'ok')
+    # tanpa jendela: batas efektif = masa ujian, diberitahukan ke admin
+    assert [p['kode'] for p in j['peringatan']] == ['portal_ikut_masa_ujian']
+    sesudah = {t['jenis']: t for t in klien.db.ujian_tautan_publik.docs}
+    assert sesudah['info'] == sebelum['info'] and sesudah['monitoring'] == sebelum['monitoring']  # tautan lain tak tersentuh
+    riwayat = [(x['jenis'], x['aksi']) for x in klien.db.ujian_tautan_riwayat.docs if x['aksi'] in ('buka', 'tutup')]
+    assert riwayat == [('portal', 'buka')]
+
+    klien.kini = datetime.fromisoformat('2026-12-07T08:00:00+07:00')  # sehari setelah masa ujian
+    p = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik').json()['tautan']['portal']
+    assert (p['aktif'], p['berlaku'], p['alasan']) == (True, False, 'sudah_selesai')  # sama dengan yang dilihat siswa
+
+    r = klien('admin', 'admin', 'PUT', '/ujian/uas/tautan-publik/portal', json={'aktif': False})
+    assert r.status_code == 200 and r.json()['tautan']['alasan'] == 'nonaktif'
+    assert klien('admin', 'admin', 'POST', '/ujian/uas/tautan-publik/portal/ganti-token').json()['tautan']['token'] != portal['token']
+
+
+@pytest.mark.parametrize('uid,peran', [('kamad', 'kepala_sekolah'), ('guru1', 'guru')])
+def test_sakelar_portal_hanya_admin(klien, uid, peran):
+    assert klien(uid, peran, 'GET', '/ujian/uas/tautan-publik').status_code == 200
+    assert klien(uid, peran, 'PUT', '/ujian/uas/tautan-publik/portal', json={'aktif': True}).status_code == 403
+
+
+def test_jenis_tautan_tidak_dikenal(klien):
+    r = klien('admin', 'admin', 'PUT', '/ujian/uas/tautan-publik/lain', json={'aktif': True})
+    assert r.status_code == 404 and 'portal' in r.json()['detail']

@@ -1,5 +1,8 @@
-"""Pengelolaan Tautan Publik ujian (ber-login): dua tautan ber-token acak per ujian — info ujian (siswa) dan monitoring
-pengumpulan (panitia/guru). Kontrak sama dengan frontend/src/lib/ujianTautanPublik.js.
+"""Pengelolaan Tautan Publik ujian (ber-login): tiga tautan ber-token acak per ujian — info ujian (siswa), monitoring
+pengumpulan (panitia/guru), dan portal ujian (siswa saat jam ujian). Masing-masing punya sakelar buka/tutup, jendela
+waktu, dan token sendiri; mengubah satu tautan tidak pernah menyentuh yang lain. Status tautan portal dihitung dengan
+jendela efektifnya (batas kosong = masa ujian; ujian_portal.ringkas_tautan_portal), sama dengan yang diperiksa rute
+publik portal. Kontrak sama dengan frontend/src/lib/ujianTautanPublik.js.
 
 Akses menu `tautan_publik`: admin (pengelola) melihat & mengubah; kepala madrasah, waka kurikulum, serta ketua &
 sekretaris panitia ujian itu melihat (boleh_ubah = false). Tautan yang belum ada dibuat otomatis dalam keadaan ditutup
@@ -16,6 +19,7 @@ from ujian_info import (
     JENIS_TAUTAN, KOLEKSI_AKSES_LOG, KOLEKSI_TAUTAN, KOLEKSI_TAUTAN_RIWAYAT, galat_saringan_audit, kueri_saringan_audit, UbahTautanIn, baca_waktu, catat_riwayat_tautan, ganti_token, inisialisasi_tautan,
     peringatan_jendela, ringkas_tautan, terapkan_ubah_tautan,
 )
+from ujian_portal import ringkas_tautan_portal
 
 router = APIRouter()
 
@@ -28,18 +32,24 @@ def _ringkas_ujian(u: Dict) -> Dict:
 
 def _jenis_sah(jenis: str) -> str:
     if jenis not in JENIS_TAUTAN:
-        raise HTTPException(404, "Jenis tautan tidak dikenal (info atau monitoring).")
+        raise HTTPException(404, "Jenis tautan tidak dikenal (info, monitoring, atau portal).")
     return jenis
+
+
+def _ringkas(t: Dict, ujian: Optional[Dict], kini) -> Optional[Dict]:
+    """Ringkasan tautan untuk admin; tautan portal memakai jendela efektif (masa ujian) agar statusnya sama dengan rute publik."""
+    return ringkas_tautan_portal(t, ujian, kini) if (t or {}).get('jenis') == 'portal' else ringkas_tautan(t, kini)
 
 
 @router.get("/ujian/{ujian_id}/tautan-publik")
 async def daftar_tautan_publik(ujian_id: str, user: Dict = Depends(get_current_user)):
-    """Dua tautan publik satu ujian beserta status berlaku saat ini: { ujian, boleh_ubah, tautan: { info, monitoring } }."""
+    """Tiga tautan publik satu ujian beserta status berlaku saat ini:
+    { ujian, boleh_ubah, tautan: { info, monitoring, portal } }."""
     a = await akses_ujian(user, ujian_id, 'tautan_publik')
     tautan = await inisialisasi_tautan(db, ujian_id, user)
     kini = sekarang_wib()
     return {'ujian': _ringkas_ujian(a['ujian']), 'boleh_ubah': a['pengelola'],
-            'tautan': {j: ringkas_tautan(tautan[j], kini) for j in JENIS_TAUTAN}}
+            'tautan': {j: _ringkas(tautan[j], a['ujian'], kini) for j in JENIS_TAUTAN}}
 
 
 FIELD_AKSES_AUDIT = {'_id': 0, 'id': 1, 'jenis_tautan': 1, 'waktu': 1, 'ip': 1, 'ip_rantai': 1, 'perangkat': 1, 'hasil': 1, 'sesi': 1,
@@ -98,7 +108,7 @@ async def detail_tautan_publik(ujian_id: str, jenis: str, user: Dict = Depends(g
     t = (await inisialisasi_tautan(db, ujian_id, user))[jenis]
     riwayat = (await db[KOLEKSI_TAUTAN_RIWAYAT].find({'tautan_id': t['id']}, {'_id': 0}).sort('waktu', -1)
                .to_list(RIWAYAT_DETAIL_MAKS))[:RIWAYAT_DETAIL_MAKS]
-    return {'ujian': _ringkas_ujian(a['ujian']), 'boleh_ubah': a['pengelola'], 'tautan': ringkas_tautan(t, sekarang_wib()),
+    return {'ujian': _ringkas_ujian(a['ujian']), 'boleh_ubah': a['pengelola'], 'tautan': _ringkas(t, a['ujian'], sekarang_wib()),
             'riwayat': riwayat}
 
 
@@ -149,15 +159,15 @@ async def simpan_tautan_publik(ujian_id: str, jenis: str, body: UbahTautanIn, re
     await log_audit(user, 'ujian_tautan_ubah', KOLEKSI_TAUTAN, lama['id'],
                     {'ujian_id': ujian_id, 'jenis': jenis, **baru}, request=request)
     kini = sekarang_wib()
-    return {'tautan': ringkas_tautan(t, kini), 'peringatan': peringatan_jendela(t, ujian, kini)}
+    return {'tautan': _ringkas(t, ujian, kini), 'peringatan': peringatan_jendela(t, ujian, kini)}
 
 
 @router.post("/ujian/{ujian_id}/tautan-publik/{jenis}/ganti-token")
 async def ganti_token_tautan_publik(ujian_id: str, jenis: str, request: Request, user: Dict = Depends(get_current_user)):
     """Ganti token tautan (admin): tautan lama langsung tidak dikenal (404 bagi pemegangnya); buka/tutup & jendela waktu
     tetap. Dicatat di riwayat tautan & audit umum tanpa menyimpan token. -> { tautan }"""
-    lama, _ = await _tautan_admin(user, ujian_id, jenis)
+    lama, ujian = await _tautan_admin(user, ujian_id, jenis)
     t = await ganti_token(db, lama['id'], sekarang_wib())
     await catat_riwayat_tautan(db, t, 'ganti_token', user, detail='Token lama tidak berlaku lagi', sebelum=lama, sesudah=t)
     await log_audit(user, 'ujian_tautan_ganti_token', KOLEKSI_TAUTAN, lama['id'], {'ujian_id': ujian_id, 'jenis': jenis}, request=request)
-    return {'tautan': ringkas_tautan(t, sekarang_wib())}
+    return {'tautan': _ringkas(t, ujian, sekarang_wib())}

@@ -720,6 +720,9 @@ def peringatan_jendela(t: Dict[str, Any], ujian: Optional[Dict[str, Any]], sekar
     akhir_ujian = baca_waktu(f"{(ujian or {}).get('selesai')}T00:00:00") if (ujian or {}).get('selesai') else None
     if t.get('jenis') == 'info' and selesai and akhir_ujian and selesai < akhir_ujian:
         hasil.append({'kode': 'berakhir_sebelum_ujian', 'pesan': 'Jendela waktu berakhir sebelum hari terakhir ujian.'})
+    if t.get('jenis') == 'portal' and t.get('aktif') and (not t.get('mulai_at') or not t.get('selesai_at')):
+        hasil.append({'kode': 'portal_ikut_masa_ujian', 'pesan': 'Portal dibuka tanpa jendela waktu lengkap: batas yang kosong mengikuti '
+                      'masa ujian, sehingga portal tetap terkunci di luar masa ujian.'})
     return hasil
 
 

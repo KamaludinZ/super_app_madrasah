@@ -33,16 +33,16 @@ function rentang(mulai, selesai) {
  * Status portal siswa + sakelar buka/tutup portal (admin; tersimpan langsung, terpisah dari tautan info & monitoring)
  * dan pintasan membuka portal / mengatur jendela waktunya di menu Tautan Publik.
  */
-function StatusPortal({ tautan, ujianId, bolehUbah, onBerubah }) {
+function StatusPortal({ tautan, ujianId, masaUjian, bolehUbah, onBerubah }) {
   const [sibuk, setSibuk] = useState(false);
   const url = urlTautan(tautan);
-  const tampil = tautan ? { ...tautan, ...statusTautan(tautan) } : null;
+  const tampil = tautan ? { ...tautan, ...statusTautan(tautan, new Date(), masaUjian) } : null;
   const ubahAktif = async (aktif) => {
     setSibuk(true);
     try {
       const r = await simpanTautanPublik(ujianId, 'portal', { aktif });
       onBerubah(r.tautan, r.tiruan);
-      const st = statusTautan(r.tautan);
+      const st = statusTautan(r.tautan, new Date(), masaUjian);
       if (!aktif) {
         toast.success('Portal ujian ditutup. Siswa kini melihat "portal sedang ditutup".', {
           action: { label: 'Urungkan', onClick: () => ubahAktif(true) },
@@ -67,8 +67,8 @@ function StatusPortal({ tautan, ujianId, bolehUbah, onBerubah }) {
             {tampil.alasan === 'nonaktif' ? 'Link soal tetap bisa disiapkan. Siswa baru dapat membuka portal setelah portal dibuka.' : tampil.pesan}
           </p>
         )}
-        {tampil?.berlaku && (!tautan.mulai_at || !tautan.selesai_at) && (
-          <p className="text-xs text-amber-700" data-testid="status-portal-tanpa-batas">Portal terbuka tanpa jendela waktu lengkap — batasi pada masa ujian di menu Tautan Publik.</p>
+        {tautan?.aktif && (!tautan.mulai_at || !tautan.selesai_at) && (
+          <p className="text-xs text-slate-500" data-testid="status-portal-ikut-masa">Batas jendela yang kosong mengikuti masa ujian — portal terkunci di luar masa ujian.</p>
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -269,7 +269,7 @@ export default function UjianLinkSoalPage() {
 
       {!ditolak && data && (
         <>
-          <StatusPortal tautan={data.tautan_portal} ujianId={ujian?.id} bolehUbah={bolehUbah}
+          <StatusPortal tautan={data.tautan_portal} ujianId={ujian?.id} masaUjian={ujian} bolehUbah={bolehUbah}
             onBerubah={(t, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, tautan_portal: t }))} />
           {!bolehUbah && (
             <p className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800" data-testid="link-hanya-lihat">

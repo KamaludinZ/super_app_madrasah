@@ -63,9 +63,9 @@ export default function KartuTautanPublik({ ujianId, namaUjian, masaUjian, meta,
 
   const kini = useSekarang();
   // Status dihitung ulang di klien (cermin cek_tautan server) agar ikut berganti saat batas waktu terlewati.
-  const st = statusTautan(tautan, kini);
+  const st = statusTautan(tautan, kini, masaUjian);
   const tampil = { ...tautan, ...st };
-  const keterangan = keteranganWaktu(tautan, kini);
+  const keterangan = keteranganWaktu(tautan, kini, masaUjian);
   const peringatan = peringatanTautan(tautan, masaUjian, kini);
   const url = urlTautan(tautan);
   const galat = galatJendela({ mulai, selesai });
