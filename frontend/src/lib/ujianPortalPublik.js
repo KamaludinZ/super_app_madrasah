@@ -18,9 +18,11 @@
  *          soal: [{ id, jenjang: 7|8|9, mapel: kode baku, tanggal: 'YYYY-MM-DD' (WIB), sesi_ke,
  *                   mulai_at, selesai_at,                 (jendela tombol "Mengerjakan"; awalnya dari jadwal ujian)
  *                   status: 'belum_dimulai' | 'berlangsung' | 'ditutup',   (menurut waktu server)
+ *                   hitung_mundur: { menuju: 'mulai' | 'selesai', detik } | null,  (menurut waktu server saat respons)
  *                   siap: bool,                           (tautan soal terisi DAN tombol diaktifkan admin)
  *                   ditahan: bool,                        (tautan terisi tetapi tombol dimatikan admin; siap = false)
  *                   jumlah_klik, klik_terakhir_at }] }    (cache klik sah dari ujian_link_soal)
+ *          batas_berikutnya_at: ISO | null }   (perubahan status terdekat; klien memuat ulang sesudahnya)
  *        TIDAK PERNAH memuat `url` tautan soal: tautan baru keluar lewat rute kerjakan di bawah, saat mapel berlangsung.
  *        Mapel baku yang tidak punya entri `soal` = belum dijadwalkan.
  *     404 token tidak dikenal; 403 portal tidak dapat dibuka -> detail { alasan: 'nonaktif' | 'belum_mulai' | 'sudah_selesai',

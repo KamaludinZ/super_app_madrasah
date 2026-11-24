@@ -196,3 +196,14 @@ def test_jendela_portal_cadangan_masa_ujian():
     assert up.cek_masa_portal(aktif, ujian, _wib('2026-12-06T23:59:59+07:00'))['berlaku']
     assert up.cek_masa_portal(aktif, ujian, _wib('2026-12-07T00:00:00+07:00'))['alasan'] == 'sudah_selesai'
     assert up.cek_masa_portal({**aktif, 'aktif': False}, ujian, _wib('2026-12-02T08:00:00+07:00'))['alasan'] == 'nonaktif'
+
+
+def test_hitung_mundur_dan_batas_berikutnya_dari_waktu_server():
+    m, s = '2026-12-02T07:30:00+07:00', '2026-12-02T09:00:00+07:00'
+    assert up.hitung_mundur(m, s, _wib('2026-12-02T07:29:59.400+07:00')) == {'menuju': 'mulai', 'detik': 1}
+    assert up.hitung_mundur(m, s, _wib('2026-12-02T00:30:00+00:00')) == {'menuju': 'selesai', 'detik': 5400}  # zona lain
+    assert up.hitung_mundur(m, s, _wib('2026-12-02T09:00:00+07:00')) is None and up.hitung_mundur('x', s, _wib(s)) is None
+    soal = [{'mulai_at': m, 'selesai_at': s}, {'mulai_at': '2026-12-02T09:30:00+07:00', 'selesai_at': '2026-12-02T11:00:00+07:00'}]
+    assert up.batas_berikutnya(soal, _wib('2026-12-02T08:00:00+07:00')) == s
+    assert up.batas_berikutnya(soal, _wib('2026-12-02T09:00:00+07:00')) == '2026-12-02T09:30:00+07:00'  # tepat batas: berikutnya
+    assert up.batas_berikutnya(soal, _wib('2026-12-02T11:00:00+07:00')) is None

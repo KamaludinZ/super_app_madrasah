@@ -20,7 +20,7 @@ from routers.ujian_formulir import jadwal_ujian
 from routers.ujian_info_publik import TANPA_CACHE, madrasah_publik
 from ujian import KOLEKSI_UJIAN, sekarang_wib
 from ujian_info import PESAN_TOKEN, cari_tautan, catat_akses, catat_segarkan, cek_tautan, mapel_semua_jenjang, token_layak
-from ujian_portal import KOLEKSI_LINK_SOAL, cek_masa_portal, jadwal_berikutnya, soal_portal
+from ujian_portal import KOLEKSI_LINK_SOAL, batas_berikutnya, cek_masa_portal, jadwal_berikutnya, soal_portal
 
 router = APIRouter()
 
@@ -58,9 +58,9 @@ async def portal_berlaku(token: str, request: Optional[Request] = None, catat=Tr
 @router.get("/publik/portal-ujian/{token}")
 async def portal_ujian_publik(token: str, request: Request, response: Response, segarkan: bool = Query(False),
                               sesi: Optional[str] = Query(None, max_length=40)):
-    """Portal ujian (tanpa login): madrasah, ujian, jendela tautan portal, waktu server, mapel baku per jenjang, dan
-    `soal` — jadwal tiap mapel dengan status (belum_dimulai/berlangsung/ditutup menurut waktu server), siap/ditahan,
-    dan penghitung klik. Tanpa tautan soal."""
+    """Portal ujian (tanpa login): madrasah, ujian, jendela tautan portal, waktu server, mapel baku per jenjang,
+    `soal` — jadwal tiap mapel dengan status (belum_dimulai/berlangsung/ditutup) & hitung mundur menurut WAKTU SERVER,
+    siap/ditahan, dan penghitung klik — serta `batas_berikutnya_at` (perubahan status terdekat). Tanpa tautan soal."""
     tautan, ujian = await portal_berlaku(token, request, catat=not segarkan, sesi=sesi)
     if segarkan:
         await catat_segarkan(db, tautan, sesi)
@@ -72,5 +72,6 @@ async def portal_ujian_publik(token: str, request: Request, response: Response, 
         'tautan': {'jenis': tautan['jenis'], 'mulai_at': tautan.get('mulai_at'), 'selesai_at': tautan.get('selesai_at')},
         'waktu_server': kini.isoformat(),
         'mapel': await mapel_semua_jenjang(db),
-        'soal': await soal_ujian(ujian['id'], kini),
+        'soal': (soal := await soal_ujian(ujian['id'], kini)),
+        'batas_berikutnya_at': batas_berikutnya(soal, kini),
     }

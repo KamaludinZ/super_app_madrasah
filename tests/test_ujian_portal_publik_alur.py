@@ -63,7 +63,8 @@ def test_portal_tanpa_login_hanya_jadwal_dan_status(klien):
     assert r.status_code == 200, r.text
     assert r.headers['cache-control'] == 'no-store'
     d = r.json()
-    assert set(d) == {'madrasah', 'ujian', 'tautan', 'waktu_server', 'mapel', 'soal'}  # tanpa kisi-kisi/berkas/tata tertib
+    assert set(d) == {'madrasah', 'ujian', 'tautan', 'waktu_server', 'mapel', 'soal', 'batas_berikutnya_at'}  # tanpa kisi-kisi/berkas/tata tertib
+    assert d['batas_berikutnya_at'] == f'{HARI_INI}T09:00:00+07:00'  # matematika & PPKn ditutup pukul 09.00
     assert d['tautan'] == {'jenis': 'portal', 'mulai_at': '2026-12-01T06:00:00+07:00', 'selesai_at': '2026-12-06T16:00:00+07:00'}
     assert d['waktu_server'] == f'{HARI_INI}T08:00:00+07:00' and len(d['mapel']['7']) == 15
     # isolasi: tautan soal tidak pernah ikut payload portal
@@ -72,9 +73,10 @@ def test_portal_tanpa_login_hanya_jadwal_dan_status(klien):
     assert s[(7, 'matematika')] == {
         'id': 'ls-7-matematika', 'jenjang': 7, 'mapel': 'matematika', 'tanggal': HARI_INI, 'sesi_ke': 1,
         'mulai_at': f'{HARI_INI}T07:30:00+07:00', 'selesai_at': f'{HARI_INI}T09:00:00+07:00', 'status': 'berlangsung',
-        'siap': True, 'ditahan': False, 'jumlah_klik': 12, 'klik_terakhir_at': f'{HARI_INI}T07:58:00+07:00'}
+        'hitung_mundur': {'menuju': 'selesai', 'detik': 3600}, 'siap': True, 'ditahan': False, 'jumlah_klik': 12, 'klik_terakhir_at': f'{HARI_INI}T07:58:00+07:00'}
     assert (s[(7, 'ipa')]['status'], s[(7, 'ipa')]['siap'], s[(7, 'ipa')]['sesi_ke']) == ('belum_dimulai', False, None)
-    assert (s[(8, 'ipa')]['status'], s[(8, 'ipa')]['siap']) == ('ditutup', True)
+    assert (s[(8, 'ipa')]['status'], s[(8, 'ipa')]['siap'], s[(8, 'ipa')]['hitung_mundur']) == ('ditutup', True, None)
+    assert s[(7, 'ipa')]['hitung_mundur'] == {'menuju': 'mulai', 'detik': 5400}
     assert (s[(9, 'pkn')]['status'], s[(9, 'pkn')]['siap'], s[(9, 'pkn')]['ditahan']) == ('berlangsung', False, True)
     # mapel dari jadwal yang belum diatur admin: tampil, belum siap, id sementara
     bi = s[(7, 'bahasa_indonesia')]

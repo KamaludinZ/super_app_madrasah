@@ -272,6 +272,26 @@ def status_jendela(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Option
     return 'berlangsung' if kini < s else 'ditutup'
 
 
+def hitung_mundur(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """Hitung mundur satu mapel menurut WAKTU SERVER -> { menuju: 'mulai' | 'selesai', detik } (detik dibulatkan ke atas,
+    ≥ 1), atau None bila sudah ditutup / jendela tidak terbaca."""
+    status = status_jendela(mulai_at, selesai_at, sekarang)
+    if status not in ('belum_dimulai', 'berlangsung'):
+        return None
+    menuju = 'mulai' if status == 'belum_dimulai' else 'selesai'
+    target = baca_waktu(mulai_at if menuju == 'mulai' else selesai_at)
+    detik = (target - sekarang.astimezone(WIB_TZ)).total_seconds()
+    return {'menuju': menuju, 'detik': max(1, int(-(-detik // 1)))}
+
+
+def batas_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Optional[str]:
+    """Waktu (ISO) perubahan status terdekat SESUDAH `sekarang` di antara semua mapel (mulai atau tutup), atau None —
+    klien memuat ulang tepat setelahnya agar status dikonfirmasi server."""
+    kini = sekarang.astimezone(WIB_TZ)
+    calon = [w for s in soal or [] for w in (s.get('mulai_at'), s.get('selesai_at')) if baca_waktu(w) and baca_waktu(w) > kini]
+    return min(calon, key=baca_waktu) if calon else None
+
+
 def tanggal_wib(nilai: Any) -> Optional[str]:
     d = baca_waktu(nilai)
     return d.astimezone(WIB_TZ).date().isoformat() if d else None
@@ -302,7 +322,8 @@ def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, Lis
             baris.append({
                 'id': (d or {}).get('id') or f'belum-{j}-{m["kode"]}', 'jenjang': j, 'mapel': m['kode'], 'tanggal': tanggal,
                 'sesi_ke': (jd or {}).get('sesi_ke') if jd and jd.get('tanggal') == tanggal else None,
-                'mulai_at': mulai, 'selesai_at': selesai, 'status': status, 'siap': siap,
+                'mulai_at': mulai, 'selesai_at': selesai, 'status': status, 'hitung_mundur': hitung_mundur(mulai, selesai, sekarang),
+                'siap': siap,
                 'ditahan': bool(d) and not siap and bool(url_soal_aman(d.get('url'))),
                 'jumlah_klik': int((d or {}).get('jumlah_klik') or 0), 'klik_terakhir_at': (d or {}).get('klik_terakhir_at'),
             })
