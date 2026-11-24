@@ -259,6 +259,19 @@ def susun_link_admin(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str
 # ---- Payload portal publik ----
 STATUS_SOAL = ('belum_dimulai', 'berlangsung', 'ditutup')
 
+# Satu-satunya field per mapel yang boleh keluar di payload portal publik (daftar putih; sama dengan FIELD_SOAL_PUBLIK di
+# frontend/src/lib/ujianPortalPublik.js ditambah hitung_mundur). Tautan soal (`url`), host-nya, identitas admin, dan field
+# lain dokumen link soal TIDAK PERNAH ikut — tautan soal hanya keluar lewat rute kerjakan saat mapel berlangsung.
+FIELD_SOAL_PUBLIK = ('id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'hitung_mundur',
+                     'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at')
+# Field ujian yang boleh tampil di halaman publik.
+FIELD_UJIAN_PUBLIK = ('nama', 'jenis', 'tahun_pelajaran', 'mulai', 'selesai')
+
+
+def saring_soal_publik(baris: Dict[str, Any]) -> Dict[str, Any]:
+    """Pertahanan terakhir isolasi payload portal: hanya FIELD_SOAL_PUBLIK, apa pun yang ditambahkan di hulu."""
+    return {k: baris.get(k) for k in FIELD_SOAL_PUBLIK}
+
 
 def status_jendela(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Optional[str]:
     """Status satu mapel menurut WAKTU SERVER: 'belum_dimulai' | 'berlangsung' | 'ditutup' pada jendela [mulai, selesai);
@@ -327,7 +340,7 @@ def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, Lis
                 'ditahan': bool(d) and not siap and bool(url_soal_aman(d.get('url'))),
                 'jumlah_klik': int((d or {}).get('jumlah_klik') or 0), 'klik_terakhir_at': (d or {}).get('klik_terakhir_at'),
             })
-        hasil.extend(sorted(baris, key=lambda x: (baca_waktu(x['mulai_at']), x['sesi_ke'] or 0)))
+        hasil.extend(saring_soal_publik(b) for b in sorted(baris, key=lambda x: (baca_waktu(x['mulai_at']), x['sesi_ke'] or 0)))
     return hasil
 
 

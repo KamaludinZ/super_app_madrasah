@@ -20,7 +20,7 @@ from routers.ujian_formulir import jadwal_ujian
 from routers.ujian_info_publik import TANPA_CACHE, madrasah_publik
 from ujian import KOLEKSI_UJIAN, sekarang_wib
 from ujian_info import PESAN_TOKEN, cari_tautan, catat_akses, catat_segarkan, cek_tautan, mapel_semua_jenjang, token_layak
-from ujian_portal import KOLEKSI_LINK_SOAL, batas_berikutnya, cek_masa_portal, jadwal_berikutnya, soal_portal
+from ujian_portal import FIELD_UJIAN_PUBLIK, KOLEKSI_LINK_SOAL, batas_berikutnya, cek_masa_portal, jadwal_berikutnya, soal_portal
 
 router = APIRouter()
 
@@ -68,8 +68,8 @@ async def portal_ujian_publik(token: str, request: Request, response: Response, 
     response.headers.update(TANPA_CACHE)
     return {
         'madrasah': await madrasah_publik(),
-        'ujian': {k: ujian.get(k) for k in ('nama', 'jenis', 'tahun_pelajaran', 'mulai', 'selesai')},
-        'tautan': {'jenis': tautan['jenis'], 'mulai_at': tautan.get('mulai_at'), 'selesai_at': tautan.get('selesai_at')},
+        'ujian': {k: ujian.get(k) for k in FIELD_UJIAN_PUBLIK},
+        'tautan': {'jenis': tautan['jenis'], 'mulai_at': tautan.get('mulai_at'), 'selesai_at': tautan.get('selesai_at')},  # tanpa token
         'waktu_server': kini.isoformat(),
         'mapel': await mapel_semua_jenjang(db),
         'soal': (soal := await soal_ujian(ujian['id'], kini)),

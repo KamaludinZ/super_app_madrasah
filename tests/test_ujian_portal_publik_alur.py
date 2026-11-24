@@ -164,3 +164,34 @@ def test_jendela_admin_tetap_dipakai_bila_diisi(klien):
     assert get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()['detail']['alasan'] == 'belum_mulai'
     klien.kini = datetime.fromisoformat(f'{HARI_INI}T09:00:00+07:00')
     assert get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').status_code == 200
+
+
+
+def test_isolasi_payload_portal_info_monitoring(klien):
+    """Field tambahan apa pun di dokumen link soal tidak bocor; halaman info & monitoring tidak memuat data link soal."""
+    import ujian_portal as up
+    klien.db.ujian_link_soal.docs[0].update({'catatan_admin': 'kunci jawaban di folder X', 'diperbarui_oleh': 'admin',
+                                             'diperbarui_oleh_nama': 'Administrator', 'token_cbt': 'RAHASIA-CBT-123'})
+    klien.db.ujian_tautan_publik.docs.append({'id': 't-mon', 'ujian_id': 'uas', 'jenis': 'monitoring', 'token': 'TokenMonitoringContoh_123456789a',
+                                              'aktif': True, 'mulai_at': None, 'selesai_at': None})
+    r = get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}')
+    d = r.json()
+    assert all(tuple(x) == up.FIELD_SOAL_PUBLIK for x in d['soal'])
+    assert set(d['ujian']) == set(up.FIELD_UJIAN_PUBLIK) and TOKEN_PORTAL not in r.text
+    for rahasia in ('cbt.madrasah.sch.id', 'RAHASIA-CBT-123', 'kunci jawaban', 'Administrator'):
+        assert rahasia not in r.text, rahasia
+    for path in (f'/publik/info-ujian/{TOKEN_INFO}', '/publik/monitoring-ujian/TokenMonitoringContoh_123456789a'):
+        t = get(klien, path)
+        assert t.status_code == 200, path
+        for rahasia in ('cbt.madrasah.sch.id', 'RAHASIA-CBT-123', 'ls-7-matematika', 'jumlah_klik', TOKEN_PORTAL):
+            assert rahasia not in t.text, (path, rahasia)
+
+
+def test_field_soal_publik_sama_dengan_frontend():
+    import re
+    from pathlib import Path
+
+    import ujian_portal as up
+    js = (Path(__file__).resolve().parents[1] / 'frontend' / 'src' / 'lib' / 'ujianPortalPublik.js').read_text(encoding='utf-8')
+    frontend = re.findall(r"'([a-z_]+)'", re.search(r'const FIELD_SOAL_PUBLIK = \[([^\]]+)\]', js).group(1))
+    assert [f for f in up.FIELD_SOAL_PUBLIK if f != 'hitung_mundur'] == frontend
