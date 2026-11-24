@@ -193,7 +193,7 @@ export default function UjianInfoUjianPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base"><ScrollText className="h-4 w-4 text-[#006837]" /> Tata Tertib Ujian</CardTitle>
-                  <p className="text-xs text-slate-500">Awali baris dengan <b>1.</b> atau <b>-</b> agar tampil sebagai daftar bernomor atau berbutir. Baris lain tampil sebagai paragraf.</p>
+                  <p className="text-xs text-slate-500">Awali baris dengan <b>1.</b> atau <b>-</b> agar tampil sebagai daftar. Sub-butir <b>a.</b>, <b>b.</b> (atau <b>1)</b>) di bawahnya otomatis menjorok. Teks tempelan dari Word juga bisa. Baris lain tampil sebagai paragraf.</p>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Textarea value={isian.tata_tertib} onChange={ubah('tata_tertib')} readOnly={!bolehUbah} rows={14}
