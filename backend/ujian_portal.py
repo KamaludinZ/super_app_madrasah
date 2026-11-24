@@ -322,3 +322,28 @@ def jadwal_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Opt
     for s in sorted((s for s in belum_lewat if s.get('tanggal') == tanggal), key=lambda s: baca_waktu(s['mulai_at'])):
         pertama.setdefault(s['jenjang'], {k: s[k] for k in ('jenjang', 'mapel', 'mulai_at', 'selesai_at')})
     return {'tanggal': tanggal, 'soal': [pertama[j] for j in sorted(pertama)]}
+
+
+# ---- Penjaga masa ujian portal ----
+def jendela_portal(tautan: Dict[str, Any], ujian: Optional[Dict[str, Any]]) -> Dict[str, Optional[str]]:
+    """Jendela efektif portal -> { mulai_at, selesai_at } (ISO WIB / None). Batas yang diisi admin pada tautan portal
+    dipakai apa adanya; batas yang KOSONG diganti masa ujian (ujian.mulai 00.00 WIB s.d. akhir hari ujian.selesai) agar
+    portal tidak pernah terbuka di luar masa ujian walau admin lupa mengisi jendela."""
+    from datetime import timedelta
+    u = ujian or {}
+    mulai = tautan.get('mulai_at') or (iso_wib(u['mulai'], '00:00') if u.get('mulai') else None)
+    selesai = tautan.get('selesai_at')
+    if not selesai and u.get('selesai'):
+        try:
+            besok = (datetime.fromisoformat(u['selesai']) + timedelta(days=1)).date().isoformat()
+            selesai = iso_wib(besok, '00:00')
+        except ValueError:
+            selesai = None
+    return {'mulai_at': mulai, 'selesai_at': selesai}
+
+
+def cek_masa_portal(tautan: Dict[str, Any], ujian: Optional[Dict[str, Any]], sekarang: datetime) -> Dict[str, Any]:
+    """Validator portal (murni): cek_tautan pada jendela efektif portal (jendela_portal). -> sama dengan cek_tautan:
+    { berlaku, alasan, pesan, mulai_at, selesai_at } dengan mulai_at/selesai_at = jendela efektif."""
+    from ujian_info import cek_tautan
+    return cek_tautan({**tautan, **jendela_portal(tautan, ujian)}, sekarang)

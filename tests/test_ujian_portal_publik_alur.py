@@ -137,3 +137,28 @@ def test_muat_ulang_tidak_menambah_log(klien):
         assert get(klien, url, params={'sesi': 'sesiPortalA', 'segarkan': 1}).status_code == 200
     log = klien.db.ujian_akses_log.docs
     assert len(log) == 1 and log[0]['sesi'] == 'sesiPortalA' and log[0]['jumlah_segarkan'] == 3
+
+
+def test_tanpa_jendela_tautan_portal_tetap_terkunci_di_luar_masa_ujian(klien):
+    t = klien.db.ujian_tautan_publik.docs[0]
+    t['mulai_at'] = t['selesai_at'] = None  # admin membuka portal tanpa mengisi jendela
+    url = f'/publik/portal-ujian/{TOKEN_PORTAL}'
+    klien.kini = datetime.fromisoformat('2026-11-30T23:59:00+07:00')  # sehari sebelum masa ujian (1–6 Des)
+    r = get(klien, url)
+    assert r.status_code == 403 and r.json()['detail']['alasan'] == 'belum_mulai'
+    assert r.json()['detail']['mulai_at'] == '2026-12-01T00:00:00+07:00' and r.json()['detail']['pesan'] == 'Tautan portal ujian belum dibuka.'
+    klien.kini = datetime.fromisoformat('2026-12-06T23:59:00+07:00')  # hari terakhir masih terbuka
+    assert get(klien, url).status_code == 200
+    klien.kini = datetime.fromisoformat('2026-12-07T00:00:00+07:00')
+    r = get(klien, url)
+    assert r.status_code == 403 and r.json()['detail']['alasan'] == 'sudah_selesai' and r.json()['detail']['selesai_at'] == '2026-12-07T00:00:00+07:00'
+    # satu entri log per permintaan, dengan hasil akhirnya
+    assert [x['hasil'] for x in klien.db.ujian_akses_log.docs] == ['belum_mulai', 'ok', 'sudah_selesai']
+
+
+def test_jendela_admin_tetap_dipakai_bila_diisi(klien):
+    t = klien.db.ujian_tautan_publik.docs[0]
+    t['mulai_at'], t['selesai_at'] = f'{HARI_INI}T09:00:00+07:00', None  # admin mempersempit awal; akhir ikut masa ujian
+    assert get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').json()['detail']['alasan'] == 'belum_mulai'
+    klien.kini = datetime.fromisoformat(f'{HARI_INI}T09:00:00+07:00')
+    assert get(klien, f'/publik/portal-ujian/{TOKEN_PORTAL}').status_code == 200

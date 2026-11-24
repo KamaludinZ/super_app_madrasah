@@ -183,3 +183,16 @@ def test_susun_link_admin_dan_url_untuk_pemantau():
 def _wib(s):
     from datetime import datetime
     return datetime.fromisoformat(s)
+
+
+def test_jendela_portal_cadangan_masa_ujian():
+    ujian = {'mulai': '2026-12-01', 'selesai': '2026-12-06'}
+    assert up.jendela_portal({'mulai_at': None, 'selesai_at': None}, ujian) == {
+        'mulai_at': '2026-12-01T00:00:00+07:00', 'selesai_at': '2026-12-07T00:00:00+07:00'}
+    admin = {'mulai_at': '2026-12-02T06:00:00+07:00', 'selesai_at': '2026-12-02T15:00:00+07:00'}
+    assert up.jendela_portal(admin, ujian) == admin  # jendela admin dipakai apa adanya
+    assert up.jendela_portal({'mulai_at': None, 'selesai_at': None}, {}) == {'mulai_at': None, 'selesai_at': None}
+    aktif = {'jenis': 'portal', 'aktif': True, 'mulai_at': None, 'selesai_at': None}
+    assert up.cek_masa_portal(aktif, ujian, _wib('2026-12-06T23:59:59+07:00'))['berlaku']
+    assert up.cek_masa_portal(aktif, ujian, _wib('2026-12-07T00:00:00+07:00'))['alasan'] == 'sudah_selesai'
+    assert up.cek_masa_portal({**aktif, 'aktif': False}, ujian, _wib('2026-12-02T08:00:00+07:00'))['alasan'] == 'nonaktif'
