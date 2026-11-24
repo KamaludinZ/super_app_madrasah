@@ -13,14 +13,15 @@ Dokumen `ujian_info_konten` (satu per ujian; diisi admin):
                               diunggah_pada, diunggah_oleh, diunggah_oleh_nama } | None   (unggah ulang menimpa)
     diperbarui_pada, diperbarui_oleh, diperbarui_oleh_nama
 
-Dokumen `ujian_tautan_publik` (dua tautan per ujian: info & monitoring):
-    id (unik), ujian_id, jenis ('info'|'monitoring'), token (acak, unik; buat_token), aktif (buka/tutup manual),
+Dokumen `ujian_tautan_publik` (tiga tautan per ujian: info, monitoring, & portal — masing-masing token, sakelar, dan
+jendela sendiri; portal = halaman Portal Ujian tempat siswa membuka soal, lihat ujian_portal.py):
+    id (unik), ujian_id, jenis ('info'|'monitoring'|'portal'), token (acak, unik; buat_token), aktif (buka/tutup manual),
     mulai_at, selesai_at (ISO datetime WIB, jendela waktu akses; None = tanpa batas), dibuat_oleh, dibuat_oleh_nama,
     dibuat_pada, diperbarui_pada
     Unik: token; (ujian_id, jenis).
 
 Dokumen `ujian_tautan_riwayat` (jejak perubahan pengaturan tautan; pola seperti pkg_audit_log):
-    id, tautan_id, ujian_id, jenis (info|monitoring), aksi (AKSI_TAUTAN), oleh, oleh_nama, waktu, detail (teks ringkas),
+    id, tautan_id, ujian_id, jenis (info|monitoring|portal), aksi (AKSI_TAUTAN), oleh, oleh_nama, waktu, detail (teks ringkas),
     sebelum, sesudah ({aktif, mulai_at, selesai_at} — token TIDAK disimpan)
 
 Dokumen `ujian_berkas` (kisi-kisi & kartu soal; satu per ujian+jenis+jenjang+mapel — unggah ulang MENIMPA):
@@ -34,7 +35,8 @@ Dokumen `ujian_mapel_baku` (master mapel ujian per jenjang; di-seed dari MAPEL_U
     Unik: (jenjang, kode). Seed memakai $setOnInsert sehingga perubahan nama/aktif oleh admin tidak tertimpa saat
     migrasi diulang. Bila koleksi kosong, kode memakai konstanta MAPEL_UJIAN_BAKU (mapel_jenjang).
 
-Dokumen `ujian_akses_log`: id, tautan_id, ujian_id, jenis_tautan, token (≤ 100 karakter, juga untuk token salah),
+Dokumen `ujian_akses_log`: id, tautan_id, ujian_id, jenis_tautan, aksi ('buka_tautan' | 'klik_mengerjakan'; lihat
+    ujian_portal.py — klik juga menyimpan link_soal_id, jenjang, mapel, url_host), token (≤ 100 karakter, juga untuk token salah),
     waktu, ip (sumber asli di balik proxy; lihat ip_peminta), ip_rantai (X-Forwarded-For mentah), perangkat (user agent),
     hasil (HASIL_AKSES), jumlah_percobaan (token tidak dikenal: percobaan dari IP sama dalam 1 menit digabung), sesi (id acak per pembukaan halaman dari klien, opsional),
     terakhir_aktif & jumlah_segarkan (diperbarui setiap muat ulang otomatis halaman yang sama — satu entri per
@@ -96,7 +98,7 @@ KODE_MAPEL = tuple(k for k, _ in MAPEL_UJIAN_BAKU)
 NAMA_MAPEL = dict(MAPEL_UJIAN_BAKU)
 JENJANG_UJIAN = (7, 8, 9)
 
-JENIS_TAUTAN = ('info', 'monitoring')
+JENIS_TAUTAN = ('info', 'monitoring', 'portal')
 JENIS_BERKAS = ('kisi_kisi', 'kartu_soal')
 MODE_UNDUH = ('publik', 'tunggal', 'zip_jenjang')
 # 'kartu_soal_ditolak': percobaan mengunduh kartu soal (rahasia) lewat tautan publik — dijawab 404, dicatat untuk admin.
@@ -338,7 +340,7 @@ def ringkas_konten_publik(konten: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 # ---- Tautan publik: token & jendela waktu ----
 PESAN_TOKEN = 'Tautan tidak ditemukan atau sudah diganti panitia.'
-LABEL_TAUTAN = {'info': 'informasi ujian', 'monitoring': 'monitoring pengumpulan berkas'}
+LABEL_TAUTAN = {'info': 'informasi ujian', 'monitoring': 'monitoring pengumpulan berkas', 'portal': 'portal ujian'}
 
 
 def dokumen_tautan_baru(ujian_id: str, jenis: str, user: Dict[str, Any], waktu: datetime = None) -> Dict[str, Any]:
@@ -393,8 +395,10 @@ def cek_tautan(tautan: Optional[Dict[str, Any]], sekarang: datetime = None) -> D
     return {'berlaku': True, 'alasan': 'ok', 'pesan': None, **jendela}
 
 
-# Jalur halaman publik tiap jenis tautan (frontend: /publik/info-ujian/:token & /publik/monitoring-ujian/:token).
-JALUR_TAUTAN = {'info': '/publik/info-ujian/{token}', 'monitoring': '/publik/monitoring-ujian/{token}'}
+# Jalur halaman publik tiap jenis tautan (frontend: /publik/info-ujian/:token, /publik/monitoring-ujian/:token,
+# /publik/portal-ujian/:token).
+JALUR_TAUTAN = {'info': '/publik/info-ujian/{token}', 'monitoring': '/publik/monitoring-ujian/{token}',
+                'portal': '/publik/portal-ujian/{token}'}
 
 
 def jalur_tautan(tautan: Dict[str, Any]) -> Optional[str]:
@@ -441,8 +445,9 @@ async def pastikan_tautan(db, ujian_id: str, jenis: str, user: Dict[str, Any]) -
 
 
 async def inisialisasi_tautan(db, ujian_id: str, user: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Service inisialisasi: pastikan DUA tautan ber-token acak (info & monitoring) milik ujian ada — baru dibuat dalam
-    keadaan DITUTUP tanpa jendela waktu, dan pembuatannya dicatat di riwayat. Idempoten. -> { 'info': …, 'monitoring': … }"""
+    """Service inisialisasi: pastikan TIGA tautan ber-token acak (info, monitoring, portal) milik ujian ada — baru dibuat
+    dalam keadaan DITUTUP tanpa jendela waktu, dan pembuatannya dicatat di riwayat. Idempoten.
+    -> { 'info': …, 'monitoring': …, 'portal': … }"""
     hasil = {}
     for jenis in JENIS_TAUTAN:
         t, dibuat = await _pastikan(db, ujian_id, jenis, user)
@@ -459,7 +464,8 @@ async def ganti_token(db, tautan_id: str, waktu: datetime = None) -> Optional[Di
 
 
 async def cari_tautan(db, token: Optional[str], jenis: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Tautan dari token (tanpa query bila bentuk token mustahil); `jenis` membatasi info/monitoring."""
+    """Tautan dari token (tanpa query bila bentuk token mustahil); `jenis` membatasi info/monitoring/portal — token portal
+    tidak pernah membuka halaman info, dan sebaliknya."""
     if not token_layak(token):
         return None
     q = {'token': token, **({'jenis': jenis} if jenis else {})}
@@ -508,12 +514,17 @@ def sesi_sah(sesi: Optional[str]) -> Optional[str]:
 
 
 def dokumen_akses_log(tautan: Optional[Dict[str, Any]], token: Optional[str], hasil: str, ip: Optional[str] = None,
-                      perangkat: Optional[str] = None, waktu: datetime = None, sesi: Optional[str] = None) -> Dict[str, Any]:
+                      perangkat: Optional[str] = None, waktu: datetime = None, sesi: Optional[str] = None,
+                      aksi: str = 'buka_tautan') -> Dict[str, Any]:
+    """Satu baris jejak akses publik. `aksi`: 'buka_tautan' (pembukaan halaman) atau 'klik_mengerjakan' (klik sah portal;
+    pemanggil menambahkan link_soal_id, jenjang, mapel, url_host)."""
     if hasil not in HASIL_AKSES:
         raise ValueError(f'Hasil akses tidak dikenal: {hasil}')
+    if aksi not in ('buka_tautan', 'klik_mengerjakan'):
+        raise ValueError(f'Aksi akses tidak dikenal: {aksi}')
     t = tautan or {}
     w = (waktu or sekarang_wib()).isoformat()
-    return {'id': str(uuid.uuid4()), 'tautan_id': t.get('id'), 'ujian_id': t.get('ujian_id'), 'jenis_tautan': t.get('jenis'),
+    return {'id': str(uuid.uuid4()), 'tautan_id': t.get('id'), 'ujian_id': t.get('ujian_id'), 'jenis_tautan': t.get('jenis'), 'aksi': aksi,
             'token': (token or '')[:TOKEN_MAKS], 'waktu': w, 'ip': ip, 'perangkat': (perangkat or '')[:PERANGKAT_MAKS] or None,
             'hasil': hasil, 'sesi': sesi_sah(sesi), 'terakhir_aktif': w, 'jumlah_segarkan': 0}
 

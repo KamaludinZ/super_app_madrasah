@@ -275,15 +275,15 @@ def test_riwayat_tautan_tanpa_token():
     assert ui.dokumen_riwayat_tautan(t, 'ganti_token', {}, detail='x' * 400)['detail'] == 'x' * 300
 
 
-def test_inisialisasi_dua_tautan():
+def test_inisialisasi_tiga_tautan():
     db = Db()
     adm = {'id': 'adm', 'full_name': 'Admin'}
     t = asyncio.run(ui.inisialisasi_tautan(db, 'u1', adm))
-    assert set(t) == {'info', 'monitoring'} and t['info']['token'] != t['monitoring']['token']
+    assert set(t) == {'info', 'monitoring', 'portal'} and len({x['token'] for x in t.values()}) == 3
     assert all(x['aktif'] is False and x['mulai_at'] is None and len(x['token']) == 32 for x in t.values())
-    assert [r['aksi'] for r in db.ujian_tautan_riwayat.docs] == ['buat', 'buat']
+    assert [r['aksi'] for r in db.ujian_tautan_riwayat.docs] == ['buat', 'buat', 'buat']
     t2 = asyncio.run(ui.inisialisasi_tautan(db, 'u1', adm))  # idempoten: tidak membuat & tidak mencatat ulang
-    assert t2['info']['id'] == t['info']['id'] and len(db.ujian_tautan_publik.docs) == 2 and len(db.ujian_tautan_riwayat.docs) == 2
+    assert t2['info']['id'] == t['info']['id'] and len(db.ujian_tautan_publik.docs) == 3 and len(db.ujian_tautan_riwayat.docs) == 3
 
 
 def test_tabrakan_token_dicoba_ulang():

@@ -76,7 +76,7 @@ def test_admin_melihat_konten_kosong_dan_tautan_info(klien):
                            'diperbarui_pada': None, 'diperbarui_oleh_nama': None, 'versi': None}
     assert d['tautan_info']['jalur'].startswith('/publik/info-ujian/') and d['tautan_info']['aktif'] is False
     assert r.headers['cache-control'] == 'no-store'
-    assert len(klien.db.ujian_tautan_publik.docs) == 2  # tautan dibuat tertutup bila belum ada
+    assert len(klien.db.ujian_tautan_publik.docs) == 3  # tautan dibuat tertutup bila belum ada
 
 
 @pytest.mark.parametrize('uid,peran', [('kamad', 'kepala_sekolah'), ('wakakur', 'waka_kurikulum'), ('guru1', 'guru')])

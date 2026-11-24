@@ -32,9 +32,9 @@ def test_daftar_tautan_admin_dan_inisialisasi(klien):
     info, mon = d['tautan']['info'], d['tautan']['monitoring']
     assert info['jalur'] == f"/publik/info-ujian/{info['token']}" and mon['jalur'].startswith('/publik/monitoring-ujian/')
     assert (info['aktif'], info['berlaku'], info['alasan']) == (False, False, 'nonaktif')
-    assert len(klien.db.ujian_tautan_publik.docs) == 2
+    assert len(klien.db.ujian_tautan_publik.docs) == 3
     assert klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik').json()['tautan']['info']['token'] == info['token']  # stabil
-    assert len(klien.db.ujian_tautan_publik.docs) == 2
+    assert len(klien.db.ujian_tautan_publik.docs) == 3
 
 
 @pytest.mark.parametrize('uid,peran,boleh', [('kamad', 'kepala_sekolah', False), ('wakakur', 'waka_kurikulum', False), ('guru1', 'guru', False)])
@@ -83,7 +83,7 @@ def test_buka_tutup_tautan_admin(klien):
     t = a('PUT', '/ujian/uas/tautan-publik/info', json={'aktif': False}).json()['tautan']
     assert (t['aktif'], t['alasan']) == (False, 'nonaktif')
     assert klien(None, None, 'GET', f'/publik/info-ujian/{token}').json()['detail']['alasan'] == 'nonaktif'
-    assert len(klien.db.ujian_tautan_publik.docs) == 2  # tidak dihapus
+    assert len(klien.db.ujian_tautan_publik.docs) == 3  # tidak dihapus
     aksi = [x['aksi'] for x in klien.db.ujian_tautan_riwayat.docs if x['jenis'] == 'info']
     assert aksi == ['buat', 'buka', 'tutup']
     r = klien.db.ujian_tautan_riwayat.docs[-1]
@@ -223,7 +223,7 @@ def test_jejak_audit_tautan(klien):
     teks = r.text
     assert d['info']['token'] not in teks and d['monitoring']['token'] not in teks and 'TokenSalahSekali' not in teks
     aksi = [p['aksi'] for p in j['perubahan']]
-    assert aksi[0] == 'tutup' and sorted(aksi) == ['buat', 'buat', 'buka', 'buka', 'tutup']  # sisanya terjadi pada jam yang sama
+    assert aksi[0] == 'tutup' and sorted(aksi) == ['buat', 'buat', 'buat', 'buka', 'buka', 'tutup']  # sisanya terjadi pada jam yang sama
     assert set(j['perubahan'][0]) == {'id', 'waktu', 'jenis', 'aksi', 'oleh_nama', 'detail'}
 
     j = a('GET', '/ujian/uas/tautan-publik/audit', params={'jenis': 'info', 'hasil': 'ditolak'}).json()
