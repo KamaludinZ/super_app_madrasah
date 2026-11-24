@@ -201,6 +201,20 @@ export const normalKlik = (n) => {
   return Number.isFinite(x) && x > 0 ? x : 0;
 };
 
+/**
+ * Gabungkan hasil muat dari server dengan klik yang baru dinaikkan sementara di klien: selama `sampai` belum lewat,
+ * jumlah_klik tidak boleh turun di bawah angka sementara (muat ulang latar yang berangkat sebelum klik membawa angka
+ * lama). Setelah lewat, angka server dipakai apa adanya. `sementara` = { soal_id: { jumlah_klik, klik_terakhir_at, sampai } }.
+ */
+export function gabungKlikSementara(soal, sementara, kiniMs = Date.now()) {
+  if (!sementara || !Object.keys(sementara).length) return soal;
+  return (soal || []).map((s) => {
+    const t = sementara[s.id];
+    if (!t || kiniMs >= t.sampai || normalKlik(s.jumlah_klik) >= t.jumlah_klik) return s;
+    return { ...s, jumlah_klik: t.jumlah_klik, klik_terakhir_at: t.klik_terakhir_at || s.klik_terakhir_at };
+  });
+}
+
 // ---- Isolasi data: whitelist field ----
 const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at'];
 
@@ -237,13 +251,20 @@ const penyimpanKlik = (() => {
   }
   return null;
 })();
-const klikContoh = (() => {
-  try {
-    const isi = JSON.parse(penyimpanKlik?.getItem(KUNCI_KLIK_CONTOH)) || {};
-    return Object.fromEntries(Object.entries(isi).filter(([, v]) => v && normalKlik(v.jumlah) > 0)
-      .map(([k, v]) => [k, { jumlah: normalKlik(v.jumlah), terakhir: typeof v.terakhir === 'string' ? v.terakhir : null }]));
-  } catch { return {}; }
-})();
+const klikContoh = {};
+/**
+ * Segarkan `klikContoh` dari penyimpanan (bisa sudah ditambah tab lain). Dipanggil tepat sebelum membaca atau menaikkan
+ * penghitung, sehingga baca–tambah–tulis terjadi dalam satu langkah sinkron dan klik tab lain tidak tertimpa.
+ */
+function segarkanKlikContoh() {
+  let isi = null;
+  try { isi = JSON.parse(penyimpanKlik?.getItem(KUNCI_KLIK_CONTOH)); } catch { isi = null; }
+  if (!isi || typeof isi !== 'object') return; // tanpa penyimpanan: pakai yang di memori
+  Object.keys(klikContoh).forEach((k) => { delete klikContoh[k]; });
+  Object.entries(isi).forEach(([k, v]) => {
+    if (v && normalKlik(v.jumlah) > 0) klikContoh[k] = { jumlah: normalKlik(v.jumlah), terakhir: typeof v.terakhir === 'string' ? v.terakhir : null };
+  });
+}
 const simpanKlikContoh = () => {
   try { penyimpanKlik?.setItem(KUNCI_KLIK_CONTOH, JSON.stringify(klikContoh)); } catch { /* penuh/diblokir: tetap di memori */ }
 };
@@ -251,6 +272,7 @@ const JANGKAR_CONTOH = Math.floor(Date.now() / MENIT) * MENIT;
 const iso = (ms) => new Date(ms).toISOString();
 
 function soalTiruan() {
+  segarkanKlikContoh();
   const kini = JANGKAR_CONTOH;
   const hariIni = [[-150, -90], [-60, 3], [5, 95], [120, 210]]; // menit relatif terhadap jangkar
   const jamBesok = [['07:30', '09:00'], ['09:30', '11:00']];
@@ -280,7 +302,7 @@ function soalTiruan() {
       // Klik awal ditetapkan dari keadaan saat jangkar (stabil antar-muat), ditambah klik contoh yang dicatat di tab ini.
       const awal = statusSoal({ mulai_at: iso(mulai), selesai_at: iso(selesai) }, JANGKAR_CONTOH);
       const id = `contoh-soal-${j}-${m.kode}`;
-      const dicatat = klikContoh[id];
+      const dicatat = klikContoh[id] || null;
       const klik = { ditutup: 28 + ((i * 7 + j) % 9), berlangsung: 9 + j, belum_dimulai: 0 }[awal] + (dicatat?.jumlah || 0);
       const klikAwalAt = klik ? Math.min(JANGKAR_CONTOH, selesai) - ((i + j) % 5) * MENIT : null;
       hasil.push({
@@ -290,7 +312,7 @@ function soalTiruan() {
         // Kelas 7: satu mapel tautannya sudah ada tetapi tombolnya dimatikan admin (ditahan).
         siap: i !== 4 + ji && !(j === 8 && i === 2) && !(j === 7 && i === 6),
         ditahan: j === 7 && i === 6,
-        jumlah_klik: klik, klik_terakhir_at: dicatat?.terakhir || (klikAwalAt ? iso(klikAwalAt) : null),
+        jumlah_klik: klik, klik_terakhir_at: dicatat?.terakhir || (klikAwalAt ? iso(klikAwalAt) : null), klik_tercatat: dicatat?.jumlah || 0,
       });
     });
   });
@@ -340,12 +362,14 @@ export function catatKlikTiruan(token, soalId) {
   if (!s) throw tolak('tidak_dikenal', 'Mapel tidak ditemukan pada portal ini.');
   if (!s.siap) throw s.ditahan ? tolak('ditahan', 'Tombol mapel ini sedang ditahan panitia.') : tolak('belum_siap', 'Tautan soal mapel ini belum disiapkan panitia.');
   if (statusSoal(s, Date.now()) !== 'berlangsung') throw tolak('di_luar_jendela', 'Di luar jam pengerjaan mapel ini.');
-  const c = klikContoh[soalId] || { jumlah: 0, terakhir: null };
-  c.jumlah += 1;
-  c.terakhir = new Date().toISOString();
+  // Satu langkah sinkron (meniru $inc + $set server): baca terbaru, naikkan jumlah & waktu klik terakhir bersama, tulis.
+  segarkanKlikContoh();
+  const sebelum = klikContoh[soalId]?.jumlah || 0;
+  const c = { jumlah: sebelum + 1, terakhir: new Date().toISOString() };
   klikContoh[soalId] = c;
   simpanKlikContoh();
-  return { jumlah_klik: s.jumlah_klik + 1, klik_terakhir_at: c.terakhir };
+  // jumlah_klik = klik awal contoh (tanpa catatan tab ini) + seluruh klik tercatat terbaru
+  return { jumlah_klik: s.jumlah_klik - (s.klik_tercatat || 0) + c.jumlah, klik_terakhir_at: c.terakhir };
 }
 
 /** Halaman soal contoh di tab baru (pengganti tautan soal eksternal pada mode contoh), tanpa opener & referrer. */

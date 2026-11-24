@@ -8,7 +8,9 @@ import DaftarSoalPortal, { useJamServer } from '@/components/ujian/publik/portal
 import { formatWIB } from '@/lib/datetime';
 import { JENJANG_UJIAN } from '@/lib/mapelUjian';
 import { bersihkanToken, msSampai } from '@/lib/ujianInfoPublik';
-import { batasBerikutAt, buatSesi, galatPortal, muatPortalPublik, selisihJamServer } from '@/lib/ujianPortalPublik';
+import {
+  batasBerikutAt, buatSesi, gabungKlikSementara, galatPortal, muatPortalPublik, selisihJamServer,
+} from '@/lib/ujianPortalPublik';
 
 const JUDUL = 'Portal Ujian';
 const KUNCI_JENJANG = 'portalUjian:jenjang';
@@ -18,6 +20,7 @@ const PERIKSA_DITUTUP_MS = 2 * 60 * 1000; // portal ditutup sementara: periksa u
 const DETAK_RAPAT_MS = 10 * 60 * 1000; // batas mapel ≤ 10 menit lagi: jam berdetak tiap detik (hitung mundur menit:detik)
 const SUSUL_BATAS_MS = 1500; // muat ulang dari server sesaat setelah mapel dibuka/ditutup agar status dikonfirmasi server
 const KONFIRMASI_KLIK_MS = 4000; // setelah klik Mengerjakan: muat ulang agar jumlah klik mengikuti hitungan server
+const TAHAN_SEMENTARA_MS = 3000; // angka sementara dijaga dari muat ulang lama; muat konfirmasi (4 dtk) memakai angka server
 
 const jenjangSah = (v) => (JENJANG_UJIAN.includes(Number(v)) ? Number(v) : null);
 function jenjangAwal(param) {
@@ -53,6 +56,7 @@ export default function PublikPortalUjianPage() {
   const [jenjang, setJenjang] = useState(() => jenjangAwal(cari.get('kelas')));
   const adaData = useRef(false);
   const sesi = useRef(null); // satu id per pembukaan halaman (log akses)
+  const klikSementara = useRef({}); // { soal_id: { jumlah_klik, klik_terakhir_at, sampai } } — lihat gabungKlikSementara
   if (!sesi.current) sesi.current = buatSesi();
   const [detak, setDetak] = useState(15000);
   const sekarangMs = useJamServer(selisih, detak);
@@ -67,7 +71,7 @@ export default function PublikPortalUjianPage() {
     return muatPortalPublik(token, { segarkan: diam, sesi: sesi.current })
       .then((d) => {
         setSelisih(selisihJamServer(d.waktu_server));
-        setData(d); adaData.current = true; setTautanGalat(null); setGagalMuat(false); setDimuatPada(new Date());
+        setData({ ...d, soal: gabungKlikSementara(d.soal, klikSementara.current) }); adaData.current = true; setTautanGalat(null); setGagalMuat(false); setDimuatPada(new Date());
       })
       .catch((e) => {
         const g = galatPortal(e);
@@ -117,8 +121,10 @@ export default function PublikPortalUjianPage() {
   const konfirmasiKlik = useRef(null);
   useEffect(() => () => clearTimeout(konfirmasiKlik.current), []);
   const klikTercatat = useCallback((soalId, hasil, { sementara = false } = {}) => {
+    // jumlah & waktu klik terakhir diperbarui bersama dalam satu pembaruan state
     setData((d) => (d ? { ...d, soal: d.soal.map((s) => (s.id === soalId ? { ...s, ...hasil } : s)) } : d));
     if (sementara) {
+      klikSementara.current = { ...klikSementara.current, [soalId]: { ...hasil, sampai: Date.now() + TAHAN_SEMENTARA_MS } };
       clearTimeout(konfirmasiKlik.current);
       konfirmasiKlik.current = setTimeout(() => muat(true), KONFIRMASI_KLIK_MS);
     }
