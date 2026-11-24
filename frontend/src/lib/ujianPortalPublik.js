@@ -23,7 +23,10 @@
  *        TIDAK PERNAH memuat `url` tautan soal: tautan baru keluar lewat rute kerjakan di bawah, saat mapel berlangsung.
  *        Mapel baku yang tidak punya entri `soal` = belum dijadwalkan.
  *     404 token tidak dikenal; 403 portal tidak dapat dibuka -> detail { alasan: 'nonaktif' | 'belum_mulai' | 'sudah_selesai',
- *        pesan, mulai_at, selesai_at, madrasah }
+ *        pesan, mulai_at, selesai_at, madrasah,
+ *        jadwal_berikutnya: { tanggal, soal: [{ jenjang, mapel: kode, mulai_at, selesai_at }] } | null }
+ *        (jadwal_berikutnya = hari ujian terdekat yang belum lewat beserta mapel pertamanya tiap jenjang; tanpa tautan soal.
+ *         null bila masa ujian sudah berakhir atau jadwal belum disusun)
  *   GET /publik/portal-ujian/{token}/kerjakan/{soal_id}
  *     -> 302 ke tautan soal eksternal (Referrer-Policy: no-referrer). Server memeriksa token, jendela portal, dan jendela
  *        mapel menurut waktu server; klik sah dicatat (ujian_akses_log aksi=klik_mengerjakan) dan jumlah_klik dinaikkan.
@@ -33,7 +36,7 @@ import { denganTiruan, publik } from '@/lib/ujianPublik';
 import { hariIniWIB } from '@/lib/tanggal';
 import { parseServerDate, wibDateKey } from '@/lib/datetime';
 import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU } from '@/lib/mapelUjian';
-import { galatTautanTiruan, tambahHari } from '@/lib/ujianInfoPublik';
+import { galatTautanInfo, galatTautanTiruan, tambahHari } from '@/lib/ujianInfoPublik';
 import { buatSesi } from '@/lib/ujianMonitoringPublik';
 
 export { buatSesi };
@@ -164,6 +167,33 @@ export function ringkasPortal(hari) {
   };
 }
 
+// ---- Portal terkunci ----
+
+/**
+ * Jadwal berikutnya dari detail penolakan portal -> { tanggal, soal: [{ jenjang, mapel, mulai_at, selesai_at }] } (urut
+ * jenjang, lalu jam mulai) atau null. Field lain (mis. tautan soal) dibuang.
+ */
+export function bersihkanJadwalBerikutnya(j) {
+  if (!j || typeof j !== 'object') return null;
+  const soal = (Array.isArray(j.soal) ? j.soal : [])
+    .filter((s) => s && s.mapel && JENJANG_UJIAN.includes(Number(s.jenjang)) && parseServerDate(s.mulai_at))
+    .map((s) => ({ jenjang: Number(s.jenjang), mapel: s.mapel, mulai_at: s.mulai_at, selesai_at: s.selesai_at || null }))
+    .sort((a, b) => a.jenjang - b.jenjang || msWaktu(a.mulai_at) - msWaktu(b.mulai_at));
+  const tanggal = j.tanggal || (soal[0] ? wibDateKey(soal[0].mulai_at) : null);
+  return tanggal || soal.length ? { tanggal, soal } : null;
+}
+
+/**
+ * Alasan portal tidak dapat dibuka -> galatTautanInfo ditambah `jadwal_berikutnya` (lihat bersihkanJadwalBerikutnya),
+ * atau null bila galat lain (mis. koneksi).
+ */
+export function galatPortal(e) {
+  const g = galatTautanInfo(e);
+  if (!g) return null;
+  const d = e?.response?.data?.detail;
+  return { ...g, jadwal_berikutnya: d && typeof d === 'object' ? bersihkanJadwalBerikutnya(d.jadwal_berikutnya) : null };
+}
+
 // ---- Isolasi data: whitelist field ----
 const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'jumlah_klik', 'klik_terakhir_at'];
 
@@ -229,9 +259,26 @@ function soalTiruan() {
   return hasil;
 }
 
+// Hari ujian contoh berikutnya: mapel pertama tiap jenjang pukul 07.30–09.00 WIB pada `tanggal`.
+function jadwalBerikutnyaTiruan(tanggal) {
+  return {
+    tanggal,
+    soal: JENJANG_UJIAN.map((j, ji) => ({
+      jenjang: j, mapel: MAPEL_UJIAN_BAKU[(ji * 4) % MAPEL_UJIAN_BAKU.length].kode,
+      mulai_at: `${tanggal}T07:30:00+07:00`, selesai_at: `${tanggal}T09:00:00+07:00`,
+    })),
+  };
+}
+
 export function portalTiruan(token) {
   const g = galatTautanTiruan(token, 'portal ujian');
-  if (g) throw g;
+  if (g) {
+    const d = g.response.data.detail;
+    if (token === 'contoh-belum-mulai') d.jadwal_berikutnya = jadwalBerikutnyaTiruan(tambahHari(hariIniWIB(), 3));
+    if (token === 'contoh-ditutup') d.jadwal_berikutnya = jadwalBerikutnyaTiruan(tambahHari(hariIniWIB(), 1));
+    if (token === 'contoh-berakhir') d.jadwal_berikutnya = null;
+    throw g;
+  }
   const mulai = hariIniWIB();
   return {
     madrasah: { nama: 'MTsN 2 Kota Malang (contoh)', logo_url: null },
@@ -245,7 +292,7 @@ export function portalTiruan(token) {
 // ---- API ----
 
 /**
- * Isi portal satu tautan -> { ...kontrak, soal (tersaring), tiruan }. Melempar galat 403/404 (baca dengan galatTautanInfo).
+ * Isi portal satu tautan -> { ...kontrak, soal (tersaring), tiruan }. Melempar galat 403/404 (baca dengan galatPortal).
  * `sesi` = id pembukaan halaman (buatSesi); `segarkan` = true untuk muat ulang agar tidak tercatat sebagai pembukaan baru.
  */
 export const muatPortalPublik = async (token, { segarkan = false, sesi = null } = {}) => {

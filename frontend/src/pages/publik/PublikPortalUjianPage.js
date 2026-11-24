@@ -3,12 +3,12 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { Loader2, RefreshCw, ShieldCheck, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import KerangkaPublik from '@/components/ujian/publik/KerangkaPublik';
-import TautanTidakBerlaku from '@/components/ujian/publik/info/TautanTidakBerlaku';
+import PortalTerkunci from '@/components/ujian/publik/portal/PortalTerkunci';
 import DaftarSoalPortal, { useJamServer } from '@/components/ujian/publik/portal/DaftarSoalPortal';
 import { formatWIB } from '@/lib/datetime';
 import { JENJANG_UJIAN } from '@/lib/mapelUjian';
-import { bersihkanToken, galatTautanInfo, msSampai } from '@/lib/ujianInfoPublik';
-import { batasBerikutAt, buatSesi, muatPortalPublik, selisihJamServer } from '@/lib/ujianPortalPublik';
+import { bersihkanToken, msSampai } from '@/lib/ujianInfoPublik';
+import { batasBerikutAt, buatSesi, galatPortal, muatPortalPublik, selisihJamServer } from '@/lib/ujianPortalPublik';
 
 const JUDUL = 'Portal Ujian';
 const KUNCI_JENJANG = 'portalUjian:jenjang';
@@ -29,7 +29,8 @@ function jenjangAwal(param) {
  * Portal ujian publik lewat tautan /publik/portal-ujian/:token (tanpa login, token jenis `portal` — terpisah dari tautan
  * info & monitoring): jadwal mapel ujian per jenjang dalam tab Kelas 7/8/9 beserta status tiap mapel menurut jam server.
  * Tidak memuat kisi-kisi, tata tertib, berkas, maupun data pribadi siswa. Di luar masa ujian / saat ditutup panitia,
- * server menolak dan hanya pesan "tautan tidak berlaku" yang tampil. Tab jenjang dapat dibuka langsung dengan ?kelas=.
+ * server menolak dan hanya pesan "portal belum dibuka / sudah ditutup" beserta jadwal berikutnya yang tampil (isi yang
+ * sempat dimuat dibuang). Tab jenjang dapat dibuka langsung dengan ?kelas=.
  */
 export default function PublikPortalUjianPage() {
   const { token } = useParams();
@@ -68,7 +69,7 @@ export default function PublikPortalUjianPage() {
         setData(d); adaData.current = true; setTautanGalat(null); setGagalMuat(false); setDimuatPada(new Date());
       })
       .catch((e) => {
-        const g = galatTautanInfo(e);
+        const g = galatPortal(e);
         if (g) { setTautanGalat(g); setData(null); adaData.current = false; } // portal ditutup: isi lama tidak boleh tetap tampil
         else if (!(diam && adaData.current)) setGagalMuat(true);
       })
@@ -107,7 +108,7 @@ export default function PublikPortalUjianPage() {
   }, [tautanGalat, muat]);
 
   useEffect(() => {
-    if (tautanGalat) document.title = `Tautan tidak berlaku · ${JUDUL}`;
+    if (tautanGalat) document.title = `${tautanGalat.alasan === 'tidak_dikenal' ? 'Tautan tidak berlaku' : 'Portal terkunci'} · ${JUDUL}`;
     else if (data?.ujian?.nama) document.title = `${JUDUL} · ${data.ujian.nama}`;
   }, [data, tautanGalat]);
 
@@ -120,7 +121,7 @@ export default function PublikPortalUjianPage() {
   if (tautanGalat) {
     return (
       <KerangkaPublik info={tautanGalat.madrasah ? { madrasah: tautanGalat.madrasah } : null} judul={JUDUL}>
-        <TautanTidakBerlaku galat={tautanGalat} onMuatUlang={() => muat()} memuat={memuat} kontak="pengawas ruang atau panitia ujian"
+        <PortalTerkunci galat={tautanGalat} onMuatUlang={() => muat()} memuat={memuat}
           catatan={tautanGalat.alasan === 'nonaktif' && diperiksaPada
             ? `Diperiksa otomatis tiap 2 menit · terakhir ${formatWIB(diperiksaPada, 'Time', { hour: '2-digit', minute: '2-digit' })} WIB` : null} />
       </KerangkaPublik>
