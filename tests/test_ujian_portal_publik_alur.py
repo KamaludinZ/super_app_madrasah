@@ -195,3 +195,14 @@ def test_field_soal_publik_sama_dengan_frontend():
     js = (Path(__file__).resolve().parents[1] / 'frontend' / 'src' / 'lib' / 'ujianPortalPublik.js').read_text(encoding='utf-8')
     frontend = re.findall(r"'([a-z_]+)'", re.search(r'const FIELD_SOAL_PUBLIK = \[([^\]]+)\]', js).group(1))
     assert [f for f in up.FIELD_SOAL_PUBLIK if f != 'hitung_mundur'] == frontend
+
+
+def test_rute_info_dan_monitoring_tidak_menyentuh_link_soal():
+    """Penjaga statis isolasi: router halaman info & monitoring (dan modul yang mereka pakai untuk menyusun payload)
+    tidak pernah membaca koleksi link soal, sehingga tautan soal mustahil ikut payload-nya walau kode berubah."""
+    from pathlib import Path
+    backend = Path(__file__).resolve().parents[1] / 'backend'
+    for f in ('routers/ujian_info_publik.py', 'routers/ujian_monitoring_publik.py', 'ujian_pengumpulan.py'):
+        teks = (backend / f).read_text(encoding='utf-8')
+        for terlarang in ('ujian_link_soal', 'KOLEKSI_LINK_SOAL', 'ujian_portal', 'url_soal'):
+            assert terlarang not in teks, (f, terlarang)
