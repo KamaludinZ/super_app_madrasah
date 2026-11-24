@@ -35,8 +35,8 @@ const GAYA_STATUS = {
 };
 
 /**
- * Keterangan status satu mapel di bawah namanya: jam buka/tutup menurut jam server dan hitung mundurnya — menuju jam
- * mulai bila belum dimulai, menuju jam tutup bila sedang berlangsung.
+ * Keterangan status satu mapel di bawah namanya beserta hitung mundurnya — menuju jam mulai bila belum dimulai, menuju
+ * jam tutup bila sedang berlangsung (jamnya sendiri sudah tertulis di kolom kiri).
  */
 function KeteranganStatus({ soal, sekarangMs, testId }) {
   if (!soal.siap) {
@@ -52,15 +52,10 @@ function KeteranganStatus({ soal, sekarangMs, testId }) {
       </p>
     );
   }
-  const rincian = {
-    berlangsung: `ditutup ${jam(soal.selesai_at)} WIB`,
-    belum_dimulai: `dibuka ${jam(soal.mulai_at)} WIB`,
-    ditutup: null,
-  }[soal.status];
   const mundur = hitungMundurSoal(soal, sekarangMs);
   return (
     <p className={`text-xs ${GAYA_STATUS[soal.status]}`} data-testid={testId} data-status={soal.status}>
-      <span className="font-semibold">{STATUS_SOAL[soal.status].label}</span>{rincian && <> · {rincian}</>}
+      <span className="whitespace-nowrap font-semibold">{STATUS_SOAL[soal.status].label}</span>
       {mundur?.teks && (
         <span className="whitespace-nowrap" data-testid={`${testId}-mundur`} data-menuju={mundur.menuju}>
           {' · '}{mundur.menuju === 'selesai' ? 'sisa ' : ''}<span className="font-semibold tabular-nums">{mundur.teks}</span>{mundur.menuju === 'mulai' ? ' lagi' : ''}
@@ -88,7 +83,7 @@ function JumlahKlik({ n, aktif, testId }) {
  * dengan alasannya; mapel yang tautan soalnya belum disiapkan tidak diberi tombol. Mode contoh (`tiruan`) mencatat
  * klik ke pencatat tiruan dan membuka halaman soal contoh.
  */
-function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwarsa, onKlik, testId }) {
+function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwarsa, onKlik, lebar = false, testId }) {
   if (!soal.siap) return null;
   const n = Number(soal.jumlah_klik) || 0;
   if (!bolehKerjakan(soal)) {
@@ -96,8 +91,9 @@ function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwars
     return (
       <Button type="button" size="sm" variant="outline" disabled title={alasan}
         aria-label={`Mengerjakan ${soal.nama} — ${alasan.toLowerCase()}${n ? `, sudah diklik ${n} kali` : ''}`}
-        className="h-9 gap-1.5 px-3" data-testid={testId} data-aktif="tidak">
-        {soal.status === 'ditutup' ? <Lock aria-hidden="true" /> : <Clock aria-hidden="true" />} Mengerjakan
+        className="h-9 gap-1.5 px-2.5 sm:px-3" data-testid={testId} data-aktif="tidak">
+        {soal.status === 'ditutup' ? <Lock aria-hidden="true" /> : <Clock aria-hidden="true" />}
+        <span className="hidden sm:inline">Mengerjakan</span>
         <JumlahKlik n={n} testId={`${testId}-klik`} />
       </Button>
     );
@@ -128,7 +124,8 @@ function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwars
     onKlik?.(soal.id, { jumlah_klik: n + 1, klik_terakhir_at: new Date(kini).toISOString() }, { sementara: true });
   };
   return (
-    <Button asChild size="sm" className="h-9 gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d]" data-testid={testId} data-aktif="ya">
+    <Button asChild size="sm" className={`gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d] ${lebar ? 'h-10 w-full text-sm sm:h-9 sm:w-auto sm:text-xs' : 'h-9'}`}
+      data-testid={testId} data-aktif="ya">
       <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
         aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)${n ? `, sudah diklik ${n} kali` : ''}`}>
         <ExternalLink aria-hidden="true" /> Mengerjakan
@@ -175,10 +172,11 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
 function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKedaluwarsa, onKlik }) {
   const redup = soal.status === 'ditutup' || !soal.siap;
   const berlangsung = soal.siap && soal.status === 'berlangsung';
+  // Di layar sempit tombol aktif turun ke baris sendiri selebar kolom isi agar mudah diketuk; tombol nonaktif tetap ringkas.
   return (
-    <li className={`flex items-center gap-3 px-3 py-2.5 ${berlangsung ? 'bg-amber-50/70' : ''}`}
+    <li className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:flex-nowrap ${berlangsung ? 'bg-amber-50/70' : ''}`}
       data-testid={`portal-${jenjang}-${soal.mapel}`} data-status={soal.siap ? soal.status : 'belum_siap'}>
-      <div className={`w-20 shrink-0 text-xs text-slate-500 sm:w-24 ${redup ? 'opacity-60' : ''}`}>
+      <div className={`w-[4.75rem] shrink-0 text-xs text-slate-500 sm:w-24 ${redup ? 'opacity-60' : ''}`}>
         {soal.sesi_ke ? <div className="font-medium text-slate-700">Sesi {soal.sesi_ke}</div> : null}
         <div className="tabular-nums">{jam(soal.mulai_at)}–{jam(soal.selesai_at)}</div>
       </div>
@@ -186,9 +184,9 @@ function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKed
         <div className="text-sm font-semibold text-slate-900">{soal.nama}</div>
         <KeteranganStatus soal={soal} sekarangMs={sekarangMs} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
-      <div className="shrink-0">
+      <div className={berlangsung ? 'w-full pl-[5.5rem] sm:w-auto sm:shrink-0 sm:pl-0' : 'shrink-0'}>
         <TombolKerjakan soal={soal} jenjang={jenjang} token={token} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa}
-          onKlik={onKlik} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
+          onKlik={onKlik} lebar={berlangsung} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
       </div>
     </li>
   );
