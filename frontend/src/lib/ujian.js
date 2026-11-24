@@ -97,7 +97,7 @@ export const MENU_UJIAN = [
   { key: 'ruang', label: 'Ruang & Peserta', to: '/ujian/ruang', keterangan: 'Ruang ujian, peserta, dan nomor peserta' },
   { key: 'pengawas', label: 'Guru Pengawas', to: '/ujian/pengawas', keterangan: 'Master pilihan guru pengawas' },
   { key: 'formulir', label: 'Pengaturan Formulir', to: '/ujian/formulir', keterangan: 'Jendela waktu & template cetak' },
-  { key: 'tautan_publik', label: 'Tautan Publik', to: '/ujian/tautan-publik', keterangan: 'Info ujian siswa & monitoring pengumpulan soal' },
+  { key: 'tautan_publik', label: 'Tautan Publik', to: '/ujian/tautan-publik', keterangan: 'Info & portal ujian siswa, monitoring pengumpulan soal' },
   { key: 'info_ujian', label: 'Info Ujian', to: '/ujian/info-ujian', keterangan: 'Tata tertib & panduan CBT untuk siswa' },
   { key: 'link_soal', label: 'Link Soal', to: '/ujian/link-soal', keterangan: 'Tautan soal CBT & jam tombol Mengerjakan di portal' },
   { key: 'berkas_soal', label: 'Berkas Soal', to: '/ujian/berkas-soal', keterangan: 'Status kisi-kisi & kartu soal, PJ, unduh ZIP' },

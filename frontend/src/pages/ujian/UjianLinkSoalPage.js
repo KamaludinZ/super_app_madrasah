@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   AlertTriangle, ArrowLeft, CircleDashed, ExternalLink, Info, Link2, Loader2, MonitorPlay, Pencil, PowerOff, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import AksesDitolak from '@/components/security/AksesDitolak';
 import PilihUjian from '@/components/ujian/PilihUjian';
 import { TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
@@ -12,7 +14,7 @@ import DialogLinkSoal from '@/components/ujian/linkSoal/DialogLinkSoal';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { JENJANG_UJIAN, labelJenjang } from '@/lib/mapelUjian';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
-import { HALAMAN_TAUTAN_PUBLIK, urlTautan } from '@/lib/ujianTautanPublik';
+import { HALAMAN_TAUTAN_PUBLIK, simpanTautanPublik, statusTautan, urlTautan } from '@/lib/ujianTautanPublik';
 import { barisLinkJenjang, hostUrl, ikutJadwal, muatLinkSoal } from '@/lib/ujianLinkSoal';
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
@@ -25,20 +27,56 @@ function rentang(mulai, selesai) {
   return hariSama ? `${tglPendek(mulai)} · ${jam(mulai)}–${jam(selesai)}` : `${tglPendek(mulai)} ${jam(mulai)} – ${tglPendek(selesai)} ${jam(selesai)}`;
 }
 
-/** Status portal siswa + pintasan membuka portal & mengatur tautannya. */
-function StatusPortal({ tautan, ujianId }) {
+/**
+ * Status portal siswa + sakelar buka/tutup portal (admin; tersimpan langsung, terpisah dari tautan info & monitoring)
+ * dan pintasan membuka portal / mengatur jendela waktunya di menu Tautan Publik.
+ */
+function StatusPortal({ tautan, ujianId, bolehUbah, onBerubah }) {
+  const [sibuk, setSibuk] = useState(false);
   const url = urlTautan(tautan);
+  const tampil = tautan ? { ...tautan, ...statusTautan(tautan) } : null;
+  const ubahAktif = async (aktif) => {
+    setSibuk(true);
+    try {
+      const r = await simpanTautanPublik(ujianId, 'portal', { aktif });
+      onBerubah(r.tautan, r.tiruan);
+      const st = statusTautan(r.tautan);
+      if (!aktif) {
+        toast.success('Portal ujian ditutup. Siswa kini melihat "portal sedang ditutup".', {
+          action: { label: 'Urungkan', onClick: () => ubahAktif(true) },
+        });
+      } else if (!st.berlaku) toast.warning(`Portal dibuka, tetapi belum dapat diakses: ${st.pesan}`);
+      else toast.success('Portal ujian dibuka.');
+      (r.peringatan || []).forEach((p) => toast.warning(p.pesan));
+    } catch (e) {
+      toast.error(pesanGalat(e, 'Gagal mengubah status portal.'));
+    } finally {
+      setSibuk(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="status-portal">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
-          Portal ujian siswa {tautan ? <LencanaStatusTautan tautan={tautan} testId="status-tautan-portal" /> : <span className="text-xs text-slate-500">(tautan belum dibuat)</span>}
+          Portal ujian siswa {tampil ? <LencanaStatusTautan tautan={tampil} testId="status-tautan-portal" /> : <span className="text-xs text-slate-500">(tautan belum dibuat)</span>}
         </div>
-        {!tautan?.berlaku && (
-          <p className="text-xs text-slate-500">Link soal tetap bisa disiapkan. Siswa baru dapat membuka portal setelah tautan portal dibuka di menu Tautan Publik.</p>
+        {tampil && !tampil.berlaku && (
+          <p className="text-xs text-slate-500" data-testid="status-portal-pesan">
+            {tampil.alasan === 'nonaktif' ? 'Link soal tetap bisa disiapkan. Siswa baru dapat membuka portal setelah portal dibuka.' : tampil.pesan}
+          </p>
+        )}
+        {tampil?.berlaku && (!tautan.mulai_at || !tautan.selesai_at) && (
+          <p className="text-xs text-amber-700" data-testid="status-portal-tanpa-batas">Portal terbuka tanpa jendela waktu lengkap — batasi pada masa ujian di menu Tautan Publik.</p>
         )}
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {tautan && bolehUbah && (
+          <label className="mr-1 flex items-center gap-2 text-xs font-medium text-slate-700" htmlFor="sakelar-portal">
+            {sibuk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {tautan.aktif ? 'Portal dibuka' : 'Portal ditutup'}
+            <Switch id="sakelar-portal" checked={!!tautan.aktif} disabled={sibuk} onCheckedChange={ubahAktif} data-testid="sakelar-portal" />
+          </label>
+        )}
         {url && (
           <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
             <a href={url} target="_blank" rel="noopener noreferrer" data-testid="buka-portal"><ExternalLink className="h-3.5 w-3.5" /> Buka portal</a>
@@ -207,7 +245,8 @@ export default function UjianLinkSoalPage() {
 
       {!ditolak && data && (
         <>
-          <StatusPortal tautan={data.tautan_portal} ujianId={ujian?.id} />
+          <StatusPortal tautan={data.tautan_portal} ujianId={ujian?.id} bolehUbah={bolehUbah}
+            onBerubah={(t, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, tautan_portal: t }))} />
           {!bolehUbah && (
             <p className="flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800" data-testid="link-hanya-lihat">
               <Info className="h-4 w-4 shrink-0" /> Anda melihat sebagai pemantau. Link soal hanya dapat diatur admin; alamat soal lengkap tidak ditampilkan.

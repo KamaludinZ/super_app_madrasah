@@ -10,8 +10,8 @@ import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
 import { JENIS_TAUTAN_PUBLIK, muatTautanPublik } from '@/lib/ujianTautanPublik';
 
 /**
- * Pengelolaan Tautan Publik (/ujian/tautan-publik?ujian=<id>): dua tautan ber-token acak per ujian — Info Ujian untuk
- * siswa dan Monitoring Pengumpulan untuk panitia/guru. Admin membuka/menutup tautan, mengatur jendela waktu akses, dan
+ * Pengelolaan Tautan Publik (/ujian/tautan-publik?ujian=<id>): tiga tautan ber-token acak per ujian — Info Ujian dan
+ * Portal Ujian untuk siswa, serta Monitoring Pengumpulan untuk panitia/guru; masing-masing dibuka/ditutup sendiri. Admin membuka/menutup tautan, mengatur jendela waktu akses, dan
  * mengganti token; kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat.
  */
 export default function UjianTautanPublikPage() {
@@ -54,7 +54,7 @@ export default function UjianTautanPublikPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
             <Link2 className="h-7 w-7 text-[#006837]" /> Tautan Publik
           </h1>
-          <p className="mt-1 text-sm text-slate-600">Halaman info ujian untuk siswa dan monitoring pengumpulan soal — dibuka tanpa login, cukup dengan tautan.</p>
+          <p className="mt-1 text-sm text-slate-600">Info ujian dan portal ujian untuk siswa, serta monitoring pengumpulan soal — dibuka tanpa login, cukup dengan tautan. Tiap tautan dibuka/ditutup sendiri.</p>
         </div>
         <Button variant="outline" onClick={() => muat(ujian)} disabled={memuat || !ujian} className="gap-2 self-start sm:self-auto" data-testid="btn-muat-ulang-tautan">
           {memuat ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Muat Ulang

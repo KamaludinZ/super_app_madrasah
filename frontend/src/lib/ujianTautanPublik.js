@@ -1,20 +1,22 @@
 /**
- * Ujian Madrasah — Pengelolaan Tautan Publik: dua tautan ber-token acak per ujian, yaitu halaman INFO UJIAN untuk siswa
- * (/publik/info-ujian/:token) dan MONITORING PENGUMPULAN berkas (/publik/monitoring-ujian/:token). Admin membuka/menutup
+ * Ujian Madrasah — Pengelolaan Tautan Publik: tiga tautan ber-token acak per ujian, yaitu halaman INFO UJIAN untuk siswa
+ * (/publik/info-ujian/:token), MONITORING PENGUMPULAN berkas (/publik/monitoring-ujian/:token), dan PORTAL UJIAN tempat
+ * siswa membuka soal saat jam ujian (/publik/portal-ujian/:token). Masing-masing punya token, sakelar buka/tutup, dan
+ * jendela waktu sendiri — menutup portal tidak memengaruhi info maupun monitoring, dan sebaliknya. Admin membuka/menutup
  * tautan kapan saja tanpa menghapusnya, membatasi jendela waktu akses, dan dapat mengganti token (tautan lama mati).
  *
  * Kontrak server (backend menyusul; koleksi `ujian_tautan_publik`):
  *   GET  /ujian/{ujian_id}/tautan-publik
- *     -> { boleh_ubah, tautan: { info: Tautan, monitoring: Tautan } }   (admin mengubah; pimpinan & ketua/sekretaris melihat;
+ *     -> { boleh_ubah, tautan: { info: Tautan, monitoring: Tautan, portal: Tautan } }   (admin mengubah; pimpinan & ketua/sekretaris melihat;
  *        tautan yang belum ada dibuat otomatis dalam keadaan DITUTUP)
  *   PUT  /ujian/{ujian_id}/tautan-publik/{jenis} { aktif? , mulai_at?, selesai_at? } -> { tautan: Tautan, peringatan }   (admin)
  *        PARSIAL: hanya field yang dikirim yang berubah — sakelar mengirim { aktif }, form jendela { mulai_at, selesai_at }
  *        (ISO WIB atau null = tanpa batas; selesai harus setelah mulai, dicek terhadap nilai gabungan -> 422 pesan)
  *   POST /ujian/{ujian_id}/tautan-publik/{jenis}/ganti-token -> { tautan: Tautan }   (admin; token lama langsung tidak dikenal)
- *   Tautan = { id, jenis: 'info'|'monitoring', token, jalur: '/publik/…/<token>', aktif, mulai_at, selesai_at,
+ *   Tautan = { id, jenis: 'info'|'monitoring'|'portal', token, jalur: '/publik/…/<token>', aktif, mulai_at, selesai_at,
  *              berlaku, alasan: 'ok'|'nonaktif'|'belum_mulai'|'sudah_selesai', pesan, diperbarui_pada }
  *
- *   GET  /ujian/{ujian_id}/tautan-publik/audit?jenis=info|monitoring&hasil=ok|ditolak&dari=&sampai=&cari=&batas=50
+ *   GET  /ujian/{ujian_id}/tautan-publik/audit?jenis=info|monitoring|portal&hasil=ok|ditolak&dari=&sampai=&cari=&batas=50
  *        (dari/sampai 'YYYY-MM-DD' WIB inklusif; cari = potongan IP atau user agent)
  *     -> { ringkasan: { total, ok, ditolak, kartu_soal_ditolak },
  *          akses: [{ id, jenis_tautan, waktu, ip, perangkat, hasil, sesi, terakhir_aktif, jumlah_segarkan }]  (terbaru dulu),
@@ -30,6 +32,7 @@ export const HALAMAN_TAUTAN_PUBLIK = '/ujian/tautan-publik';
 export const JENIS_TAUTAN_PUBLIK = [
   { jenis: 'info', judul: 'Info Ujian', untuk: 'Siswa', keterangan: 'Jadwal, tata tertib, panduan CBT, dan unduh kisi-kisi per jenjang.', pola: '/publik/info-ujian/' },
   { jenis: 'monitoring', judul: 'Monitoring Pengumpulan Soal', untuk: 'Panitia & guru', keterangan: 'Status kisi-kisi & kartu soal per mapel, nama PJ, dan waktu update — tanpa isi kartu soal.', pola: '/publik/monitoring-ujian/' },
+  { jenis: 'portal', judul: 'Portal Ujian', untuk: 'Siswa saat ujian', keterangan: 'Tombol Mengerjakan per mapel sesuai jam ujian — terpisah dari Info Ujian; di luar jendela waktunya portal terkunci.', pola: '/publik/portal-ujian/' },
 ];
 
 /** URL lengkap tautan publik (server mengirim jalur relatif). */
@@ -65,7 +68,10 @@ export async function salinTeks(teks) {
 
 /** Pesan siap kirim (WhatsApp/grup kelas) untuk satu tautan. */
 export function pesanBagikan(meta, url, namaUjian) {
-  const untuk = meta.jenis === 'info' ? 'Info ujian (jadwal, tata tertib, panduan CBT, kisi-kisi)' : 'Monitoring pengumpulan kisi-kisi & kartu soal';
+  const untuk = {
+    info: 'Info ujian (jadwal, tata tertib, panduan CBT, kisi-kisi)',
+    portal: 'Portal ujian (buka soal tiap mapel sesuai jam ujian)',
+  }[meta.jenis] || 'Monitoring pengumpulan kisi-kisi & kartu soal';
   return `${untuk}${namaUjian ? ` — ${namaUjian}` : ''}:\n${url}`;
 }
 
@@ -171,6 +177,12 @@ export function peringatanTautan(t, masaUjian, sekarang = new Date()) {
   if (t.jenis === 'info' && selesai && masaUjian?.selesai && selesai < new Date(`${masaUjian.selesai}T00:00:00+07:00`)) {
     hasil.push({ kode: 'berakhir_sebelum_ujian', pesan: 'Jendela waktu berakhir sebelum hari terakhir ujian.' });
   }
+  if (t.jenis === 'portal' && !t.aktif && selamaUjian) {
+    hasil.push({ kode: 'portal_tutup_saat_ujian', pesan: 'Masa ujian sedang berlangsung tetapi portal ditutup — siswa tidak dapat membuka soal.' });
+  }
+  if (t.jenis === 'portal' && t.aktif && (!t.mulai_at || !t.selesai_at)) {
+    hasil.push({ kode: 'portal_tanpa_batas', pesan: 'Portal dibuka tanpa jendela waktu lengkap — batasi pada masa ujian agar portal terkunci di luar waktu ujian.' });
+  }
   if (t.jenis === 'monitoring' && t.aktif && !t.selesai_at) {
     hasil.push({ kode: 'monitoring_tanpa_batas', pesan: 'Tautan monitoring terbuka tanpa batas akhir — pertimbangkan menutupnya setelah pengumpulan selesai.' });
   }
@@ -184,7 +196,7 @@ export function galatJendela({ mulai, selesai }) {
 }
 
 // ---- Data tiruan (selama endpoint belum ada; perubahan hanya di memori) ----
-const contoh = {}; // { ujian_id: { info, monitoring } }
+const contoh = {}; // { ujian_id: { info, monitoring, portal } }
 
 function tokenAcak() {
   const huruf = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -203,6 +215,7 @@ function tautanContoh(ujianId) {
     contoh[ujianId] = {
       info: { id: `contoh-info-${ujianId}`, jenis: 'info', token: tokenAcak(), aktif: true, mulai_at: null, selesai_at: null, diperbarui_pada: kini },
       monitoring: { id: `contoh-mon-${ujianId}`, jenis: 'monitoring', token: tokenAcak(), aktif: false, mulai_at: null, selesai_at: null, diperbarui_pada: kini },
+      portal: { id: `contoh-portal-${ujianId}`, jenis: 'portal', token: tokenAcak(), aktif: false, mulai_at: null, selesai_at: null, diperbarui_pada: kini },
     };
   }
   return contoh[ujianId];
@@ -212,7 +225,7 @@ export const muatTautanPublik = (ujianId) => denganTiruan(
   async () => (await api.get(`/ujian/${ujianId}/tautan-publik`)).data,
   () => {
     const t = tautanContoh(ujianId);
-    return { boleh_ubah: true, tautan: { info: lengkapi(t.info), monitoring: lengkapi(t.monitoring) } };
+    return { boleh_ubah: true, tautan: { info: lengkapi(t.info), monitoring: lengkapi(t.monitoring), portal: lengkapi(t.portal) } };
   },
 );
 

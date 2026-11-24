@@ -22,7 +22,7 @@ import { denganTiruan } from '@/lib/ujian';
 import { hariIniWIB } from '@/lib/tanggal';
 import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU, mapelUntuk } from '@/lib/mapelUjian';
 import { tambahHari } from '@/lib/ujianInfoPublik';
-import { dariInputWaktu, keInputWaktu } from '@/lib/ujianTautanPublik';
+import { dariInputWaktu, keInputWaktu, muatTautanPublik } from '@/lib/ujianTautanPublik';
 
 export const HALAMAN_LINK_SOAL = '/ujian/link-soal';
 export const URL_SOAL_MAKS = 2000; // sama dengan backend (URL_SOAL_MAKS)
@@ -195,11 +195,12 @@ const galat = (status, detail) => { const e = new Error(String(status)); e.respo
 /** Link soal satu ujian -> { ujian?, boleh_ubah, tautan_portal, mapel, link, tiruan }. */
 export const muatLinkSoal = (ujianId) => denganTiruan(
   async () => (await api.get(`/ujian/${ujianId}/link-soal`)).data,
-  () => ({
-    boleh_ubah: true,
-    tautan_portal: { jenis: 'portal', jalur: '/publik/portal-ujian/contoh', aktif: true, berlaku: true, alasan: 'ok' },
-    link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
-  }),
+  async () => {
+    // Status portal contoh diambil dari pengelolaan tautan (data contoh yang sama) agar sakelar di kedua menu sejalan.
+    let portal = null;
+    try { portal = (await muatTautanPublik(ujianId)).tautan?.portal || null; } catch { /* tanpa status portal */ }
+    return { boleh_ubah: true, tautan_portal: portal, link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })) };
+  },
 );
 
 /** Simpan satu baris link soal (menimpa) -> { link, tiruan }. 409 bila versi berbeda; 422 isian tidak sah. */

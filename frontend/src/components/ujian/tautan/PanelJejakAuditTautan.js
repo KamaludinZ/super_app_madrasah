@@ -11,7 +11,7 @@ import {
   LABEL_AKSI_TAUTAN, LABEL_HASIL_AKSES, lamaPantau, muatAuditTautan, ringkasPerangkat,
 } from '@/lib/ujianTautanPublik';
 
-const NAMA_JENIS = { info: 'Info', monitoring: 'Monitoring' };
+const NAMA_JENIS = { info: 'Info', monitoring: 'Monitoring', portal: 'Portal' };
 const kelasHasil = (h) => (h === 'ok' ? 'bg-emerald-50 text-emerald-700' : h === 'kartu_soal_ditolak' ? 'bg-rose-100 text-rose-700' : 'bg-amber-50 text-amber-800');
 
 function Angka({ label, nilai, nada = 'text-slate-900', testId }) {
@@ -94,7 +94,7 @@ export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
         <SaringanAudit nilai={saringan} onUbah={setSaringan} testId="audit-saring" />
         <div className="flex flex-wrap items-center gap-3">
           <Pilih label="Tautan" nilai={saringan.jenis} onUbah={(v) => setSaringan((s) => ({ ...s, jenis: v }))} testId="audit-saring-jenis"
-            opsi={[['', 'Semua'], ['info', 'Info ujian'], ['monitoring', 'Monitoring']]} />
+            opsi={[['', 'Semua'], ['info', 'Info ujian'], ['monitoring', 'Monitoring'], ['portal', 'Portal ujian']]} />
           <Pilih label="Hasil" nilai={saringan.hasil} onUbah={(v) => setSaringan((s) => ({ ...s, hasil: v }))} testId="audit-saring-hasil"
             opsi={[['', 'Semua'], ['ok', 'Berhasil'], ['ditolak', 'Ditolak']]} />
         </div>
