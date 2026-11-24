@@ -267,6 +267,11 @@ async def _ujian_akses_log(db):
     return await migrate(db)
 
 
+async def _ujian_portal(db):
+    from migrations.migrate_ujian_portal import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -304,6 +309,7 @@ MIGRASI = [
     ('2026-11-23_ujian_berkas', _ujian_berkas),
     ('2026-11-23_ujian_unduh_log', _ujian_unduh_log),
     ('2026-11-23_ujian_akses_log', _ujian_akses_log),
+    ('2026-11-24_ujian_portal', _ujian_portal),
 ]
 
 

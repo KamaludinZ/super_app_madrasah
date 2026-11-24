@@ -97,8 +97,9 @@ export const MENU_UJIAN = [
   { key: 'ruang', label: 'Ruang & Peserta', to: '/ujian/ruang', keterangan: 'Ruang ujian, peserta, dan nomor peserta' },
   { key: 'pengawas', label: 'Guru Pengawas', to: '/ujian/pengawas', keterangan: 'Master pilihan guru pengawas' },
   { key: 'formulir', label: 'Pengaturan Formulir', to: '/ujian/formulir', keterangan: 'Jendela waktu & template cetak' },
-  { key: 'tautan_publik', label: 'Tautan Publik', to: '/ujian/tautan-publik', keterangan: 'Info ujian siswa & monitoring pengumpulan soal' },
+  { key: 'tautan_publik', label: 'Tautan Publik', to: '/ujian/tautan-publik', keterangan: 'Info & portal ujian siswa, monitoring pengumpulan soal' },
   { key: 'info_ujian', label: 'Info Ujian', to: '/ujian/info-ujian', keterangan: 'Tata tertib & panduan CBT untuk siswa' },
+  { key: 'link_soal', label: 'Link Soal', to: '/ujian/link-soal', keterangan: 'Tautan soal CBT & jam tombol Mengerjakan di portal' },
   { key: 'berkas_soal', label: 'Berkas Soal', to: '/ujian/berkas-soal', keterangan: 'Status kisi-kisi & kartu soal, PJ, unduh ZIP' },
   { key: 'audit_publik', label: 'Jejak Audit Publik', to: '/ujian/audit-publik', keterangan: 'Riwayat akses tautan & unduhan berkas' },
   { key: 'daftar_hadir', label: 'Daftar Hadir', to: '/ujian/daftar-hadir', keterangan: 'Pantau kehadiran, izin & sakit' },
@@ -119,6 +120,7 @@ export const AKSES_MENU_UJIAN = {
   formulir: { pimpinan: false, jabatan: ['ketua', 'sekretaris'] },
   tautan_publik: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // mengubah: admin saja (boleh_ubah)
   info_ujian: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // mengisi tata tertib & panduan: admin saja (boleh_ubah)
+  link_soal: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // mengatur tautan & jendela: admin saja (boleh_ubah)
   berkas_soal: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // isi kartu soal: admin saja
   audit_publik: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] },
   daftar_hadir: { pimpinan: true, jabatan: SEMUA_JABATAN },
@@ -131,7 +133,7 @@ export const AKSES_MENU_UJIAN = {
 };
 
 // Rute sub-menu yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/tautan-publik', '/ujian/info-ujian', '/ujian/unggah-berkas', '/ujian/berkas-soal', '/ujian/audit-publik', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai', '/ujian/kartu-peserta', '/ujian/kartu-meja']);
+export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/tautan-publik', '/ujian/info-ujian', '/ujian/link-soal', '/ujian/unggah-berkas', '/ujian/berkas-soal', '/ujian/audit-publik', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai', '/ujian/kartu-peserta', '/ujian/kartu-meja']);
 export const HALAMAN_ARSIP_SEMESTER = '/ujian/arsip-semester';
 
 /** Menu kepanitiaan untuk pengguna: akses dari peran pengelola/pimpinan atau jabatan panitia (gabungan). */

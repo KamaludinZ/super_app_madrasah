@@ -126,6 +126,7 @@ import UjianBeritaAcaraPage from '@/pages/ujian/UjianBeritaAcaraPage';
 import UjianNilaiPage from '@/pages/ujian/UjianNilaiPage';
 import UjianTautanPublikPage from '@/pages/ujian/UjianTautanPublikPage';
 import UjianInfoUjianPage from '@/pages/ujian/UjianInfoUjianPage';
+import UjianLinkSoalPage from '@/pages/ujian/UjianLinkSoalPage';
 import UjianUnggahBerkasPage from '@/pages/ujian/UjianUnggahBerkasPage';
 import UjianBerkasSoalPage from '@/pages/ujian/UjianBerkasSoalPage';
 import UjianAuditPublikPage from '@/pages/ujian/UjianAuditPublikPage';
@@ -133,6 +134,7 @@ import PublikDaftarHadirPage from '@/pages/publik/PublikDaftarHadirPage';
 import PublikBeritaAcaraPage from '@/pages/publik/PublikBeritaAcaraPage';
 import PublikInfoUjianPage from '@/pages/publik/PublikInfoUjianPage';
 import PublikMonitoringUjianPage from '@/pages/publik/PublikMonitoringUjianPage';
+import PublikPortalUjianPage from '@/pages/publik/PublikPortalUjianPage';
 import PublikTautanTidakBerlakuPage from '@/pages/publik/PublikTautanTidakBerlakuPage';
 import PublikTautanPendekPage from '@/pages/publik/PublikTautanPendekPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
@@ -356,6 +358,7 @@ function App() {
           <Route path="/publik/ujian/:token/berita-acara" element={<PublikBeritaAcaraPage />} />
           <Route path="/publik/info-ujian/:token" element={<PublikInfoUjianPage />} />
           <Route path="/publik/monitoring-ujian/:token" element={<PublikMonitoringUjianPage />} />
+          <Route path="/publik/portal-ujian/:token" element={<PublikPortalUjianPage />} />
           <Route path="/publik/t/:token" element={<PublikTautanPendekPage />} />
           <Route path="/publik/*" element={<PublikTautanTidakBerlakuPage />} />
           <Route path="/maintenance" element={<MaintenancePage />} />
@@ -460,6 +463,7 @@ function App() {
             <Route path="/ujian/formulir" element={<UjianFormulirPage />} />
             <Route path="/ujian/tautan-publik" element={<UjianTautanPublikPage />} />
             <Route path="/ujian/info-ujian" element={<UjianInfoUjianPage />} />
+            <Route path="/ujian/link-soal" element={<UjianLinkSoalPage />} />
             <Route path="/ujian/unggah-berkas" element={<UjianUnggahBerkasPage />} />
             <Route path="/ujian/berkas-soal" element={<UjianBerkasSoalPage />} />
             <Route path="/ujian/audit-publik" element={<UjianAuditPublikPage />} />

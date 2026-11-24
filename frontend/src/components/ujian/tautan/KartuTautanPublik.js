@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  AlertTriangle, CalendarClock, Check, CheckCircle2, Copy, ExternalLink, Globe2, KeyRound, Loader2, Lock, MonitorCheck, Save, Share2,
+  AlertTriangle, CalendarClock, Check, CheckCircle2, Copy, ExternalLink, Globe2, KeyRound, Loader2, Lock, MonitorCheck, MonitorPlay, Save, Share2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
   salinTeks, selesaiSudahLewat, simpanTautanPublik, statusTautan, urlTautan,
 } from '@/lib/ujianTautanPublik';
 
-const IKON = { info: Globe2, monitoring: MonitorCheck };
+const IKON = { info: Globe2, monitoring: MonitorCheck, portal: MonitorPlay };
 
 // Lencana status berlaku saat ini (dari server: cek_tautan).
 const STATUS = {
@@ -47,7 +47,7 @@ function useSekarang() {
 }
 
 /**
- * Satu tautan publik (info / monitoring): status berlaku, URL + salin/buka, sakelar buka/tutup (tersimpan langsung),
+ * Satu tautan publik (info / monitoring / portal): status berlaku, URL + salin/buka, sakelar buka/tutup (tersimpan langsung),
  * jendela waktu akses (WIB; kosong = tanpa batas), dan ganti token dengan konfirmasi. `bolehUbah` false = hanya lihat.
  */
 export default function KartuTautanPublik({ ujianId, namaUjian, masaUjian, meta, tautan, bolehUbah, onTersimpan }) {
@@ -63,9 +63,9 @@ export default function KartuTautanPublik({ ujianId, namaUjian, masaUjian, meta,
 
   const kini = useSekarang();
   // Status dihitung ulang di klien (cermin cek_tautan server) agar ikut berganti saat batas waktu terlewati.
-  const st = statusTautan(tautan, kini);
+  const st = statusTautan(tautan, kini, masaUjian);
   const tampil = { ...tautan, ...st };
-  const keterangan = keteranganWaktu(tautan, kini);
+  const keterangan = keteranganWaktu(tautan, kini, masaUjian);
   const peringatan = peringatanTautan(tautan, masaUjian, kini);
   const url = urlTautan(tautan);
   const galat = galatJendela({ mulai, selesai });

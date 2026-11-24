@@ -177,13 +177,13 @@ def test_saringan_jenjang_mapel(klien):
         assert r.status_code == 422 and (pesan is None or pesan in r.json()['detail'])
 
 
-def test_buat_ujian_langsung_menyiapkan_dua_tautan(klien):
+def test_buat_ujian_langsung_menyiapkan_tiga_tautan(klien):
     r = klien('admin', 'admin', 'POST', '/ujian', json={'jenis': 'UTS', 'nama': 'ASTS Ganjil 2026/2027', 'mulai': '2026-10-05', 'selesai': '2026-10-10'})
     assert r.status_code == 200, r.text
     uid = r.json()['id']
     t = [x for x in klien.db.ujian_tautan_publik.docs if x['ujian_id'] == uid]
-    assert sorted(x['jenis'] for x in t) == ['info', 'monitoring'] and not any(x['aktif'] for x in t)
-    assert [x['aksi'] for x in klien.db.ujian_tautan_riwayat.docs if x['ujian_id'] == uid] == ['buat', 'buat']
+    assert sorted(x['jenis'] for x in t) == ['info', 'monitoring', 'portal'] and not any(x['aktif'] for x in t)
+    assert [x['aksi'] for x in klien.db.ujian_tautan_riwayat.docs if x['ujian_id'] == uid] == ['buat', 'buat', 'buat']
 
 
 def test_validasi_tautan_publik(klien):

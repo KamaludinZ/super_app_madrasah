@@ -1,0 +1,567 @@
+"""Ujian Madrasah — PORTAL UJIAN publik & LINK SOAL: skema dan aturan murni.
+
+Portal ujian (/publik/portal-ujian/{token}) adalah halaman publik TERPISAH dari halaman info: token jenis `portal` di
+`ujian_tautan_publik` (lihat ujian_info.JENIS_TAUTAN) dengan sakelar & jendela waktu sendiri (= masa ujian; di luar itu
+portal ditolak server). Portal hanya memuat jadwal mapel dan tombol "Mengerjakan"; tautan soal eksternal tidak pernah
+ikut payload — baru keluar lewat rute kerjakan (302) saat jendela mapel berlangsung menurut waktu server.
+
+Dokumen `ujian_link_soal` (satu per ujian + jenjang + mapel — simpan ulang MENIMPA, tidak menambah baris):
+    id (unik), ujian_id, jenjang (7|8|9), mapel (kode baku ujian_mapel_baku),
+    url                 tautan soal eksternal; hanya http/https (url_soal_aman); '' = belum diisi (mapel "belum siap")
+    mulai_at, selesai_at  ISO datetime WIB — jendela tombol "Mengerjakan" (nilai awal dari sesi jadwal_ujian mapel itu;
+                        admin boleh mempersempit). Jendela [mulai_at, selesai_at): tepat pada selesai_at sudah ditutup.
+    aktif               tombol dapat dimatikan admin walau jendela berlangsung ("ditahan")
+    jumlah_klik         CACHE klik sah "Mengerjakan" (dinaikkan atomik $inc bersama klik_terakhir_at); sumber kebenaran
+                        tetap ujian_akses_log aksi=klik_mengerjakan — dapat dibangun ulang dari log kapan saja
+    klik_terakhir_at    waktu klik sah terakhir (cache, ikut dibangun ulang)
+    dibuat_pada, diperbarui_pada (= versi untuk cek bentrok antar-admin), diperbarui_oleh, diperbarui_oleh_nama
+    Unik: id; (ujian_id, jenjang, mapel).
+
+`ujian_akses_log` (skema di ujian_info.py) mendapat field `aksi` (AKSI_AKSES) agar jejak audit publik tetap satu tempat:
+    'buka_tautan'      pembukaan halaman publik (info/monitoring/portal). Entri lama tanpa `aksi` TIDAK diubah (log audit
+                       tidak pernah diubah massal) — pembaca memperlakukannya sebagai 'buka_tautan' (KUERI_BUKA)
+    'klik_mengerjakan' klik sah tombol "Mengerjakan" di portal; tambahan field link_soal_id, jenjang, mapel, url_host
+                       (nama host tujuan saja). Hanya klik yang benar-benar dialihkan ke tautan soal yang dicatat.
+Tanpa aturan hapus: log klik disimpan selamanya (tanpa TTL).
+"""
+import re
+import uuid
+from datetime import datetime
+from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlsplit
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from ujian import WIB_TZ, sekarang_wib
+from ujian_info import JENJANG_UJIAN, KOLEKSI_AKSES_LOG, baca_waktu
+
+KOLEKSI_LINK_SOAL = 'ujian_link_soal'
+
+AKSI_AKSES = ('buka_tautan', 'klik_mengerjakan')
+AKSI_BUKA = 'buka_tautan'
+AKSI_KLIK = 'klik_mengerjakan'
+
+# Saringan log: klik SAH "Mengerjakan" (hanya yang dialihkan ke tautan soal) vs pembukaan tautan (termasuk entri lama
+# sebelum field `aksi` ada). Klik yang ditolak tetap tercatat (aksi klik, hasil ≠ ok) tetapi tidak pernah dihitung.
+KUERI_KLIK = {'aksi': AKSI_KLIK, 'hasil': 'ok'}
+KUERI_BUKA = {'aksi': {'$ne': AKSI_KLIK}}
+
+URL_SOAL_MAKS = 2000  # sama dengan URL_SOAL_MAKS di frontend/src/lib/ujianLinkSoal.js
+
+INDEX_LINK_SOAL = [
+    (KOLEKSI_LINK_SOAL, [('id', 1)], {'unique': True}),
+    # Satu tautan soal per ujian + jenjang + mapel: simpan ulang menimpa.
+    (KOLEKSI_LINK_SOAL, [('ujian_id', 1), ('jenjang', 1), ('mapel', 1)], {'unique': True, 'name': 'link_soal_unik_mapel'}),
+    # Intensitas & rincian klik per link soal (agregasi dari log, bukan dari cache) dan bangun ulang penghitung.
+    (KOLEKSI_AKSES_LOG, [('link_soal_id', 1), ('aksi', 1), ('waktu', -1)], {'name': 'akses_link_aksi_waktu'}),
+    (KOLEKSI_AKSES_LOG, [('ujian_id', 1), ('aksi', 1), ('waktu', -1)], {'name': 'akses_ujian_aksi_waktu'}),
+]
+
+# Pola literal lebih dulu: urlsplit memaafkan bentuk rusak seperti "http:///x" atau "https:\\host".
+_URL_SOAL = re.compile(r'^https?://[^/\\?#@\s]+', re.IGNORECASE)
+
+
+def url_soal_aman(url: Any) -> Optional[str]:
+    """Tautan soal yang boleh dipasang -> URL bersih, atau None. Hanya http:// atau https:// dengan nama host, tanpa spasi
+    maupun karakter kontrol,
+    tanpa kredensial (user:sandi@), ≤ URL_SOAL_MAKS. javascript:, data:, file:, dan skema lain ditolak. Sama dengan
+    urlSoalAman di frontend."""
+    t = str(url or '').strip()
+    if not t or len(t) > URL_SOAL_MAKS or re.search(r'[\s\x00-\x1f\x7f]', t) or not _URL_SOAL.match(t):
+        return None
+    try:
+        u = urlsplit(t)
+    except ValueError:
+        return None
+    if u.scheme.lower() not in ('http', 'https') or not u.hostname or u.username or u.password:
+        return None
+    return t
+
+
+def host_url(url: Any) -> str:
+    """Nama host tautan untuk ditampilkan ringkas / dicatat di log ('' bila tidak terbaca)."""
+    try:
+        h = urlsplit(str(url or '').strip()).hostname or ''
+    except ValueError:
+        return ''
+    return h[4:] if h.startswith('www.') else h
+
+
+def link_soal_rusak(doc: Dict[str, Any]) -> Optional[str]:
+    """Alasan sebuah dokumen link soal tidak dapat dipakai apa adanya (dilaporkan migrasi, tidak diubah), atau None:
+    'jenjang_tidak_sah', 'url_tidak_sah' (terisi tetapi bukan http/https), 'jendela_tidak_terbaca', 'jendela_terbalik'
+    (selesai ≤ mulai)."""
+    if 'jenjang' in doc and doc.get('jenjang') not in JENJANG_UJIAN:
+        return 'jenjang_tidak_sah'
+    if doc.get('url') and not url_soal_aman(doc.get('url')):
+        return 'url_tidak_sah'
+    mulai, selesai = doc.get('mulai_at'), doc.get('selesai_at')
+    m, s = baca_waktu(mulai), baca_waktu(selesai)
+    if (mulai and not m) or (selesai and not s):
+        return 'jendela_tidak_terbaca'
+    if m and s and s <= m:
+        return 'jendela_terbalik'
+    return None
+
+
+# ---- Jendela awal dari jadwal ujian ----
+# Nama mapel di jadwal_ujian adalah teks bebas (menu Pengaturan Formulir); dicocokkan ke kode baku lewat nama ternormal
+# (huruf & angka saja, huruf kecil) dan beberapa sebutan lain yang lazim di madrasah.
+_ALIAS_MAPEL = {
+    'alquranhadits': 'quran_hadits', 'alquranhadis': 'quran_hadits', 'quranhadis': 'quran_hadits', 'qurdis': 'quran_hadits',
+    'ppkn': 'pkn', 'pendidikanpancasila': 'pkn', 'pancasila': 'pkn', 'pendidikanpancasiladankewarganegaraan': 'pkn',
+    'aqidahakhlak': 'akidah_akhlak', 'akidahakhlaq': 'akidah_akhlak', 'aqidahakhlaq': 'akidah_akhlak',
+    'fikih': 'fiqh', 'fiqih': 'fiqh', 'sejarahkebudayaanislam': 'ski',
+    'pendidikanjasmaniolahragadankesehatan': 'pjok', 'penjas': 'pjok', 'penjaskes': 'pjok', 'penjasorkes': 'pjok',
+    'senibudayadanprakarya': 'seni_budaya', 'sbdp': 'seni_budaya', 'sbk': 'seni_budaya', 'tik': 'informatika',
+    'bindo': 'bahasa_indonesia', 'bing': 'bahasa_inggris', 'barab': 'bahasa_arab', 'bjawa': 'bahasa_jawa',
+}
+
+
+def kunci_nama_mapel(nama: Any) -> str:
+    """Nama mapel ternormal untuk dicocokkan: huruf kecil, hanya huruf & angka ("Al-Qur'an Hadits" -> "alquranhadits")."""
+    return re.sub(r'[^a-z0-9]', '', str(nama or '').lower())
+
+
+def kode_mapel_dari_nama(nama: Any, mapel: Iterable[Dict[str, Any]]) -> Optional[str]:
+    """Kode baku dari nama mapel teks bebas: cocok dengan nama atau kode mapel baku (`mapel` = [{kode, nama}] jenjang itu),
+    atau dengan alias lazim. None bila tidak dikenali."""
+    k = kunci_nama_mapel(nama)
+    if not k:
+        return None
+    daftar = list(mapel)
+    for m in daftar:
+        if k in (kunci_nama_mapel(m.get('nama')), kunci_nama_mapel(m.get('kode'))):
+            return m['kode']
+    alias = _ALIAS_MAPEL.get(k)
+    return alias if alias and any(m['kode'] == alias for m in daftar) else None
+
+
+def iso_wib(tanggal: str, jam: str) -> str:
+    """'YYYY-MM-DD' + 'HH:MM' (WIB) -> ISO datetime ber-zona WIB."""
+    return f'{tanggal}T{jam}:00+07:00'
+
+
+def jendela_jadwal(jadwal: Iterable[Dict[str, Any]], jenjang: int, mapel: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Sesi jadwal ujian tiap mapel baku satu jenjang -> { kode: { tanggal, sesi_ke, mulai_at, selesai_at } } (nilai awal
+    jendela tombol "Mengerjakan"). Bila satu mapel muncul di beberapa sesi, sesi paling awal yang dipakai. Sesi yang nama
+    mapelnya tidak dikenali dilewati (mapel itu tampil "belum ada di jadwal")."""
+    daftar = list(mapel)
+    hasil: Dict[str, Dict[str, Any]] = {}
+    for s in sorted(jadwal or [], key=lambda x: (x.get('tanggal') or '', x.get('jam_mulai') or '', x.get('sesi_ke') or 0)):
+        kode = kode_mapel_dari_nama((s.get('mapel') or {}).get(str(jenjang)), daftar)
+        if not kode or kode in hasil or not (s.get('tanggal') and s.get('jam_mulai') and s.get('jam_selesai')):
+            continue
+        hasil[kode] = {'tanggal': s['tanggal'], 'sesi_ke': s.get('sesi_ke'),
+                       'mulai_at': iso_wib(s['tanggal'], s['jam_mulai']), 'selesai_at': iso_wib(s['tanggal'], s['jam_selesai'])}
+    return hasil
+
+
+# ---- Isian & dokumen link soal ----
+def _waktu_wib(v: Any, nama: str) -> str:
+    d = baca_waktu(v)
+    if not d:
+        raise ValueError(f'Waktu {nama} tidak terbaca')
+    return d.astimezone(WIB_TZ).replace(microsecond=0).isoformat()
+
+
+class LinkSoalIn(BaseModel):
+    """Isian admin satu link soal (PUT /ujian/{id}/link-soal/{jenjang}/{mapel}). `url` boleh kosong (mapel "belum siap").
+    `versi` = diperbarui_pada yang dimuat (None bila belum pernah disimpan) — beda dengan yang tersimpan -> ditolak (409)."""
+    url: str = Field('', max_length=URL_SOAL_MAKS + 50)
+    mulai_at: str = Field(..., max_length=40)
+    selesai_at: str = Field(..., max_length=40)
+    aktif: bool = True
+    versi: Optional[str] = Field(None, max_length=64)
+
+    @field_validator('url', mode='before')
+    @classmethod
+    def _url(cls, v):
+        t = str(v or '').strip()
+        if not t:
+            return ''
+        if len(t) > URL_SOAL_MAKS:
+            raise ValueError(f'Tautan soal maksimal {URL_SOAL_MAKS} karakter')
+        aman = url_soal_aman(t)
+        if not aman:
+            raise ValueError('Tautan soal harus diawali http:// atau https://, tanpa spasi dan tanpa nama pengguna/sandi')
+        return aman
+
+    @field_validator('mulai_at')
+    @classmethod
+    def _mulai(cls, v):
+        return _waktu_wib(v, 'mulai')
+
+    @field_validator('selesai_at')
+    @classmethod
+    def _selesai(cls, v):
+        return _waktu_wib(v, 'tutup')
+
+    @model_validator(mode='after')
+    def _urutan(self):
+        if baca_waktu(self.selesai_at) <= baca_waktu(self.mulai_at):
+            raise ValueError('Waktu tutup harus setelah waktu mulai')
+        return self
+
+
+def link_siap(doc: Optional[Dict[str, Any]]) -> bool:
+    """Tombol "Mengerjakan" dapat dipakai: tautan soal sah terisi DAN tombol diaktifkan admin."""
+    return bool(doc) and bool(url_soal_aman(doc.get('url'))) and doc.get('aktif', True) is not False
+
+
+def dokumen_link_soal(ujian_id: str, jenjang: int, mapel: str, isi: LinkSoalIn, user: Dict[str, Any],
+                      lama: Optional[Dict[str, Any]] = None, waktu: datetime = None) -> Dict[str, Any]:
+    """Dokumen link soal hasil simpan admin (MENIMPA yang lama). id, dibuat_pada, dan penghitung klik (cache dari log)
+    dipertahankan — mengganti tautan/jendela tidak menghapus riwayat klik."""
+    if int(jenjang) not in JENJANG_UJIAN:
+        raise ValueError(f'Jenjang tidak dikenal: {jenjang}')
+    t = (waktu or sekarang_wib()).isoformat()
+    lama = lama or {}
+    return {
+        'id': lama.get('id') or str(uuid.uuid4()), 'ujian_id': ujian_id, 'jenjang': int(jenjang), 'mapel': mapel,
+        'url': isi.url, 'mulai_at': isi.mulai_at, 'selesai_at': isi.selesai_at, 'aktif': bool(isi.aktif),
+        'jumlah_klik': int(lama.get('jumlah_klik') or 0), 'klik_terakhir_at': lama.get('klik_terakhir_at'),
+        'dibuat_pada': lama.get('dibuat_pada') or t, 'diperbarui_pada': t,
+        'diperbarui_oleh': user.get('id'), 'diperbarui_oleh_nama': user.get('full_name') or user.get('username'),
+    }
+
+
+def ringkas_link_admin(doc: Optional[Dict[str, Any]], jenjang: int, mapel: str, jadwal: Optional[Dict[str, Any]] = None,
+                       tampil_url: bool = False) -> Dict[str, Any]:
+    """Satu entri LinkSoal untuk menu Link Soal (kontrak frontend/src/lib/ujianLinkSoal.js). Mapel yang belum pernah
+    disimpan: id None, url '', jendela dari jadwal. Alamat soal lengkap hanya untuk admin (`tampil_url`); pemantau
+    mendapat nama host saja."""
+    d = doc or {}
+    url = d.get('url') or ''
+    return {
+        'id': d.get('id'), 'jenjang': int(jenjang), 'mapel': mapel,
+        'url': url if tampil_url else '', 'url_host': host_url(url) if url else '',
+        'mulai_at': d.get('mulai_at') or (jadwal or {}).get('mulai_at'),
+        'selesai_at': d.get('selesai_at') or (jadwal or {}).get('selesai_at'),
+        'aktif': d.get('aktif', True) is not False, 'siap': link_siap(doc), 'jadwal': jadwal,
+        'jumlah_klik': int(d.get('jumlah_klik') or 0), 'klik_terakhir_at': d.get('klik_terakhir_at'),
+        'diperbarui_pada': d.get('diperbarui_pada'), 'diperbarui_oleh_nama': d.get('diperbarui_oleh_nama'),
+        'versi': d.get('diperbarui_pada'),
+    }
+
+
+def susun_link_admin(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                     jadwal: Iterable[Dict[str, Any]], tampil_url: bool = False) -> List[Dict[str, Any]]:
+    """Satu entri per jenjang × mapel baku aktif (urutan baku), menggabungkan dokumen tersimpan dan jendela jadwal."""
+    peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
+    jadwal = list(jadwal or [])
+    hasil = []
+    for j in JENJANG_UJIAN:
+        daftar = mapel_per_jenjang.get(str(j)) or []
+        dari_jadwal = jendela_jadwal(jadwal, j, daftar)
+        hasil.extend(ringkas_link_admin(peta.get((j, m['kode'])), j, m['kode'], dari_jadwal.get(m['kode']), tampil_url) for m in daftar)
+    return hasil
+
+
+# ---- Payload portal publik ----
+STATUS_SOAL = ('belum_dimulai', 'berlangsung', 'ditutup')
+
+# Satu-satunya field per mapel yang boleh keluar di payload portal publik (daftar putih; sama dengan FIELD_SOAL_PUBLIK di
+# frontend/src/lib/ujianPortalPublik.js ditambah hitung_mundur). Tautan soal (`url`), host-nya, identitas admin, dan field
+# lain dokumen link soal TIDAK PERNAH ikut — tautan soal hanya keluar lewat rute kerjakan saat mapel berlangsung.
+FIELD_SOAL_PUBLIK = ('id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'hitung_mundur',
+                     'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at')
+# Field ujian yang boleh tampil di halaman publik.
+FIELD_UJIAN_PUBLIK = ('nama', 'jenis', 'tahun_pelajaran', 'mulai', 'selesai')
+
+
+def saring_soal_publik(baris: Dict[str, Any]) -> Dict[str, Any]:
+    """Pertahanan terakhir isolasi payload portal: hanya FIELD_SOAL_PUBLIK, apa pun yang ditambahkan di hulu."""
+    return {k: baris.get(k) for k in FIELD_SOAL_PUBLIK}
+
+
+def status_jendela(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Optional[str]:
+    """Status satu mapel menurut WAKTU SERVER: 'belum_dimulai' | 'berlangsung' | 'ditutup' pada jendela [mulai, selesai);
+    None bila jendela tidak lengkap/tidak terbaca (mapel tidak ditampilkan — fail-closed, tombol tidak pernah aktif)."""
+    m, s = baca_waktu(mulai_at), baca_waktu(selesai_at)
+    if not m or not s or s <= m:
+        return None
+    kini = sekarang.astimezone(WIB_TZ)
+    if kini < m:
+        return 'belum_dimulai'
+    return 'berlangsung' if kini < s else 'ditutup'
+
+
+def hitung_mundur(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """Hitung mundur satu mapel menurut WAKTU SERVER -> { menuju: 'mulai' | 'selesai', detik } (detik dibulatkan ke atas,
+    ≥ 1), atau None bila sudah ditutup / jendela tidak terbaca."""
+    status = status_jendela(mulai_at, selesai_at, sekarang)
+    if status not in ('belum_dimulai', 'berlangsung'):
+        return None
+    menuju = 'mulai' if status == 'belum_dimulai' else 'selesai'
+    target = baca_waktu(mulai_at if menuju == 'mulai' else selesai_at)
+    detik = (target - sekarang.astimezone(WIB_TZ)).total_seconds()
+    return {'menuju': menuju, 'detik': max(1, int(-(-detik // 1)))}
+
+
+def batas_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Optional[str]:
+    """Waktu (ISO) perubahan status terdekat SESUDAH `sekarang` di antara semua mapel (mulai atau tutup), atau None —
+    klien memuat ulang tepat setelahnya agar status dikonfirmasi server."""
+    kini = sekarang.astimezone(WIB_TZ)
+    calon = [w for s in soal or [] for w in (s.get('mulai_at'), s.get('selesai_at')) if baca_waktu(w) and baca_waktu(w) > kini]
+    return min(calon, key=baca_waktu) if calon else None
+
+
+def tanggal_wib(nilai: Any) -> Optional[str]:
+    d = baca_waktu(nilai)
+    return d.astimezone(WIB_TZ).date().isoformat() if d else None
+
+
+def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                jadwal: Iterable[Dict[str, Any]], sekarang: datetime) -> List[Dict[str, Any]]:
+    """Daftar mapel portal (kontrak `soal` di frontend/src/lib/ujianPortalPublik.js), satu entri per jenjang × mapel baku
+    aktif yang punya jendela pengerjaan (dari link soal tersimpan, atau dari jadwal ujian bila belum diatur), urut jenjang
+    lalu jam mulai. TIDAK PERNAH memuat `url` tautan soal. Mapel tanpa jendela = belum dijadwalkan (tidak ikut)."""
+    peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
+    jadwal = list(jadwal or [])
+    hasil = []
+    for j in JENJANG_UJIAN:
+        daftar = mapel_per_jenjang.get(str(j)) or []
+        dari_jadwal = jendela_jadwal(jadwal, j, daftar)
+        baris = []
+        for m in daftar:
+            d = peta.get((j, m['kode']))
+            jd = dari_jadwal.get(m['kode'])
+            mulai = (d or {}).get('mulai_at') or (jd or {}).get('mulai_at')
+            selesai = (d or {}).get('selesai_at') or (jd or {}).get('selesai_at')
+            status = status_jendela(mulai, selesai, sekarang)
+            if not status:
+                continue
+            tanggal = tanggal_wib(mulai)
+            siap = link_siap(d)
+            baris.append({
+                'id': (d or {}).get('id') or f'belum-{j}-{m["kode"]}', 'jenjang': j, 'mapel': m['kode'], 'tanggal': tanggal,
+                'sesi_ke': (jd or {}).get('sesi_ke') if jd and jd.get('tanggal') == tanggal else None,
+                'mulai_at': mulai, 'selesai_at': selesai, 'status': status, 'hitung_mundur': hitung_mundur(mulai, selesai, sekarang),
+                'siap': siap,
+                'ditahan': bool(d) and not siap and bool(url_soal_aman(d.get('url'))),
+                'jumlah_klik': int((d or {}).get('jumlah_klik') or 0), 'klik_terakhir_at': (d or {}).get('klik_terakhir_at'),
+            })
+        hasil.extend(saring_soal_publik(b) for b in sorted(baris, key=lambda x: (baca_waktu(x['mulai_at']), x['sesi_ke'] or 0)))
+    return hasil
+
+
+def jadwal_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """Hari ujian terdekat yang belum lewat beserta mapel pertama tiap jenjang (untuk pesan "portal belum dibuka/ditutup")
+    -> { tanggal, soal: [{ jenjang, mapel, mulai_at, selesai_at }] } atau None. Tanpa tautan soal & tanpa penghitung."""
+    kini = sekarang.astimezone(WIB_TZ)
+    belum_lewat = [s for s in soal or [] if baca_waktu(s.get('selesai_at')) and baca_waktu(s['selesai_at']) > kini]
+    if not belum_lewat:
+        return None
+    tanggal = min(s['tanggal'] for s in belum_lewat if s.get('tanggal'))
+    pertama: Dict[int, Dict[str, Any]] = {}
+    for s in sorted((s for s in belum_lewat if s.get('tanggal') == tanggal), key=lambda s: baca_waktu(s['mulai_at'])):
+        pertama.setdefault(s['jenjang'], {k: s[k] for k in ('jenjang', 'mapel', 'mulai_at', 'selesai_at')})
+    return {'tanggal': tanggal, 'soal': [pertama[j] for j in sorted(pertama)]}
+
+
+# ---- Penjaga masa ujian portal ----
+def jendela_portal(tautan: Dict[str, Any], ujian: Optional[Dict[str, Any]]) -> Dict[str, Optional[str]]:
+    """Jendela efektif portal -> { mulai_at, selesai_at } (ISO WIB / None). Batas yang diisi admin pada tautan portal
+    dipakai apa adanya; batas yang KOSONG diganti masa ujian (ujian.mulai 00.00 WIB s.d. akhir hari ujian.selesai) agar
+    portal tidak pernah terbuka di luar masa ujian walau admin lupa mengisi jendela."""
+    from datetime import timedelta
+    u = ujian or {}
+    mulai = tautan.get('mulai_at') or (iso_wib(u['mulai'], '00:00') if u.get('mulai') else None)
+    selesai = tautan.get('selesai_at')
+    if not selesai and u.get('selesai'):
+        try:
+            besok = (datetime.fromisoformat(u['selesai']) + timedelta(days=1)).date().isoformat()
+            selesai = iso_wib(besok, '00:00')
+        except ValueError:
+            selesai = None
+    return {'mulai_at': mulai, 'selesai_at': selesai}
+
+
+def cek_masa_portal(tautan: Dict[str, Any], ujian: Optional[Dict[str, Any]], sekarang: datetime) -> Dict[str, Any]:
+    """Validator portal (murni): cek_tautan pada jendela efektif portal (jendela_portal). -> sama dengan cek_tautan:
+    { berlaku, alasan, pesan, mulai_at, selesai_at } dengan mulai_at/selesai_at = jendela efektif."""
+    from ujian_info import cek_tautan
+    return cek_tautan({**tautan, **jendela_portal(tautan, ujian)}, sekarang)
+
+
+# ---- Panel admin ----
+def ringkas_tautan_portal(tautan: Optional[Dict[str, Any]], ujian: Optional[Dict[str, Any]], sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """ringkas_tautan untuk tautan portal, dengan status berlaku menurut jendela EFEKTIF (batas kosong = masa ujian) —
+    sama dengan yang diperiksa rute publik portal."""
+    from ujian_info import ringkas_tautan
+    r = ringkas_tautan(tautan, sekarang)
+    if not r:
+        return None
+    cek = cek_masa_portal(tautan, ujian, sekarang)
+    return {**r, 'berlaku': cek['berlaku'], 'alasan': cek['alasan'], 'pesan': cek['pesan']}
+
+
+def peringatan_link(isi: 'LinkSoalIn', ujian: Optional[Dict[str, Any]], jadwal: Optional[Dict[str, Any]]) -> List[str]:
+    """Peringatan (tidak menghalangi simpan) atas jendela yang kemungkinan tidak disengaja."""
+    hasil = []
+    u = ujian or {}
+    mulai, selesai = baca_waktu(isi.mulai_at), baca_waktu(isi.selesai_at)
+    masa = jendela_portal({}, u)
+    if masa['mulai_at'] and masa['selesai_at'] and (mulai < baca_waktu(masa['mulai_at']) or selesai > baca_waktu(masa['selesai_at'])):
+        hasil.append(f"Jendela pengerjaan berada di luar masa ujian ({u.get('mulai')} s.d. {u.get('selesai')}) — portal terkunci "
+                     'di luar masa ujian, sehingga tombol tidak dapat dipakai pada waktu itu.')
+    if jadwal and (mulai < baca_waktu(jadwal['mulai_at']) or selesai > baca_waktu(jadwal['selesai_at'])):
+        hasil.append('Jendela pengerjaan melebar dari sesi jadwal ujian mapel ini. Pastikan memang disengaja (mis. ujian susulan).')
+    if isi.url and not isi.aktif:
+        hasil.append('Tombol Mengerjakan dimatikan: mapel ini tampil "ditahan panitia" di portal sampai diaktifkan lagi.')
+    return hasil
+
+
+
+# ---- Klik "Mengerjakan" ----
+def nilai_klik(doc: Optional[Dict[str, Any]], sekarang: datetime) -> Dict[str, Any]:
+    """Penilaian satu klik "Mengerjakan" menurut WAKTU SERVER -> { hasil (ujian_info.HASIL_AKSES), pesan, status_http }.
+    Sah ('ok') hanya bila mapel dikenal, tautan soal sah, tombol aktif, dan jendela mapel sedang berlangsung."""
+    if not doc:
+        return {'hasil': 'tidak_dikenal', 'pesan': 'Mata pelajaran ini tidak ada di portal. Muat ulang portal ujian.', 'status_http': 404}
+    if not url_soal_aman(doc.get('url')):
+        return {'hasil': 'mapel_belum_siap', 'pesan': 'Tautan soal mata pelajaran ini belum disiapkan panitia. Laporkan ke pengawas ruang.',
+                'status_http': 403}
+    if doc.get('aktif') is False:
+        return {'hasil': 'mapel_ditahan', 'pesan': 'Tombol mata pelajaran ini sedang ditahan panitia. Tunggu arahan pengawas ruang.',
+                'status_http': 403}
+    status = status_jendela(doc.get('mulai_at'), doc.get('selesai_at'), sekarang)
+    if status == 'belum_dimulai':
+        jam = baca_waktu(doc['mulai_at']).astimezone(WIB_TZ).strftime('%H.%M')
+        return {'hasil': 'belum_mulai', 'pesan': f'Soal belum dapat dikerjakan. Dibuka pukul {jam} WIB.', 'status_http': 403}
+    if status != 'berlangsung':
+        return {'hasil': 'sudah_selesai' if status == 'ditutup' else 'mapel_belum_siap',
+                'pesan': 'Waktu pengerjaan mata pelajaran ini sudah ditutup.' if status == 'ditutup'
+                else 'Jadwal pengerjaan mata pelajaran ini belum diatur panitia.', 'status_http': 403}
+    return {'hasil': 'ok', 'pesan': None, 'status_http': 302}
+
+
+def ringkas_link_log(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Identitas link soal untuk log klik: tanpa tautan lengkap (hanya nama host)."""
+    if not doc:
+        return None
+    return {'id': doc.get('id'), 'jenjang': doc.get('jenjang'), 'mapel': doc.get('mapel'), 'url_host': host_url(doc.get('url'))}
+
+
+async def naikkan_klik(db, link_id: str, waktu: datetime) -> None:
+    """Naikkan cache penghitung satu link soal dalam SATU operasi atomik: jumlah_klik +1 ($inc) dan klik_terakhir_at
+    ($max — klik bersamaan yang selesai tidak berurutan tidak memundurkan waktu). Log tetap sumber kebenaran."""
+    await db[KOLEKSI_LINK_SOAL].update_one(
+        {'id': link_id}, {'$inc': {'jumlah_klik': 1}, '$max': {'klik_terakhir_at': waktu.astimezone(WIB_TZ).isoformat()}})
+
+
+def id_soal_layak(soal_id: Optional[str]) -> bool:
+    """Bentuk id link soal masuk akal (dicek sebelum query): uuid / id URL-safe ≤ 64 karakter."""
+    return bool(soal_id) and len(soal_id) <= 64 and re.fullmatch(r'[A-Za-z0-9_-]+', soal_id) is not None
+
+
+# ---- Agregasi klik dari jejak audit (sumber kebenaran) & bangun ulang cache ----
+LOG_KLIK_MAKS = 500000
+
+
+async def agregasi_klik(db, ujian_id: str) -> Dict[str, Dict[str, Any]]:
+    """Klik SAH per link soal satu ujian dari ujian_akses_log (KUERI_KLIK) -> { link_soal_id: { jumlah, terakhir } }.
+    Inilah sumber kebenaran penghitung; jumlah_klik di dokumen link soal hanya cache."""
+    hasil: Dict[str, Dict[str, Any]] = {}
+    log = await db[KOLEKSI_AKSES_LOG].find({'ujian_id': ujian_id, **KUERI_KLIK}, {'_id': 0, 'link_soal_id': 1, 'waktu': 1}).to_list(LOG_KLIK_MAKS)
+    for x in log:
+        lid = x.get('link_soal_id')
+        if not lid:
+            continue
+        h = hasil.setdefault(lid, {'jumlah': 0, 'terakhir': None})
+        h['jumlah'] += 1
+        w = x.get('waktu')
+        if w and (h['terakhir'] is None or baca_waktu(w) > baca_waktu(h['terakhir'])):
+            h['terakhir'] = w
+    return hasil
+
+
+async def bangun_ulang_klik(db, ujian_id: str, dry_run: bool = False, waktu: datetime = None) -> Dict[str, Any]:
+    """Hitung ulang cache jumlah_klik & klik_terakhir_at semua link soal satu ujian dari jejak audit. Idempoten; log tidak
+    diubah. Pembaruan bersyarat (cache tidak berubah sejak dibaca): klik yang masuk di tengah proses tidak pernah
+    tertimpa — baris itu dilaporkan di `berubah` dan cukup dijalankan ulang.
+    -> { diperiksa, diperbaiki, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }], berubah, waktu, dry_run }"""
+    agregat = await agregasi_klik(db, ujian_id)
+    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(1000)
+    selisih, berubah = [], []
+    for d in sorted(docs, key=lambda d: (d.get('jenjang') or 0, d.get('mapel') or '')):
+        a = agregat.get(d['id'], {'jumlah': 0, 'terakhir': None})
+        sebelum, terakhir_lama = int(d.get('jumlah_klik') or 0), d.get('klik_terakhir_at')
+        if (sebelum, terakhir_lama) == (a['jumlah'], a['terakhir']):
+            continue
+        baris = {'jenjang': d.get('jenjang'), 'mapel': d.get('mapel'), 'sebelum': sebelum, 'sesudah': a['jumlah'],
+                 'klik_terakhir_at': a['terakhir']}
+        if not dry_run:
+            r = await db[KOLEKSI_LINK_SOAL].update_one(
+                {'id': d['id'], 'jumlah_klik': d.get('jumlah_klik'), 'klik_terakhir_at': terakhir_lama},
+                {'$set': {'jumlah_klik': a['jumlah'], 'klik_terakhir_at': a['terakhir']}})
+            if not r.matched_count:
+                berubah.append({k: baris[k] for k in ('jenjang', 'mapel')})
+                continue
+        selisih.append(baris)
+    return {'diperiksa': len(docs), 'diperbaiki': len(selisih), 'selisih': selisih, 'berubah': berubah,
+            'waktu': (waktu or sekarang_wib()).isoformat(), 'dry_run': dry_run}
+
+
+# ---- Intensitas klik untuk admin ----
+def susun_intensitas(log: Iterable[Dict[str, Any]], docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                     jadwal: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    """Intensitas klik SAH per jenjang × mapel baku dari baris log (sudah tersaring KUERI_KLIK + rentang tanggal) —
+    kontrak GET /ujian/{id}/link-soal/intensitas (frontend/src/lib/ujianLinkSoal.js):
+    { hari: [tanggal WIB yang punya klik, urut], ringkasan: { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at },
+      intensitas: [{ link_soal_id, jenjang, mapel, url_host, mulai_at, selesai_at, siap, jumlah_klik, klik_terakhir_at,
+                     harian: [{ tanggal, jumlah }] }] }. Tanpa tautan soal lengkap."""
+    per_link: Dict[str, Dict[str, Any]] = {}
+    for x in log or []:
+        lid, w = x.get('link_soal_id'), baca_waktu(x.get('waktu'))
+        if not lid or not w:
+            continue
+        p = per_link.setdefault(lid, {'jumlah': 0, 'terakhir': None, 'harian': {}})
+        p['jumlah'] += 1
+        tgl = w.astimezone(WIB_TZ).date().isoformat()
+        p['harian'][tgl] = p['harian'].get(tgl, 0) + 1
+        if p['terakhir'] is None or w > baca_waktu(p['terakhir']):
+            p['terakhir'] = x['waktu']
+    peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
+    jadwal = list(jadwal or [])
+    intensitas = []
+    for j in JENJANG_UJIAN:
+        daftar = mapel_per_jenjang.get(str(j)) or []
+        dari_jadwal = jendela_jadwal(jadwal, j, daftar)
+        for m in daftar:
+            d = peta.get((j, m['kode'])) or {}
+            jd = dari_jadwal.get(m['kode']) or {}
+            p = per_link.get(d.get('id')) or {'jumlah': 0, 'terakhir': None, 'harian': {}}
+            intensitas.append({
+                'link_soal_id': d.get('id'), 'jenjang': j, 'mapel': m['kode'], 'url_host': host_url(d.get('url')) if d.get('url') else '',
+                'mulai_at': d.get('mulai_at') or jd.get('mulai_at'), 'selesai_at': d.get('selesai_at') or jd.get('selesai_at'),
+                'siap': link_siap(d or None), 'jumlah_klik': p['jumlah'], 'klik_terakhir_at': p['terakhir'],
+                'harian': [{'tanggal': t, 'jumlah': n} for t, n in sorted(p['harian'].items())],
+            })
+    terakhir = [x['klik_terakhir_at'] for x in intensitas if x['klik_terakhir_at']]
+    return {
+        'hari': sorted({h['tanggal'] for x in intensitas for h in x['harian']}),
+        'ringkasan': {'total_klik': sum(x['jumlah_klik'] for x in intensitas),
+                      'mapel_diklik': sum(1 for x in intensitas if x['jumlah_klik']),
+                      'mapel_siap': sum(1 for x in intensitas if x['siap']),
+                      'klik_terakhir_at': max(terakhir, key=baca_waktu) if terakhir else None},
+        'intensitas': intensitas,
+    }
+
+
+FIELD_RINCIAN_KLIK = ('id', 'waktu', 'ip', 'perangkat', 'sesi')
+
+
+def rincian_klik(log: Iterable[Dict[str, Any]], batas: int) -> Dict[str, Any]:
+    """Rincian klik SAH satu link soal (baris log terbaru dulu) -> { total, klik (≤ batas, hanya FIELD_RINCIAN_KLIK),
+    per_ip, per_perangkat } — per_ip/per_perangkat dari SELURUH klik, terbanyak dulu (seri: urut abjad)."""
+    daftar = list(log or [])
+
+    def per(kunci):
+        hitung: Dict[Any, int] = {}
+        for x in daftar:
+            hitung[x.get(kunci)] = hitung.get(x.get(kunci), 0) + 1
+        return [{kunci: k, 'jumlah': n} for k, n in sorted(hitung.items(), key=lambda kv: (-kv[1], str(kv[0])))]
+    return {'total': len(daftar), 'klik': [{k: x.get(k) for k in FIELD_RINCIAN_KLIK} for x in daftar[:batas]],
+            'per_ip': per('ip'), 'per_perangkat': per('perangkat')}
