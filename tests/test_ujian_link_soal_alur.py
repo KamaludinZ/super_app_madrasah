@@ -124,3 +124,42 @@ def test_pemantau_melihat_tanpa_alamat_soal(klien, uid, peran):
 def test_bukan_pemantau_ditolak(klien, uid, peran):
     assert klien(uid, peran, 'GET', URL).status_code == 403
     assert simpan(klien, 7, 'matematika', {'url': 'https://x.id'}, uid=uid, peran=peran).status_code == 403
+
+
+def test_balapan_dua_admin_baris_baru_ditolak_indeks_unik(klien, monkeypatch):
+    """Dua admin menyimpan mapel yang belum pernah diatur pada saat bersamaan: keduanya lolos cek versi (None), tetapi
+    indeks unik (ujian_id, jenjang, mapel) menolak sisipan kedua -> 409, bukan dokumen ganda atau timpaan diam-diam."""
+    from pymongo.errors import DuplicateKeyError
+    koleksi = klien.db.ujian_link_soal
+
+    async def tolak(_doc):
+        raise DuplicateKeyError('E11000 duplicate key error: link_soal_unik_mapel')
+    monkeypatch.setattr(koleksi, 'insert_one', tolak)
+    r = simpan(klien, 7, 'matematika', {'url': 'https://cbt.id/b'})
+    assert r.status_code == 409 and 'diubah admin lain' in r.json()['detail']
+    assert not koleksi.docs
+
+
+def test_balapan_dua_admin_ubah_bersyarat_versi(klien, monkeypatch):
+    """Admin B menyimpan di antara pembacaan & penulisan admin A: update bersyarat versi tidak cocok -> 409 untuk A,
+    isian B tetap utuh."""
+    l1 = simpan(klien, 7, 'matematika', {'url': 'https://cbt.id/a'}).json()['link']
+    koleksi = klien.db.ujian_link_soal
+    asli = koleksi.update_one
+
+    async def sela(q, u, upsert=False):
+        koleksi.docs[0].update({'url': 'https://cbt.id/dari-admin-b', 'diperbarui_pada': 'versi-admin-b'})  # B lebih dulu
+        return await asli(q, u, upsert=upsert)
+    monkeypatch.setattr(koleksi, 'update_one', sela)
+    r = simpan(klien, 7, 'matematika', {'url': 'https://cbt.id/dari-admin-a'}, versi=l1['versi'])
+    assert r.status_code == 409
+    assert (koleksi.docs[0]['url'], koleksi.docs[0]['diperbarui_pada']) == ('https://cbt.id/dari-admin-b', 'versi-admin-b')
+
+
+def test_versi_berganti_tiap_simpan(klien):
+    versi = [None]
+    for i in range(3):
+        r = simpan(klien, 9, 'ipa', {'url': f'https://cbt.id/{i}'}, versi=versi[-1])
+        assert r.status_code == 200, r.text
+        versi.append(r.json()['link']['versi'])
+    assert len(set(versi)) == 4
