@@ -90,7 +90,7 @@ function JumlahKlik({ n, aktif, tampilNol = false, testId }) {
  * dengan alasannya; mapel yang tautan soalnya belum disiapkan tidak diberi tombol. Mode contoh (`tiruan`) mencatat
  * klik ke pencatat tiruan dan membuka halaman soal contoh.
  */
-function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwarsa, onKlik, lebar = false, testId }) {
+function TombolKerjakan({ soal, jenjang, token, sesi, tiruan, kiniServer, onKedaluwarsa, onKlik, lebar = false, testId }) {
   if (!soal.siap) return null;
   const n = normalKlik(soal.jumlah_klik);
   if (!bolehKerjakan(soal)) {
@@ -133,7 +133,7 @@ function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwars
   return (
     <Button asChild size="sm" className={`gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d] ${lebar ? 'h-10 w-full text-sm sm:h-9 sm:w-auto sm:text-xs' : 'h-9'}`}
       data-testid={testId} data-aktif="ya">
-      <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
+      <a href={urlKerjakan(token, soal.id, sesi)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
         aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)${n ? `, sudah diklik ${n} kali` : ''}`}>
         <ExternalLink aria-hidden="true" /> Mengerjakan
         <JumlahKlik n={n} aktif tampilNol testId={`${testId}-klik`} />
@@ -176,7 +176,7 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
   );
 }
 
-function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKedaluwarsa, onKlik }) {
+function BarisSoal({ soal, jenjang, token, sesi, tiruan, sekarangMs, kiniServer, onKedaluwarsa, onKlik }) {
   const redup = soal.status === 'ditutup' || !soal.siap;
   const berlangsung = soal.siap && soal.status === 'berlangsung';
   // Di layar sempit tombol aktif turun ke baris sendiri selebar kolom isi agar mudah diketuk; tombol nonaktif tetap ringkas.
@@ -192,14 +192,14 @@ function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKed
         <KeteranganStatus soal={soal} sekarangMs={sekarangMs} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
       <div className={berlangsung ? 'w-full pl-[5.5rem] sm:w-auto sm:shrink-0 sm:pl-0' : 'shrink-0'}>
-        <TombolKerjakan soal={soal} jenjang={jenjang} token={token} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa}
+        <TombolKerjakan soal={soal} jenjang={jenjang} token={token} sesi={sesi} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa}
           onKlik={onKlik} lebar={berlangsung} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
       </div>
     </li>
   );
 }
 
-function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, kiniServer, onKedaluwarsa, onKlik }) {
+function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, sesi, tiruan, kiniServer, onKedaluwarsa, onKlik }) {
   const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
@@ -228,7 +228,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, 
                 {lewat && <span className="text-[11px] text-slate-500">Sudah lewat</span>}
               </div>
               <ul className="divide-y divide-slate-100">
-                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} sekarangMs={sekarangMs}
+                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} sesi={sesi} tiruan={tiruan} sekarangMs={sekarangMs}
                   kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} onKlik={onKlik} />)}
               </ul>
             </li>
@@ -263,7 +263,7 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, 
  * tercatat (sementara = perkiraan klien sebelum server mengonfirmasi).
  */
 export default function DaftarSoalPortal({
-  soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false, kiniServer, onKedaluwarsa, onKlik,
+  soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, sesi = null, tiruan = false, kiniServer, onKedaluwarsa, onKlik,
 }) {
   const hariIni = useMemo(() => new Date(sekarangMs).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), [sekarangMs]);
   const lencana = (j) => {
@@ -274,7 +274,7 @@ export default function DaftarSoalPortal({
   return (
     <BagianInfo id="portal" Ikon={MonitorPlay} judul="Mata Pelajaran Ujian" keterangan="Semua jam dalam WIB menurut jam server madrasah. Pilih kelasmu.">
       <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="portal" lencana={lencana}
-        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} tiruan={tiruan}
+        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} sesi={sesi} tiruan={tiruan}
           kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} onKlik={onKlik} />} />
     </BagianInfo>
   );

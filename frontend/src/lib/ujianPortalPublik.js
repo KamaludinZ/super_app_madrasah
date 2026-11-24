@@ -30,7 +30,7 @@
  *        jadwal_berikutnya: { tanggal, soal: [{ jenjang, mapel: kode, mulai_at, selesai_at }] } | null }
  *        (jadwal_berikutnya = hari ujian terdekat yang belum lewat beserta mapel pertamanya tiap jenjang; tanpa tautan soal.
  *         null bila masa ujian sudah berakhir atau jadwal belum disusun)
- *   GET /publik/portal-ujian/{token}/kerjakan/{soal_id}
+ *   GET /publik/portal-ujian/{token}/kerjakan/{soal_id}[?sesi=<id pembukaan halaman>]
  *     -> 302 ke tautan soal eksternal (Referrer-Policy: no-referrer). Server memeriksa token, jendela portal, dan jendela
  *        mapel menurut waktu server; klik sah dicatat (ujian_akses_log aksi=klik_mengerjakan) dan jumlah_klik dinaikkan.
  *        Di luar jendela -> 403 seperti di atas.
@@ -50,7 +50,7 @@ const BASIS_API = `${process.env.REACT_APP_BACKEND_URL || ''}/api`;
  * Alamat tombol "Mengerjakan" satu mapel: rute kerjakan server yang memeriksa jendela waktu, mencatat klik sah, lalu
  * mengalihkan (302) ke tautan soal eksternal. Tautan soal sendiri tidak pernah ada di halaman.
  */
-export const urlKerjakan = (token, soalId) => `${BASIS_API}/publik/portal-ujian/${encodeURIComponent(token)}/kerjakan/${encodeURIComponent(soalId)}`;
+export const urlKerjakan = (token, soalId, sesi = null) => `${BASIS_API}/publik/portal-ujian/${encodeURIComponent(token)}/kerjakan/${encodeURIComponent(soalId)}${sesi ? `?sesi=${encodeURIComponent(sesi)}` : ''}`;
 
 /** Tombol "Mengerjakan" boleh ditekan: tautan soal sudah disiapkan dan mapel sedang berlangsung menurut jam server. */
 export const bolehKerjakan = (soal) => !!soal?.siap && soal.status === 'berlangsung';
