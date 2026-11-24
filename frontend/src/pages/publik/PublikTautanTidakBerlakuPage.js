@@ -6,6 +6,7 @@ import TautanTidakBerlaku from '@/components/ujian/publik/info/TautanTidakBerlak
 // Judul & kontak menurut jalur yang dicoba dibuka.
 function konteks(path) {
   if (path.startsWith('/publik/monitoring-ujian')) return { judul: 'Monitoring Pengumpulan Soal', kontak: 'panitia ujian atau admin madrasah' };
+  if (path.startsWith('/publik/portal-ujian')) return { judul: 'Portal Ujian', kontak: 'pengawas ruang atau panitia ujian' };
   if (path.startsWith('/publik/info-ujian')) return { judul: 'Informasi Ujian', kontak: 'wali kelas atau panitia ujian' };
   return { judul: 'Tautan Publik Madrasah', kontak: 'pengirim tautan atau panitia ujian' };
 }
