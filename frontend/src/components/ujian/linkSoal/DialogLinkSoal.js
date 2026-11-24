@@ -63,6 +63,7 @@ export default function DialogLinkSoal({ ujianId, sasaran, onTutup, onTersimpan,
       toast.success(`Link soal ${sasaran.nama} ${labelJenjang(sasaran.jenjang)} disimpan${r.tiruan ? ' (contoh)' : ''}`, {
         description: r.link?.siap ? 'Tombol Mengerjakan tampil di portal sesuai jendela waktunya.' : 'Mapel ditandai belum siap di portal sampai tautan diisi dan diaktifkan.',
       });
+      (r.peringatan || []).forEach((p) => toast.warning(p)); // peringatan server (tidak menghalangi simpan)
       onTersimpan?.(r.link, r.tiruan);
     } catch (e) {
       setGalatSimpan({ pesan: pesanGalat(e, 'Gagal menyimpan link soal.'), bentrok: e?.response?.status === 409 });

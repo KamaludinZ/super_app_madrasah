@@ -9,7 +9,8 @@
  *     -> { ujian, boleh_ubah, tautan_portal: Tautan | null (lihat ujianTautanPublik.js),
  *          mapel: { '7': [{ kode, nama }], '8': [...], '9': [...] },   (mapel baku aktif per jenjang)
  *          link: [LinkSoal] }   (satu entri per jenjang × mapel baku aktif; yang belum diatur: id null, url '')
- *   PUT /ujian/{ujian_id}/link-soal/{jenjang}/{mapel} { url, mulai_at, selesai_at, aktif, versi } -> { link: LinkSoal }
+ *   PUT /ujian/{ujian_id}/link-soal/{jenjang}/{mapel} { url, mulai_at, selesai_at, aktif, versi }
+ *     -> { link: LinkSoal, peringatan: [teks] }   (peringatan: jendela di luar masa ujian / melebar dari jadwal / ditahan)
  *        (admin; menimpa — satu baris per jenjang+mapel. `versi` = link.versi yang dimuat (null bila belum pernah
  *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai -> pesan)
  *   POST /ujian/{ujian_id}/link-soal/bangun-ulang-klik

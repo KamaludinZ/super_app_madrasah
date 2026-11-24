@@ -381,3 +381,31 @@ def cek_masa_portal(tautan: Dict[str, Any], ujian: Optional[Dict[str, Any]], sek
     { berlaku, alasan, pesan, mulai_at, selesai_at } dengan mulai_at/selesai_at = jendela efektif."""
     from ujian_info import cek_tautan
     return cek_tautan({**tautan, **jendela_portal(tautan, ujian)}, sekarang)
+
+
+# ---- Panel admin ----
+def ringkas_tautan_portal(tautan: Optional[Dict[str, Any]], ujian: Optional[Dict[str, Any]], sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """ringkas_tautan untuk tautan portal, dengan status berlaku menurut jendela EFEKTIF (batas kosong = masa ujian) —
+    sama dengan yang diperiksa rute publik portal."""
+    from ujian_info import ringkas_tautan
+    r = ringkas_tautan(tautan, sekarang)
+    if not r:
+        return None
+    cek = cek_masa_portal(tautan, ujian, sekarang)
+    return {**r, 'berlaku': cek['berlaku'], 'alasan': cek['alasan'], 'pesan': cek['pesan']}
+
+
+def peringatan_link(isi: 'LinkSoalIn', ujian: Optional[Dict[str, Any]], jadwal: Optional[Dict[str, Any]]) -> List[str]:
+    """Peringatan (tidak menghalangi simpan) atas jendela yang kemungkinan tidak disengaja."""
+    hasil = []
+    u = ujian or {}
+    mulai, selesai = baca_waktu(isi.mulai_at), baca_waktu(isi.selesai_at)
+    masa = jendela_portal({}, u)
+    if masa['mulai_at'] and masa['selesai_at'] and (mulai < baca_waktu(masa['mulai_at']) or selesai > baca_waktu(masa['selesai_at'])):
+        hasil.append(f"Jendela pengerjaan berada di luar masa ujian ({u.get('mulai')} s.d. {u.get('selesai')}) — portal terkunci "
+                     'di luar masa ujian, sehingga tombol tidak dapat dipakai pada waktu itu.')
+    if jadwal and (mulai < baca_waktu(jadwal['mulai_at']) or selesai > baca_waktu(jadwal['selesai_at'])):
+        hasil.append('Jendela pengerjaan melebar dari sesi jadwal ujian mapel ini. Pastikan memang disengaja (mis. ujian susulan).')
+    if isi.url and not isi.aktif:
+        hasil.append('Tombol Mengerjakan dimatikan: mapel ini tampil "ditahan panitia" di portal sampai diaktifkan lagi.')
+    return hasil
