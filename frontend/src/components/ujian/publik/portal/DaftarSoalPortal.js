@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import {
-  STATUS_SOAL, bolehKerjakan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, urlKerjakan,
+  STATUS_SOAL, bolehKerjakan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, statusSoal, urlKerjakan,
 } from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
@@ -74,7 +74,7 @@ function KeteranganStatus({ soal, sekarangMs, testId }) {
  * Di luar jendela tombol dinonaktifkan dengan alasannya. Mapel yang tautan soalnya belum disiapkan tidak diberi tombol.
  * Mode contoh (`tiruan`) tidak membuka apa pun: belum ada tautan soal sungguhan.
  */
-function TombolKerjakan({ soal, token, tiruan, testId }) {
+function TombolKerjakan({ soal, token, tiruan, kiniServer, onKedaluwarsa, testId }) {
   if (!soal.siap) return null;
   if (!bolehKerjakan(soal)) {
     const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Belum dimulai — dibuka ${jam(soal.mulai_at)} WIB`;
@@ -85,14 +85,23 @@ function TombolKerjakan({ soal, token, tiruan, testId }) {
       </Button>
     );
   }
-  const klikContoh = (e) => {
+  const klik = (e) => {
+    // Detak jam di tab latar bisa tertahan peramban: periksa ulang dengan jam server saat ini sebelum membuka soal.
+    // (Server tetap memeriksa jendela waktu pada rute kerjakan.)
+    const kini = kiniServer ? kiniServer() : Date.now();
+    if (statusSoal(soal, kini) !== 'berlangsung') {
+      e.preventDefault();
+      toast.error(statusSoal(soal, kini) === 'ditutup' ? `Waktu pengerjaan ${soal.nama} sudah ditutup.` : `${soal.nama} belum dimulai.`);
+      onKedaluwarsa?.();
+      return;
+    }
     if (!tiruan) return;
     e.preventDefault();
     toast.info('Mode contoh: tautan soal sungguhan terbuka setelah server portal siap.');
   };
   return (
     <Button asChild size="sm" className="h-9 gap-1.5 bg-[#006837] px-3 text-white hover:bg-[#00552d]" data-testid={testId} data-aktif="ya">
-      <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klikContoh}
+      <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
         aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)`}>
         <ExternalLink aria-hidden="true" /> Mengerjakan
       </a>
@@ -134,7 +143,7 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
   );
 }
 
-function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs }) {
+function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs, kiniServer, onKedaluwarsa }) {
   const redup = soal.status === 'ditutup' || !soal.siap;
   const berlangsung = soal.siap && soal.status === 'berlangsung';
   return (
@@ -149,13 +158,13 @@ function BarisSoal({ soal, jenjang, token, tiruan, sekarangMs }) {
         <KeteranganStatus soal={soal} sekarangMs={sekarangMs} testId={`portal-${jenjang}-${soal.mapel}-status`} />
       </div>
       <div className="shrink-0">
-        <TombolKerjakan soal={soal} token={token} tiruan={tiruan} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
+        <TombolKerjakan soal={soal} token={token} tiruan={tiruan} kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} testId={`portal-${jenjang}-${soal.mapel}-kerjakan`} />
       </div>
     </li>
   );
 }
 
-function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }) {
+function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan, kiniServer, onKedaluwarsa }) {
   const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
@@ -184,7 +193,8 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
                 {lewat && <span className="text-[11px] text-slate-500">Sudah lewat</span>}
               </div>
               <ul className="divide-y divide-slate-100">
-                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} sekarangMs={sekarangMs} />)}
+                {h.soal.map((s) => <BarisSoal key={s.id} soal={s} jenjang={jenjang} token={token} tiruan={tiruan} sekarangMs={sekarangMs}
+                  kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} />)}
               </ul>
             </li>
           );
@@ -213,8 +223,12 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
  * sesi & jam, nama mapel, keterangan status, dan tombol "Mengerjakan" (aktif hanya saat mapel berlangsung). Tiap tab
  * hanya memuat mapel baku jenjang itu; mapel yang sedang berlangsung (atau berikutnya) disorot di atas. Status dihitung
  * dari `sekarangMs` = waktu server berjalan (useJamServer), bukan jam perangkat. `token` = token portal (rute kerjakan).
+ * `kiniServer()` = jam server saat ini (dipakai memeriksa ulang saat tombol ditekan); `onKedaluwarsa()` = muat ulang
+ * bila tombol ternyata sudah tidak berlaku.
  */
-export default function DaftarSoalPortal({ soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false }) {
+export default function DaftarSoalPortal({
+  soal, mapel, jenjang, onUbahJenjang, sekarangMs, token, tiruan = false, kiniServer, onKedaluwarsa,
+}) {
   const hariIni = useMemo(() => new Date(sekarangMs).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), [sekarangMs]);
   const lencana = (j) => {
     const r = ringkasPortal(soalJenjang(soal, j, mapelUntuk(mapel, j), sekarangMs).hari);
@@ -224,7 +238,8 @@ export default function DaftarSoalPortal({ soal, mapel, jenjang, onUbahJenjang, 
   return (
     <BagianInfo id="portal" Ikon={MonitorPlay} judul="Mata Pelajaran Ujian" keterangan="Semua jam dalam WIB menurut jam server madrasah. Pilih kelasmu.">
       <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="portal" lencana={lencana}
-        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} tiruan={tiruan} />} />
+        isi={(j) => <IsiJenjang soal={soal} mapel={mapel} jenjang={j} sekarangMs={sekarangMs} hariIni={hariIni} token={token} tiruan={tiruan}
+          kiniServer={kiniServer} onKedaluwarsa={onKedaluwarsa} />} />
     </BagianInfo>
   );
 }

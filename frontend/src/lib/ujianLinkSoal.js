@@ -43,6 +43,38 @@ export function urlSoalAman(url) {
   return t;
 }
 
+/**
+ * Saran perbaikan tautan yang ditempel tanpa skema ("cbt.madrasah.sch.id/ujian") -> versi https:// yang sah, atau null
+ * bila tautan sudah sah / tidak dapat diperbaiki dengan menambah skema.
+ */
+export function saranUrlSoal(url) {
+  const t = String(url || '').trim();
+  if (!t || urlSoalAman(t) || /^[a-z][a-z0-9+.-]*:/i.test(t)) return null; // sudah sah, atau ber-skema lain (javascript:, ftp:, …)
+  const calon = `https://${t.replace(/^\/+/, '')}`;
+  return urlSoalAman(calon) && hostUrl(calon).includes('.') ? calon : null;
+}
+
+/** Tautan sah tetapi tanpa enkripsi (http://) — boleh, hanya diberi peringatan. */
+export const urlTanpaEnkripsi = (url) => !!urlSoalAman(url) && /^http:/i.test(String(url).trim());
+
+/**
+ * Buka tautan soal di tab baru tanpa referrer dan tanpa akses balik ke halaman ini (noopener) — untuk menguji tautan
+ * dari panel admin. Tautan tidak sah tidak dibuka. -> true bila dibuka.
+ */
+export function ujiTautanSoal(url) {
+  const aman = urlSoalAman(url);
+  if (!aman) return false;
+  const a = document.createElement('a');
+  a.href = aman;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.referrerPolicy = 'no-referrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return true;
+}
+
 /** Nama host untuk ditampilkan ringkas ("quiz.madrasah.sch.id"); '' bila tidak terbaca. */
 export function hostUrl(url) {
   try { return new URL(String(url || '').trim()).hostname.replace(/^www\./, ''); } catch { return ''; }

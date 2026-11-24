@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, CalendarClock, Link2, Loader2, RotateCcw, Save } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ExternalLink, Link2, Loader2, RotateCcw, Save, ShieldAlert, Wand2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -13,7 +13,8 @@ import { labelJenjang } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
 import { keInputWaktu } from '@/lib/ujianTautanPublik';
 import {
-  URL_SOAL_MAKS, galatIsianLink, isianDariLink, isianLinkSama, peringatanJendela, simpanLinkSoal,
+  URL_SOAL_MAKS, galatIsianLink, isianDariLink, isianLinkSama, peringatanJendela, saranUrlSoal, simpanLinkSoal, ujiTautanSoal,
+  urlSoalAman, urlTanpaEnkripsi,
 } from '@/lib/ujianLinkSoal';
 
 const teksJadwal = (j) => (j
@@ -70,6 +71,8 @@ export default function DialogLinkSoal({ ujianId, sasaran, onTutup, onTersimpan,
     }
   };
 
+  const saran = saranUrlSoal(isian.url);
+  const urlSah = urlSoalAman(isian.url);
   const tampilGalat = (f) => (disentuh || (f === 'url' && isian.url) || (f !== 'url' && isian[f]) ? galat[f] : null);
 
   return (
@@ -84,13 +87,33 @@ export default function DialogLinkSoal({ ujianId, sasaran, onTutup, onTersimpan,
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="link-url">Tautan soal</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="link-url">Tautan soal</Label>
+              {urlSah && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => ujiTautanSoal(isian.url)} className="h-7 gap-1.5 px-2 text-xs text-[#006837]"
+                  title="Buka di tab baru tanpa referrer" data-testid="uji-tautan-soal">
+                  <ExternalLink className="h-3.5 w-3.5" /> Uji tautan
+                </Button>
+              )}
+            </div>
             <Input id="link-url" type="url" inputMode="url" value={isian.url} onChange={ubah('url')} maxLength={URL_SOAL_MAKS}
+              onBlur={() => setIsian((s) => ({ ...s, url: String(s.url || '').trim() }))}
               placeholder="https://…" autoComplete="off" spellCheck={false} aria-invalid={!!tampilGalat('url')}
               aria-describedby={tampilGalat('url') ? 'galat-link-url' : 'bantuan-link-url'} data-testid="isian-link-url" />
             {tampilGalat('url')
               ? <GalatField pesan={tampilGalat('url')} id="galat-link-url" />
               : <p id="bantuan-link-url" className="text-xs text-slate-500">Hanya http:// atau https://. Kosongkan bila soal belum siap — mapel ditandai belum siap di portal.</p>}
+            {saran && (
+              <button type="button" onClick={() => { setIsian((s) => ({ ...s, url: saran })); setGalatSimpan(null); }}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-left text-xs text-[#006837] hover:bg-emerald-100" data-testid="saran-url-soal">
+                <Wand2 className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Pakai <span className="font-mono">{saran}</span></span>
+              </button>
+            )}
+            {urlTanpaEnkripsi(isian.url) && (
+              <p className="flex items-start gap-1.5 text-xs text-amber-700" data-testid="peringatan-http">
+                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Tautan memakai http:// tanpa enkripsi. Gunakan https:// bila aplikasi ujian mendukungnya.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2 rounded-lg border border-slate-200 p-3">

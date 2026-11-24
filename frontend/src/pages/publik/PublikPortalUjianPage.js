@@ -163,7 +163,7 @@ export default function PublikPortalUjianPage() {
       </div>
 
       <DaftarSoalPortal soal={data.soal} mapel={data.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang} sekarangMs={sekarangMs}
-        token={token} tiruan={data.tiruan} />
+        token={token} tiruan={data.tiruan} kiniServer={() => Date.now() + selisih} onKedaluwarsa={() => muat(true)} />
 
       <p className="flex items-start gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600" data-testid="portal-catatan">
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
