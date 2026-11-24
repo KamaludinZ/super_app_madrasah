@@ -16,6 +16,13 @@
  *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }], link: [LinkSoal] }
  *        (admin; jumlah_klik & klik_terakhir_at tiap link soal dihitung ulang dari ujian_akses_log aksi=klik_mengerjakan —
  *         log adalah sumber kebenaran, angka pada dokumen hanya cache. Log tidak diubah; aman diulang.)
+ *   GET /ujian/{ujian_id}/link-soal/intensitas[?dari=YYYY-MM-DD&sampai=YYYY-MM-DD]   (admin & pemantau)
+ *     -> { rentang: { dari, sampai }, hari: ['YYYY-MM-DD', …] (hari yang tercakup, urut),
+ *          ringkasan: { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at },
+ *          intensitas: [{ link_soal_id, jenjang, mapel, url_host, mulai_at, selesai_at, siap,
+ *                         jumlah_klik, klik_terakhir_at, harian: [{ tanggal, jumlah }] }] }
+ *        (diagregasi dari ujian_akses_log aksi=klik_mengerjakan per link_soal_id dalam rentang tanggal WIB — BUKAN dari
+ *         cache jumlah_klik — sehingga tetap dapat ditelusuri setelah ujian selesai; satu entri per jenjang × mapel baku)
  *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode baku, url (admin saja; pemantau: '' dan url_host), url_host,
  *                mulai_at, selesai_at, aktif, siap (url terisi & aktif),
  *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at } | null,   (sesi jadwal ujian mapel ini = nilai awal)
@@ -246,6 +253,58 @@ export const bangunUlangKlik = (ujianId) => denganTiruan(
       diperiksa: daftar.filter((l) => l.id).length, diperbaiki: selisih.length, selisih, waktu: new Date().toISOString(),
       link: daftar.map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
     };
+  },
+);
+
+// ---- Intensitas klik (panel admin) ----
+
+/** Ringkasan intensitas dari daftar entri -> { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at }. */
+export function ringkasIntensitas(intensitas) {
+  const daftar = intensitas || [];
+  const terakhir = daftar.map((x) => x.klik_terakhir_at).filter(Boolean).sort().pop() || null;
+  return {
+    total_klik: daftar.reduce((n, x) => n + (Number(x.jumlah_klik) || 0), 0),
+    mapel_diklik: daftar.filter((x) => Number(x.jumlah_klik) > 0).length,
+    mapel_siap: daftar.filter((x) => x.siap).length,
+    klik_terakhir_at: terakhir,
+  };
+}
+
+/** Entri intensitas satu jenjang dalam urutan mapel baku: [{ nomor, kode, nama, data: Entri | null }]. */
+export function intensitasJenjang(intensitas, mapel, jenjang) {
+  const peta = new Map((intensitas || []).filter((x) => Number(x.jenjang) === Number(jenjang)).map((x) => [x.mapel, x]));
+  return mapelUntuk(mapel, jenjang).map((m, i) => ({ nomor: i + 1, kode: m.kode, nama: m.nama, data: peta.get(m.kode) || null }));
+}
+
+// Sebaran harian contoh: klik jatuh pada hari sesi mapel itu; sebagian kecil pada hari ujian berikutnya (susulan).
+function harianContoh(l) {
+  const n = klikLogContoh(l);
+  if (!n || !l.jadwal) return [];
+  const hariSusulan = geserHariUjian(l.jadwal.tanggal, 1);
+  const susulan = l.jumlah_klik % 3 === 0 && hariSusulan <= hariIniWIB() ? Math.min(3, Math.floor(n / 4)) : 0;
+  const hasil = [{ tanggal: l.jadwal.tanggal, jumlah: n - susulan }];
+  if (susulan) hasil.push({ tanggal: hariSusulan, jumlah: susulan });
+  return hasil;
+}
+
+/** Intensitas klik "Mengerjakan" per jenjang per mapel (dari jejak audit) -> { rentang, hari, ringkasan, intensitas, tiruan }. */
+export const muatIntensitasKlik = (ujianId, { dari = '', sampai = '' } = {}) => denganTiruan(
+  async () => (await api.get(`/ujian/${ujianId}/link-soal/intensitas`, { params: { ...(dari ? { dari } : {}), ...(sampai ? { sampai } : {}) } })).data,
+  () => {
+    const dalam = (t) => (!dari || t >= dari) && (!sampai || t <= sampai);
+    const intensitas = linkContoh(ujianId).map((l) => {
+      const harian = harianContoh(l).filter((h) => dalam(h.tanggal));
+      const jumlah = harian.reduce((n, h) => n + h.jumlah, 0);
+      const akhir = harian.length ? harian[harian.length - 1].tanggal : null;
+      return {
+        link_soal_id: l.id, jenjang: l.jenjang, mapel: l.mapel, url_host: l.url_host, mulai_at: l.mulai_at, selesai_at: l.selesai_at, siap: l.siap,
+        jumlah_klik: jumlah,
+        klik_terakhir_at: !jumlah ? null : (akhir === l.jadwal?.tanggal ? l.klik_terakhir_at : `${akhir}T08:05:00+07:00`),
+        harian,
+      };
+    });
+    const hari = [...new Set(intensitas.flatMap((x) => x.harian.map((h) => h.tanggal)))].sort();
+    return { rentang: { dari: dari || null, sampai: sampai || null }, hari, ringkasan: ringkasIntensitas(intensitas), intensitas };
   },
 );
 

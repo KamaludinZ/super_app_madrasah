@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  AlertTriangle, ArrowLeft, CircleDashed, ExternalLink, Info, Link2, Loader2, MonitorPlay, Pencil, PowerOff, RefreshCw,
+  Activity, AlertTriangle, ArrowLeft, CircleDashed, ExternalLink, Info, Link2, Loader2, MonitorPlay, Pencil, PowerOff, RefreshCw, Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -12,6 +12,7 @@ import { TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import { LencanaStatusTautan } from '@/components/ujian/tautan/KartuTautanPublik';
 import DialogLinkSoal from '@/components/ujian/linkSoal/DialogLinkSoal';
 import PanelBangunUlangKlik from '@/components/ujian/linkSoal/PanelBangunUlangKlik';
+import PanelIntensitasKlik from '@/components/ujian/linkSoal/PanelIntensitasKlik';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { JENJANG_UJIAN, labelJenjang } from '@/lib/mapelUjian';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
@@ -163,11 +164,31 @@ function IsiJenjang({ data, jenjang, bolehUbah, onAtur }) {
 
 const jenjangSah = (v) => (JENJANG_UJIAN.includes(Number(v)) ? Number(v) : JENJANG_UJIAN[0]);
 
+// Dua tampilan menu Link Soal (?tampilan=): pengaturan tautan & jendela, atau intensitas klik dari jejak audit.
+const TAMPILAN = [
+  { kode: 'pengaturan', label: 'Pengaturan', Ikon: Settings2 },
+  { kode: 'intensitas', label: 'Intensitas klik', Ikon: Activity },
+];
+
+function PilihTampilan({ nilai, onUbah }) {
+  return (
+    <div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Tampilan" data-testid="pilih-tampilan-link">
+      {TAMPILAN.map(({ kode, label, Ikon }) => (
+        <button key={kode} type="button" role="tab" aria-selected={nilai === kode} onClick={() => onUbah(kode)} data-testid={`tampilan-${kode}`}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[#006837] ${nilai === kode ? 'bg-white text-[#006837] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+          <Ikon className="h-3.5 w-3.5" /> {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Link Soal (/ujian/link-soal?ujian=<id>&kelas=7|8|9): tautan soal eksternal & jendela waktu tombol "Mengerjakan" per
+ * Link Soal (/ujian/link-soal?ujian=<id>&kelas=7|8|9[&tampilan=intensitas]): tautan soal eksternal & jendela waktu tombol "Mengerjakan" per
  * jenjang per mapel baku untuk Portal Ujian siswa. Jendela awalnya mengikuti jadwal ujian; admin boleh
  * mempersempitnya. Tiap baris disimpan sendiri lewat dialog dengan cek versi agar dua admin tidak saling menimpa.
- * Kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat tanpa alamat soal lengkap.
+ * Kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat tanpa alamat soal lengkap. Tampilan
+ * "Intensitas klik" menunjukkan jumlah & waktu klik Mengerjakan per mapel dari jejak audit.
  */
 export default function UjianLinkSoalPage() {
   const [params, setParams] = useSearchParams();
@@ -178,6 +199,8 @@ export default function UjianLinkSoalPage() {
   const [ditolak, setDitolak] = useState('');
   const [sasaran, setSasaran] = useState(null);
   const jenjang = jenjangSah(params.get('kelas'));
+  const tampilan = params.get('tampilan') === 'intensitas' ? 'intensitas' : 'pengaturan';
+  const ubahTampilan = (t) => setParams((p) => { const n = new URLSearchParams(p); if (t === 'pengaturan') n.delete('tampilan'); else n.set('tampilan', t); return n; }, { replace: true });
 
   const muat = useCallback(async (u) => {
     if (!u) { setData(null); return; }
@@ -253,10 +276,17 @@ export default function UjianLinkSoalPage() {
               <Info className="h-4 w-4 shrink-0" /> Anda melihat sebagai pemantau. Link soal hanya dapat diatur admin; alamat soal lengkap tidak ditampilkan.
             </p>
           )}
-          <TabJenjang nilai={jenjang} onUbah={ubahJenjang} testId="link" lencana={lencana}
-            isi={(j) => <IsiJenjang data={data} jenjang={j} bolehUbah={bolehUbah} onAtur={setSasaran} />} />
-          {bolehUbah && (
-            <PanelBangunUlangKlik ujianId={ujian?.id} onSelesai={(link, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, link }))} />
+          <PilihTampilan nilai={tampilan} onUbah={ubahTampilan} />
+          {tampilan === 'pengaturan' ? (
+            <>
+              <TabJenjang nilai={jenjang} onUbah={ubahJenjang} testId="link" lencana={lencana}
+                isi={(j) => <IsiJenjang data={data} jenjang={j} bolehUbah={bolehUbah} onAtur={setSasaran} />} />
+              {bolehUbah && (
+                <PanelBangunUlangKlik ujianId={ujian?.id} onSelesai={(link, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, link }))} />
+              )}
+            </>
+          ) : (
+            <PanelIntensitasKlik ujianId={ujian?.id} mapel={data.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang} />
           )}
         </>
       )}
