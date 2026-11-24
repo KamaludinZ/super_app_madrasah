@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarDays, CircleDashed, Clock, ExternalLink, Lock, MonitorPlay } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CircleDashed, Clock, ExternalLink, Lock, MonitorPlay } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
@@ -39,9 +39,15 @@ const GAYA_STATUS = {
  */
 function KeteranganStatus({ soal, sekarangMs, testId }) {
   if (!soal.siap) {
+    // Jam ujian sudah berjalan tetapi tautan soal belum dipasang: siswa perlu tahu harus melapor, bukan menunggu diam.
+    const mendesak = soal.status === 'berlangsung';
     return (
-      <p className="inline-flex items-center gap-1 text-xs text-slate-500" data-testid={testId} data-status="belum_siap">
-        <CircleDashed className="h-3 w-3 shrink-0" aria-hidden="true" /> Belum siap — tautan soal belum disiapkan panitia
+      <p className={`mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs ${mendesak ? 'text-amber-800' : 'text-slate-500'}`}
+        data-testid={testId} data-status="belum_siap" data-mendesak={mendesak ? 'ya' : 'tidak'}>
+        <span className={`inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[11px] font-semibold ${mendesak ? 'border-amber-400 bg-amber-50' : 'border-slate-300'}`}>
+          {mendesak ? <AlertTriangle className="h-3 w-3" aria-hidden="true" /> : <CircleDashed className="h-3 w-3" aria-hidden="true" />} Belum siap
+        </span>
+        {mendesak ? 'Jam ujian sudah dimulai, tetapi tautan soal belum disiapkan. Laporkan ke pengawas ruang.' : 'Tautan soal belum disiapkan panitia.'}
       </p>
     );
   }
@@ -114,6 +120,12 @@ function Sorotan({ sorotan, hariIni, sekarangMs }) {
                 {' · '}{berlangsung ? `sampai ${jam(s.selesai_at)} WIB` : `${s.tanggal === hariIni ? 'hari ini' : tglPanjang(s.tanggal)}, ${jam(s.mulai_at)} WIB`}
                 {mundur?.teks && <> · {berlangsung ? 'sisa ' : ''}<span className="font-semibold tabular-nums">{mundur.teks}</span>{berlangsung ? '' : ' lagi'}</>}
               </span>
+              {!s.siap && (
+                <span className={`ml-1.5 inline-flex rounded-full border border-dashed px-1.5 text-[11px] font-semibold ${berlangsung ? 'border-white/60 text-white' : 'border-slate-300 text-slate-600'}`}
+                  data-testid={`portal-sorotan-belum-siap-${s.mapel}`}>
+                  Belum siap
+                </span>
+              )}
             </div>
           );
         })}
@@ -147,6 +159,8 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
   const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
+  // Yang sudah ditutup tidak perlu diumumkan lagi: hanya mapel yang masih akan/sedang berlangsung.
+  const belumSiap = hari.flatMap((h) => h.soal).filter((s) => !s.siap && s.status !== 'ditutup');
   if (!hari.length) {
     return (
       <KosongInfo Ikon={CalendarDays} judul="Jadwal pengerjaan belum disusun" testId={`portal-kosong-${jenjang}`}>
@@ -176,6 +190,15 @@ function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, tiruan }
           );
         })}
       </ol>
+      {belumSiap.length > 0 && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600" data-testid={`portal-belum-siap-${jenjang}`}>
+          <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span>
+            {belumSiap.length} mapel belum siap: <span className="font-medium text-slate-800">{belumSiap.map((m) => m.nama).join(', ')}</span>.
+            {' '}Tombol Mengerjakan muncul sendiri setelah panitia memasang tautan soalnya — halaman ini diperbarui otomatis tiap menit.
+          </span>
+        </p>
+      )}
       {tanpaJadwal.length > 0 && (
         <p className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" data-testid={`portal-tanpa-jadwal-${jenjang}`}>
           Belum dijadwalkan: <span className="text-slate-700">{tanpaJadwal.map((m) => m.nama).join(', ')}</span>.

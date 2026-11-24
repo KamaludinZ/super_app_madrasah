@@ -251,7 +251,8 @@ function soalTiruan() {
       hasil.push({
         id: `contoh-soal-${j}-${m.kode}`, jenjang: j, mapel: m.kode, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
         mulai_at: iso(mulai), selesai_at: iso(selesai), status,
-        siap: i !== 4 + ji, // satu mapel per jenjang tautan soalnya belum diisi admin
+        // satu mapel per jenjang tautan soalnya belum diisi admin; kelas 8 termasuk mapel yang dibuka sebentar lagi hari ini
+        siap: i !== 4 + ji && !(j === 8 && i === 2),
         jumlah_klik: klik, klik_terakhir_at: klik ? iso(Math.min(Date.now(), selesai) - ((i + j) % 5) * MENIT) : null,
       });
     });
