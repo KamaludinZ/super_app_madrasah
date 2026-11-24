@@ -195,6 +195,12 @@ export function galatPortal(e) {
   return { ...g, jadwal_berikutnya: d && typeof d === 'object' ? bersihkanJadwalBerikutnya(d.jadwal_berikutnya) : null };
 }
 
+/** Jumlah klik dari server dinormalkan: bilangan bulat ≥ 0 (null/NaN/negatif/teks -> 0). */
+export const normalKlik = (n) => {
+  const x = Math.floor(Number(n));
+  return Number.isFinite(x) && x > 0 ? x : 0;
+};
+
 // ---- Isolasi data: whitelist field ----
 const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at'];
 
@@ -207,7 +213,7 @@ export function bersihkanSoalPublik(soal) {
     .filter((s) => s && s.mapel && JENJANG_UJIAN.includes(Number(s.jenjang)))
     .map((s) => {
       const b = Object.fromEntries(FIELD_SOAL_PUBLIK.map((k) => [k, s[k] ?? null]));
-      return { ...b, jenjang: Number(b.jenjang), siap: !!b.siap, ditahan: !b.siap && !!b.ditahan, jumlah_klik: Number(b.jumlah_klik) || 0 };
+      return { ...b, jenjang: Number(b.jenjang), siap: !!b.siap, ditahan: !b.siap && !!b.ditahan, jumlah_klik: normalKlik(b.jumlah_klik) };
     });
 }
 
@@ -218,14 +224,28 @@ export function bersihkanSoalPublik(soal) {
 // satu mapel sudah ditutup, satu berlangsung dan ditutup ±3 menit lagi, satu dibuka ±5 menit lagi, satu menyusul
 // siang hari; sisanya pada hari-hari berikutnya.
 const MENIT = 60 * 1000;
-// Klik "Mengerjakan" contoh disimpan per tab browser agar penghitung tetap bertambah setelah muat ulang (meniru cache
-// jumlah_klik server). { soal_id: { jumlah, terakhir } }
+// Klik "Mengerjakan" contoh disimpan di localStorage perangkat ini (cadangan: sessionStorage, lalu memori) agar
+// penghitung bertahan setelah muat ulang, tab ditutup, atau portal dibuka di tab lain — meniru cache jumlah_klik server.
+// { soal_id: { jumlah, terakhir } }; entri rusak diabaikan.
 const KUNCI_KLIK_CONTOH = 'portalUjian:klikContoh';
+const penyimpanKlik = (() => {
+  for (const nama of ['localStorage', 'sessionStorage']) {
+    try {
+      const s = globalThis[nama];
+      if (s) { s.getItem(KUNCI_KLIK_CONTOH); return s; }
+    } catch { /* diblokir (mode privat / kebijakan): coba berikutnya */ }
+  }
+  return null;
+})();
 const klikContoh = (() => {
-  try { return JSON.parse(sessionStorage.getItem(KUNCI_KLIK_CONTOH)) || {}; } catch { return {}; }
+  try {
+    const isi = JSON.parse(penyimpanKlik?.getItem(KUNCI_KLIK_CONTOH)) || {};
+    return Object.fromEntries(Object.entries(isi).filter(([, v]) => v && normalKlik(v.jumlah) > 0)
+      .map(([k, v]) => [k, { jumlah: normalKlik(v.jumlah), terakhir: typeof v.terakhir === 'string' ? v.terakhir : null }]));
+  } catch { return {}; }
 })();
 const simpanKlikContoh = () => {
-  try { sessionStorage.setItem(KUNCI_KLIK_CONTOH, JSON.stringify(klikContoh)); } catch { /* abaikan */ }
+  try { penyimpanKlik?.setItem(KUNCI_KLIK_CONTOH, JSON.stringify(klikContoh)); } catch { /* penuh/diblokir: tetap di memori */ }
 };
 const JANGKAR_CONTOH = Math.floor(Date.now() / MENIT) * MENIT;
 const iso = (ms) => new Date(ms).toISOString();

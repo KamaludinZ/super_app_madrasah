@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import {
-  STATUS_SOAL, bolehKerjakan, bukaSoalContoh, catatKlikTiruan, hitungMundurSoal, ringkasPortal, soalJenjang, sorotanPortal, statusSoal,
-  urlKerjakan,
+  STATUS_SOAL, bolehKerjakan, bukaSoalContoh, catatKlikTiruan, hitungMundurSoal, normalKlik, ringkasPortal, soalJenjang, sorotanPortal,
+  statusSoal, urlKerjakan,
 } from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
@@ -70,10 +70,11 @@ function KeteranganStatus({ soal, sekarangMs, testId }) {
 
 /**
  * Jumlah klik sah "Mengerjakan" sebelumnya (per klik, bukan per siswa; dari cache jumlah_klik server / pencatat tiruan)
- * di dalam tombol, mis. "18 klik"; tidak tampil bila 0.
+ * di dalam tombol, mis. "18 klik". Angka nol ditampilkan ("0 klik") hanya bila `tampilNol` — saat mapel berlangsung
+ * atau sudah ditutup; sebelum dimulai nol sudah pasti sehingga disembunyikan.
  */
-function JumlahKlik({ n, aktif, testId }) {
-  if (!n) return null;
+function JumlahKlik({ n, aktif, tampilNol = false, testId }) {
+  if (!n && !tampilNol) return null;
   return (
     <span className={`rounded px-1.5 py-px text-[11px] font-semibold tabular-nums ${aktif ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}
       title={`Tombol ini sudah diklik ${n.toLocaleString('id-ID')} kali`} data-testid={testId} data-jumlah={n}>
@@ -91,7 +92,7 @@ function JumlahKlik({ n, aktif, testId }) {
  */
 function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwarsa, onKlik, lebar = false, testId }) {
   if (!soal.siap) return null;
-  const n = Number(soal.jumlah_klik) || 0;
+  const n = normalKlik(soal.jumlah_klik);
   if (!bolehKerjakan(soal)) {
     const alasan = soal.status === 'ditutup' ? 'Waktu pengerjaan sudah ditutup' : `Belum dimulai — dibuka ${jam(soal.mulai_at)} WIB`;
     return (
@@ -100,7 +101,7 @@ function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwars
         className="h-9 gap-1.5 px-2.5 sm:px-3" data-testid={testId} data-aktif="tidak">
         {soal.status === 'ditutup' ? <Lock aria-hidden="true" /> : <Clock aria-hidden="true" />}
         <span className="hidden sm:inline">Mengerjakan</span>
-        <JumlahKlik n={n} testId={`${testId}-klik`} />
+        <JumlahKlik n={n} tampilNol={soal.status === 'ditutup'} testId={`${testId}-klik`} />
       </Button>
     );
   }
@@ -135,7 +136,7 @@ function TombolKerjakan({ soal, jenjang, token, tiruan, kiniServer, onKedaluwars
       <a href={urlKerjakan(token, soal.id)} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" onClick={klik}
         aria-label={`Mengerjakan ${soal.nama} (membuka soal di tab baru)${n ? `, sudah diklik ${n} kali` : ''}`}>
         <ExternalLink aria-hidden="true" /> Mengerjakan
-        <JumlahKlik n={n} aktif testId={`${testId}-klik`} />
+        <JumlahKlik n={n} aktif tampilNol testId={`${testId}-klik`} />
       </a>
     </Button>
   );
