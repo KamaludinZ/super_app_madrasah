@@ -31,6 +31,7 @@
 import { api } from '@/lib/api';
 import { denganTiruan } from '@/lib/ujian';
 import { hariIniWIB } from '@/lib/tanggal';
+import { parseServerDate } from '@/lib/datetime';
 import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU, mapelUntuk } from '@/lib/mapelUjian';
 import { tambahHari } from '@/lib/ujianInfoPublik';
 import { dariInputWaktu, keInputWaktu, muatTautanPublik } from '@/lib/ujianTautanPublik';
@@ -207,6 +208,9 @@ function linkContoh(ujianId) {
       });
     });
     daftar.forEach((l) => { l.siap = !!l.url && l.aktif; });
+    // Satu mapel kelas 7 yang sesinya sudah lewat dan tautannya terpasang tetapi tidak pernah diklik (tidak tersentuh).
+    const sepi = daftar.find((x) => x.jenjang === 7 && x.siap && x.jumlah_klik > 0);
+    if (sepi) { sepi.jumlah_klik = 0; sepi.klik_terakhir_at = null; }
     // Dua mapel yang cache-nya sengaja tertinggal dari "jejak audit" (kelas 8 kurang 2, kelas 9 lebih 1) agar hasil
     // bangun ulang penghitung dapat dicoba.
     [[8, 2], [9, -1]].forEach(([j, beda]) => {
@@ -283,16 +287,28 @@ export const SARINGAN_INTENSITAS = [
 ];
 
 /**
- * Saring baris intensitas (hasil intensitasJenjang): `mapel` = kode baku atau '' (semua); `status` = 'semua' |
- * 'dikerjakan' (ada klik) | 'tidak_tersentuh' (tautan soal sudah terpasang tetapi belum pernah diklik).
+ * Keadaan klik satu entri intensitas pada waktu `kiniMs`:
+ *   'dikerjakan'      ada klik sah;
+ *   'tidak_tersentuh' tautan terpasang, jendela sudah dibuka (berlangsung/lewat), tetapi belum pernah diklik;
+ *   'menunggu'        tautan terpasang, jendela belum dibuka — nol klik masih wajar;
+ *   'tanpa_tautan'    tautan soal belum diisi.
  */
-export function saringIntensitas(baris, { mapel = '', status = 'semua' } = {}) {
+export function keadaanKlik(d, kiniMs = Date.now()) {
+  if ((Number(d?.jumlah_klik) || 0) > 0) return 'dikerjakan';
+  if (!d?.url_host) return 'tanpa_tautan';
+  const mulai = parseServerDate(d.mulai_at)?.getTime();
+  return Number.isFinite(mulai) && mulai > kiniMs ? 'menunggu' : 'tidak_tersentuh';
+}
+
+/**
+ * Saring baris intensitas (hasil intensitasJenjang): `mapel` = kode baku atau '' (semua); `status` = 'semua' |
+ * 'dikerjakan' | 'tidak_tersentuh' (lihat keadaanKlik).
+ */
+export function saringIntensitas(baris, { mapel = '', status = 'semua' } = {}, kiniMs = Date.now()) {
   return (baris || []).filter((b) => {
     if (mapel && b.kode !== mapel) return false;
-    const n = Number(b.data?.jumlah_klik) || 0;
-    if (status === 'dikerjakan') return n > 0;
-    if (status === 'tidak_tersentuh') return n === 0 && !!b.data?.url_host;
-    return true;
+    if (status === 'semua') return true;
+    return keadaanKlik(b.data, kiniMs) === status;
   });
 }
 

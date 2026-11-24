@@ -6,8 +6,13 @@ import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
 import {
-  SARINGAN_INTENSITAS, intensitasJenjang, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
+  SARINGAN_INTENSITAS, intensitasJenjang, keadaanKlik, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
 } from '@/lib/ujianLinkSoal';
+
+const LENCANA_KEADAAN = {
+  tidak_tersentuh: { label: 'Tidak tersentuh', kelas: 'border-amber-300 bg-amber-50 text-amber-800' },
+  menunggu: { label: 'Menunggu jadwal', kelas: 'border-slate-200 bg-slate-50 text-slate-500' },
+};
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
 const tglPendek = (iso) => formatWIB(iso, 'Date', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -22,23 +27,42 @@ function KartuAngka({ label, nilai, keterangan, testId }) {
   );
 }
 
-function BarisIntensitas({ baris, jenjang }) {
+/**
+ * Satu mapel: jendela & host tautan, jumlah klik dengan batang relatif terhadap mapel tersibuk di jenjang itu (`maks`),
+ * klik terakhir, dan lencana bila tautannya terpasang tetapi tidak tersentuh / masih menunggu jadwal.
+ */
+function BarisIntensitas({ baris, jenjang, maks }) {
   const d = baris.data;
   const n = Number(d?.jumlah_klik) || 0;
+  const keadaan = keadaanKlik(d);
+  const lencana = LENCANA_KEADAAN[keadaan];
+  const persen = maks ? Math.max(n ? 4 : 0, Math.round((n / maks) * 100)) : 0;
   return (
     <li className="flex flex-col gap-1 px-3 py-2.5 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_minmax(0,9rem)] sm:items-center sm:gap-3"
       data-testid={`intensitas-${jenjang}-${baris.kode}`} data-jumlah={n}>
       <span className="hidden text-right text-xs tabular-nums text-slate-400 sm:block">{baris.nomor}</span>
-      <span className="text-sm font-semibold text-slate-900">{baris.nama}</span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="text-sm font-semibold text-slate-900">{baris.nama}</span>
+        {lencana && (
+          <span className={`rounded-full border px-1.5 py-px text-[10px] font-semibold ${lencana.kelas}`} data-testid={`intensitas-${jenjang}-${baris.kode}-keadaan`} data-keadaan={keadaan}>
+            {lencana.label}
+          </span>
+        )}
+      </span>
       <span className="min-w-0 text-xs text-slate-600">
         {d?.mulai_at && d?.selesai_at
           ? <span className="tabular-nums">{tglPendek(d.mulai_at)} · {jam(d.mulai_at)}–{jam(d.selesai_at)}</span>
           : <span className="text-slate-400">Belum ada jendela</span>}
         {d?.url_host ? <span className="ml-1.5 font-mono text-slate-500">{d.url_host}</span> : <span className="ml-1.5 text-slate-400">· tautan belum diisi</span>}
       </span>
-      <span className="text-sm tabular-nums sm:text-right" data-testid={`intensitas-${jenjang}-${baris.kode}-jumlah`}>
-        <span className={`font-bold ${n ? 'text-slate-900' : 'text-slate-400'}`}>{n.toLocaleString('id-ID')}</span>
-        <span className="text-xs text-slate-500"> klik</span>
+      <span className="flex items-center gap-2 sm:block" data-testid={`intensitas-${jenjang}-${baris.kode}-jumlah`}>
+        <span className="block text-sm tabular-nums sm:text-right">
+          <span className={`font-bold ${n ? 'text-slate-900' : 'text-slate-400'}`}>{n.toLocaleString('id-ID')}</span>
+          <span className="text-xs text-slate-500"> klik</span>
+        </span>
+        <span className="block h-1.5 w-24 overflow-hidden rounded-full bg-slate-100 sm:ml-auto sm:mt-1 sm:w-full" aria-hidden="true">
+          <span className="block h-full rounded-full bg-[#006837]" style={{ width: `${persen}%` }} />
+        </span>
       </span>
       <span className="text-xs text-slate-500" data-testid={`intensitas-${jenjang}-${baris.kode}-terakhir`}>
         {d?.klik_terakhir_at ? <>Terakhir {tglPendek(d.klik_terakhir_at)} {jam(d.klik_terakhir_at)}</> : 'Belum pernah diklik'}
@@ -76,11 +100,14 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
   const baris = useMemo(() => intensitasJenjang(data.intensitas, mapel, jenjang), [data.intensitas, mapel, jenjang]);
   const tampil = useMemo(() => saringIntensitas(baris, saringan), [baris, saringan]);
   const r = ringkasIntensitas(baris.map((b) => b.data).filter(Boolean));
+  const maks = Math.max(0, ...baris.map((b) => Number(b.data?.jumlah_klik) || 0));
+  const tidakTersentuh = baris.filter((b) => keadaanKlik(b.data) === 'tidak_tersentuh').length;
   const disaring = !!saringan.mapel || saringan.status !== 'semua';
   return (
     <>
       <p className="mb-2 text-xs text-slate-500" data-testid={`ringkas-intensitas-${jenjang}`}>
         <span className="font-semibold text-slate-700">{r.total_klik.toLocaleString('id-ID')} klik</span> pada {r.mapel_diklik} dari {baris.length} mapel {labelJenjang(jenjang)}
+        {tidakTersentuh > 0 && <> · <span className="font-semibold text-amber-700">{tidakTersentuh} tidak tersentuh</span></>}
         {disaring && <> · menampilkan {tampil.length} mapel</>}
       </p>
       <BarisSaringan saringan={saringan} onUbah={onUbahSaringan} mapel={mapelUntuk(mapel, jenjang)} />
@@ -98,7 +125,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan }) {
             <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span><span>Klik terakhir</span>
           </div>
           <ul className="divide-y divide-slate-100" data-testid={`daftar-intensitas-${jenjang}`}>
-            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} />)}
+            {tampil.map((b) => <BarisIntensitas key={b.kode} baris={b} jenjang={jenjang} maks={maks} />)}
           </ul>
         </div>
       )}
