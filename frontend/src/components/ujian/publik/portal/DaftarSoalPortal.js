@@ -65,13 +65,16 @@ function KeteranganStatus({ soal, sekarangMs, testId }) {
   );
 }
 
-/** Jumlah klik sah "Mengerjakan" sebelumnya (per klik, bukan per siswa) di dalam tombol; tidak tampil bila 0. */
+/**
+ * Jumlah klik sah "Mengerjakan" sebelumnya (per klik, bukan per siswa; dari cache jumlah_klik server / pencatat tiruan)
+ * di dalam tombol, mis. "18 klik"; tidak tampil bila 0.
+ */
 function JumlahKlik({ n, aktif, testId }) {
   if (!n) return null;
   return (
     <span className={`rounded px-1.5 py-px text-[11px] font-semibold tabular-nums ${aktif ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}
       title={`Tombol ini sudah diklik ${n.toLocaleString('id-ID')} kali`} data-testid={testId} data-jumlah={n}>
-      {n.toLocaleString('id-ID')}<span className="sr-only"> kali diklik</span>
+      {n.toLocaleString('id-ID')} klik
     </span>
   );
 }
