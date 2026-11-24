@@ -577,8 +577,8 @@ async def catat_segarkan(db, tautan: Dict[str, Any], sesi: Optional[str], waktu:
     if not sesi or not tautan:
         return False
     try:
-        r = await db[KOLEKSI_AKSES_LOG].update_one(
-            {'tautan_id': tautan.get('id'), 'sesi': sesi},
+        r = await db[KOLEKSI_AKSES_LOG].update_one(  # hanya entri pembukaan (bukan klik Mengerjakan dari sesi yang sama)
+            {'tautan_id': tautan.get('id'), 'sesi': sesi, 'aksi': {'$ne': 'klik_mengerjakan'}},
             {'$inc': {'jumlah_segarkan': 1}, '$set': {'terakhir_aktif': (waktu or sekarang_wib()).isoformat()}})
         return bool(r.matched_count)
     except Exception as e:  # noqa: BLE001 — audit tidak boleh menggagalkan permintaan

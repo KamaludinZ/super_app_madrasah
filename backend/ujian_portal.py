@@ -254,3 +254,71 @@ def susun_link_admin(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str
         dari_jadwal = jendela_jadwal(jadwal, j, daftar)
         hasil.extend(ringkas_link_admin(peta.get((j, m['kode'])), j, m['kode'], dari_jadwal.get(m['kode']), tampil_url) for m in daftar)
     return hasil
+
+
+# ---- Payload portal publik ----
+STATUS_SOAL = ('belum_dimulai', 'berlangsung', 'ditutup')
+
+
+def status_jendela(mulai_at: Any, selesai_at: Any, sekarang: datetime) -> Optional[str]:
+    """Status satu mapel menurut WAKTU SERVER: 'belum_dimulai' | 'berlangsung' | 'ditutup' pada jendela [mulai, selesai);
+    None bila jendela tidak lengkap/tidak terbaca (mapel tidak ditampilkan — fail-closed, tombol tidak pernah aktif)."""
+    m, s = baca_waktu(mulai_at), baca_waktu(selesai_at)
+    if not m or not s or s <= m:
+        return None
+    kini = sekarang.astimezone(WIB_TZ)
+    if kini < m:
+        return 'belum_dimulai'
+    return 'berlangsung' if kini < s else 'ditutup'
+
+
+def tanggal_wib(nilai: Any) -> Optional[str]:
+    d = baca_waktu(nilai)
+    return d.astimezone(WIB_TZ).date().isoformat() if d else None
+
+
+def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                jadwal: Iterable[Dict[str, Any]], sekarang: datetime) -> List[Dict[str, Any]]:
+    """Daftar mapel portal (kontrak `soal` di frontend/src/lib/ujianPortalPublik.js), satu entri per jenjang × mapel baku
+    aktif yang punya jendela pengerjaan (dari link soal tersimpan, atau dari jadwal ujian bila belum diatur), urut jenjang
+    lalu jam mulai. TIDAK PERNAH memuat `url` tautan soal. Mapel tanpa jendela = belum dijadwalkan (tidak ikut)."""
+    peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
+    jadwal = list(jadwal or [])
+    hasil = []
+    for j in JENJANG_UJIAN:
+        daftar = mapel_per_jenjang.get(str(j)) or []
+        dari_jadwal = jendela_jadwal(jadwal, j, daftar)
+        baris = []
+        for m in daftar:
+            d = peta.get((j, m['kode']))
+            jd = dari_jadwal.get(m['kode'])
+            mulai = (d or {}).get('mulai_at') or (jd or {}).get('mulai_at')
+            selesai = (d or {}).get('selesai_at') or (jd or {}).get('selesai_at')
+            status = status_jendela(mulai, selesai, sekarang)
+            if not status:
+                continue
+            tanggal = tanggal_wib(mulai)
+            siap = link_siap(d)
+            baris.append({
+                'id': (d or {}).get('id') or f'belum-{j}-{m["kode"]}', 'jenjang': j, 'mapel': m['kode'], 'tanggal': tanggal,
+                'sesi_ke': (jd or {}).get('sesi_ke') if jd and jd.get('tanggal') == tanggal else None,
+                'mulai_at': mulai, 'selesai_at': selesai, 'status': status, 'siap': siap,
+                'ditahan': bool(d) and not siap and bool(url_soal_aman(d.get('url'))),
+                'jumlah_klik': int((d or {}).get('jumlah_klik') or 0), 'klik_terakhir_at': (d or {}).get('klik_terakhir_at'),
+            })
+        hasil.extend(sorted(baris, key=lambda x: (baca_waktu(x['mulai_at']), x['sesi_ke'] or 0)))
+    return hasil
+
+
+def jadwal_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Optional[Dict[str, Any]]:
+    """Hari ujian terdekat yang belum lewat beserta mapel pertama tiap jenjang (untuk pesan "portal belum dibuka/ditutup")
+    -> { tanggal, soal: [{ jenjang, mapel, mulai_at, selesai_at }] } atau None. Tanpa tautan soal & tanpa penghitung."""
+    kini = sekarang.astimezone(WIB_TZ)
+    belum_lewat = [s for s in soal or [] if baca_waktu(s.get('selesai_at')) and baca_waktu(s['selesai_at']) > kini]
+    if not belum_lewat:
+        return None
+    tanggal = min(s['tanggal'] for s in belum_lewat if s.get('tanggal'))
+    pertama: Dict[int, Dict[str, Any]] = {}
+    for s in sorted((s for s in belum_lewat if s.get('tanggal') == tanggal), key=lambda s: baca_waktu(s['mulai_at'])):
+        pertama.setdefault(s['jenjang'], {k: s[k] for k in ('jenjang', 'mapel', 'mulai_at', 'selesai_at')})
+    return {'tanggal': tanggal, 'soal': [pertama[j] for j in sorted(pertama)]}

@@ -45,6 +45,7 @@ from routers import (
     ujian_publik,
     ujian_info_publik,
     ujian_monitoring_publik,
+    ujian_portal_publik,
     ujian_mapel,
     ujian_tautan_publik,
     ujian_berkas,
@@ -163,6 +164,7 @@ api_router.include_router(ujian_formulir.router)
 api_router.include_router(ujian_publik.router)
 api_router.include_router(ujian_info_publik.router)
 api_router.include_router(ujian_monitoring_publik.router)
+api_router.include_router(ujian_portal_publik.router)
 api_router.include_router(ujian_mapel.router)
 api_router.include_router(ujian_tautan_publik.router)
 api_router.include_router(ujian_berkas.router)
