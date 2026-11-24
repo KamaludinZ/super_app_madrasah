@@ -14,8 +14,9 @@
  *        (sesi: id acak per pembukaan halaman; segarkan: muat ulang — server tidak mencatatnya sebagai pembukaan baru)
  *     -> { madrasah: { nama, logo_url }, ujian: { nama, jenis, tahun_pelajaran, mulai, selesai },
  *          tautan: { jenis: 'portal', mulai_at, selesai_at }, waktu_server: ISO,
- *          mapel: { '7': [{ kode, nama }], '8': [...], '9': [...] },   (mapel baku aktif per jenjang; lihat mapelUntuk)
- *          soal: [{ id, jenjang: 7|8|9, mapel: kode baku, tanggal: 'YYYY-MM-DD' (WIB), sesi_ke,
+ *          mapel: { '7': [{ kode, nama }], '8': [...], '9': [...] },   (mapel di JADWAL SESI ujian per jenjang, urut jadwal —
+ *                 termasuk mapel di luar mapel baku seperti "Simulasi"; jadwal kosong = []; lihat mapelPortalJenjang)
+ *          soal: [{ id, jenjang: 7|8|9, mapel: kode mapel, nama, tanggal: 'YYYY-MM-DD' (WIB), sesi_ke,
  *                   mulai_at, selesai_at,                 (jendela tombol "Mengerjakan"; awalnya dari jadwal ujian)
  *                   status: 'belum_dimulai' | 'berlangsung' | 'ditutup',   (menurut waktu server)
  *                   hitung_mundur: { menuju: 'mulai' | 'selesai', detik } | null,  (menurut waktu server saat respons)
@@ -24,10 +25,10 @@
  *                   jumlah_klik, klik_terakhir_at }] }    (cache klik sah dari ujian_link_soal)
  *          batas_berikutnya_at: ISO | null }   (perubahan status terdekat; klien memuat ulang sesudahnya)
  *        TIDAK PERNAH memuat `url` tautan soal: tautan baru keluar lewat rute kerjakan di bawah, saat mapel berlangsung.
- *        Mapel baku yang tidak punya entri `soal` = belum dijadwalkan.
+ *        Mapel di `mapel` yang tidak punya entri `soal` = jadwalnya belum lengkap (tanpa jam).
  *     404 token tidak dikenal; 403 portal tidak dapat dibuka -> detail { alasan: 'nonaktif' | 'belum_mulai' | 'sudah_selesai',
  *        pesan, mulai_at, selesai_at, madrasah,
- *        jadwal_berikutnya: { tanggal, soal: [{ jenjang, mapel: kode, mulai_at, selesai_at }] } | null }
+ *        jadwal_berikutnya: { tanggal, soal: [{ jenjang, mapel: kode, nama, mulai_at, selesai_at }] } | null }
  *        (jadwal_berikutnya = hari ujian terdekat yang belum lewat beserta mapel pertamanya tiap jenjang; tanpa tautan soal.
  *         null bila masa ujian sudah berakhir atau jadwal belum disusun)
  *   GET /publik/portal-ujian/{token}/kerjakan/{soal_id}[?sesi=<id pembukaan halaman>]
@@ -125,9 +126,19 @@ export function batasBerikutAt(soal, sekarangMs) {
 const msWaktu = (iso) => parseServerDate(iso)?.getTime() ?? Infinity;
 
 /**
+ * Mapel portal satu jenjang dari server: mengikuti jadwal sesi ujian (lihat kontrak `mapel`). Jadwal kosong = [] — tidak
+ * jatuh ke 15 mapel baku; konstanta baku hanya dipakai bila respons sama sekali tidak memuat `mapel`.
+ */
+export function mapelPortalJenjang(mapel, jenjang) {
+  if (!mapel || typeof mapel !== 'object') return MAPEL_UJIAN_BAKU;
+  const daftar = mapel[String(jenjang)];
+  return Array.isArray(daftar) ? daftar.filter((m) => m && m.kode) : [];
+}
+
+/**
  * Soal satu jenjang menurut jadwal -> { hari: [{ tanggal, soal: [Soal & { nama, status }] }], tanpaJadwal: [{ kode, nama }] }.
- * Urut waktu mulai; hanya mapel baku jenjang itu (`mapel` dari server bila ada). `tanpaJadwal` = mapel baku yang belum
- * punya jendela pengerjaan. `sekarangMs` = waktu server saat ini (status dihitung ulang darinya).
+ * Urut waktu mulai; hanya mapel jenjang itu (`mapel` dari server, lihat mapelPortalJenjang). `tanpaJadwal` = mapel yang
+ * belum punya jendela pengerjaan. `sekarangMs` = waktu server saat ini (status dihitung ulang darinya).
  */
 export function soalJenjang(soal, jenjang, mapel = MAPEL_UJIAN_BAKU, sekarangMs = Date.now()) {
   const nama = new Map(mapel.map((m) => [m.kode, m.nama]));
@@ -138,7 +149,7 @@ export function soalJenjang(soal, jenjang, mapel = MAPEL_UJIAN_BAKU, sekarangMs 
   milik.forEach((s) => {
     const tanggal = s.tanggal || wibDateKey(s.mulai_at) || '';
     if (!perTanggal.has(tanggal)) perTanggal.set(tanggal, []);
-    perTanggal.get(tanggal).push({ ...s, nama: nama.get(s.mapel), status: statusSoal(s, sekarangMs) });
+    perTanggal.get(tanggal).push({ ...s, nama: nama.get(s.mapel) || s.nama, status: statusSoal(s, sekarangMs) });
   });
   const terjadwal = new Set(milik.map((s) => s.mapel));
   return {
@@ -173,14 +184,17 @@ export function ringkasPortal(hari) {
 // ---- Portal terkunci ----
 
 /**
- * Jadwal berikutnya dari detail penolakan portal -> { tanggal, soal: [{ jenjang, mapel, mulai_at, selesai_at }] } (urut
+ * Jadwal berikutnya dari detail penolakan portal -> { tanggal, soal: [{ jenjang, mapel, nama, mulai_at, selesai_at }] } (urut
  * jenjang, lalu jam mulai) atau null. Field lain (mis. tautan soal) dibuang.
  */
 export function bersihkanJadwalBerikutnya(j) {
   if (!j || typeof j !== 'object') return null;
   const soal = (Array.isArray(j.soal) ? j.soal : [])
     .filter((s) => s && s.mapel && JENJANG_UJIAN.includes(Number(s.jenjang)) && parseServerDate(s.mulai_at))
-    .map((s) => ({ jenjang: Number(s.jenjang), mapel: s.mapel, mulai_at: s.mulai_at, selesai_at: s.selesai_at || null }))
+    .map((s) => ({
+      jenjang: Number(s.jenjang), mapel: s.mapel, nama: typeof s.nama === 'string' && s.nama ? s.nama : null,
+      mulai_at: s.mulai_at, selesai_at: s.selesai_at || null,
+    }))
     .sort((a, b) => a.jenjang - b.jenjang || msWaktu(a.mulai_at) - msWaktu(b.mulai_at));
   const tanggal = j.tanggal || (soal[0] ? wibDateKey(soal[0].mulai_at) : null);
   return tanggal || soal.length ? { tanggal, soal } : null;
@@ -218,7 +232,7 @@ export function gabungKlikSementara(soal, sementara, kiniMs = Date.now()) {
 }
 
 // ---- Isolasi data: whitelist field ----
-const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at'];
+const FIELD_SOAL_PUBLIK = ['id', 'jenjang', 'mapel', 'nama', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at'];
 
 /**
  * Saring daftar soal dari server: hanya FIELD_SOAL_PUBLIK. Lapisan pertahanan kedua — bila server keliru mengirim `url`
@@ -308,7 +322,7 @@ function soalTiruan() {
       const klik = { ditutup: 28 + ((i * 7 + j) % 9), berlangsung: 9 + j, belum_dimulai: 0 }[awal] + (dicatat?.jumlah || 0);
       const klikAwalAt = klik ? Math.min(JANGKAR_CONTOH, selesai) - ((i + j) % 5) * MENIT : null;
       hasil.push({
-        id, jenjang: j, mapel: m.kode, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
+        id, jenjang: j, mapel: m.kode, nama: m.nama, tanggal: wibDateKey(mulai), sesi_ke: i < hariIni.length ? i + 1 : sesi,
         mulai_at: iso(mulai), selesai_at: iso(selesai), status,
         // satu mapel per jenjang tautan soalnya belum diisi admin; kelas 8 termasuk mapel yang dibuka sebentar lagi hari ini.
         // Kelas 7: satu mapel tautannya sudah ada tetapi tombolnya dimatikan admin (ditahan).
@@ -317,7 +331,27 @@ function soalTiruan() {
         jumlah_klik: klik, klik_terakhir_at: dicatat?.terakhir || (klikAwalAt ? iso(klikAwalAt) : null), klik_tercatat: dicatat?.jumlah || 0,
       });
     });
+    // "Simulasi" — mapel dari menu Mata Pelajaran di luar mapel baku — dijadwalkan kemarin (sudah ditutup).
+    const kemarin = tambahHari(hariIniWIB(), -1);
+    hasil.unshift({
+      id: `contoh-soal-${j}-simulasi`, jenjang: j, mapel: 'simulasi', nama: 'Simulasi', tanggal: kemarin, sesi_ke: 1,
+      mulai_at: `${kemarin}T08:00:00+07:00`, selesai_at: `${kemarin}T09:00:00+07:00`, status: 'ditutup', siap: true, ditahan: false,
+      jumlah_klik: 30 + j, klik_terakhir_at: `${kemarin}T08:5${j - 6}:00+07:00`, klik_tercatat: 0,
+    });
   });
+  return hasil;
+}
+
+// Daftar mapel contoh per jenjang seperti respons server: mapel di jadwal, urut waktu mulai.
+function mapelTiruan(soal) {
+  const hasil = {};
+  JENJANG_UJIAN.forEach((j) => {
+    const milik = soal.filter((s) => s.jenjang === j).sort((a, b) => msWaktu(a.mulai_at) - msWaktu(b.mulai_at));
+    hasil[String(j)] = [...new Map(milik.map((s) => [s.mapel, { kode: s.mapel, nama: s.nama }])).values()];
+  });
+  // Kelas 9: satu mapel ada di jadwal tetapi jamnya belum lengkap (tampil "belum dijadwalkan").
+  const sisa = MAPEL_UJIAN_BAKU.find((m) => !hasil['9'].some((x) => x.kode === m.kode));
+  if (sisa) hasil['9'].push({ kode: sisa.kode, nama: sisa.nama });
   return hasil;
 }
 
@@ -326,7 +360,7 @@ function jadwalBerikutnyaTiruan(tanggal) {
   return {
     tanggal,
     soal: JENJANG_UJIAN.map((j, ji) => ({
-      jenjang: j, mapel: MAPEL_UJIAN_BAKU[(ji * 4) % MAPEL_UJIAN_BAKU.length].kode,
+      jenjang: j, mapel: MAPEL_UJIAN_BAKU[(ji * 4) % MAPEL_UJIAN_BAKU.length].kode, nama: MAPEL_UJIAN_BAKU[(ji * 4) % MAPEL_UJIAN_BAKU.length].nama,
       mulai_at: `${tanggal}T07:30:00+07:00`, selesai_at: `${tanggal}T09:00:00+07:00`,
     })),
   };
@@ -347,7 +381,7 @@ export function portalTiruan(token) {
     ujian: { nama: 'Asesmen Sumatif Akhir Semester Ganjil (contoh)', jenis: 'UAS', tahun_pelajaran: '2026/2027', mulai, selesai: tambahHari(mulai, 9) },
     tautan: { jenis: 'portal', mulai_at: `${mulai}T06:30:00+07:00`, selesai_at: `${tambahHari(mulai, 9)}T15:00:00+07:00` },
     waktu_server: new Date().toISOString(),
-    soal: token === 'contoh-kosong' ? [] : soalTiruan(),
+    ...(() => { const soal = token === 'contoh-kosong' ? [] : soalTiruan(); return { soal, mapel: mapelTiruan(soal) }; })(),
   };
 }
 

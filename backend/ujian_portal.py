@@ -6,7 +6,9 @@ portal ditolak server). Portal hanya memuat jadwal mapel dan tombol "Mengerjakan
 ikut payload — baru keluar lewat rute kerjakan (302) saat jendela mapel berlangsung menurut waktu server.
 
 Dokumen `ujian_link_soal` (satu per ujian + jenjang + mapel — simpan ulang MENIMPA, tidak menambah baris):
-    id (unik), ujian_id, jenjang (7|8|9), mapel (kode baku ujian_mapel_baku),
+    id (unik), ujian_id, jenjang (7|8|9), mapel (kode mapel jadwal — kode_mapel_jadwal: kode baku ujian_mapel_baku bila
+                        nama di jadwal dikenali, selain itu nama ternormal, mis. "Simulasi" -> "simulasi"),
+    nama_mapel          nama tampil saat disimpan (teks jadwal / nama baku) — untuk mapel yang kemudian hilang dari jadwal
     url                 tautan soal eksternal; hanya http/https (url_soal_aman); '' = belum diisi (mapel "belum siap")
     mulai_at, selesai_at  ISO datetime WIB — jendela tombol "Mengerjakan" (nilai awal dari sesi jadwal_ujian mapel itu;
                         admin boleh mempersempit). Jendela [mulai_at, selesai_at): tepat pada selesai_at sudah ditutup.
@@ -33,7 +35,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ujian import WIB_TZ, sekarang_wib
-from ujian_info import JENJANG_UJIAN, KOLEKSI_AKSES_LOG, baca_waktu
+from ujian_info import JENJANG_UJIAN, KOLEKSI_AKSES_LOG, baca_waktu, nama_mapel
 
 KOLEKSI_LINK_SOAL = 'ujian_link_soal'
 
@@ -137,23 +139,86 @@ def kode_mapel_dari_nama(nama: Any, mapel: Iterable[Dict[str, Any]]) -> Optional
     return alias if alias and any(m['kode'] == alias for m in daftar) else None
 
 
+KODE_MAPEL_MAKS = 80  # = panjang maksimal nama mapel di jadwal sesi (JadwalSesiEditor)
+
+
+def kode_mapel_jadwal(nama: Any, baku: Iterable[Dict[str, Any]]) -> Optional[str]:
+    """Kode mapel Link Soal untuk satu nama mapel di jadwal sesi (teks bebas menu Pengaturan Formulir, biasanya dari menu
+    Mata Pelajaran): kode baku bila nama dikenali (kode_mapel_dari_nama), selain itu nama ternormal — huruf kecil, huruf &
+    angka saja ("Simulasi CBT" -> "simulasicbt"). None bila nama kosong."""
+    return kode_mapel_dari_nama(nama, baku) or (kunci_nama_mapel(nama)[:KODE_MAPEL_MAKS] or None)
+
+
 def iso_wib(tanggal: str, jam: str) -> str:
     """'YYYY-MM-DD' + 'HH:MM' (WIB) -> ISO datetime ber-zona WIB."""
     return f'{tanggal}T{jam}:00+07:00'
 
 
+def _urut_sesi(s: Dict[str, Any]):
+    return (s.get('tanggal') or '', s.get('jam_mulai') or '', s.get('sesi_ke') or 0)
+
+
+def mapel_link_soal(jadwal: Iterable[Dict[str, Any]], baku_per_jenjang: Dict[str, List[Dict[str, Any]]],
+                    docs: Iterable[Dict[str, Any]] = ()) -> Dict[str, List[Dict[str, Any]]]:
+    """Daftar mapel Link Soal & Portal Ujian tiap jenjang MENGIKUTI JADWAL SESI ujian (menu Pengaturan Formulir), bukan
+    master 15 mapel baku: { '7': [{ kode, nama, di_jadwal, jumlah_sesi }], ... } urut kemunculan pertama di jadwal
+    (tanggal, jam mulai, sesi). Nama dari master baku bila dikenali, selain itu teks jadwal apa adanya (mis. "Simulasi").
+    Mapel yang muncul di beberapa sesi tetap satu baris (jumlah_sesi > 1; jendela awal = sesi pertama). Mapel yang tidak
+    ada di jadwal tidak ikut, KECUALI sudah punya link soal tersimpan (`docs`): ditambahkan di akhir dengan di_jadwal
+    False & jumlah_sesi 0 agar tidak hilang diam-diam — tampil di menu admin, tidak di portal."""
+    urut = sorted(jadwal or [], key=_urut_sesi)
+    docs = list(docs or [])
+    hasil: Dict[str, List[Dict[str, Any]]] = {}
+    for j in JENJANG_UJIAN:
+        baku = list(baku_per_jenjang.get(str(j)) or [])
+        nama_baku = {m['kode']: m['nama'] for m in baku}
+        daftar: List[Dict[str, Any]] = []
+        posisi: Dict[str, int] = {}
+        for s in urut:
+            nama = str((s.get('mapel') or {}).get(str(j)) or '').strip()
+            kode = kode_mapel_jadwal(nama, baku)
+            if not kode:
+                continue
+            if kode in posisi:
+                daftar[posisi[kode]]['jumlah_sesi'] += 1
+                continue
+            posisi[kode] = len(daftar)
+            daftar.append({'kode': kode, 'nama': nama_baku.get(kode) or nama, 'di_jadwal': True, 'jumlah_sesi': 1})
+        for d in sorted((d for d in docs if int(d.get('jenjang') or 0) == j), key=lambda d: str(d.get('mapel') or '')):
+            kode = d.get('mapel')
+            if kode and kode not in posisi:
+                posisi[kode] = len(daftar)
+                daftar.append({'kode': kode, 'nama': d.get('nama_mapel') or nama_baku.get(kode) or nama_mapel(kode),
+                               'di_jadwal': False, 'jumlah_sesi': 0})
+        hasil[str(j)] = daftar
+    return hasil
+
+
+def mapel_portal(mapel_per_jenjang: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, str]]]:
+    """Daftar mapel untuk payload portal publik: hanya mapel yang ada di jadwal, { kode, nama } saja."""
+    return {j: [{'kode': m['kode'], 'nama': m['nama']} for m in daftar if m.get('di_jadwal', True)]
+            for j, daftar in (mapel_per_jenjang or {}).items()}
+
+
 def jendela_jadwal(jadwal: Iterable[Dict[str, Any]], jenjang: int, mapel: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """Sesi jadwal ujian tiap mapel baku satu jenjang -> { kode: { tanggal, sesi_ke, mulai_at, selesai_at } } (nilai awal
-    jendela tombol "Mengerjakan"). Bila satu mapel muncul di beberapa sesi, sesi paling awal yang dipakai. Sesi yang nama
-    mapelnya tidak dikenali dilewati (mapel itu tampil "belum ada di jadwal")."""
+    """Sesi jadwal ujian tiap mapel satu jenjang -> { kode: { tanggal, sesi_ke, mulai_at, selesai_at, jumlah_sesi } } (nilai
+    awal jendela tombol "Mengerjakan"). `mapel` = daftar untuk mencocokkan nama (mapel_link_soal atau mapel baku); nama yang
+    tidak dikenali memakai nama ternormal (kode_mapel_jadwal). Bila satu mapel muncul di beberapa sesi, sesi paling awal
+    yang lengkap (tanggal & jam) yang dipakai; jumlah_sesi = banyaknya sesi mapel itu."""
     daftar = list(mapel)
     hasil: Dict[str, Dict[str, Any]] = {}
-    for s in sorted(jadwal or [], key=lambda x: (x.get('tanggal') or '', x.get('jam_mulai') or '', x.get('sesi_ke') or 0)):
-        kode = kode_mapel_dari_nama((s.get('mapel') or {}).get(str(jenjang)), daftar)
-        if not kode or kode in hasil or not (s.get('tanggal') and s.get('jam_mulai') and s.get('jam_selesai')):
+    jumlah: Dict[str, int] = {}
+    for s in sorted(jadwal or [], key=_urut_sesi):
+        kode = kode_mapel_jadwal((s.get('mapel') or {}).get(str(jenjang)), daftar)
+        if not kode:
+            continue
+        jumlah[kode] = jumlah.get(kode, 0) + 1
+        if kode in hasil or not (s.get('tanggal') and s.get('jam_mulai') and s.get('jam_selesai')):
             continue
         hasil[kode] = {'tanggal': s['tanggal'], 'sesi_ke': s.get('sesi_ke'),
                        'mulai_at': iso_wib(s['tanggal'], s['jam_mulai']), 'selesai_at': iso_wib(s['tanggal'], s['jam_selesai'])}
+    for kode, x in hasil.items():
+        x['jumlah_sesi'] = jumlah[kode]
     return hasil
 
 
@@ -210,7 +275,7 @@ def link_siap(doc: Optional[Dict[str, Any]]) -> bool:
 
 
 def dokumen_link_soal(ujian_id: str, jenjang: int, mapel: str, isi: LinkSoalIn, user: Dict[str, Any],
-                      lama: Optional[Dict[str, Any]] = None, waktu: datetime = None) -> Dict[str, Any]:
+                      lama: Optional[Dict[str, Any]] = None, waktu: datetime = None, nama: Optional[str] = None) -> Dict[str, Any]:
     """Dokumen link soal hasil simpan admin (MENIMPA yang lama). id, dibuat_pada, dan penghitung klik (cache dari log)
     dipertahankan — mengganti tautan/jendela tidak menghapus riwayat klik."""
     if int(jenjang) not in JENJANG_UJIAN:
@@ -219,7 +284,7 @@ def dokumen_link_soal(ujian_id: str, jenjang: int, mapel: str, isi: LinkSoalIn, 
     lama = lama or {}
     return {
         'id': lama.get('id') or str(uuid.uuid4()), 'ujian_id': ujian_id, 'jenjang': int(jenjang), 'mapel': mapel,
-        'url': isi.url, 'mulai_at': isi.mulai_at, 'selesai_at': isi.selesai_at, 'aktif': bool(isi.aktif),
+        'nama_mapel': nama or lama.get('nama_mapel') or nama_mapel(mapel), 'url': isi.url, 'mulai_at': isi.mulai_at, 'selesai_at': isi.selesai_at, 'aktif': bool(isi.aktif),
         'jumlah_klik': int(lama.get('jumlah_klik') or 0), 'klik_terakhir_at': lama.get('klik_terakhir_at'),
         'dibuat_pada': lama.get('dibuat_pada') or t, 'diperbarui_pada': t,
         'diperbarui_oleh': user.get('id'), 'diperbarui_oleh_nama': user.get('full_name') or user.get('username'),
@@ -247,7 +312,8 @@ def ringkas_link_admin(doc: Optional[Dict[str, Any]], jenjang: int, mapel: str, 
 
 def susun_link_admin(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
                      jadwal: Iterable[Dict[str, Any]], tampil_url: bool = False) -> List[Dict[str, Any]]:
-    """Satu entri per jenjang × mapel baku aktif (urutan baku), menggabungkan dokumen tersimpan dan jendela jadwal."""
+    """Satu entri per jenjang × mapel `mapel_per_jenjang` (mapel_link_soal: urutan jadwal), menggabungkan dokumen tersimpan
+    dan jendela jadwal."""
     peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
     jadwal = list(jadwal or [])
     hasil = []
@@ -264,7 +330,7 @@ STATUS_SOAL = ('belum_dimulai', 'berlangsung', 'ditutup')
 # Satu-satunya field per mapel yang boleh keluar di payload portal publik (daftar putih; sama dengan FIELD_SOAL_PUBLIK di
 # frontend/src/lib/ujianPortalPublik.js ditambah hitung_mundur). Tautan soal (`url`), host-nya, identitas admin, dan field
 # lain dokumen link soal TIDAK PERNAH ikut — tautan soal hanya keluar lewat rute kerjakan saat mapel berlangsung.
-FIELD_SOAL_PUBLIK = ('id', 'jenjang', 'mapel', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'hitung_mundur',
+FIELD_SOAL_PUBLIK = ('id', 'jenjang', 'mapel', 'nama', 'tanggal', 'sesi_ke', 'mulai_at', 'selesai_at', 'status', 'hitung_mundur',
                      'siap', 'ditahan', 'jumlah_klik', 'klik_terakhir_at')
 # Field ujian yang boleh tampil di halaman publik.
 FIELD_UJIAN_PUBLIK = ('nama', 'jenis', 'tahun_pelajaran', 'mulai', 'selesai')
@@ -314,9 +380,10 @@ def tanggal_wib(nilai: Any) -> Optional[str]:
 
 def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
                 jadwal: Iterable[Dict[str, Any]], sekarang: datetime) -> List[Dict[str, Any]]:
-    """Daftar mapel portal (kontrak `soal` di frontend/src/lib/ujianPortalPublik.js), satu entri per jenjang × mapel baku
-    aktif yang punya jendela pengerjaan (dari link soal tersimpan, atau dari jadwal ujian bila belum diatur), urut jenjang
-    lalu jam mulai. TIDAK PERNAH memuat `url` tautan soal. Mapel tanpa jendela = belum dijadwalkan (tidak ikut)."""
+    """Daftar mapel portal (kontrak `soal` di frontend/src/lib/ujianPortalPublik.js), satu entri per jenjang × mapel JADWAL
+    (mapel_link_soal dengan di_jadwal; mapel yang sudah dihapus dari jadwal tidak ikut) yang punya jendela pengerjaan (dari
+    link soal tersimpan, atau dari jadwal ujian bila belum diatur), urut jenjang lalu jam mulai. TIDAK PERNAH memuat `url`
+    tautan soal. Mapel tanpa jendela = belum dijadwalkan (tidak ikut)."""
     peta = {(int(d.get('jenjang') or 0), d.get('mapel')): d for d in docs or []}
     jadwal = list(jadwal or [])
     hasil = []
@@ -325,6 +392,8 @@ def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, Lis
         dari_jadwal = jendela_jadwal(jadwal, j, daftar)
         baris = []
         for m in daftar:
+            if not m.get('di_jadwal', True):
+                continue
             d = peta.get((j, m['kode']))
             jd = dari_jadwal.get(m['kode'])
             mulai = (d or {}).get('mulai_at') or (jd or {}).get('mulai_at')
@@ -335,7 +404,8 @@ def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, Lis
             tanggal = tanggal_wib(mulai)
             siap = link_siap(d)
             baris.append({
-                'id': (d or {}).get('id') or f'belum-{j}-{m["kode"]}', 'jenjang': j, 'mapel': m['kode'], 'tanggal': tanggal,
+                'id': (d or {}).get('id') or f'belum-{j}-{m["kode"]}', 'jenjang': j, 'mapel': m['kode'], 'nama': m.get('nama'),
+                'tanggal': tanggal,
                 'sesi_ke': (jd or {}).get('sesi_ke') if jd and jd.get('tanggal') == tanggal else None,
                 'mulai_at': mulai, 'selesai_at': selesai, 'status': status, 'hitung_mundur': hitung_mundur(mulai, selesai, sekarang),
                 'siap': siap,
@@ -348,7 +418,7 @@ def soal_portal(docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, Lis
 
 def jadwal_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Optional[Dict[str, Any]]:
     """Hari ujian terdekat yang belum lewat beserta mapel pertama tiap jenjang (untuk pesan "portal belum dibuka/ditutup")
-    -> { tanggal, soal: [{ jenjang, mapel, mulai_at, selesai_at }] } atau None. Tanpa tautan soal & tanpa penghitung."""
+    -> { tanggal, soal: [{ jenjang, mapel, nama, mulai_at, selesai_at }] } atau None. Tanpa tautan soal & tanpa penghitung."""
     kini = sekarang.astimezone(WIB_TZ)
     belum_lewat = [s for s in soal or [] if baca_waktu(s.get('selesai_at')) and baca_waktu(s['selesai_at']) > kini]
     if not belum_lewat:
@@ -356,7 +426,7 @@ def jadwal_berikutnya(soal: Iterable[Dict[str, Any]], sekarang: datetime) -> Opt
     tanggal = min(s['tanggal'] for s in belum_lewat if s.get('tanggal'))
     pertama: Dict[int, Dict[str, Any]] = {}
     for s in sorted((s for s in belum_lewat if s.get('tanggal') == tanggal), key=lambda s: baca_waktu(s['mulai_at'])):
-        pertama.setdefault(s['jenjang'], {k: s[k] for k in ('jenjang', 'mapel', 'mulai_at', 'selesai_at')})
+        pertama.setdefault(s['jenjang'], {k: s.get(k) for k in ('jenjang', 'mapel', 'nama', 'mulai_at', 'selesai_at')})
     return {'tanggal': tanggal, 'soal': [pertama[j] for j in sorted(pertama)]}
 
 
@@ -408,6 +478,9 @@ def peringatan_link(isi: 'LinkSoalIn', ujian: Optional[Dict[str, Any]], jadwal: 
                      'di luar masa ujian, sehingga tombol tidak dapat dipakai pada waktu itu.')
     if jadwal and (mulai < baca_waktu(jadwal['mulai_at']) or selesai > baca_waktu(jadwal['selesai_at'])):
         hasil.append('Jendela pengerjaan melebar dari sesi jadwal ujian mapel ini. Pastikan memang disengaja (mis. ujian susulan).')
+    if jadwal and (jadwal.get('jumlah_sesi') or 1) > 1:
+        hasil.append(f"Mapel ini ada di {jadwal['jumlah_sesi']} sesi jadwal, tetapi tombol Mengerjakan hanya memakai satu "
+                     'jendela waktu (awalnya sesi pertama). Sesuaikan jamnya bila sesi lain juga perlu dibuka.')
     if isi.url and not isi.aktif:
         hasil.append('Tombol Mengerjakan dimatikan: mapel ini tampil "ditahan panitia" di portal sampai diaktifkan lagi.')
     return hasil
@@ -441,7 +514,8 @@ def ringkas_link_log(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Identitas link soal untuk log klik: tanpa tautan lengkap (hanya nama host)."""
     if not doc:
         return None
-    return {'id': doc.get('id'), 'jenjang': doc.get('jenjang'), 'mapel': doc.get('mapel'), 'url_host': host_url(doc.get('url'))}
+    return {'id': doc.get('id'), 'jenjang': doc.get('jenjang'), 'mapel': doc.get('mapel'), 'nama_mapel': doc.get('nama_mapel'),
+            'url_host': host_url(doc.get('url'))}
 
 
 async def naikkan_klik(db, link_id: str, waktu: datetime) -> None:
@@ -490,7 +564,8 @@ async def bangun_ulang_klik(db, ujian_id: str, dry_run: bool = False, waktu: dat
         sebelum, terakhir_lama = int(d.get('jumlah_klik') or 0), d.get('klik_terakhir_at')
         if (sebelum, terakhir_lama) == (a['jumlah'], a['terakhir']):
             continue
-        baris = {'jenjang': d.get('jenjang'), 'mapel': d.get('mapel'), 'sebelum': sebelum, 'sesudah': a['jumlah'],
+        baris = {'jenjang': d.get('jenjang'), 'mapel': d.get('mapel'), 'nama_mapel': d.get('nama_mapel') or nama_mapel(d.get('mapel')),
+                 'sebelum': sebelum, 'sesudah': a['jumlah'],
                  'klik_terakhir_at': a['terakhir']}
         if not dry_run:
             r = await db[KOLEKSI_LINK_SOAL].update_one(
@@ -507,10 +582,10 @@ async def bangun_ulang_klik(db, ujian_id: str, dry_run: bool = False, waktu: dat
 # ---- Intensitas klik untuk admin ----
 def susun_intensitas(log: Iterable[Dict[str, Any]], docs: Iterable[Dict[str, Any]], mapel_per_jenjang: Dict[str, List[Dict[str, Any]]],
                      jadwal: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
-    """Intensitas klik SAH per jenjang × mapel baku dari baris log (sudah tersaring KUERI_KLIK + rentang tanggal) —
+    """Intensitas klik SAH per jenjang × mapel (mapel_link_soal) dari baris log (sudah tersaring KUERI_KLIK + rentang tanggal) —
     kontrak GET /ujian/{id}/link-soal/intensitas (frontend/src/lib/ujianLinkSoal.js):
     { hari: [tanggal WIB yang punya klik, urut], ringkasan: { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at },
-      intensitas: [{ link_soal_id, jenjang, mapel, url_host, mulai_at, selesai_at, siap, jumlah_klik, klik_terakhir_at,
+      intensitas: [{ link_soal_id, jenjang, mapel, nama, di_jadwal, url_host, mulai_at, selesai_at, siap, jumlah_klik, klik_terakhir_at,
                      harian: [{ tanggal, jumlah }] }] }. Tanpa tautan soal lengkap."""
     per_link: Dict[str, Dict[str, Any]] = {}
     for x in log or []:
@@ -534,7 +609,8 @@ def susun_intensitas(log: Iterable[Dict[str, Any]], docs: Iterable[Dict[str, Any
             jd = dari_jadwal.get(m['kode']) or {}
             p = per_link.get(d.get('id')) or {'jumlah': 0, 'terakhir': None, 'harian': {}}
             intensitas.append({
-                'link_soal_id': d.get('id'), 'jenjang': j, 'mapel': m['kode'], 'url_host': host_url(d.get('url')) if d.get('url') else '',
+                'link_soal_id': d.get('id'), 'jenjang': j, 'mapel': m['kode'], 'nama': m.get('nama'),
+                'di_jadwal': m.get('di_jadwal', True), 'url_host': host_url(d.get('url')) if d.get('url') else '',
                 'mulai_at': d.get('mulai_at') or jd.get('mulai_at'), 'selesai_at': d.get('selesai_at') or jd.get('selesai_at'),
                 'siap': link_siap(d or None), 'jumlah_klik': p['jumlah'], 'klik_terakhir_at': p['terakhir'],
                 'harian': [{'tanggal': t, 'jumlah': n} for t, n in sorted(p['harian'].items())],

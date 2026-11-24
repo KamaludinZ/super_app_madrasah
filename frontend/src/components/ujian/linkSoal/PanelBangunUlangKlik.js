@@ -72,7 +72,7 @@ export default function PanelBangunUlangKlik({ ujianId, onSelesai }) {
             <ul className="mt-2 divide-y divide-slate-200">
               {hasil.selisih.map((s) => (
                 <li key={`${s.jenjang}-${s.mapel}`} className="flex items-center justify-between gap-3 py-1.5" data-testid={`selisih-${s.jenjang}-${s.mapel}`}>
-                  <span className="min-w-0 text-slate-700">{namaMapelUjian(s.mapel)} · {labelJenjang(s.jenjang)}</span>
+                  <span className="min-w-0 text-slate-700">{s.nama_mapel || namaMapelUjian(s.mapel)} · {labelJenjang(s.jenjang)}</span>
                   <span className="flex shrink-0 items-center gap-1.5 tabular-nums">
                     <span className="text-slate-400 line-through">{s.sebelum}</span>
                     <ArrowRight className="h-3 w-3 text-slate-400" aria-label="menjadi" />

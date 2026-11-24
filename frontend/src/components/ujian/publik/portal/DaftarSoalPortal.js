@@ -3,10 +3,10 @@ import { toast } from 'sonner';
 import { AlertTriangle, CalendarDays, CircleDashed, Clock, ExternalLink, Lock, MonitorPlay } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatWIB } from '@/lib/datetime';
-import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
+import { labelJenjang } from '@/lib/mapelUjian';
 import {
-  STATUS_SOAL, bolehKerjakan, bukaSoalContoh, catatKlikTiruan, hitungMundurSoal, normalKlik, ringkasPortal, soalJenjang, sorotanPortal,
-  statusSoal, urlKerjakan,
+  STATUS_SOAL, bolehKerjakan, bukaSoalContoh, catatKlikTiruan, hitungMundurSoal, mapelPortalJenjang, normalKlik, ringkasPortal, soalJenjang,
+  sorotanPortal, statusSoal, urlKerjakan,
 } from '@/lib/ujianPortalPublik';
 import { BagianInfo, KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 
@@ -200,7 +200,7 @@ function BarisSoal({ soal, jenjang, token, sesi, tiruan, sekarangMs, kiniServer,
 }
 
 function IsiJenjang({ soal, mapel, jenjang, sekarangMs, hariIni, token, sesi, tiruan, kiniServer, onKedaluwarsa, onKlik }) {
-  const daftarMapel = useMemo(() => mapelUntuk(mapel, jenjang), [mapel, jenjang]);
+  const daftarMapel = useMemo(() => mapelPortalJenjang(mapel, jenjang), [mapel, jenjang]);
   const { hari, tanpaJadwal } = useMemo(() => soalJenjang(soal, jenjang, daftarMapel, sekarangMs), [soal, jenjang, daftarMapel, sekarangMs]);
   const sorotan = sorotanPortal(hari);
   // Yang sudah ditutup tidak perlu diumumkan lagi: hanya mapel yang masih akan/sedang berlangsung.
@@ -267,7 +267,7 @@ export default function DaftarSoalPortal({
 }) {
   const hariIni = useMemo(() => new Date(sekarangMs).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }), [sekarangMs]);
   const lencana = (j) => {
-    const r = ringkasPortal(soalJenjang(soal, j, mapelUntuk(mapel, j), sekarangMs).hari);
+    const r = ringkasPortal(soalJenjang(soal, j, mapelPortalJenjang(mapel, j), sekarangMs).hari);
     if (r.berlangsung) return `${r.berlangsung} berlangsung`;
     return r.total ? `${r.ditutup}/${r.total} selesai` : 'belum ada';
   };

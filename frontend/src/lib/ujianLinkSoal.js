@@ -1,44 +1,50 @@
 /**
  * Ujian Madrasah — menu Link Soal (ber-login; key `link_soal`): admin mengisi tautan soal eksternal (aplikasi CBT) dan
- * jendela waktu tombol "Mengerjakan" per jenjang per mapel baku untuk Portal Ujian siswa (/publik/portal-ujian/:token).
- * Jendela awalnya mengikuti sesi jadwal ujian mapel itu (menu Pengaturan Formulir); admin boleh mempersempitnya.
+ * jendela waktu tombol "Mengerjakan" per jenjang per mapel untuk Portal Ujian siswa (/publik/portal-ujian/:token).
+ * Daftar mapel MENGIKUTI JADWAL SESI ujian (menu Pengaturan Formulir) — termasuk mapel di luar 15 mapel baku seperti
+ * "Simulasi" yang diambil dari menu Mata Pelajaran. Jendela awalnya mengikuti sesi jadwal mapel itu (sesi pertama bila
+ * mapel ada di beberapa sesi); admin boleh mengubahnya.
  * Kepala madrasah, waka kurikulum, serta ketua & sekretaris panitia melihat (boleh_ubah = false) tanpa alamat soal.
  *
  * Kontrak server (backend menyusul; koleksi `ujian_link_soal`, unik ujian_id + jenjang + mapel):
  *   GET /ujian/{ujian_id}/link-soal
  *     -> { ujian, boleh_ubah, tautan_portal: Tautan | null (lihat ujianTautanPublik.js),
- *          mapel: { '7': [{ kode, nama }], '8': [...], '9': [...] },   (mapel baku aktif per jenjang)
- *          link: [LinkSoal] }   (satu entri per jenjang × mapel baku aktif; yang belum diatur: id null, url '')
+ *          mapel: { '7': [{ kode, nama, di_jadwal, jumlah_sesi }], '8': [...], '9': [...] },
+ *            (mapel di jadwal sesi jenjang itu, urut jadwal; kode = kode baku bila nama dikenali, selain itu nama
+ *             ternormal — "Simulasi" -> "simulasi". Link tersimpan yang mapelnya sudah dihapus dari jadwal ikut di akhir
+ *             dengan di_jadwal false & jumlah_sesi 0: tampil di sini, tidak di portal. Jadwal kosong = daftar kosong.)
+ *          link: [LinkSoal] }   (satu entri per jenjang × mapel di atas; yang belum diatur: id null, url '')
  *   PUT /ujian/{ujian_id}/link-soal/{jenjang}/{mapel} { url, mulai_at, selesai_at, aktif, versi }
  *     -> { link: LinkSoal, peringatan: [teks] }   (peringatan: jendela di luar masa ujian / melebar dari jadwal / ditahan)
  *        (admin; menimpa — satu baris per jenjang+mapel. `versi` = link.versi yang dimuat (null bila belum pernah
- *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai -> pesan)
+ *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai / mapel
+ *         tidak ada di jadwal sesi -> pesan. Peringatan juga muncul bila mapel ada di beberapa sesi jadwal.)
  *   POST /ujian/{ujian_id}/link-soal/bangun-ulang-klik
- *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }],
+ *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, nama_mapel, sebelum, sesudah, klik_terakhir_at }],
  *          berubah: [{ jenjang, mapel }] (menerima klik baru saat dihitung — dilewati, jalankan ulang), link: [LinkSoal] }
  *        (admin; jumlah_klik & klik_terakhir_at tiap link soal dihitung ulang dari ujian_akses_log aksi=klik_mengerjakan —
  *         log adalah sumber kebenaran, angka pada dokumen hanya cache. Log tidak diubah; aman diulang.)
  *   GET /ujian/{ujian_id}/link-soal/intensitas[?dari=YYYY-MM-DD&sampai=YYYY-MM-DD]   (admin & pemantau)
  *     -> { rentang: { dari, sampai }, hari: ['YYYY-MM-DD', …] (hari yang tercakup, urut),
  *          ringkasan: { total_klik, mapel_diklik, mapel_siap, klik_terakhir_at },
- *          intensitas: [{ link_soal_id, jenjang, mapel, url_host, mulai_at, selesai_at, siap,
+ *          intensitas: [{ link_soal_id, jenjang, mapel, nama, di_jadwal, url_host, mulai_at, selesai_at, siap,
  *                         jumlah_klik, klik_terakhir_at, harian: [{ tanggal, jumlah }] }] }
  *        (diagregasi dari ujian_akses_log aksi=klik_mengerjakan per link_soal_id dalam rentang tanggal WIB — BUKAN dari
- *         cache jumlah_klik — sehingga tetap dapat ditelusuri setelah ujian selesai; satu entri per jenjang × mapel baku)
+ *         cache jumlah_klik — sehingga tetap dapat ditelusuri setelah ujian selesai; satu entri per jenjang × mapel)
  *   GET /ujian/{ujian_id}/link-soal/{link_soal_id}/klik[?batas=200]   (admin & pemantau)
  *     -> { total, klik: [{ id, waktu, ip, perangkat (user agent), sesi }] (terbaru dulu, maksimal `batas`),
  *          per_ip: [{ ip, jumlah }], per_perangkat: [{ perangkat, jumlah }] (terbanyak dulu, dari SELURUH klik) }
  *        (baris ujian_akses_log aksi=klik_mengerjakan link soal itu; untuk menelusuri sumber klik yang janggal)
- *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode baku, url (admin saja; pemantau: '' dan url_host), url_host,
+ *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode mapel (lihat `mapel`), url (admin saja; pemantau: '' dan url_host), url_host,
  *                mulai_at, selesai_at, aktif, siap (url terisi & aktif),
- *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at } | null,   (sesi jadwal ujian mapel ini = nilai awal)
+ *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at, jumlah_sesi } | null,   (sesi pertama jadwal mapel ini = nilai awal)
  *                jumlah_klik, klik_terakhir_at, diperbarui_pada, diperbarui_oleh_nama, versi }
  */
 import { api } from '@/lib/api';
 import { denganTiruan } from '@/lib/ujian';
 import { hariIniWIB } from '@/lib/tanggal';
 import { parseServerDate, wibDateKey } from '@/lib/datetime';
-import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU, mapelUntuk } from '@/lib/mapelUjian';
+import { JENJANG_UJIAN, MAPEL_UJIAN_BAKU } from '@/lib/mapelUjian';
 import { tambahHari } from '@/lib/ujianInfoPublik';
 import { dariInputWaktu, keInputWaktu, muatTautanPublik } from '@/lib/ujianTautanPublik';
 
@@ -149,19 +155,34 @@ export const badanLink = (isi, versi) => ({
 // ---- Susunan per jenjang ----
 
 /**
- * Baris satu jenjang dalam urutan mapel baku: [{ nomor, kode, nama, link: LinkSoal | null }] dan ringkasan
- * { total, siap, terjadwal } untuk lencana tab.
+ * Daftar mapel Link Soal satu jenjang dari server (`mapel` respons GET link-soal): mengikuti jadwal sesi ujian, termasuk
+ * mapel di luar mapel baku, ditambah link tersimpan yang sudah tidak ada di jadwal (di_jadwal false). Jadwal kosong =
+ * daftar kosong — TIDAK jatuh ke 15 mapel baku seperti mapelUntuk. -> [{ kode, nama, di_jadwal, jumlah_sesi }]
+ */
+export function mapelLinkSoal(mapel, jenjang) {
+  const daftar = mapel?.[String(jenjang)];
+  return Array.isArray(daftar) ? daftar.filter((m) => m && m.kode).map((m) => ({ di_jadwal: true, jumlah_sesi: 1, ...m })) : [];
+}
+
+/**
+ * Baris satu jenjang dalam urutan jadwal: [{ nomor, kode, nama, di_jadwal, jumlah_sesi, link: LinkSoal | null }] dan
+ * ringkasan { total, siap, terjadwal, di_luar_jadwal } untuk lencana tab — total/siap/terjadwal hanya mapel yang ada di
+ * jadwal (yang di luar jadwal tidak tampil di portal).
  */
 export function barisLinkJenjang(link, mapel, jenjang) {
-  const daftar = mapelUntuk(mapel, jenjang);
+  const daftar = mapelLinkSoal(mapel, jenjang);
   const peta = new Map((link || []).filter((l) => Number(l.jenjang) === Number(jenjang)).map((l) => [l.mapel, l]));
-  const baris = daftar.map((m, i) => ({ nomor: i + 1, kode: m.kode, nama: m.nama, link: peta.get(m.kode) || null }));
+  const baris = daftar.map((m, i) => ({
+    nomor: i + 1, kode: m.kode, nama: m.nama, di_jadwal: m.di_jadwal !== false, jumlah_sesi: m.jumlah_sesi || 0, link: peta.get(m.kode) || null,
+  }));
+  const dijadwal = baris.filter((b) => b.di_jadwal);
   return {
     baris,
     ringkas: {
-      total: baris.length,
-      siap: baris.filter((b) => b.link?.siap).length,
-      terjadwal: baris.filter((b) => b.link?.mulai_at && b.link?.selesai_at).length,
+      total: dijadwal.length,
+      siap: dijadwal.filter((b) => b.link?.siap).length,
+      terjadwal: dijadwal.filter((b) => b.link?.mulai_at && b.link?.selesai_at).length,
+      di_luar_jadwal: baris.length - dijadwal.length,
     },
   };
 }
@@ -190,25 +211,36 @@ function jadwalContoh(j, i) {
   return { tanggal, sesi_ke: sesi, mulai_at: `${tanggal}T${m}:00+07:00`, selesai_at: `${tanggal}T${s}:00+07:00` };
 }
 
+// Mapel contoh per jenjang: "Simulasi" (dari menu Mata Pelajaran, di luar mapel baku) lalu 15 mapel baku.
+const MAPEL_CONTOH = [{ kode: 'simulasi', nama: 'Simulasi' }, ...MAPEL_UJIAN_BAKU];
+
 function linkContoh(ujianId) {
   if (!contoh[ujianId]) {
     const daftar = [];
     JENJANG_UJIAN.forEach((j, ji) => {
-      MAPEL_UJIAN_BAKU.forEach((m, i) => {
-        const slot = (i + ji * 4) % MAPEL_UJIAN_BAKU.length; // urutan jadwal berbeda per jenjang
-        const tanpaJadwal = j === 9 && slot === MAPEL_UJIAN_BAKU.length - 1;
-        const jadwal = tanpaJadwal ? null : jadwalContoh(j, slot);
-        const terisi = !tanpaJadwal && (i + j) % 4 !== 0;
-        const dipersempit = terisi && i % 5 === 1;
+      MAPEL_CONTOH.forEach((m, i) => {
+        const simulasi = i === 0;
+        const slot = (i - 1 + ji * 4) % MAPEL_UJIAN_BAKU.length; // urutan jadwal berbeda per jenjang
+        // Kelas 9: satu mapel sudah dihapus dari jadwal tetapi link-nya telanjur tersimpan ("tidak ada di jadwal").
+        const tanpaJadwal = j === 9 && !simulasi && slot === MAPEL_UJIAN_BAKU.length - 1;
+        // Simulasi: sehari sebelum hari ujian pertama; kelas 7 punya dua sesi simulasi.
+        const hariSimulasi = geserHariUjian(hariIniWIB(), -3);
+        const jadwal = tanpaJadwal ? null : simulasi
+          ? { tanggal: hariSimulasi, sesi_ke: 1, mulai_at: `${hariSimulasi}T08:00:00+07:00`, selesai_at: `${hariSimulasi}T09:00:00+07:00`, jumlah_sesi: j === 7 ? 2 : 1 }
+          : { ...jadwalContoh(j, slot), jumlah_sesi: 1 };
+        const terisi = tanpaJadwal || simulasi || (i + j) % 4 !== 0;
+        const dipersempit = terisi && !tanpaJadwal && i % 5 === 1;
+        const susulan = tanpaJadwal ? jadwalContoh(j, 1) : null;
         daftar.push({
-          id: terisi ? `contoh-link-${j}-${m.kode}` : null, jenjang: j, mapel: m.kode,
+          id: terisi ? `contoh-link-${j}-${m.kode}` : null, jenjang: j, mapel: m.kode, nama_mapel: m.nama,
+          di_jadwal: !tanpaJadwal, jumlah_sesi: jadwal?.jumlah_sesi || 0,
           url: terisi ? `https://cbt.contoh-madrasah.sch.id/ujian/${j}/${m.kode}` : '', url_host: terisi ? 'cbt.contoh-madrasah.sch.id' : '',
-          mulai_at: jadwal ? (dipersempit ? jadwal.mulai_at.replace(/T(07|09):30/, 'T$1:45') : jadwal.mulai_at) : null,
-          selesai_at: jadwal?.selesai_at || null,
+          mulai_at: jadwal ? (dipersempit ? jadwal.mulai_at.replace(/T(07|09):30/, 'T$1:45') : jadwal.mulai_at) : susulan.mulai_at,
+          selesai_at: jadwal?.selesai_at || susulan.selesai_at,
           aktif: !(terisi && i % 7 === 3), jadwal,
           // klik hanya ada pada sesi yang sudah lewat (sebelum hari ini)
-          jumlah_klik: terisi && jadwal.tanggal < hariIniWIB() ? 12 + ((i * 7 + j * 3) % 23) : 0,
-          klik_terakhir_at: terisi && jadwal.tanggal < hariIniWIB() ? `${jadwal.tanggal}T${jadwal.sesi_ke === 1 ? '08:4' : '10:4'}${i % 10}:00+07:00` : null,
+          jumlah_klik: terisi && jadwal && jadwal.tanggal < hariIniWIB() ? 12 + ((i * 7 + j * 3) % 23) : 0,
+          klik_terakhir_at: terisi && jadwal && jadwal.tanggal < hariIniWIB() ? `${jadwal.tanggal}T${jadwal.sesi_ke === 1 ? '08:4' : '10:4'}${i % 10}:00+07:00` : null,
           diperbarui_pada: terisi ? `${hariIniWIB()}T08:${String(10 + i).padStart(2, '0')}:00+07:00` : null,
           diperbarui_oleh_nama: terisi ? GURU_CONTOH : null, versi: terisi ? `contoh-v1-${j}-${m.kode}` : null,
         });
@@ -231,6 +263,17 @@ function linkContoh(ujianId) {
 
 const galat = (status, detail) => { const e = new Error(String(status)); e.response = { status, data: { detail } }; return e; };
 
+// Daftar mapel contoh per jenjang seperti respons server: urut jadwal, lalu yang tidak ada di jadwal di akhir.
+function mapelContoh(ujianId) {
+  const hasil = {};
+  JENJANG_UJIAN.forEach((j) => {
+    hasil[String(j)] = linkContoh(ujianId).filter((l) => l.jenjang === j)
+      .sort((a, b) => Number(b.di_jadwal) - Number(a.di_jadwal) || String(a.jadwal?.mulai_at || '').localeCompare(String(b.jadwal?.mulai_at || '')))
+      .map((l) => ({ kode: l.mapel, nama: l.nama_mapel, di_jadwal: l.di_jadwal, jumlah_sesi: l.jumlah_sesi }));
+  });
+  return hasil;
+}
+
 // Jumlah klik menurut "jejak audit" contoh: sama dengan cache kecuali mapel bertanda selisih_log (lihat linkContoh).
 const klikLogContoh = (l) => Math.max(0, (l.jumlah_klik || 0) + (l.selisih_log || 0));
 
@@ -241,7 +284,10 @@ export const muatLinkSoal = (ujianId) => denganTiruan(
     // Status portal contoh diambil dari pengelolaan tautan (data contoh yang sama) agar sakelar di kedua menu sejalan.
     let portal = null;
     try { portal = (await muatTautanPublik(ujianId)).tautan?.portal || null; } catch { /* tanpa status portal */ }
-    return { boleh_ubah: true, tautan_portal: portal, link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })) };
+    return {
+      boleh_ubah: true, tautan_portal: portal, mapel: mapelContoh(ujianId),
+      link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
+    };
   },
 );
 
@@ -256,7 +302,9 @@ export const bangunUlangKlik = (ujianId) => denganTiruan(
     const selisih = [];
     daftar.filter((l) => l.id).forEach((l) => {
       const sesudah = klikLogContoh(l);
-      if (sesudah !== (l.jumlah_klik || 0)) selisih.push({ jenjang: l.jenjang, mapel: l.mapel, sebelum: l.jumlah_klik || 0, sesudah, klik_terakhir_at: l.klik_terakhir_at });
+      if (sesudah !== (l.jumlah_klik || 0)) {
+        selisih.push({ jenjang: l.jenjang, mapel: l.mapel, nama_mapel: l.nama_mapel, sebelum: l.jumlah_klik || 0, sesudah, klik_terakhir_at: l.klik_terakhir_at });
+      }
       l.jumlah_klik = sesudah;
       l.selisih_log = 0;
     });
@@ -281,10 +329,12 @@ export function ringkasIntensitas(intensitas) {
   };
 }
 
-/** Entri intensitas satu jenjang dalam urutan mapel baku: [{ nomor, kode, nama, data: Entri | null }]. */
+/** Entri intensitas satu jenjang dalam urutan jadwal (mapelLinkSoal): [{ nomor, kode, nama, di_jadwal, data: Entri | null }]. */
 export function intensitasJenjang(intensitas, mapel, jenjang) {
   const peta = new Map((intensitas || []).filter((x) => Number(x.jenjang) === Number(jenjang)).map((x) => [x.mapel, x]));
-  return mapelUntuk(mapel, jenjang).map((m, i) => ({ nomor: i + 1, kode: m.kode, nama: m.nama, data: peta.get(m.kode) || null }));
+  return mapelLinkSoal(mapel, jenjang).map((m, i) => ({
+    nomor: i + 1, kode: m.kode, nama: m.nama, di_jadwal: m.di_jadwal !== false, data: peta.get(m.kode) || null,
+  }));
 }
 
 export const SARINGAN_INTENSITAS = [
@@ -308,7 +358,7 @@ export function keadaanKlik(d, kiniMs = Date.now()) {
 }
 
 /**
- * Saring baris intensitas (hasil intensitasJenjang): `mapel` = kode baku atau '' (semua); `status` = 'semua' |
+ * Saring baris intensitas (hasil intensitasJenjang): `mapel` = kode mapel atau '' (semua); `status` = 'semua' |
  * 'dikerjakan' | 'tidak_tersentuh' (lihat keadaanKlik).
  */
 export function saringIntensitas(baris, { mapel = '', status = 'semua' } = {}, kiniMs = Date.now()) {
@@ -341,7 +391,7 @@ export const muatIntensitasKlik = (ujianId, { dari = '', sampai = '' } = {}) => 
       // klik terakhir = klik terbaru dalam rentang pada daftar klik contoh yang sama dengan panel rincian
       const terbaru = jumlah ? klikContohLink(l).find((k) => dalam(wibDateKey(k.waktu))) : null;
       return {
-        link_soal_id: l.id, jenjang: l.jenjang, mapel: l.mapel, url_host: l.url_host, mulai_at: l.mulai_at, selesai_at: l.selesai_at, siap: l.siap,
+        link_soal_id: l.id, jenjang: l.jenjang, mapel: l.mapel, nama: l.nama_mapel, di_jadwal: l.di_jadwal, url_host: l.url_host, mulai_at: l.mulai_at, selesai_at: l.selesai_at, siap: l.siap,
         jumlah_klik: jumlah, klik_terakhir_at: terbaru?.waktu || null, harian,
       };
     });

@@ -36,7 +36,7 @@ Dokumen `ujian_mapel_baku` (master mapel ujian per jenjang; di-seed dari MAPEL_U
     migrasi diulang. Bila koleksi kosong, kode memakai konstanta MAPEL_UJIAN_BAKU (mapel_jenjang).
 
 Dokumen `ujian_akses_log`: id, tautan_id, ujian_id, jenis_tautan, aksi ('buka_tautan' | 'klik_mengerjakan'; lihat
-    ujian_portal.py — klik juga menyimpan link_soal_id, jenjang, mapel, url_host), token (≤ 100 karakter, juga untuk token salah),
+    ujian_portal.py — klik juga menyimpan link_soal_id, jenjang, mapel, nama_mapel, url_host), token (≤ 100 karakter, juga untuk token salah),
     waktu, ip (sumber asli di balik proxy; lihat ip_peminta), ip_rantai (X-Forwarded-For mentah), perangkat (user agent),
     hasil (HASIL_AKSES), jumlah_percobaan (token tidak dikenal: percobaan dari IP sama dalam 1 menit digabung), sesi (id acak per pembukaan halaman dari klien, opsional),
     terakhir_aktif & jumlah_segarkan (diperbarui setiap muat ulang otomatis halaman yang sama — satu entri per
@@ -575,14 +575,15 @@ async def catat_akses(db, tautan: Optional[Dict[str, Any]], token: Optional[str]
 async def catat_klik(db, tautan: Optional[Dict[str, Any]], token: Optional[str], link: Optional[Dict[str, Any]], hasil: str,
                      request=None, sesi: Optional[str] = None, waktu: datetime = None) -> Optional[Dict[str, Any]]:
     """Catat satu klik tombol "Mengerjakan" portal ke ujian_akses_log (aksi 'klik_mengerjakan'), sah maupun ditolak.
-    `link` = { id, jenjang, mapel, url_host } (nama host tujuan saja, bukan tautan lengkap) atau None bila mapel tidak
+    `link` = { id, jenjang, mapel, nama_mapel, url_host } (nama host tujuan saja, bukan tautan lengkap) atau None bila mapel tidak
     dikenal. Hanya entri ber-hasil 'ok' yang dihitung sebagai klik sah (penghitung & intensitas). -> dokumen log (None
     bila gagal dicatat — audit tidak boleh menggagalkan permintaan)."""
     try:
         ip, perangkat = peminta(request)
         doc = dokumen_akses_log(tautan, token, hasil, ip, perangkat, waktu=waktu, sesi=sesi, aksi='klik_mengerjakan')
         l = link or {}
-        doc.update({'link_soal_id': l.get('id'), 'jenjang': l.get('jenjang'), 'mapel': l.get('mapel'), 'url_host': l.get('url_host') or None,
+        doc.update({'link_soal_id': l.get('id'), 'jenjang': l.get('jenjang'), 'mapel': l.get('mapel'), 'nama_mapel': l.get('nama_mapel'),
+                    'url_host': l.get('url_host') or None,
                     'ip_rantai': ip_peminta(request)[1]})
         await db[KOLEKSI_AKSES_LOG].insert_one(dict(doc))
         return doc

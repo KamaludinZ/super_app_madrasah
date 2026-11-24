@@ -127,10 +127,57 @@ def test_jendela_awal_dari_jadwal():
     ]
     j7 = up.jendela_jadwal(jadwal, 7, MAPEL7)
     assert j7 == {
-        'matematika': {'tanggal': '2026-12-02', 'sesi_ke': 2, 'mulai_at': '2026-12-02T09:30:00+07:00', 'selesai_at': '2026-12-02T11:00:00+07:00'},
-        'ipa': {'tanggal': '2026-12-03', 'sesi_ke': 1, 'mulai_at': '2026-12-03T07:30:00+07:00', 'selesai_at': '2026-12-03T09:00:00+07:00'},
-    }  # sesi paling awal dipakai; nama tak dikenal ("… (susulan)") dilewati
+        'matematika': {'tanggal': '2026-12-02', 'sesi_ke': 2, 'mulai_at': '2026-12-02T09:30:00+07:00', 'selesai_at': '2026-12-02T11:00:00+07:00',
+                       'jumlah_sesi': 1},
+        'ipa': {'tanggal': '2026-12-03', 'sesi_ke': 1, 'mulai_at': '2026-12-03T07:30:00+07:00', 'selesai_at': '2026-12-03T09:00:00+07:00',
+                'jumlah_sesi': 2},
+        # nama di luar mapel baku menjadi mapel sendiri (nama ternormal), bukan dilewati
+        'matematikasusulan': {'tanggal': '2026-12-04', 'sesi_ke': 1, 'mulai_at': '2026-12-04T07:30:00+07:00',
+                              'selesai_at': '2026-12-04T09:00:00+07:00', 'jumlah_sesi': 1},
+    }  # sesi paling awal dipakai; jumlah_sesi = banyaknya sesi mapel itu
     assert set(up.jendela_jadwal(jadwal, 8, MAPEL7)) == {'matematika'} and up.jendela_jadwal(jadwal, 9, MAPEL7) == {}
+
+
+def test_kode_mapel_jadwal_di_luar_mapel_baku():
+    assert up.kode_mapel_jadwal('Matematika', MAPEL7) == 'matematika' and up.kode_mapel_jadwal("Al-Qur'an Hadits", MAPEL7) == 'quran_hadits'
+    assert up.kode_mapel_jadwal('Simulasi', MAPEL7) == 'simulasi' and up.kode_mapel_jadwal(' Simulasi CBT (Kelas 7) ', MAPEL7) == 'simulasicbtkelas7'
+    assert up.kode_mapel_jadwal('', MAPEL7) is None and up.kode_mapel_jadwal('  -  ', MAPEL7) is None
+    assert len(up.kode_mapel_jadwal('Simulasi ' * 30, MAPEL7)) == up.KODE_MAPEL_MAKS
+    # mapel baku yang dinonaktifkan di master tetap dapat dijadwalkan (kodenya sama dengan kode baku)
+    assert up.kode_mapel_jadwal('IPA', [m for m in MAPEL7 if m['kode'] != 'ipa']) == 'ipa'
+
+
+def test_mapel_link_soal_mengikuti_jadwal():
+    """Daftar mapel Link Soal & portal = mapel di jadwal sesi (urut kemunculan), bukan 15 mapel baku."""
+    jadwal = [
+        {'tanggal': '2026-12-03', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'IPA', '8': 'Simulasi'}},
+        {'tanggal': '2026-12-02', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'Simulasi', '8': 'PPKn'}},
+        {'tanggal': '2026-12-04', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'simulasi'}},
+    ]
+    docs = [{'jenjang': 7, 'mapel': 'ips', 'nama_mapel': 'IPS'}, {'jenjang': 7, 'mapel': 'ipa'},
+            {'jenjang': 9, 'mapel': 'simulasilama', 'nama_mapel': 'Simulasi Lama'}]
+    m = up.mapel_link_soal(jadwal, {str(j): MAPEL7 for j in (7, 8, 9)}, docs)
+    assert m['7'] == [
+        {'kode': 'simulasi', 'nama': 'Simulasi', 'di_jadwal': True, 'jumlah_sesi': 2},   # dua sesi tetap satu baris
+        {'kode': 'ipa', 'nama': 'IPA', 'di_jadwal': True, 'jumlah_sesi': 1},
+        {'kode': 'ips', 'nama': 'IPS', 'di_jadwal': False, 'jumlah_sesi': 0},           # tersimpan, sudah tidak di jadwal
+    ]
+    assert [(x['kode'], x['nama']) for x in m['8']] == [('pkn', 'PKN'), ('simulasi', 'Simulasi')]  # nama baku dipakai bila dikenali
+    assert m['9'] == [{'kode': 'simulasilama', 'nama': 'Simulasi Lama', 'di_jadwal': False, 'jumlah_sesi': 0}]
+    assert up.mapel_link_soal([], {'7': MAPEL7}) == {'7': [], '8': [], '9': []}  # tanpa jadwal: kosong, bukan 15 mapel baku
+    assert up.mapel_portal(m)['7'] == [{'kode': 'simulasi', 'nama': 'Simulasi'}, {'kode': 'ipa', 'nama': 'IPA'}]  # tanpa yang di luar jadwal
+
+
+def test_soal_portal_hanya_mapel_jadwal():
+    jadwal = [{'tanggal': '2026-12-02', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'Simulasi'}}]
+    docs = [{'id': 'l-sim', 'jenjang': 7, 'mapel': 'simulasi', 'url': 'https://cbt.id/s', 'aktif': True,
+             'mulai_at': '2026-12-02T07:30:00+07:00', 'selesai_at': '2026-12-02T09:00:00+07:00'},
+            {'id': 'l-ips', 'jenjang': 7, 'mapel': 'ips', 'url': 'https://cbt.id/i', 'aktif': True,
+             'mulai_at': '2026-12-02T07:30:00+07:00', 'selesai_at': '2026-12-02T09:00:00+07:00'}]
+    mapel = up.mapel_link_soal(jadwal, {'7': MAPEL7}, docs)
+    soal = up.soal_portal(docs, mapel, jadwal, _wib('2026-12-02T08:00:00+07:00'))
+    assert [(s['id'], s['mapel'], s['nama'], s['status'], s['siap']) for s in soal] == [('l-sim', 'simulasi', 'Simulasi', 'berlangsung', True)]
+    assert all('url' not in s for s in soal)
 
 
 def test_isian_link_soal():

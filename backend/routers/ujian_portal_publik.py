@@ -20,24 +20,36 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core import db
-from routers.ujian_formulir import jadwal_ujian
 from routers.ujian_info_publik import TANPA_CACHE, madrasah_publik
+from routers.ujian_link_soal import mapel_dan_jadwal
 from ujian import KOLEKSI_UJIAN, sekarang_wib
 from ujian_info import (
-    PESAN_TOKEN, cari_tautan, catat_akses, catat_klik, catat_segarkan, cek_tautan, mapel_semua_jenjang, token_layak,
+    PESAN_TOKEN, cari_tautan, catat_akses, catat_klik, catat_segarkan, cek_tautan, token_layak,
 )
 from ujian_portal import (
-    FIELD_UJIAN_PUBLIK, KOLEKSI_LINK_SOAL, batas_berikutnya, cek_masa_portal, id_soal_layak, jadwal_berikutnya, naikkan_klik,
-    nilai_klik, ringkas_link_log, soal_portal, url_soal_aman,
+    FIELD_UJIAN_PUBLIK, KOLEKSI_LINK_SOAL, batas_berikutnya, cek_masa_portal, id_soal_layak, jadwal_berikutnya, mapel_portal, naikkan_klik, nilai_klik, ringkas_link_log, soal_portal, url_soal_aman,
 )
 
 router = APIRouter()
 
 
+async def soal_dan_mapel(ujian_id: str, sekarang) -> Tuple[list, Dict[str, list]]:
+    """(daftar mapel portal pada waktu server `sekarang` — ujian_portal.soal_portal, mapel jadwal per jenjang) satu ujian."""
+    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(500)
+    mapel, jadwal = await mapel_dan_jadwal(ujian_id, docs)
+    return soal_portal(docs, mapel, jadwal, sekarang), mapel
+
+
 async def soal_ujian(ujian_id: str, sekarang) -> list:
     """Daftar mapel portal satu ujian pada waktu server `sekarang` (lihat ujian_portal.soal_portal)."""
-    docs = await db[KOLEKSI_LINK_SOAL].find({'ujian_id': ujian_id}, {'_id': 0}).to_list(500)
-    return soal_portal(docs, await mapel_semua_jenjang(db), await jadwal_ujian(ujian_id), sekarang)
+    return (await soal_dan_mapel(ujian_id, sekarang))[0]
+
+
+async def di_jadwal(doc: Dict[str, Any]) -> bool:
+    """Mapel link soal ini masih ada di jadwal sesi ujiannya (mapel yang dihapus dari jadwal tidak tampil di portal dan
+    kliknya ditolak walau dokumen link soal masih ada)."""
+    mapel, _ = await mapel_dan_jadwal(doc['ujian_id'], [])
+    return any(m['kode'] == doc.get('mapel') for m in mapel.get(str(doc.get('jenjang')), []))
 
 
 async def portal_berlaku(token: str, request: Optional[Request] = None, catat=True,
@@ -67,21 +79,22 @@ async def portal_berlaku(token: str, request: Optional[Request] = None, catat=Tr
 @router.get("/publik/portal-ujian/{token}")
 async def portal_ujian_publik(token: str, request: Request, response: Response, segarkan: bool = Query(False),
                               sesi: Optional[str] = Query(None, max_length=40)):
-    """Portal ujian (tanpa login): madrasah, ujian, jendela tautan portal, waktu server, mapel baku per jenjang,
+    """Portal ujian (tanpa login): madrasah, ujian, jendela tautan portal, waktu server, mapel jadwal per jenjang,
     `soal` — jadwal tiap mapel dengan status (belum_dimulai/berlangsung/ditutup) & hitung mundur menurut WAKTU SERVER,
     siap/ditahan, dan penghitung klik — serta `batas_berikutnya_at` (perubahan status terdekat). Tanpa tautan soal."""
     tautan, ujian = await portal_berlaku(token, request, catat=not segarkan, sesi=sesi)
     if segarkan:
         await catat_segarkan(db, tautan, sesi)
     kini = sekarang_wib()
+    soal, mapel = await soal_dan_mapel(ujian['id'], kini)
     response.headers.update(TANPA_CACHE)
     return {
         'madrasah': await madrasah_publik(),
         'ujian': {k: ujian.get(k) for k in FIELD_UJIAN_PUBLIK},
         'tautan': {'jenis': tautan['jenis'], 'mulai_at': tautan.get('mulai_at'), 'selesai_at': tautan.get('selesai_at')},  # tanpa token
         'waktu_server': kini.isoformat(),
-        'mapel': await mapel_semua_jenjang(db),
-        'soal': (soal := await soal_ujian(ujian['id'], kini)),
+        'mapel': mapel_portal(mapel),
+        'soal': soal,
         'batas_berikutnya_at': batas_berikutnya(soal, kini),
     }
 
@@ -103,8 +116,8 @@ def halaman_tolak(status: int, pesan: str) -> HTMLResponse:
 
 @router.get("/publik/portal-ujian/{token}/kerjakan/{soal_id}")
 async def kerjakan_soal(token: str, soal_id: str, request: Request, sesi: Optional[str] = Query(None, max_length=40)):
-    """Tombol "Mengerjakan" (tanpa login): portal harus berlaku (token, sakelar, masa ujian) dan mapel siap & sedang
-    berlangsung menurut WAKTU SERVER. Klik dicatat ke ujian_akses_log (aksi klik_mengerjakan, sah maupun ditolak). Klik
+    """Tombol "Mengerjakan" (tanpa login): portal harus berlaku (token, sakelar, masa ujian), mapel masih ada di jadwal
+    sesi, serta siap & sedang berlangsung menurut WAKTU SERVER. Klik dicatat ke ujian_akses_log (aksi klik_mengerjakan, sah maupun ditolak). Klik
     sah menaikkan jumlah_klik & klik_terakhir_at secara atomik lalu dialihkan 302 ke tautan soal (Referrer-Policy:
     no-referrer). Klik yang ditolak tidak dihitung dan dijawab halaman HTML berisi alasannya (403/404)."""
     try:
@@ -119,7 +132,7 @@ async def kerjakan_soal(token: str, soal_id: str, request: Request, sesi: Option
         return halaman_tolak(e.status_code, pesan)
     doc = await db[KOLEKSI_LINK_SOAL].find_one({'id': soal_id, 'ujian_id': ujian['id']}, {'_id': 0}) if id_soal_layak(soal_id) else None
     kini = sekarang_wib()
-    nilai = nilai_klik(doc, kini)
+    nilai = nilai_klik(doc if doc and await di_jadwal(doc) else None, kini)
     await catat_klik(db, tautan, token, ringkas_link_log(doc), nilai['hasil'], request, sesi=sesi, waktu=kini)
     tujuan = url_soal_aman((doc or {}).get('url'))
     if nilai['hasil'] != 'ok' or not tujuan:
