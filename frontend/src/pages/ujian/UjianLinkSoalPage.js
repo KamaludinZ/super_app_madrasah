@@ -11,6 +11,7 @@ import PilihUjian from '@/components/ujian/PilihUjian';
 import { TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import { LencanaStatusTautan } from '@/components/ujian/tautan/KartuTautanPublik';
 import DialogLinkSoal from '@/components/ujian/linkSoal/DialogLinkSoal';
+import PanelBangunUlangKlik from '@/components/ujian/linkSoal/PanelBangunUlangKlik';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { JENJANG_UJIAN, labelJenjang } from '@/lib/mapelUjian';
 import { HALAMAN_BERANDA_UJIAN, aksesDitolak, pesanGalat } from '@/lib/ujian';
@@ -254,6 +255,9 @@ export default function UjianLinkSoalPage() {
           )}
           <TabJenjang nilai={jenjang} onUbah={ubahJenjang} testId="link" lencana={lencana}
             isi={(j) => <IsiJenjang data={data} jenjang={j} bolehUbah={bolehUbah} onAtur={setSasaran} />} />
+          {bolehUbah && (
+            <PanelBangunUlangKlik ujianId={ujian?.id} onSelesai={(link, tiruan) => setData((d) => ({ ...d, tiruan: d.tiruan || tiruan, link }))} />
+          )}
         </>
       )}
 

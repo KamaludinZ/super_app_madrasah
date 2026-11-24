@@ -12,6 +12,10 @@
  *   PUT /ujian/{ujian_id}/link-soal/{jenjang}/{mapel} { url, mulai_at, selesai_at, aktif, versi } -> { link: LinkSoal }
  *        (admin; menimpa — satu baris per jenjang+mapel. `versi` = link.versi yang dimuat (null bila belum pernah
  *         disimpan); 409 bila admin lain sudah mengubah baris itu; 422 tautan bukan http(s) / selesai ≤ mulai -> pesan)
+ *   POST /ujian/{ujian_id}/link-soal/bangun-ulang-klik
+ *     -> { diperiksa, diperbaiki, waktu, selisih: [{ jenjang, mapel, sebelum, sesudah, klik_terakhir_at }], link: [LinkSoal] }
+ *        (admin; jumlah_klik & klik_terakhir_at tiap link soal dihitung ulang dari ujian_akses_log aksi=klik_mengerjakan —
+ *         log adalah sumber kebenaran, angka pada dokumen hanya cache. Log tidak diubah; aman diulang.)
  *   LinkSoal = { id, jenjang: 7|8|9, mapel: kode baku, url (admin saja; pemantau: '' dan url_host), url_host,
  *                mulai_at, selesai_at, aktif, siap (url terisi & aktif),
  *                jadwal: { tanggal, sesi_ke, mulai_at, selesai_at } | null,   (sesi jadwal ujian mapel ini = nilai awal)
@@ -151,12 +155,21 @@ export function barisLinkJenjang(link, mapel, jenjang) {
 const contoh = {};
 const GURU_CONTOH = 'Administrator (contoh)';
 
-function jadwalContoh(j, i) {
-  // Slot ke-i: hari ujian ke-floor(i/2) mulai besok (Minggu dilewati), sesi 1 07.30–09.00 / sesi 2 09.30–11.00.
-  let tanggal = hariIniWIB();
-  for (let n = 0; n <= Math.floor(i / 2); n += 1) {
-    do { tanggal = tambahHari(tanggal, 1); } while (new Date(`${tanggal}T00:00:00Z`).getUTCDay() === 0);
+// Hari ujian contoh: dua hari sudah lewat (sesi-sesinya punya klik), sisanya mulai besok. Minggu dilewati.
+const geserHariUjian = (dari, n) => {
+  let t = dari;
+  const arah = n < 0 ? -1 : 1;
+  for (let k = 0; k < Math.abs(n); k += 1) {
+    do { t = tambahHari(t, arah); } while (new Date(`${t}T00:00:00Z`).getUTCDay() === 0);
   }
+  return t;
+};
+
+function jadwalContoh(j, i) {
+  // Slot ke-i: hari ujian ke-floor(i/2) — hari 0–1 = dua hari ujian lalu, hari 2 dst. = mulai besok; sesi 1 07.30–09.00 /
+  // sesi 2 09.30–11.00.
+  const hari = Math.floor(i / 2);
+  const tanggal = hari < 2 ? geserHariUjian(hariIniWIB(), hari - 2) : geserHariUjian(hariIniWIB(), hari - 1);
   const sesi = (i % 2) + 1;
   const [m, s] = sesi === 1 ? ['07:30', '09:00'] : ['09:30', '11:00'];
   return { tanggal, sesi_ke: sesi, mulai_at: `${tanggal}T${m}:00+07:00`, selesai_at: `${tanggal}T${s}:00+07:00` };
@@ -178,19 +191,30 @@ function linkContoh(ujianId) {
           mulai_at: jadwal ? (dipersempit ? jadwal.mulai_at.replace(/T(07|09):30/, 'T$1:45') : jadwal.mulai_at) : null,
           selesai_at: jadwal?.selesai_at || null,
           aktif: !(terisi && i % 7 === 3), jadwal,
-          jumlah_klik: 0, klik_terakhir_at: null,
+          // klik hanya ada pada sesi yang sudah lewat (sebelum hari ini)
+          jumlah_klik: terisi && jadwal.tanggal < hariIniWIB() ? 12 + ((i * 7 + j * 3) % 23) : 0,
+          klik_terakhir_at: terisi && jadwal.tanggal < hariIniWIB() ? `${jadwal.tanggal}T${jadwal.sesi_ke === 1 ? '08:4' : '10:4'}${i % 10}:00+07:00` : null,
           diperbarui_pada: terisi ? `${hariIniWIB()}T08:${String(10 + i).padStart(2, '0')}:00+07:00` : null,
           diperbarui_oleh_nama: terisi ? GURU_CONTOH : null, versi: terisi ? `contoh-v1-${j}-${m.kode}` : null,
         });
       });
     });
     daftar.forEach((l) => { l.siap = !!l.url && l.aktif; });
+    // Dua mapel yang cache-nya sengaja tertinggal dari "jejak audit" (kelas 8 kurang 2, kelas 9 lebih 1) agar hasil
+    // bangun ulang penghitung dapat dicoba.
+    [[8, 2], [9, -1]].forEach(([j, beda]) => {
+      const l = daftar.find((x) => x.jenjang === j && x.jumlah_klik > 1);
+      if (l) l.selisih_log = beda;
+    });
     contoh[ujianId] = daftar;
   }
   return contoh[ujianId];
 }
 
 const galat = (status, detail) => { const e = new Error(String(status)); e.response = { status, data: { detail } }; return e; };
+
+// Jumlah klik menurut "jejak audit" contoh: sama dengan cache kecuali mapel bertanda selisih_log (lihat linkContoh).
+const klikLogContoh = (l) => Math.max(0, (l.jumlah_klik || 0) + (l.selisih_log || 0));
 
 /** Link soal satu ujian -> { ujian?, boleh_ubah, tautan_portal, mapel, link, tiruan }. */
 export const muatLinkSoal = (ujianId) => denganTiruan(
@@ -200,6 +224,28 @@ export const muatLinkSoal = (ujianId) => denganTiruan(
     let portal = null;
     try { portal = (await muatTautanPublik(ujianId)).tautan?.portal || null; } catch { /* tanpa status portal */ }
     return { boleh_ubah: true, tautan_portal: portal, link: linkContoh(ujianId).map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })) };
+  },
+);
+
+/**
+ * Bangun ulang penghitung klik semua link soal satu ujian dari jejak audit -> { diperiksa, diperbaiki, selisih, link,
+ * waktu, tiruan }.
+ */
+export const bangunUlangKlik = (ujianId) => denganTiruan(
+  async () => (await api.post(`/ujian/${ujianId}/link-soal/bangun-ulang-klik`)).data,
+  () => {
+    const daftar = linkContoh(ujianId);
+    const selisih = [];
+    daftar.filter((l) => l.id).forEach((l) => {
+      const sesudah = klikLogContoh(l);
+      if (sesudah !== (l.jumlah_klik || 0)) selisih.push({ jenjang: l.jenjang, mapel: l.mapel, sebelum: l.jumlah_klik || 0, sesudah, klik_terakhir_at: l.klik_terakhir_at });
+      l.jumlah_klik = sesudah;
+      l.selisih_log = 0;
+    });
+    return {
+      diperiksa: daftar.filter((l) => l.id).length, diperbaiki: selisih.length, selisih, waktu: new Date().toISOString(),
+      link: daftar.map((l) => ({ ...l, jadwal: l.jadwal && { ...l.jadwal } })),
+    };
   },
 );
 
