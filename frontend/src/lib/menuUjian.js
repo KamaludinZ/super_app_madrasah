@@ -1,6 +1,6 @@
 import {
   ClipboardList, UsersRound, DoorClosed, UserCheck, SlidersHorizontal, ClipboardCheck, FileSignature, Printer, Archive,
-  FileSpreadsheet, IdCard, Armchair,
+  FileSpreadsheet, IdCard, Armchair, Link2, FileUp, FolderDown, ShieldCheck,
 } from 'lucide-react';
 import { PERAN_PENGELOLA_UJIAN, PERAN_PIMPINAN_UJIAN, RUTE_UJIAN_TERSEDIA, mungkinPanitia } from '@/lib/ujian';
 
@@ -16,6 +16,9 @@ export const IKON_MENU_UJIAN = {
   ruang: DoorClosed,
   pengawas: UserCheck,
   formulir: SlidersHorizontal,
+  tautan_publik: Link2,
+  berkas_soal: FolderDown,
+  audit_publik: ShieldCheck,
   daftar_hadir: ClipboardCheck,
   berita_acara: FileSignature,
   cetak: Printer,
@@ -32,13 +35,20 @@ export const perluMenuUjian = (role) => mungkinPanitia(role);
  * Item grup menu Ujian dari akses pengguna: Beranda bila pengguna pengelola, pimpinan, atau menjabat panitia;
  * lalu sub-menu yang boleh diakses dan halamannya sudah dibangun.
  */
+// Guru PJ mata pelajaran (akses.pj_berkas dari server) dan admin mengunggah kisi-kisi & kartu soal; guru PJ yang
+// bukan panitia hanya mendapat item ini (tanpa Beranda Ujian).
+const ITEM_UNGGAH_BERKAS = { to: '/ujian/unggah-berkas', label: 'Unggah Berkas Soal', icon: FileUp, testid: 'nav-ujian-unggah-berkas' };
+
 export function menuUjian(akses) {
-  if (!akses || !(akses.pengelola || akses.pimpinan || akses.jabatan?.length)) return [];
+  if (!akses) return [];
+  const unggah = akses.pengelola || akses.pj_berkas ? [ITEM_UNGGAH_BERKAS] : [];
+  if (!(akses.pengelola || akses.pimpinan || akses.jabatan?.length)) return unggah;
   return [
     { to: '/ujian', label: 'Beranda Ujian', icon: ClipboardList, testid: 'nav-ujian-beranda' },
     ...(akses.menu || [])
       .filter((m) => m.akses && RUTE_UJIAN_TERSEDIA.has(m.to))
       .map((m) => ({ to: m.to, label: m.label, icon: IKON_MENU_UJIAN[m.key] || ClipboardList, testid: `nav-ujian-${m.key}` })),
+    ...unggah,
   ];
 }
 

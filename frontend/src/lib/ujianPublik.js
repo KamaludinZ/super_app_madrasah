@@ -19,7 +19,7 @@ import axios from 'axios';
 import { z } from 'zod';
 import { hariIniWIB } from '@/lib/tanggal';
 
-const publik = axios.create({ baseURL: `${process.env.REACT_APP_BACKEND_URL || ''}/api` });
+export const publik = axios.create({ baseURL: `${process.env.REACT_APP_BACKEND_URL || ''}/api` });
 
 const endpointBelumAda = (e) => e?.response?.status === 404 && e.response.data?.detail === 'Not Found';
 
@@ -80,7 +80,7 @@ export function pesertaTiruan(ruangId, sesiId) {
   return { kelas, peserta };
 }
 
-async function denganTiruan(fn, tiruan) {
+export async function denganTiruan(fn, tiruan) {
   try {
     return { ...(await fn()), tiruan: false };
   } catch (e) {

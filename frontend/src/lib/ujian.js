@@ -97,6 +97,9 @@ export const MENU_UJIAN = [
   { key: 'ruang', label: 'Ruang & Peserta', to: '/ujian/ruang', keterangan: 'Ruang ujian, peserta, dan nomor peserta' },
   { key: 'pengawas', label: 'Guru Pengawas', to: '/ujian/pengawas', keterangan: 'Master pilihan guru pengawas' },
   { key: 'formulir', label: 'Pengaturan Formulir', to: '/ujian/formulir', keterangan: 'Jendela waktu & template cetak' },
+  { key: 'tautan_publik', label: 'Tautan Publik', to: '/ujian/tautan-publik', keterangan: 'Info ujian siswa & monitoring pengumpulan soal' },
+  { key: 'berkas_soal', label: 'Berkas Soal', to: '/ujian/berkas-soal', keterangan: 'Status kisi-kisi & kartu soal, PJ, unduh ZIP' },
+  { key: 'audit_publik', label: 'Jejak Audit Publik', to: '/ujian/audit-publik', keterangan: 'Riwayat akses tautan & unduhan berkas' },
   { key: 'daftar_hadir', label: 'Daftar Hadir', to: '/ujian/daftar-hadir', keterangan: 'Pantau kehadiran, izin & sakit' },
   { key: 'berita_acara', label: 'Berita Acara', to: '/ujian/berita-acara', keterangan: 'Berita acara pengawas per ruang' },
   { key: 'cetak', label: 'Cetak Dokumen', to: '/ujian/cetak', keterangan: 'Daftar hadir & berita acara per jenjang' },
@@ -113,6 +116,9 @@ export const AKSES_MENU_UJIAN = {
   ruang: { pimpinan: false, jabatan: ['ketua', 'sekretaris'] },
   pengawas: { pimpinan: false, jabatan: ['ketua', 'sekretaris'] },
   formulir: { pimpinan: false, jabatan: ['ketua', 'sekretaris'] },
+  tautan_publik: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // mengubah: admin saja (boleh_ubah)
+  berkas_soal: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] }, // isi kartu soal: admin saja
+  audit_publik: { pimpinan: true, jabatan: ['ketua', 'sekretaris'] },
   daftar_hadir: { pimpinan: true, jabatan: SEMUA_JABATAN },
   berita_acara: { pimpinan: true, jabatan: SEMUA_JABATAN },
   cetak: { pimpinan: true, jabatan: SEMUA_JABATAN },
@@ -123,7 +129,7 @@ export const AKSES_MENU_UJIAN = {
 };
 
 // Rute sub-menu yang halamannya sudah dibangun; menu lain tampil "Segera".
-export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai', '/ujian/kartu-peserta', '/ujian/kartu-meja']);
+export const RUTE_UJIAN_TERSEDIA = new Set(['/ujian', '/ujian/arsip-semester', '/ujian/panitia', '/ujian/ruang', '/ujian/pengawas', '/ujian/formulir', '/ujian/tautan-publik', '/ujian/unggah-berkas', '/ujian/berkas-soal', '/ujian/audit-publik', '/ujian/daftar-hadir', '/ujian/berita-acara', '/ujian/cetak', '/ujian/arsip', '/ujian/nilai', '/ujian/kartu-peserta', '/ujian/kartu-meja']);
 export const HALAMAN_ARSIP_SEMESTER = '/ujian/arsip-semester';
 
 /** Menu kepanitiaan untuk pengguna: akses dari peran pengelola/pimpinan atau jabatan panitia (gabungan). */
@@ -254,9 +260,10 @@ export function gtkPilihanTiruan() {
 // Simulasi akses: pengelola/pimpinan dari peran; GTK lain dianggap menjabat seperti pada data contoh beranda
 // (ketua & sekretaris) agar grup menu panitia otomatis dapat dicoba sebelum server siap.
 export function aksesSayaTiruan(peran) {
-  if (!mungkinPanitia(peran)) return { pengelola: false, pimpinan: false, jabatan: [], menu: menuPanitiaUjian({}) };
+  if (!mungkinPanitia(peran)) return { pengelola: false, pimpinan: false, jabatan: [], menu: menuPanitiaUjian({}), pj_berkas: false };
   const { akses } = berandaTiruan(peran);
-  return { ...akses, menu: menuPanitiaUjian(akses) };
+  // contoh: guru mapel menjadi PJ berkas soal
+  return { ...akses, menu: menuPanitiaUjian(akses), pj_berkas: String(peran || '').startsWith('guru') };
 }
 
 // ---- Pemanggil API (jatuh ke data tiruan bila endpoint belum ada) ----
@@ -364,7 +371,7 @@ export const simpanPanitia = (ujianId, isian, versi) => {
 export const muatAksesSaya = (peran) => denganTiruan(
   async () => {
     const { data } = await api.get('/ujian/akses-saya');
-    return { pengelola: !!data.pengelola, pimpinan: !!data.pimpinan, jabatan: data.jabatan || [], menu: data.menu || [] };
+    return { pengelola: !!data.pengelola, pimpinan: !!data.pimpinan, jabatan: data.jabatan || [], menu: data.menu || [], pj_berkas: !!data.pj_berkas };
   },
   () => aksesSayaTiruan(peran),
 );

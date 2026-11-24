@@ -237,6 +237,36 @@ async def _ujian_nilai(db):
     return await migrate(db)
 
 
+async def _ujian_info_publik(db):
+    from migrations.migrate_ujian_info_publik import migrate
+    return await migrate(db)
+
+
+async def _ujian_mapel_baku(db):
+    from migrations.migrate_ujian_mapel_baku import migrate
+    return await migrate(db)
+
+
+async def _ujian_tautan_publik(db):
+    from migrations.migrate_ujian_tautan_publik import migrate
+    return await migrate(db)
+
+
+async def _ujian_berkas(db):
+    from migrations.migrate_ujian_berkas import migrate
+    return await migrate(db)
+
+
+async def _ujian_unduh_log(db):
+    from migrations.migrate_ujian_unduh_log import migrate
+    return await migrate(db)
+
+
+async def _ujian_akses_log(db):
+    from migrations.migrate_ujian_akses_log import migrate
+    return await migrate(db)
+
+
 MIGRASI = [
     ('2026-10-06_uks_ckg_kolom_baku', _ckg_kolom_baku),
     ('2026-10-06_gtk_nama_gelar', _gtk_nama_gelar),
@@ -268,6 +298,12 @@ MIGRASI = [
     ('2026-11-20_ujian_kehadiran', _ujian_kehadiran),
     ('2026-11-20_ujian_berita_acara', _ujian_berita_acara),
     ('2026-11-20_ujian_nilai', _ujian_nilai),
+    ('2026-11-23_ujian_info_publik', _ujian_info_publik),
+    ('2026-11-23_ujian_mapel_baku', _ujian_mapel_baku),
+    ('2026-11-23_ujian_tautan_publik', _ujian_tautan_publik),
+    ('2026-11-23_ujian_berkas', _ujian_berkas),
+    ('2026-11-23_ujian_unduh_log', _ujian_unduh_log),
+    ('2026-11-23_ujian_akses_log', _ujian_akses_log),
 ]
 
 
