@@ -286,7 +286,8 @@ export default function UjianLinkSoalPage() {
               )}
             </>
           ) : (
-            <PanelIntensitasKlik ujianId={ujian?.id} mapel={data.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang} />
+            <PanelIntensitasKlik ujianId={ujian?.id} mapel={data.mapel} jenjang={jenjang} onUbahJenjang={ubahJenjang}
+              onKePengaturan={bolehUbah ? () => ubahTampilan('pengaturan') : null} />
           )}
         </>
       )}

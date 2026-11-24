@@ -98,7 +98,7 @@ export default function RincianKlikSheet({ sasaran, onTutup }) {
 
               <div className="overflow-hidden rounded-lg border border-slate-200">
                 <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-[6.5rem_8rem_minmax(0,1fr)]" aria-hidden="true">
-                  <span>Waktu</span><span className="hidden sm:block">IP</span><span>Perangkat</span>
+                  <span>Waktu (WIB)</span><span className="hidden sm:block">IP</span><span>Perangkat</span>
                 </div>
                 <ol className="divide-y divide-slate-100" data-testid="rincian-daftar">
                   {hasil.klik.map((k) => (

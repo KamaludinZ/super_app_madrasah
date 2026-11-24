@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
+import { Activity, AlertTriangle, Link2Off, Loader2, MousePointerClick, RefreshCw, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { KosongInfo, TabJenjang } from '@/components/ujian/publik/info/BagianInfo';
 import RincianKlikSheet from '@/components/ujian/linkSoal/RincianKlikSheet';
 import { formatWIB, formatWIBPanjang } from '@/lib/datetime';
 import { labelJenjang, mapelUntuk } from '@/lib/mapelUjian';
 import { pesanGalat } from '@/lib/ujian';
+import { waktuRelatif } from '@/lib/ujianMonitoringPublik';
 import {
   SARINGAN_INTENSITAS, intensitasJenjang, keadaanKlik, muatIntensitasKlik, ringkasIntensitas, saringIntensitas,
 } from '@/lib/ujianLinkSoal';
@@ -17,6 +18,12 @@ const LENCANA_KEADAAN = {
 
 const jam = (iso) => formatWIB(iso, 'Time', { hour: '2-digit', minute: '2-digit' });
 const tglPendek = (iso) => formatWIB(iso, 'Date', { weekday: 'short', day: 'numeric', month: 'short' });
+const waktuLengkap = (iso) => `${formatWIB(iso, '', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB`;
+
+/** Waktu relatif ("12 menit lalu", "kemarin 10.43", "21 Nov 10.43") dengan waktu WIB lengkap di tooltip & pembaca layar. */
+function Waktu({ iso, className = '' }) {
+  return <time dateTime={iso} title={waktuLengkap(iso)} aria-label={waktuLengkap(iso)} className={className}>{waktuRelatif(iso)}</time>;
+}
 
 function KartuAngka({ label, nilai, keterangan, testId }) {
   return (
@@ -99,7 +106,7 @@ function BarisIntensitas({ baris, jenjang, maks, hari, maksHari, onRincian }) {
         <SebaranHarian harian={d?.harian} hari={hari} maksHari={maksHari} testId={`intensitas-${jenjang}-${baris.kode}-sebaran`} />
       </span>
       <span className="text-xs text-slate-500" data-testid={`intensitas-${jenjang}-${baris.kode}-terakhir`}>
-        {d?.klik_terakhir_at ? <>Terakhir {tglPendek(d.klik_terakhir_at)} {jam(d.klik_terakhir_at)}</>
+        {d?.klik_terakhir_at ? <>Terakhir <Waktu iso={d.klik_terakhir_at} className="text-slate-700" /></>
           : <span className="text-slate-400" data-keadaan={keadaan}>{keadaan === 'menunggu' ? 'Menunggu jadwal' : 'Belum pernah diklik'}</span>}
         {n > 0 && d?.link_soal_id && (
           <button type="button" onClick={() => onRincian({ jenjang, nama: baris.nama, data: d })}
@@ -153,6 +160,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
         <span className="font-semibold text-slate-700">{r.total_klik.toLocaleString('id-ID')} klik</span> pada {r.mapel_diklik} dari {baris.length} mapel {labelJenjang(jenjang)}
         {tidakTersentuh > 0 && <> · <span className="font-semibold text-amber-700">{tidakTersentuh} tidak tersentuh</span></>}
         {disaring && <> · menampilkan {tampil.length} mapel</>}
+        {r.klik_terakhir_at && <> · terakhir <Waktu iso={r.klik_terakhir_at} /></>}
       </p>
       <BarisSaringan saringan={saringan} onUbah={onUbahSaringan} mapel={mapelUntuk(mapel, jenjang)} />
       {!tampil.length ? (
@@ -166,7 +174,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="hidden border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.5rem_minmax(0,10rem)_minmax(0,1fr)_6rem_auto_minmax(0,8.5rem)] sm:gap-3" aria-hidden="true">
-            <span /><span>Mata pelajaran</span><span>Jendela & tautan</span><span className="text-right">Klik</span>
+            <span /><span>Mata pelajaran</span><span>Jendela (WIB) & tautan</span><span className="text-right">Klik</span>
             <span title={hari.length ? `${tglPendek(hari[0])} – ${tglPendek(hari[hari.length - 1])}` : undefined} style={{ minWidth: hari.length * 14 }}>Harian</span>
             <span>Klik terakhir</span>
           </div>
@@ -186,7 +194,7 @@ function IsiJenjang({ data, mapel, jenjang, saringan, onUbahSaringan, onRincian 
  * audit (ujian_akses_log), bukan dari cache di portal, sehingga tetap dapat ditelusuri setelah ujian selesai.
  * `mapel` = daftar mapel baku per jenjang dari respons link soal; `jenjang`/`onUbahJenjang` dibagi dengan tampilan pengaturan.
  */
-export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJenjang }) {
+export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJenjang, onKePengaturan }) {
   const [data, setData] = useState(null);
   const [memuat, setMemuat] = useState(false);
   const [galat, setGalat] = useState('');
@@ -208,6 +216,7 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
   useEffect(() => { setData(null); muat(); }, [muat]);
 
   const r = data?.ringkasan;
+  const adaTautan = !!data?.intensitas?.some((x) => x.url_host);
   const lencana = (j) => {
     if (!data) return '';
     const rj = ringkasIntensitas(intensitasJenjang(data.intensitas, mapel, j).map((b) => b.data).filter(Boolean));
@@ -229,8 +238,10 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
       </div>
 
       {galat && (
-        <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
           <AlertTriangle className="h-4 w-4 shrink-0" /> {galat}
+          <button type="button" onClick={muat} disabled={memuat} className="font-semibold underline" data-testid="intensitas-coba-lagi">Coba lagi</button>
+          {data && <span className="text-rose-700/80">Angka di bawah dari pemuatan sebelumnya.</span>}
         </div>
       )}
       {!data && memuat && <div className="p-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-[#006837]" /></div>}
@@ -241,14 +252,23 @@ export default function PanelIntensitasKlik({ ujianId, mapel, jenjang, onUbahJen
             <KartuAngka label="Total klik" nilai={r.total_klik.toLocaleString('id-ID')} keterangan="Semua jenjang" testId="intensitas-total" />
             <KartuAngka label="Mapel dikerjakan" nilai={r.mapel_diklik} keterangan={`dari ${data.intensitas.length} mapel`} testId="intensitas-mapel-diklik" />
             <KartuAngka label="Tautan siap" nilai={r.mapel_siap} keterangan="Tombol dapat dipakai" testId="intensitas-siap" />
-            <KartuAngka label="Klik terakhir" nilai={r.klik_terakhir_at ? jam(r.klik_terakhir_at) : '–'}
-              keterangan={r.klik_terakhir_at ? formatWIBPanjang(r.klik_terakhir_at, false) : 'Belum ada klik'} testId="intensitas-terakhir" />
+            <KartuAngka label="Klik terakhir" nilai={r.klik_terakhir_at ? <Waktu iso={r.klik_terakhir_at} /> : '–'}
+              keterangan={r.klik_terakhir_at ? `${formatWIBPanjang(r.klik_terakhir_at)} WIB` : 'Belum ada klik'} testId="intensitas-terakhir" />
           </div>
-          {r.total_klik === 0 && (
+          {r.total_klik === 0 && (adaTautan ? (
             <p className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="intensitas-kosong">
-              <MousePointerClick className="h-4 w-4 shrink-0 text-slate-400" /> Belum ada klik Mengerjakan yang tercatat untuk ujian ini.
+              <MousePointerClick className="h-4 w-4 shrink-0 text-slate-400" />
+              Belum ada klik Mengerjakan yang tercatat. Angka muncul setelah siswa menekan tombol pada jam ujian lewat portal.
             </p>
-          )}
+          ) : (
+            <div className="flex flex-col gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between"
+              data-testid="intensitas-tanpa-tautan">
+              <span className="flex items-center gap-2"><Link2Off className="h-4 w-4 shrink-0 text-slate-400" /> Belum ada tautan soal yang terpasang, jadi belum ada yang dapat diklik siswa.</span>
+              {onKePengaturan && (
+                <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={onKePengaturan} data-testid="intensitas-ke-pengaturan">Atur link soal</Button>
+              )}
+            </div>
+          ))}
           <TabJenjang nilai={jenjang} onUbah={onUbahJenjang} testId="intensitas" lencana={lencana}
             isi={(j) => <IsiJenjang data={data} mapel={mapel} jenjang={j} saringan={saringan} onUbahSaringan={setSaringan}
               onRincian={(s) => setRincian({ ...s, ujianId })} />} />
