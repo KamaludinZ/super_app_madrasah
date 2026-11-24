@@ -241,3 +241,18 @@ def test_skrip_bangun_ulang_semua_ujian(klien):
     hasil = asyncio.run(jalankan(klien.db, 'uas'))
     assert hasil['diperbaiki'] == 2 and klien.db.ujian_link_soal.docs[0]['jumlah_klik'] == 3
     assert asyncio.run(jalankan(klien.db))['diperbaiki'] == 0
+
+
+def test_mapel_nonaktif_di_master_ikut_hilang(klien):
+    """Master ujian_mapel_baku satu-satunya sumber: mapel yang dinonaktifkan admin tidak tampil di Link Soal, tidak dapat
+    disimpan, dan sama dengan GET /ujian/mapel-baku."""
+    import asyncio
+
+    import ujian_info as ui
+    asyncio.run(ui.seed_mapel_baku(klien.db))
+    next(d for d in klien.db.ujian_mapel_baku.docs if d['jenjang'] == 8 and d['kode'] == 'ipa')['aktif'] = False
+    d = klien('admin', 'admin', 'GET', URL).json()
+    assert len(d['link']) == 44 and (8, 'ipa') not in {(x['jenjang'], x['mapel']) for x in d['link']}
+    assert d['mapel'] == klien('admin', 'admin', 'GET', '/ujian/mapel-baku').json()['jenjang']
+    assert simpan(klien, 8, 'ipa', {'url': 'https://cbt.id'}).status_code == 422
+    assert simpan(klien, 7, 'ipa', {'url': 'https://cbt.id'}).status_code == 200  # jenjang lain tetap aktif
