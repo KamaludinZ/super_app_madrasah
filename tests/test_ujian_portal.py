@@ -98,3 +98,88 @@ def test_kueri_aksi_membaca_log_lama_sebagai_buka_tautan():
     cocok = lambda d, q: all(cocok_nilai(d.get(k), v) for k, v in q.items())  # noqa: E731
     assert [cocok(d, up.KUERI_BUKA) for d in (lama, buka, klik)] == [True, True, False]
     assert [cocok(d, up.KUERI_KLIK) for d in (lama, buka, klik)] == [False, False, True]
+
+
+MAPEL7 = [{'kode': k, 'nama': n} for k, n in ui.MAPEL_UJIAN_BAKU]
+
+
+def test_kode_mapel_dari_nama_jadwal():
+    assert up.kode_mapel_dari_nama('Matematika', MAPEL7) == 'matematika'
+    assert up.kode_mapel_dari_nama('  bahasa   INDONESIA ', MAPEL7) == 'bahasa_indonesia'
+    assert up.kode_mapel_dari_nama("Al-Qur'an Hadits", MAPEL7) == 'quran_hadits'
+    assert up.kode_mapel_dari_nama('PPKn', MAPEL7) == 'pkn' and up.kode_mapel_dari_nama('Fikih', MAPEL7) == 'fiqh'
+    assert up.kode_mapel_dari_nama('ski', MAPEL7) == 'ski'  # kode baku juga dikenali
+    assert up.kode_mapel_dari_nama('Prakarya', MAPEL7) is None and up.kode_mapel_dari_nama('', MAPEL7) is None
+    # alias hanya berlaku bila mapel tujuannya aktif di jenjang itu
+    assert up.kode_mapel_dari_nama('PPKn', [m for m in MAPEL7 if m['kode'] != 'pkn']) is None
+    # nama yang diganti admin di master mapel tetap dikenali
+    assert up.kode_mapel_dari_nama('Informatika & TIK', [{'kode': 'informatika', 'nama': 'Informatika & TIK'}]) == 'informatika'
+
+
+def test_jendela_awal_dari_jadwal():
+    jadwal = [
+        {'tanggal': '2026-12-03', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'IPA', '8': 'Matematika'}},
+        {'tanggal': '2026-12-02', 'sesi_ke': 2, 'jam_mulai': '09:30', 'jam_selesai': '11:00', 'mapel': {'7': 'Matematika'}},
+        {'tanggal': '2026-12-04', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'Matematika (susulan)'}},
+        {'tanggal': '2026-12-05', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'IPA'}},
+    ]
+    j7 = up.jendela_jadwal(jadwal, 7, MAPEL7)
+    assert j7 == {
+        'matematika': {'tanggal': '2026-12-02', 'sesi_ke': 2, 'mulai_at': '2026-12-02T09:30:00+07:00', 'selesai_at': '2026-12-02T11:00:00+07:00'},
+        'ipa': {'tanggal': '2026-12-03', 'sesi_ke': 1, 'mulai_at': '2026-12-03T07:30:00+07:00', 'selesai_at': '2026-12-03T09:00:00+07:00'},
+    }  # sesi paling awal dipakai; nama tak dikenal ("… (susulan)") dilewati
+    assert set(up.jendela_jadwal(jadwal, 8, MAPEL7)) == {'matematika'} and up.jendela_jadwal(jadwal, 9, MAPEL7) == {}
+
+
+def test_isian_link_soal():
+    from pydantic import ValidationError
+    # tanpa zona = WIB; ber-zona lain dikonversi ke WIB
+    isi = up.LinkSoalIn(url=' https://cbt.id/ujian/7 ', mulai_at='2026-12-02T07:30', selesai_at='2026-12-02T02:00:00Z')
+    assert isi.url == 'https://cbt.id/ujian/7' and isi.aktif is True and isi.versi is None
+    assert (isi.mulai_at, isi.selesai_at) == ('2026-12-02T07:30:00+07:00', '2026-12-02T09:00:00+07:00')
+    ok = up.LinkSoalIn(url='', mulai_at='2026-12-02T07:30:00+07:00', selesai_at='2026-12-02T09:00:00+07:00', aktif=False, versi='v1')
+    assert ok.url == '' and ok.aktif is False and ok.versi == 'v1'
+    for salah in (
+        {'url': 'javascript:alert(1)'}, {'url': 'data:text/html,x'}, {'url': 'https://u:p@x.id'}, {'url': 'https://' + 'x' * 2100},
+        {'selesai_at': '2026-12-02T07:30:00+07:00'}, {'selesai_at': '2026-12-02T07:00:00+07:00'}, {'mulai_at': 'besok pagi'},
+    ):
+        data = {'url': 'https://cbt.id', 'mulai_at': '2026-12-02T07:30:00+07:00', 'selesai_at': '2026-12-02T09:00:00+07:00', **salah}
+        try:
+            up.LinkSoalIn(**data)
+            raise AssertionError(f'harus ditolak: {salah}')
+        except ValidationError:
+            pass
+
+
+def test_dokumen_link_soal_menimpa_dan_menjaga_penghitung():
+    adm = {'id': 'adm', 'full_name': 'Admin'}
+    isi = up.LinkSoalIn(url='https://cbt.id/a', mulai_at='2026-12-02T07:30:00+07:00', selesai_at='2026-12-02T09:00:00+07:00')
+    baru = up.dokumen_link_soal('u1', 7, 'ipa', isi, adm, waktu=_wib('2026-12-01T10:00:00+07:00'))
+    assert baru['jumlah_klik'] == 0 and baru['klik_terakhir_at'] is None and baru['dibuat_pada'] == baru['diperbarui_pada']
+    lama = {**baru, 'jumlah_klik': 12, 'klik_terakhir_at': '2026-12-02T08:00:00+07:00'}
+    isi2 = up.LinkSoalIn(url='https://cbt.id/b', mulai_at='2026-12-02T07:45:00+07:00', selesai_at='2026-12-02T09:00:00+07:00', aktif=False)
+    ubah = up.dokumen_link_soal('u1', 7, 'ipa', isi2, adm, lama=lama, waktu=_wib('2026-12-02T10:00:00+07:00'))
+    assert ubah['id'] == baru['id'] and ubah['dibuat_pada'] == baru['dibuat_pada'] and ubah['diperbarui_pada'] != baru['diperbarui_pada']
+    assert (ubah['url'], ubah['aktif'], ubah['jumlah_klik'], ubah['klik_terakhir_at']) == ('https://cbt.id/b', False, 12, '2026-12-02T08:00:00+07:00')
+    assert not up.link_siap(ubah) and up.link_siap(baru) and not up.link_siap({**baru, 'url': ''}) and not up.link_siap(None)
+
+
+def test_susun_link_admin_dan_url_untuk_pemantau():
+    docs = [{'id': 'l1', 'jenjang': 7, 'mapel': 'ipa', 'url': 'https://www.cbt.id/ipa', 'mulai_at': '2026-12-03T07:45:00+07:00',
+             'selesai_at': '2026-12-03T09:00:00+07:00', 'aktif': True, 'jumlah_klik': 3, 'diperbarui_pada': 'v1'}]
+    jadwal = [{'tanggal': '2026-12-03', 'sesi_ke': 1, 'jam_mulai': '07:30', 'jam_selesai': '09:00', 'mapel': {'7': 'IPA', '9': 'IPS'}}]
+    mapel = {str(j): MAPEL7 for j in (7, 8, 9)}
+    admin = up.susun_link_admin(docs, mapel, jadwal, tampil_url=True)
+    assert len(admin) == 45 and [x['mapel'] for x in admin[:3]] == ['bahasa_indonesia', 'akidah_akhlak', 'matematika']
+    ipa = next(x for x in admin if (x['jenjang'], x['mapel']) == (7, 'ipa'))
+    assert ipa['url'] == 'https://www.cbt.id/ipa' and ipa['url_host'] == 'cbt.id' and ipa['siap'] and ipa['versi'] == 'v1'
+    assert ipa['mulai_at'] == '2026-12-03T07:45:00+07:00' and ipa['jadwal']['mulai_at'] == '2026-12-03T07:30:00+07:00'
+    ips9 = next(x for x in admin if (x['jenjang'], x['mapel']) == (9, 'ips'))
+    assert ips9['id'] is None and ips9['url'] == '' and not ips9['siap'] and ips9['mulai_at'] == '2026-12-03T07:30:00+07:00'
+    pemantau = next(x for x in up.susun_link_admin(docs, mapel, jadwal) if x['id'] == 'l1')
+    assert pemantau['url'] == '' and pemantau['url_host'] == 'cbt.id'  # pemantau tidak melihat alamat soal lengkap
+
+
+def _wib(s):
+    from datetime import datetime
+    return datetime.fromisoformat(s)

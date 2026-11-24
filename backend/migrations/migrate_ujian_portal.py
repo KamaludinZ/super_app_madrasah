@@ -8,8 +8,9 @@ Skema ada di ujian_portal.py (link soal) dan ujian_info.py (tautan publik jenis 
   2. MELAPORKAN jumlah entri ujian_akses_log lama tanpa field `aksi`. Entri itu TIDAK diubah — jejak audit hanya ditulis
      lewat fungsi catat_* di ujian_info.py dan tidak pernah diubah massal; pembaca memperlakukan `aksi` kosong sebagai
      'buka_tautan' (semua entri sebelum portal ada adalah pembukaan tautan), lihat ujian_portal.KUERI_BUKA;
-  3. MELAPORKAN (tanpa mengubah) link soal yang tidak dapat dipakai apa adanya: tautan bukan http/https atau jendela
-     waktu tidak terbaca/terbalik.
+  3. MELAPORKAN (tanpa mengubah) link soal yang tidak dapat dipakai apa adanya: jenjang bukan 7/8/9, tautan bukan
+     http/https, atau jendela waktu tidak terbaca/terbalik (ujian_portal.link_soal_rusak). Link soal sendiri dibuat saat
+     admin menyimpannya di menu Link Soal (satu dokumen per ujian + jenjang + mapel; jendela awal dari jadwal ujian).
 Tautan publik jenis 'portal' tidak dibuat di sini: dibuat otomatis (DITUTUP) saat menu Tautan Publik/Link Soal dibuka,
 sama seperti tautan info & monitoring.
 
@@ -41,7 +42,7 @@ async def migrate(db, dry_run: bool = False) -> dict:
         for koleksi, keys, opsi in INDEX_LINK_SOAL:
             await db[koleksi].create_index(keys, **opsi)
     log_tanpa_aksi = await db[KOLEKSI_AKSES_LOG].count_documents({'aksi': {'$exists': False}})
-    link = await db[KOLEKSI_LINK_SOAL].find({}, {'_id': 0, 'id': 1, 'url': 1, 'mulai_at': 1, 'selesai_at': 1}).to_list(100000)
+    link = await db[KOLEKSI_LINK_SOAL].find({}, {'_id': 0, 'id': 1, 'jenjang': 1, 'url': 1, 'mulai_at': 1, 'selesai_at': 1}).to_list(100000)
     rusak = [{'id': d.get('id'), 'alasan': a} for d in link if (a := link_soal_rusak(d))]
     return {'link_soal': len(link), 'link_rusak': len(rusak), 'contoh_link_rusak': rusak[:20],
             'log_tanpa_aksi': log_tanpa_aksi, 'dry_run': dry_run}
