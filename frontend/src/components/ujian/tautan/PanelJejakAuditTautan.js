@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { pesanGalat } from '@/lib/ujian';
 import { waktuRelatif } from '@/lib/ujianMonitoringPublik';
+import { namaMapelUjian } from '@/lib/mapelUjian';
 import {
   LABEL_AKSI_TAUTAN, LABEL_HASIL_AKSES, lamaPantau, muatAuditTautan, ringkasPerangkat,
 } from '@/lib/ujianTautanPublik';
@@ -41,7 +42,7 @@ function Pilih({ label, nilai, onUbah, opsi, testId }) {
  * disorot agar admin dapat segera menutup tautan.
  */
 export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
-  const [saringan, setSaringan] = useState({ jenis: '', hasil: '', dari: '', sampai: '', cari: '' });
+  const [saringan, setSaringan] = useState({ jenis: '', hasil: '', aksi: '', dari: '', sampai: '', cari: '' });
   const [data, setData] = useState(null);
   const [memuat, setMemuat] = useState(false);
   const [galat, setGalat] = useState('');
@@ -82,6 +83,7 @@ export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
             <Angka label="Berhasil" nilai={r.ok} nada="text-emerald-700" testId="audit-ok" />
             <Angka label="Ditolak" nilai={r.ditolak} nada="text-amber-700" testId="audit-ditolak" />
             <Angka label="Coba unduh kartu soal" nilai={r.kartu_soal_ditolak} nada={r.kartu_soal_ditolak ? 'text-rose-700' : 'text-slate-900'} testId="audit-kartu" />
+            {r.klik_mengerjakan !== undefined && <Angka label="Klik Mengerjakan" nilai={r.klik_mengerjakan} testId="audit-klik" />}
           </div>
         )}
         {r?.kartu_soal_ditolak > 0 && (
@@ -97,6 +99,8 @@ export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
             opsi={[['', 'Semua'], ['info', 'Info ujian'], ['monitoring', 'Monitoring'], ['portal', 'Portal ujian']]} />
           <Pilih label="Hasil" nilai={saringan.hasil} onUbah={(v) => setSaringan((s) => ({ ...s, hasil: v }))} testId="audit-saring-hasil"
             opsi={[['', 'Semua'], ['ok', 'Berhasil'], ['ditolak', 'Ditolak']]} />
+          <Pilih label="Aksi" nilai={saringan.aksi} onUbah={(v) => setSaringan((s) => ({ ...s, aksi: v }))} testId="audit-saring-aksi"
+            opsi={[['', 'Semua'], ['buka_tautan', 'Buka tautan'], ['klik_mengerjakan', 'Klik Mengerjakan']]} />
         </div>
 
         {data && (data.akses?.length ? (
@@ -108,6 +112,11 @@ export default function PanelJejakAuditTautan({ ujianId, segarkan = 0 }) {
                 <time dateTime={a.waktu} title={formatWIBPanjang(a.waktu)} className="w-28 shrink-0 text-slate-500">{waktuRelatif(a.waktu)}</time>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">{NAMA_JENIS[a.jenis_tautan] || 'Tidak dikenal'}</span>
                 <span className={`rounded px-1.5 py-0.5 font-semibold ${kelasHasil(a.hasil)}`}>{LABEL_HASIL_AKSES[a.hasil] || a.hasil}</span>
+                {a.aksi === 'klik_mengerjakan' && (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-[#006837]" data-testid={`audit-klik-${a.id}`}>
+                    Klik Mengerjakan{a.mapel ? ` · ${namaMapelUjian(a.mapel)}${a.jenjang ? ` Kelas ${a.jenjang}` : ''}` : ''}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1 text-slate-600">
                   {ringkasPerangkat(a.perangkat)}{a.ip ? <span className="text-slate-400"> · {a.ip}</span> : null}
                   {lamaPantau(a) && <span className="block text-slate-500">{lamaPantau(a)}</span>}

@@ -216,7 +216,7 @@ def test_jejak_audit_tautan(klien):
     r = a('GET', '/ujian/uas/tautan-publik/audit')
     assert r.status_code == 200, r.text
     j = r.json()
-    assert j['ringkasan'] == {'total': 4, 'ok': 3, 'ditolak': 1, 'kartu_soal_ditolak': 0}
+    assert j['ringkasan'] == {'total': 4, 'ok': 3, 'ditolak': 1, 'kartu_soal_ditolak': 0, 'klik_mengerjakan': 0}
     assert [x['hasil'] for x in j['akses']] == ['nonaktif', 'ok', 'ok', 'ok']  # terbaru dulu
     mon = next(x for x in j['akses'] if x['jenis_tautan'] == 'monitoring')
     assert (mon['sesi'], mon['jumlah_segarkan'], mon['ip'], mon['perangkat']) == ('sesiA', 1, '36.71.1.2', 'HP Siswa')
@@ -294,3 +294,30 @@ def test_sakelar_portal_hanya_admin(klien, uid, peran):
 def test_jenis_tautan_tidak_dikenal(klien):
     r = klien('admin', 'admin', 'PUT', '/ujian/uas/tautan-publik/lain', json={'aktif': True})
     assert r.status_code == 404 and 'portal' in r.json()['detail']
+
+
+def test_jejak_audit_menampilkan_klik_mengerjakan(klien):
+    log = klien.db.ujian_akses_log.docs
+    log += [
+        {'id': 'a-lama', 'ujian_id': 'uas', 'tautan_id': 't1', 'jenis_tautan': 'info', 'hasil': 'ok', 'waktu': f'{HARI_INI}T07:00:00+07:00',
+         'ip': '10.0.0.1', 'perangkat': 'HP'},  # entri lama tanpa `aksi`
+        {'id': 'k1', 'ujian_id': 'uas', 'tautan_id': 't2', 'jenis_tautan': 'portal', 'aksi': 'klik_mengerjakan', 'hasil': 'ok',
+         'link_soal_id': 'ls1', 'jenjang': 7, 'mapel': 'ipa', 'url_host': 'cbt.id', 'waktu': f'{HARI_INI}T07:40:00+07:00',
+         'ip': '10.0.0.2', 'perangkat': 'HP', 'token': 'RahasiaTokenPortal'},
+        {'id': 'k2', 'ujian_id': 'uas', 'tautan_id': 't2', 'jenis_tautan': 'portal', 'aksi': 'klik_mengerjakan', 'hasil': 'mapel_ditahan',
+         'link_soal_id': 'ls2', 'jenjang': 8, 'mapel': 'pkn', 'url_host': 'cbt.id', 'waktu': f'{HARI_INI}T07:45:00+07:00'},
+    ]
+    r = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik/audit')
+    j = r.json()
+    assert j['ringkasan']['klik_mengerjakan'] == 1 and 'RahasiaTokenPortal' not in r.text
+    baris = {a['id']: a for a in j['akses']}
+    assert baris['a-lama']['aksi'] == 'buka_tautan'  # entri lama dibaca sebagai pembukaan tautan
+    assert {k: baris['k1'][k] for k in ('aksi', 'jenjang', 'mapel', 'url_host', 'hasil')} == {
+        'aksi': 'klik_mengerjakan', 'jenjang': 7, 'mapel': 'ipa', 'url_host': 'cbt.id', 'hasil': 'ok'}
+    klik = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik/audit', params={'aksi': 'klik_mengerjakan'}).json()['akses']
+    assert [a['id'] for a in klik] == ['k2', 'k1']
+    buka = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik/audit', params={'aksi': 'buka_tautan'}).json()['akses']
+    assert [a['id'] for a in buka] == ['a-lama']
+    ditolak = klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik/audit', params={'aksi': 'klik_mengerjakan', 'hasil': 'ditolak'}).json()
+    assert [a['id'] for a in ditolak['akses']] == ['k2']
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/tautan-publik/audit', params={'aksi': 'hapus'}).status_code == 422

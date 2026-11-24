@@ -16,9 +16,9 @@
  *   Tautan = { id, jenis: 'info'|'monitoring'|'portal', token, jalur: '/publik/…/<token>', aktif, mulai_at, selesai_at,
  *              berlaku, alasan: 'ok'|'nonaktif'|'belum_mulai'|'sudah_selesai', pesan, diperbarui_pada }
  *
- *   GET  /ujian/{ujian_id}/tautan-publik/audit?jenis=info|monitoring|portal&hasil=ok|ditolak&dari=&sampai=&cari=&batas=50
+ *   GET  /ujian/{ujian_id}/tautan-publik/audit?jenis=info|monitoring|portal&aksi=buka_tautan|klik_mengerjakan&hasil=ok|ditolak&dari=&sampai=&cari=&batas=50
  *        (dari/sampai 'YYYY-MM-DD' WIB inklusif; cari = potongan IP atau user agent)
- *     -> { ringkasan: { total, ok, ditolak, kartu_soal_ditolak },
+ *     -> { ringkasan: { total, ok, ditolak, kartu_soal_ditolak, klik_mengerjakan },
  *          akses: [{ id, jenis_tautan, waktu, ip, perangkat, hasil, sesi, terakhir_aktif, jumlah_segarkan }]  (terbaru dulu),
  *          perubahan: [{ id, waktu, jenis, aksi: 'buka'|'tutup'|'jendela'|'ganti_token', oleh_nama, detail }] }
  *        (admin & pemantau; sumber ujian_akses_log & audit perubahan tautan)
@@ -320,7 +320,7 @@ const AGEN_CONTOH = [
   'Mozilla/5.0 (Linux; Android 12; Redmi Note 11) AppleWebKit/537.36 (KHTML, like Gecko) WhatsApp/2.23 Chrome/119.0 Mobile Safari/537.36',
 ];
 
-export function auditTiruan(ujianId, { jenis, hasil, ...saringanUmum } = {}) {
+export function auditTiruan(ujianId, { jenis, hasil, aksi, ...saringanUmum } = {}) {
   const kini = Date.now();
   const hasilUrut = ['ok', 'ok', 'ok', 'ok', 'tidak_dikenal', 'ok', 'nonaktif', 'ok', 'kartu_soal_ditolak', 'ok', 'ok', 'belum_mulai'];
   let akses = Array.from({ length: 24 }, (_, i) => {
@@ -340,6 +340,7 @@ export function auditTiruan(ujianId, { jenis, hasil, ...saringanUmum } = {}) {
   if (jenis) akses = akses.filter((a) => a.jenis_tautan === jenis);
   if (hasil === 'ok') akses = akses.filter((a) => a.hasil === 'ok');
   if (hasil === 'ditolak') akses = akses.filter((a) => a.hasil !== 'ok');
+  if (aksi) akses = akses.filter((a) => (a.aksi || 'buka_tautan') === aksi);
   const perubahan = [
     { id: 'contoh-ubah-1', waktu: new Date(kini - 26 * 3600000).toISOString(), jenis: 'info', aksi: 'jendela', oleh_nama: 'Administrator (contoh)', detail: 'Sepekan sebelum ujian – hari terakhir' },
     { id: 'contoh-ubah-2', waktu: new Date(kini - 25 * 3600000).toISOString(), jenis: 'info', aksi: 'buka', oleh_nama: 'Administrator (contoh)', detail: null },
@@ -350,7 +351,10 @@ export function auditTiruan(ujianId, { jenis, hasil, ...saringanUmum } = {}) {
 
 export const muatAuditTautan = (ujianId, saringan = {}) => denganTiruan(
   async () => (await api.get(`/ujian/${ujianId}/tautan-publik/audit`, {
-    params: { ...(saringan.jenis ? { jenis: saringan.jenis } : {}), ...(saringan.hasil ? { hasil: saringan.hasil } : {}), ...paramSaringanAudit(saringan), batas: 50 },
+    params: {
+      ...(saringan.jenis ? { jenis: saringan.jenis } : {}), ...(saringan.hasil ? { hasil: saringan.hasil } : {}),
+      ...(saringan.aksi ? { aksi: saringan.aksi } : {}), ...paramSaringanAudit(saringan), batas: 50,
+    },
   })).data,
   () => auditTiruan(ujianId, saringan),
 );

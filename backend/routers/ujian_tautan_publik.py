@@ -19,7 +19,7 @@ from ujian_info import (
     JENIS_TAUTAN, KOLEKSI_AKSES_LOG, KOLEKSI_TAUTAN, KOLEKSI_TAUTAN_RIWAYAT, galat_saringan_audit, kueri_saringan_audit, UbahTautanIn, baca_waktu, catat_riwayat_tautan, ganti_token, inisialisasi_tautan,
     peringatan_jendela, ringkas_tautan, terapkan_ubah_tautan,
 )
-from ujian_portal import ringkas_tautan_portal
+from ujian_portal import AKSI_BUKA, AKSI_KLIK, KUERI_BUKA, KUERI_KLIK, ringkas_tautan_portal
 
 router = APIRouter()
 
@@ -53,24 +53,32 @@ async def daftar_tautan_publik(ujian_id: str, user: Dict = Depends(get_current_u
 
 
 FIELD_AKSES_AUDIT = {'_id': 0, 'id': 1, 'jenis_tautan': 1, 'waktu': 1, 'ip': 1, 'ip_rantai': 1, 'perangkat': 1, 'hasil': 1, 'sesi': 1,
-                     'terakhir_aktif': 1, 'jumlah_segarkan': 1}  # token (termasuk tebakan salah) tidak pernah dikirim
+                     'terakhir_aktif': 1, 'jumlah_segarkan': 1,
+                     # klik "Mengerjakan" portal: mapel tujuan & host (tautan soal lengkap tidak pernah dicatat/dikirim)
+                     'aksi': 1, 'link_soal_id': 1, 'jenjang': 1, 'mapel': 1, 'url_host': 1}  # token (termasuk tebakan salah) tidak pernah dikirim
+SARINGAN_AKSI = {'buka_tautan': KUERI_BUKA, 'klik_mengerjakan': {'aksi': AKSI_KLIK}}
 FIELD_PERUBAHAN_AUDIT = {'_id': 0, 'id': 1, 'waktu': 1, 'jenis': 1, 'aksi': 1, 'oleh_nama': 1, 'detail': 1}
 PERUBAHAN_AUDIT_MAKS = 30
 
 
 @router.get("/ujian/{ujian_id}/tautan-publik/audit")
 async def jejak_audit_tautan_publik(ujian_id: str, jenis: Optional[str] = Query(None), hasil: Optional[str] = Query(None),
+                                    aksi: Optional[str] = Query(None),
                                     dari: Optional[str] = Query(None, max_length=10), sampai: Optional[str] = Query(None, max_length=10),
                                     cari: Optional[str] = Query(None, max_length=100), batas: int = Query(50, ge=1, le=200),
                                     response: Response = None, user: Dict = Depends(get_current_user)):
     """Jejak audit tautan publik satu ujian (admin & pemantau menu tautan_publik):
-    { ringkasan: { total, ok, ditolak, kartu_soal_ditolak }  (seluruh akses ujian ini, tanpa saringan),
-      akses: [...] terbaru dulu (saringan ?jenis=info|monitoring, ?hasil=ok|ditolak, ?dari=&sampai= YYYY-MM-DD WIB,
-             ?cari= potongan IP/perangkat; maks `batas`),
+    { ringkasan: { total, ok, ditolak, kartu_soal_ditolak, klik_mengerjakan }  (seluruh akses ujian ini, tanpa saringan;
+                  klik_mengerjakan = klik sah tombol Mengerjakan portal),
+      akses: [...] terbaru dulu (saringan ?jenis=info|monitoring|portal, ?hasil=ok|ditolak, ?aksi=buka_tautan|klik_mengerjakan,
+             ?dari=&sampai= YYYY-MM-DD WIB, ?cari= potongan IP/perangkat; maks `batas`) — tiap baris memuat `aksi` (entri lama
+             tanpa aksi = buka_tautan) dan, untuk klik, jenjang/mapel/url_host,
       perubahan: [...] riwayat pengaturan tautan terbaru (saringan jenis) }.
     Percobaan dengan token tak dikenal tidak terkait ujian mana pun sehingga tidak tampil di sini."""
     if jenis and jenis not in JENIS_TAUTAN:
-        raise HTTPException(422, "Saringan jenis harus info atau monitoring.")
+        raise HTTPException(422, "Saringan jenis harus info, monitoring, atau portal.")
+    if aksi and aksi not in SARINGAN_AKSI:
+        raise HTTPException(422, "Saringan aksi harus buka_tautan atau klik_mengerjakan.")
     if hasil and hasil not in ('ok', 'ditolak'):
         raise HTTPException(422, "Saringan hasil harus ok atau ditolak.")
     pesan = galat_saringan_audit(dari, sampai, cari)
@@ -83,13 +91,15 @@ async def jejak_audit_tautan_publik(ujian_id: str, jenis: Optional[str] = Query(
         'ok': await log.count_documents({'ujian_id': ujian_id, 'hasil': 'ok'}),
         'ditolak': await log.count_documents({'ujian_id': ujian_id, 'hasil': {'$ne': 'ok'}}),
         'kartu_soal_ditolak': await log.count_documents({'ujian_id': ujian_id, 'hasil': 'kartu_soal_ditolak'}),
+        'klik_mengerjakan': await log.count_documents({'ujian_id': ujian_id, **KUERI_KLIK}),
     }
-    q = {**kueri_saringan_audit(ujian_id, dari, sampai, cari), **({'jenis_tautan': jenis} if jenis else {})}
+    q = {**kueri_saringan_audit(ujian_id, dari, sampai, cari), **({'jenis_tautan': jenis} if jenis else {}),
+         **(SARINGAN_AKSI[aksi] if aksi else {})}
     if hasil == 'ok':
         q['hasil'] = 'ok'
     elif hasil == 'ditolak':
         q['hasil'] = {'$ne': 'ok'}
-    akses = [{k: d.get(k) for k in FIELD_AKSES_AUDIT if k != '_id'}  # whitelist eksplisit (bukan hanya proyeksi)
+    akses = [{k: d.get(k) for k in FIELD_AKSES_AUDIT if k != '_id'} | {'aksi': d.get('aksi') or AKSI_BUKA}  # whitelist eksplisit
              for d in (await log.find(q, FIELD_AKSES_AUDIT).sort('waktu', -1).to_list(batas))[:batas]]
     qp = {'ujian_id': ujian_id, **({'jenis': jenis} if jenis else {})}
     perubahan = [{k: d.get(k) for k in FIELD_PERUBAHAN_AUDIT if k != '_id'}
