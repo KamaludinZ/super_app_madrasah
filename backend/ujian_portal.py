@@ -61,11 +61,12 @@ _URL_SOAL = re.compile(r'^https?://[^/\\?#@\s]+', re.IGNORECASE)
 
 
 def url_soal_aman(url: Any) -> Optional[str]:
-    """Tautan soal yang boleh dipasang -> URL bersih, atau None. Hanya http:// atau https:// dengan nama host, tanpa spasi,
+    """Tautan soal yang boleh dipasang -> URL bersih, atau None. Hanya http:// atau https:// dengan nama host, tanpa spasi
+    maupun karakter kontrol,
     tanpa kredensial (user:sandi@), ≤ URL_SOAL_MAKS. javascript:, data:, file:, dan skema lain ditolak. Sama dengan
     urlSoalAman di frontend."""
     t = str(url or '').strip()
-    if not t or len(t) > URL_SOAL_MAKS or re.search(r'\s', t) or not _URL_SOAL.match(t):
+    if not t or len(t) > URL_SOAL_MAKS or re.search(r'[\s\x00-\x1f\x7f]', t) or not _URL_SOAL.match(t):
         return None
     try:
         u = urlsplit(t)

@@ -53,7 +53,8 @@ export const URL_SOAL_MAKS = 2000; // sama dengan backend (URL_SOAL_MAKS)
 export function urlSoalAman(url) {
   const t = String(url || '').trim();
   // Pola literal lebih dulu: parser URL peramban memaafkan bentuk rusak seperti "http:///x" atau "https:\\host".
-  if (!t || t.length > URL_SOAL_MAKS || /\s/.test(t) || !/^https?:\/\/[^/\\?#@\s]+/i.test(t)) return null;
+  // eslint-disable-next-line no-control-regex
+  if (!t || t.length > URL_SOAL_MAKS || /[\s\u0000-\u001f\u007f]/.test(t) || !/^https?:\/\/[^/\\?#@\s]+/i.test(t)) return null;
   let u;
   try { u = new URL(t); } catch { return null; }
   if (!['http:', 'https:'].includes(u.protocol) || !u.hostname || u.username || u.password) return null; // tanpa user:sandi@

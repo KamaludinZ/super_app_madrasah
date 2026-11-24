@@ -207,3 +207,13 @@ def test_hitung_mundur_dan_batas_berikutnya_dari_waktu_server():
     assert up.batas_berikutnya(soal, _wib('2026-12-02T08:00:00+07:00')) == s
     assert up.batas_berikutnya(soal, _wib('2026-12-02T09:00:00+07:00')) == '2026-12-02T09:30:00+07:00'  # tepat batas: berikutnya
     assert up.batas_berikutnya(soal, _wib('2026-12-02T11:00:00+07:00')) is None
+
+
+def test_url_soal_tolak_pengelabuan_skema():
+    for salah in ('JaVaScRiPt:alert(1)', ' javascript:alert(1)', 'java\tscript:alert(1)', 'jav&#x09;ascript:alert(1)',
+                  'https://cbt.id/\x00', 'https://cbt.id/\x1b[31m', 'https://cbt.id/a\x7f', 'https://cbt.id\nSet-Cookie:x',
+                  'http:/cbt.id', 'https:cbt.id', 'https//cbt.id', '\\\\cbt.id\\soal', 'hxxps://cbt.id',
+                  'https://@cbt.id', 'https://:sandi@cbt.id'):
+        assert up.url_soal_aman(salah) is None, repr(salah)
+    assert up.url_soal_aman('https://cbt.id/ujian?kelas=7&mapel=ipa#mulai') == 'https://cbt.id/ujian?kelas=7&mapel=ipa#mulai'
+    assert up.url_soal_aman('https://xn--ujin-0qa.id/soal') == 'https://xn--ujin-0qa.id/soal'
