@@ -255,7 +255,8 @@ function kisiKisiTiruan() {
   return hasil;
 }
 
-const TATA_TERTIB_CONTOH = `Peserta wajib mematuhi tata tertib berikut selama ujian berlangsung:
+/** Contoh tata tertib (data tiruan & tombol "Isi dengan contoh" di menu Info Ujian). */
+export const TATA_TERTIB_CONTOH = `Peserta wajib mematuhi tata tertib berikut selama ujian berlangsung:
 1. Hadir di ruang ujian paling lambat 15 menit sebelum ujian dimulai.
 2. Memakai seragam sesuai ketentuan madrasah dan membawa kartu peserta ujian.
 3. Duduk sesuai nomor peserta yang tertera di meja.

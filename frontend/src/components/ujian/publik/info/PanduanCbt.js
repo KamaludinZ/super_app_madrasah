@@ -47,8 +47,9 @@ function PemutarYoutube({ id }) {
 /**
  * Panduan CBT: berkas PDF (dibuka di tab baru) dan/atau video panduan. Video YouTube dapat diputar di halaman ini
  * (klik untuk memuat); tautan video lain dibuka di tab baru. Hanya tautan http(s) yang ditampilkan.
+ * `onBukaPdf` opsional menggantikan tautan publik PDF (pratinjau admin di menu Info Ujian, tanpa token).
  */
-export default function PanduanCbt({ token, panduan, tiruan }) {
+export default function PanduanCbt({ token, panduan, tiruan, onBukaPdf }) {
   const adaPdf = !!panduan?.ada_pdf;
   const video = urlVideoAman(panduan?.video_url);
   const idYoutube = idVideoYoutube(video);
@@ -63,8 +64,8 @@ export default function PanduanCbt({ token, panduan, tiruan }) {
         <div className="space-y-2">
           {idYoutube && <PemutarYoutube id={idYoutube} />}
           <div className={`grid grid-cols-1 gap-2 ${adaPdf && video ? 'sm:grid-cols-2 lg:grid-cols-1' : ''}`}>
-            {adaPdf && (tiruan ? (
-              <button type="button" onClick={bukaPanduanContoh} className={kelasTombol} data-testid="panduan-pdf">
+            {adaPdf && (tiruan || onBukaPdf ? (
+              <button type="button" onClick={onBukaPdf || bukaPanduanContoh} className={kelasTombol} data-testid="panduan-pdf">
                 <IsiTombol Ikon={FileText} judul="Buka panduan (PDF)" sub={namaPdf} />
               </button>
             ) : (
