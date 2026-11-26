@@ -63,3 +63,16 @@ def test_riwayat_dan_kode_semester_rapor():
     assert un.kode_semester_rapor({'code': 'ganjil'}) == 'ganjil' and un.kode_semester_rapor({'name': 'Genap'}) == 'genap'
     assert un.kode_semester_rapor({'code': '3'}) == 'ganjil' and un.kode_semester_rapor(None) is None
     assert set(un.SUMBER_NILAI) == set(un.LABEL_SUMBER)
+
+
+def test_migrasi_id_nilai_lama():
+    from migrations.migrate_ujian_nilai import migrate_id
+    assert ('2026-11-26_ujian_nilai_id', migrasi_otomatis._ujian_nilai_id) in migrasi_otomatis.MIGRASI
+    db = Db()
+    db.nilai_ujian.docs += [{'ujian_id': 'u', 'mapel_id': 'm', 'siswa_id': 's1', 'nilai': 80},
+                            {'id': 'ada', 'ujian_id': 'u', 'mapel_id': 'm', 'siswa_id': 's2', 'nilai': 70}]
+    assert asyncio.run(migrate_id(db, dry_run=True)) == {'nilai_tanpa_id': 1, 'dry_run': True} and 'id' not in db.nilai_ujian.docs[0]
+    assert asyncio.run(migrate_id(db))['nilai_tanpa_id'] == 1
+    assert db.nilai_ujian.docs[0]['id'] and db.nilai_ujian.docs[1]['id'] == 'ada'
+    assert asyncio.run(migrate_id(db))['nilai_tanpa_id'] == 0  # idempoten
+    assert any(o.get('unique') for k, o in db.nilai_ujian.index if k == [('id', 1)])

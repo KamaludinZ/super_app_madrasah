@@ -67,14 +67,16 @@ def test_unggah_memulai_job_dan_menyimpan_nilai(klien):
     log_id = r.json()['log_id']
     log = next(d for d in db.nilai_impor_log.docs if d['id'] == log_id)
     assert log['status'] == 'selesai' and log['diunggah_oleh_nama'] == 'Bu Siti' and log['mapel_nama'] == 'Matematika'
-    assert (log['total_baris'], log['diproses'], log['berhasil'], log['gagal']) == (6, 6, 3, 3)
+    assert (log['total_baris'], log['diproses'], log['berhasil'], log['gagal'], log['diisi_nol']) == (7, 7, 4, 3, 1)
+    assert log['tahap'] == 'selesai' and log['galat_teknis'] is None and log['gagal_di'] is None and log['diperbarui'] == log['selesai_pada']
     ps = {p['sheet']: p for p in log['per_sheet']}
-    assert ps['7A']['berhasil'] == 2 and ps['7A']['gagal'] == 1 and ps['7B']['kosong'] == 1 and ps['7B']['kelas'] == '7B'
+    assert ps['7A']['berhasil'] == 2 and ps['7A']['gagal'] == 1 and ps['7B']['diisi_nol'] == 1 and ps['7B']['kelas'] == '7B'
     pesan = {(g['sheet'], g['baris']): g['pesan'] for g in log['galat']}
     assert 'luar rentang' in pesan[('7A', 7)] and 'tidak terdaftar di kelas ini' in pesan[('7B', 6)] and 'sudah diisi di baris 5' in pesan[('7B', 8)]
     nilai = {d['siswa_id']: d for d in db.nilai_ujian.docs}
     assert nilai['s-k7a-1']['nilai'] == 88 and nilai['s-k7a-2']['nilai'] == 76.5 and nilai['s-k7b-1']['nilai'] == 90
-    assert nilai['s-k7a-1']['sumber'] == 'impor' and nilai['s-k7a-1']['kelas_id'] == 'k7a' and 's-k7b-2' not in nilai
+    assert nilai['s-k7a-1']['sumber'] == 'impor' and nilai['s-k7a-1']['kelas_id'] == 'k7a' and nilai['s-k7b-2']['nilai'] == 0  # kosong -> 0
+    assert all(d.get('id') for d in db.nilai_ujian.docs) and len({d['id'] for d in db.nilai_ujian.docs}) == len(db.nilai_ujian.docs)
     assert any(a.get('action') == 'ujian_nilai_impor' for a in db.audit_logs.docs)
 
     # unggah ulang: nilai ditimpa, bukan diduplikasi
@@ -92,8 +94,9 @@ def test_berkas_salah_tercatat_gagal(klien):
     assert 'kelas 8, bukan kelas 7' in db.nilai_impor_log.docs[-1]['pesan']
     unggah(klien, 'admin', 'admin', b'bukan excel', nama='x.xlsx')
     assert 'bukan .xlsx' in db.nilai_impor_log.docs[-1]['pesan']
-    unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', None)]}))
-    assert db.nilai_impor_log.docs[-1]['status'] == 'gagal' and 'masih kosong' in db.nilai_impor_log.docs[-1]['pesan']
+    unggah(klien, 'admin', 'admin', berkas_nilai({'7A': []}))
+    assert db.nilai_impor_log.docs[-1]['status'] == 'gagal' and 'hanya berisi header' in db.nilai_impor_log.docs[-1]['pesan']
+    assert db.nilai_impor_log.docs[-1]['gagal_di']['tahap'] == 'memeriksa'
     unggah(klien, 'admin', 'admin', berkas_nilai({'8A': [('s-k8a-1', '', '', 80)]}))
     assert 'bukan nama kelas 7' in db.nilai_impor_log.docs[-1]['galat'][0]['pesan']
     assert not db.nilai_ujian.docs
@@ -155,8 +158,8 @@ def test_ringkasan_sheet_dan_baris_gagal_tersimpan(klien, monkeypatch):
     unggah(klien, 'admin', 'admin', isi)
     log = db.nilai_impor_log.docs[-1]
     ps = {p['sheet']: p for p in log['per_sheet']}
-    assert ps['7A'] == {'sheet': '7A', 'kelas': '7A', 'total': 4, 'diproses': 4, 'berhasil': 2, 'gagal': 2, 'kosong': 0, 'dilewati': 0, 'rata': 85.5}
-    assert ps['7B']['total'] == 0 and ps['7B']['kosong'] == 1 and ps['7B']['rata'] is None and ps['IX']['kelas'] is None
+    assert ps['7A'] == {'sheet': '7A', 'kelas': '7A', 'total': 4, 'diproses': 4, 'berhasil': 2, 'gagal': 2, 'diisi_nol': 0, 'dilewati': 0, 'rata': 85.5}
+    assert ps['7B']['total'] == 1 and ps['7B']['diisi_nol'] == 1 and ps['7B']['rata'] == 0 and ps['IX']['kelas'] is None
     g = {(x['sheet'], x['baris']): x for x in log['galat']}
     assert g[('7A', 7)]['jenis'] == 'siswa' and g[('7A', 7)]['nama'] == 'Tidak Ada'
     assert g[('7A', 8)] == {'sheet': '7A', 'baris': 8, 'nama': None, 'siswa_id': 's-k7a-3', 'nilai': 'A+', 'jenis': 'nilai',
@@ -282,7 +285,8 @@ def test_unduh_template_lalu_impor_kembali(klien):
     wb.save(out)
     log_id = unggah(klien, 'guru1', 'guru', out.getvalue()).json()['log_id']
     log = next(x for x in db.nilai_impor_log.docs if x['id'] == log_id)
-    assert log['status'] == 'selesai' and log['berhasil'] == 3 and log['gagal'] == 0 and log['kelas_tanpa_sheet'] == []
+    assert log['status'] == 'selesai' and log['berhasil'] == 6 and log['gagal'] == 0 and log['kelas_tanpa_sheet'] == []
+    assert log['diisi_nol'] == 3  # 7A: 1 kosong, 7B: 2 kosong (yang lain diisi 70), 7C tanpa siswa
     # template mapel lain tertolak saat diimpor ke mapel berbeda
     ipa = klien('admin', 'admin', 'GET', '/ujian/uas/nilai/template', params={'mapel_id': 'ipa', 'jenjang': 7}).content
     unggah(klien, 'admin', 'admin', ipa)
@@ -483,3 +487,105 @@ def test_rekap_kelas_dan_sinkron_ulang_rapor(klien):
     assert klien('admin', 'admin', 'POST', '/ujian/uas/nilai/sinkron-rapor', json={}).json() == {'disinkron': 3}
     assert len(db.grade_entries.docs) == 3  # idempoten: tidak menggandakan baris rapor
     assert klien('guru1', 'guru', 'GET', '/ujian/uas/nilai/rekap', params={'mapel_id': 'mtk', 'jenjang': 7}).json()['kelas'][0]['tersinkron'] == 2
+
+
+class NilaiIdUnik:
+    """Pembungkus koleksi nilai_ujian yang meniru index unik `id` MongoDB produksi: dokumen tanpa id diindeks sebagai
+    null, sehingga hanya SATU dokumen tanpa id yang boleh ada (E11000 dup key { id: null })."""
+
+    def __init__(self, asli):
+        self.asli = asli
+
+    def __getattr__(self, nama):
+        return getattr(self.asli, nama)
+
+    async def update_one(self, q, u, upsert=False):
+        from pymongo.errors import DuplicateKeyError
+        sebelum = len(self.asli.docs)
+        h = await self.asli.update_one(q, u, upsert)
+        ids = [d.get('id') for d in self.asli.docs]
+        if len(ids) != len(set(ids)):
+            if len(self.asli.docs) > sebelum:
+                self.asli.docs.pop()
+            raise DuplicateKeyError('E11000 duplicate key error collection: madrasah.nilai_ujian index: id_1 dup key: { id: null }')
+        return h
+
+
+def test_impor_dan_edit_lolos_index_unik_id(klien):
+    """Regresi produksi: upsert nilai dulu tanpa `id` -> siswa baru kedua ditolak index unik dan seluruh impor gagal."""
+    db = klien.db
+    db['nilai_ujian'] = NilaiIdUnik(db.nilai_ujian)
+    log_id = unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', 80), ('s-k7a-2', '', '', 70), ('s-k7a-3', '', '', None)],
+                                                           '7B': [('s-k7b-1', '', '', 90)]})).json()['log_id']
+    log = next(x for x in db.nilai_impor_log.docs if x['id'] == log_id)
+    assert (log['status'], log['berhasil'], log['gagal'], log['diisi_nol']) == ('selesai', 4, 0, 1), log.get('pesan')
+    ids = [d['id'] for d in db.nilai_ujian.docs]
+    assert len(ids) == 4 and len(set(ids)) == 4 and all(ids)
+    r = klien('admin', 'admin', 'PUT', '/ujian/uas/nilai/kelas/k7b', json={'mapel_id': 'mtk', 'entries': [
+        {'siswa_id': 's-k7b-2', 'nilai': 60}, {'siswa_id': 's-k7b-3', 'nilai': 61}]})
+    assert r.status_code == 200 and r.json() == {'disimpan': 2} and len({d['id'] for d in db.nilai_ujian.docs}) == 6
+
+
+def test_galat_simpan_per_baris_dan_job_berhenti_dengan_detail(klien, monkeypatch):
+    import ujian_nilai_impor
+    from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
+    db = klien.db
+    asli = ujian_nilai_impor.sinkron_rapor
+
+    async def rapor_rusak(dbx, rapor, dok, *a):
+        if dok['siswa_id'] == 's-k7a-2':
+            raise ServerSelectionTimeoutError('mongodb+srv://admin:rahasia@cluster0.example.net timed out')
+        return await asli(dbx, rapor, dok, *a)
+    monkeypatch.setattr(ujian_nilai_impor, 'sinkron_rapor', rapor_rusak)
+    unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', 80), ('s-k7a-2', '', '', 70), ('s-k7a-3', '', '', 75)]}))
+    log = db.nilai_impor_log.docs[-1]
+    assert (log['status'], log['berhasil'], log['gagal']) == ('selesai', 2, 1) and 's-k7a-2' not in log['siswa_berhasil']
+    g = log['galat'][0]
+    assert g['jenis'] == 'simpan' and g['baris'] == 6 and 'gagal disalin ke kolom UAS rapor' in g['pesan']
+    assert 'Koneksi ke database terputus' in g['pesan'] and 'rahasia' not in g['pesan'] and '[disembunyikan]' in g['pesan']
+
+    # masalah database menyeluruh: GAGAL_SIMPAN_BERUNTUN baris berturut-turut gagal -> job gagal dengan posisi & detail teknis
+    monkeypatch.setattr(ujian_nilai_impor, 'GAGAL_SIMPAN_BERUNTUN', 2)
+
+    async def nilai_ditolak(dbx, dok):
+        raise DuplicateKeyError('E11000 duplicate key error collection: madrasah.nilai_ujian index: id_1 dup key: { id: null }')
+    monkeypatch.setattr(ujian_nilai_impor, 'simpan_dokumen_nilai', nilai_ditolak)
+    unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('', '', 'Hantu', 50), ('s-k7a-1', '', '', 81), ('s-k7a-2', '', '', 71)]}))
+    log = db.nilai_impor_log.docs[-1]
+    assert log['status'] == 'gagal' and log['tahap'] == 'menyimpan' and log['sheet_aktif'] is None
+    assert 'Database menolak data ganda' in log['pesan'] and '2 baris berturut-turut' in log['pesan'] and 'sheet 7A, baris 7' in log['pesan']
+    assert log['galat_teknis'].startswith('DuplicateKeyError: E11000') and 'id_1' in log['galat_teknis']
+    assert log['gagal_di'] == {'tahap': 'menyimpan', 'sheet': '7A', 'baris': 7, 'nama': 'Siswa 7A 2'}
+    assert (log['diproses'], log['gagal'], log['galat_total']) == (2, 2, 2) and [x['jenis'] for x in log['galat']] == ['siswa', 'simpan']
+    d = klien('admin', 'admin', 'GET', f"/ujian/uas/nilai/impor/{log['id']}").json()
+    assert d['galat_teknis'] == log['galat_teknis'] and d['gagal_di']['baris'] == 7 and d['persen'] == 100
+
+
+def test_galat_tak_terduga_saat_membaca_tercatat(klien, monkeypatch):
+    import ujian_nilai_impor
+
+    def meledak(_isi):
+        raise RuntimeError('openpyxl: sel rusak di xl/worksheets/sheet3.xml')
+    monkeypatch.setattr(ujian_nilai_impor, 'baca_berkas_nilai', meledak)
+    unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', 80)]}))
+    log = klien.db.nilai_impor_log.docs[-1]
+    assert log['status'] == 'gagal' and log['pesan'].startswith('Kesalahan tak terduga di server saat membaca berkas excel.')
+    assert log['galat_teknis'] == 'RuntimeError: openpyxl: sel rusak di xl/worksheets/sheet3.xml'
+    assert log['gagal_di'] == {'tahap': 'membaca', 'sheet': None, 'baris': None, 'nama': None}
+
+
+def test_macet_dihitung_dari_aktivitas_terakhir(klien):
+    db = klien.db
+    db.nilai_impor_log.docs += [
+        {'id': 'lama-aktif', 'ujian_id': 'uas', 'mapel_id': 'mtk', 'jenjang': 7, 'status': 'proses', 'tahap': 'menyimpan', 'sheet_aktif': '7B',
+         'waktu': '2026-01-01T07:00:00+07:00', 'diperbarui': '2099-01-01T00:00:00+07:00', 'per_sheet': [], 'galat': [],
+         'diunggah_oleh_nama': 'Pak Hadi'},
+        {'id': 'mati', 'ujian_id': 'uas', 'mapel_id': 'ipa', 'jenjang': 7, 'status': 'proses', 'tahap': 'menyimpan', 'sheet_aktif': '7B',
+         'waktu': '2026-01-01T07:00:00+07:00', 'diperbarui': '2026-01-01T07:05:00+07:00', 'per_sheet': [], 'galat': []},
+    ]
+    assert klien('admin', 'admin', 'GET', '/ujian/uas/nilai/impor/lama-aktif').json()['status'] == 'proses'  # masih berdetak
+    assert unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', 80)]})).status_code == 409
+    m = klien('admin', 'admin', 'GET', '/ujian/uas/nilai/impor/mati').json()
+    assert m['status'] == 'gagal' and 'sejak 01/01/2026 07.05 WIB pada tahap menyimpan nilai (sheet 7B)' in m['pesan']
+    assert m['gagal_di'] == {'tahap': 'menyimpan', 'sheet': '7B', 'baris': None, 'nama': None}
+    assert unggah(klien, 'admin', 'admin', berkas_nilai({'7A': [('s-k7a-1', '', '', 80)]}), mapel='ipa').status_code == 200

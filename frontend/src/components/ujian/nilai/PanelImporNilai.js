@@ -1,32 +1,34 @@
 import React, { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { FileUp, Loader2, Upload } from 'lucide-react';
-import { pesanGalat } from '@/lib/ujian';
-import { imporNilai, validasiBerkasNilai } from '@/lib/ujianNilai';
+import { AlertTriangle, FileUp, Loader2, Upload } from 'lucide-react';
+import { imporNilai, pesanGalatUnggah, validasiBerkasNilai } from '@/lib/ujianNilai';
 
 /**
  * Panel Impor Massal Nilai: unggah SATU berkas template berisi beberapa sheet kelas sekaligus untuk mapel & jenjang
- * terpilih. Baris dicocokkan per sheet menurut ID siswa/NIS/nama. Setelah diunggah, progres & hasil per sheet dipantau
- * di Monitoring Impor (`onMulai(logId)`).
+ * terpilih. Baris dicocokkan per sheet menurut ID siswa/NIS/nama; nilai kosong disimpan 0. Setelah diunggah, progres & hasil
+ * per sheet dipantau di Monitoring Impor (`onMulai(logId, info)`). Bila server menolak unggahan, penyebabnya (beserta kode
+ * HTTP) tampil di panel ini.
  */
 export default function PanelImporNilai({ ujianId, mapel, jenjang, onMulai }) {
   const masukan = useRef(null);
   const [berkas, setBerkas] = useState(null);
   const [galat, setGalat] = useState('');
+  const [ditolak, setDitolak] = useState('');
   const [proses, setProses] = useState(false);
 
-  const pilih = (f) => { setBerkas(f || null); setGalat(f ? (validasiBerkasNilai(f) || '') : ''); };
+  const pilih = (f) => { setBerkas(f || null); setDitolak(''); setGalat(f ? (validasiBerkasNilai(f) || '') : ''); };
 
   const unggah = async () => {
     setProses(true);
+    setDitolak('');
     try {
       const h = await imporNilai(ujianId, { berkas, mapelId: mapel.id, mapelNama: mapel.nama, jenjang });
       toast.success(`Berkas diterima — memproses nilai ${mapel.nama} kelas ${jenjang}${h.tiruan ? ' (contoh)' : ''}`);
+      onMulai?.(h.log_id, { mapel_id: mapel.id, mapel_nama: mapel.nama, jenjang, berkas: berkas.name });
       setBerkas(null);
-      onMulai?.(h.log_id);
     } catch (e) {
-      setGalat(pesanGalat(e, 'Gagal mengunggah berkas nilai.'));
+      setDitolak(pesanGalatUnggah(e));
     } finally {
       setProses(false);
     }
@@ -35,7 +37,7 @@ export default function PanelImporNilai({ ujianId, mapel, jenjang, onMulai }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4" data-testid="panel-impor-nilai">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><FileUp className="h-4 w-4 text-[#006837]" /> 2 · Impor massal</h3>
-      <p className="mt-1 text-xs text-slate-600">Unggah template yang sudah diisi — semua sheet kelas diproses sekaligus untuk {mapel.nama} kelas {jenjang}.</p>
+      <p className="mt-1 text-xs text-slate-600">Unggah template yang sudah diisi — semua sheet kelas diproses sekaligus untuk {mapel.nama} kelas {jenjang}. Nilai yang kosong otomatis disimpan 0.</p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <button type="button" onClick={() => masukan.current?.click()} disabled={proses}
           onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pilih(e.dataTransfer.files?.[0]); }}
@@ -50,6 +52,13 @@ export default function PanelImporNilai({ ujianId, mapel, jenjang, onMulai }) {
         </Button>
       </div>
       {galat && <p className="mt-2 text-xs text-rose-700" role="alert">{galat}</p>}
+      {ditolak && (
+        <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-900" role="alert" data-testid="galat-unggah-nilai">
+          <p className="flex items-center gap-1.5 font-semibold text-rose-800"><AlertTriangle className="h-3.5 w-3.5" /> Unggahan tidak diterima server</p>
+          <p className="mt-1">{ditolak}</p>
+          <p className="mt-1 text-rose-700">Belum ada nilai yang diproses dari berkas ini. Perbaiki penyebab di atas lalu klik Impor lagi.</p>
+        </div>
+      )}
     </section>
   );
 }

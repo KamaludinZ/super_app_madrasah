@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, ArrowLeft, BookOpen, FileSpreadsheet, Loader2, RefreshCw } from 'lucide-react';
@@ -14,7 +15,7 @@ import RingkasanImporSheet from '@/components/ujian/nilai/RingkasanImporSheet';
 import TabelBarisGagal from '@/components/ujian/nilai/TabelBarisGagal';
 import DetailUnggahan from '@/components/ujian/nilai/DetailUnggahan';
 import UnggahUlangGagal from '@/components/ujian/nilai/UnggahUlangGagal';
-import { muatImpor } from '@/lib/ujianNilai';
+import { muatImpor, pesanGalatUnggah } from '@/lib/ujianNilai';
 import { HALAMAN_BERANDA_UJIAN } from '@/lib/ujian';
 
 /**
@@ -29,12 +30,17 @@ export default function UjianNilaiPage() {
   const [tab, setTab] = useState('nilai');
   const gantiUjian = useCallback((u) => { setUjian(u); setDipilih(null); }, []);
   const selesai = useCallback(() => setSegarkan((n) => n + 1), []);
-  // Setelah unggah: pindah ke Monitoring Impor dan pantau impor baru.
-  const mulaiPantau = useCallback((logId) => {
+  // Rincian satu impor; bila gagal dimuat, alasannya ditampilkan (ProgresImpor tetap mencoba lagi selama 'proses').
+  const muatRincian = useCallback((logId) => muatImpor(ujian.id, logId)
+    .then((d) => setDipilih((x) => (!x || x.id === logId ? d : x)))
+    .catch((e) => toast.error(`Rincian impor belum dapat dimuat: ${pesanGalatUnggah(e, 'Gagal memuat rincian impor.')}`)), [ujian]);
+  // Setelah unggah: pindah ke Monitoring Impor dan langsung pantau impor baru (tahap 'diterima' sampai rincian pertama masuk).
+  const mulaiPantau = useCallback((logId, info = {}) => {
     setTab('monitoring');
     setSegarkan((n) => n + 1);
-    muatImpor(ujian.id, logId).then(setDipilih).catch(() => {});
-  }, [ujian]);
+    setDipilih({ id: logId, status: 'proses', tahap: 'diterima', ...info, per_sheet: [], galat: [] });
+    muatRincian(logId);
+  }, [muatRincian]);
 
   return (
     <div className="space-y-6" data-testid="ujian-nilai">
@@ -67,14 +73,14 @@ export default function UjianNilaiPage() {
           <TabsContent value="monitoring" className="mt-4 space-y-4">
             {dipilih && <DetailUnggahan log={dipilih} />}
             {dipilih && <ProgresImpor ujianId={ujian.id} log={dipilih} onSelesai={(l) => { setDipilih(l); selesai(); }} />}
-            {dipilih?.status === 'selesai' && <RingkasanImporSheet log={dipilih} />}
-            {dipilih?.status === 'selesai' && <TabelBarisGagal log={dipilih} />}
+            {dipilih && dipilih.status !== 'proses' && <RingkasanImporSheet log={dipilih} />}
+            {dipilih && dipilih.status !== 'proses' && <TabelBarisGagal log={dipilih} />}
             {dipilih?.status === 'selesai' && (
               <UnggahUlangGagal ujianId={ujian.id} log={dipilih}
-                onMulai={(logId) => { setSegarkan((n) => n + 1); muatImpor(ujian.id, logId).then(setDipilih).catch(() => {}); }} />
+                onMulai={(logId) => mulaiPantau(logId, { mapel_id: dipilih.mapel_id, mapel_nama: dipilih.mapel_nama, jenjang: dipilih.jenjang, ulang_dari: dipilih.id })} />
             )}
             <MonitoringImpor ujian={ujian} segarkan={segarkan} dipilihId={dipilih?.id}
-              onPilih={(l) => { setDipilih(l); muatImpor(ujian.id, l.id).then((d) => setDipilih((x) => (x?.id === l.id ? d : x))).catch(() => {}); }} />
+              onPilih={(l) => { setDipilih(l); muatRincian(l.id); }} />
           </TabsContent>
         </Tabs>
       )}

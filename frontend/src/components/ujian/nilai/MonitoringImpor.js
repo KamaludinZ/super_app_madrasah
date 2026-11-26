@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Activity, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { aksesDitolak, pesanGalat } from '@/lib/ujian';
-import { STATUS_IMPOR, muatRiwayatImpor } from '@/lib/ujianNilai';
+import { STATUS_IMPOR, labelTahap, muatRiwayatImpor, pesanGalatUnggah } from '@/lib/ujianNilai';
 import AksesDitolak from '@/components/security/AksesDitolak';
 
 export function BadgeStatusImpor({ status }) {
@@ -27,7 +27,7 @@ export default function MonitoringImpor({ ujian, segarkan = 0, onPilih, dipilihI
       setDitolak('');
     } catch (e) {
       if (aksesDitolak(e)) setDitolak(pesanGalat(e, 'Akses ditolak.'));
-      else toast.error(pesanGalat(e, 'Gagal memuat riwayat impor.'));
+      else toast.error(pesanGalatUnggah(e, 'Gagal memuat riwayat impor.'));
     }
   }, [ujian]);
   useEffect(() => { muat(); }, [muat, segarkan]);
@@ -73,10 +73,14 @@ export default function MonitoringImpor({ ujian, segarkan = 0, onPilih, dipilihI
                       <BadgeStatusImpor status={l.status} />
                     </div>
                     <div className="text-xs text-slate-500">{l.berkas} · {l.diunggah_oleh_nama} · {formatWIBPanjang(l.waktu)}</div>
+                    {l.status === 'proses' && (
+                      <div className="text-xs text-sky-800">{labelTahap(l.tahap || 'diterima')}{l.sheet_aktif ? ` · sheet ${l.sheet_aktif}` : ''} · {l.diproses || 0}/{l.total_baris || 0} baris</div>
+                    )}
                     {l.status === 'gagal' && l.pesan ? <div className="text-xs text-rose-700">{l.pesan}</div> : (
                       <div className="flex flex-wrap gap-x-3 text-xs">
                         <span className="text-emerald-700">{l.berhasil} berhasil</span>
                         <span className={l.gagal ? 'text-rose-700' : 'text-slate-400'}>{l.gagal} gagal</span>
+                        {l.diisi_nol > 0 && <span className="text-amber-700">{l.diisi_nol} kosong → 0</span>}
                         {l.per_sheet?.map((s) => <span key={s.sheet} className="text-slate-500">{s.sheet}: {s.berhasil}/{s.total}</span>)}
                       </div>
                     )}

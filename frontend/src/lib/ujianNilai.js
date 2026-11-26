@@ -19,9 +19,13 @@
  *     -> { items: [ImporLog tanpa galat], ringkasan: {status: n}, pengunggah: [{ id, nama, sebagai, jumlah, terakhir }] }
  *
  *   ImporLog = { id, mapel_id, mapel_nama, jenjang, berkas, status: 'proses'|'selesai'|'gagal', pesan,
- *                diproses, total_baris, berhasil, gagal, per_sheet: [{ sheet, kelas, total, diproses, berhasil, gagal, kosong, rata }],
+ *                tahap: 'diterima'|'membaca'|'memeriksa'|'menyimpan'|'selesai', diperbarui (aktivitas terakhir job),
+ *                diproses, total_baris, berhasil, gagal, diisi_nol (nilai kosong yang disimpan 0),
+ *                per_sheet: [{ sheet, kelas, total, diproses, berhasil, gagal, diisi_nol, dilewati, rata }],
  *                sheet_aktif, kelas_tanpa_sheet, galat: [{ sheet, baris, nama, siswa_id, nilai, jenis, pesan }], galat_total,
+ *                galat_teknis (status 'gagal' karena kesalahan server: jenis & pesan exception), gagal_di: { tahap, sheet, baris, nama },
  *                ukuran, diunggah_oleh, diunggah_oleh_nama, diunggah_sebagai, waktu, selesai_pada, durasi_detik }
+ *   Nilai kosong di berkas disimpan sebagai 0.
  */
 import { api } from '@/lib/api';
 import { denganTiruan } from '@/lib/ujian';
@@ -36,6 +40,52 @@ export const STATUS_IMPOR = {
   gagal: { label: 'Gagal', kelas: 'bg-rose-100 text-rose-800 border-rose-200' },
 };
 
+// Tahap job impor (urut, sama dengan TAHAP_IMPOR di backend/ujian_nilai.py).
+export const TAHAP_IMPOR = [
+  { key: 'diterima', label: 'Berkas diterima' },
+  { key: 'membaca', label: 'Membaca berkas Excel' },
+  { key: 'memeriksa', label: 'Memeriksa template & sheet' },
+  { key: 'menyimpan', label: 'Menyimpan nilai' },
+  { key: 'selesai', label: 'Selesai' },
+];
+export const labelTahap = (key) => TAHAP_IMPOR.find((t) => t.key === key)?.label || key || '—';
+
+// Jenis galat per baris -> label singkat.
+export const JENIS_GALAT = { sheet: 'Sheet', siswa: 'Siswa', nilai: 'Nilai', ganda: 'Ganda', simpan: 'Simpan' };
+
+/** Posisi berhenti job ({ tahap, sheet, baris, nama }) -> "Menyimpan nilai · sheet 7B · baris 12 (Ahmad)". */
+export function teksPosisiGagal(p) {
+  if (!p) return '';
+  const bagian = [labelTahap(p.tahap), p.sheet && `sheet ${p.sheet}`, p.baris && `baris ${p.baris}`].filter(Boolean);
+  return bagian.join(' · ') + (p.nama ? ` (${p.nama})` : '');
+}
+
+/**
+ * Penyebab unggahan/permintaan gagal, lengkap dengan kode HTTP agar panitia & admin tahu di mana masalahnya:
+ * koneksi putus/timeout, berkas terlalu besar di proxy (413), isian tidak valid (422), sesi habis (401), server/proxy
+ * tidak menjawab (502–504), atau pesan `detail` dari server.
+ */
+export function pesanGalatUnggah(e, cadangan = 'Gagal mengunggah berkas nilai.') {
+  const res = e?.response;
+  if (!res) {
+    if (e?.code === 'ECONNABORTED') return 'Waktu tunggu habis sebelum server menjawab. Periksa koneksi lalu coba lagi.';
+    return e?.request ? 'Tidak tersambung ke server (koneksi terputus atau diblokir). Periksa internet lalu coba lagi.' : (e?.message || cadangan);
+  }
+  const { status } = res;
+  const d = res.data?.detail;
+  if (typeof d === 'string' && d && d !== 'Not Found') return `${d} (HTTP ${status})`;
+  if (Array.isArray(d) && d.length) {
+    return `Isian unggahan tidak valid (HTTP ${status}): ${d.map((x) => [(x.loc || []).slice(-1)[0], x.msg].filter(Boolean).join(': ')).join('; ')}`;
+  }
+  if (status === 413) return 'Berkas ditolak karena terlalu besar (HTTP 413). Batas aplikasi 5 MB; bila berkas lebih kecil, batas unggah proxy/server perlu dinaikkan admin.';
+  if (status === 401) return 'Sesi login berakhir (HTTP 401). Masuk ulang lalu unggah lagi.';
+  if (status === 403) return 'Akses ditolak (HTTP 403): akun/peran aktif tidak berhak mengimpor nilai ujian ini.';
+  if (status === 404) return 'Alamat impor tidak ditemukan di server (HTTP 404) — versi backend mungkin belum diperbarui.';
+  if ([502, 503, 504].includes(status)) return `Server tidak menjawab (HTTP ${status}) — kemungkinan sedang dimulai ulang/redeploy atau proses terlalu lama. Tunggu sebentar lalu coba lagi.`;
+  if (status >= 500) return `Server mengalami galat (HTTP ${status}). Coba lagi; bila berulang, hubungi admin.`;
+  return `${cadangan} (HTTP ${status})`;
+}
+
 // ---- Data tiruan ----
 let logContoh = null;
 export function riwayatImporTiruan() {
@@ -43,16 +93,21 @@ export function riwayatImporTiruan() {
     const t = hariIniWIB();
     logContoh = [
       { id: 'contoh-log-2', mapel_id: 'contoh-mtk', mapel_nama: 'Matematika (contoh)', jenjang: 7, berkas: 'nilai_uas_matematika_kelas_7.xlsx',
-        status: 'selesai', pesan: '', diproses: 96, total_baris: 96, berhasil: 93, gagal: 3,
-        per_sheet: [{ sheet: '7A', kelas: '7A', total: 32, berhasil: 32, gagal: 0 }, { sheet: '7B', kelas: '7B', total: 32, berhasil: 30, gagal: 2 },
-          { sheet: '7C', kelas: '7C', total: 32, berhasil: 31, gagal: 1 }],
-        galat: [{ sheet: '7B', baris: 9, nama: 'Bagus Saputra', pesan: 'Nilai di luar rentang 0–100 (105)' },
-          { sheet: '7B', baris: 21, nama: 'Dimas Hidayat', pesan: 'Nilai bukan angka ("delapan puluh")' },
-          { sheet: '7C', baris: 14, nama: 'Siswa Tidak Dikenal', pesan: 'Siswa tidak ditemukan di kelas 7C' }],
+        status: 'selesai', tahap: 'selesai', pesan: '', diproses: 96, total_baris: 96, berhasil: 93, gagal: 3, diisi_nol: 2, galat_total: 3,
+        per_sheet: [{ sheet: '7A', kelas: '7A', total: 32, berhasil: 32, gagal: 0, diisi_nol: 2 }, { sheet: '7B', kelas: '7B', total: 32, berhasil: 30, gagal: 2, diisi_nol: 0 },
+          { sheet: '7C', kelas: '7C', total: 32, berhasil: 31, gagal: 1, diisi_nol: 0 }],
+        galat: [{ sheet: '7B', baris: 9, nama: 'Bagus Saputra', jenis: 'nilai', pesan: 'Nilai di luar rentang 0–100 (105)' },
+          { sheet: '7B', baris: 21, nama: 'Dimas Hidayat', jenis: 'nilai', pesan: 'Nilai bukan angka ("delapan puluh")' },
+          { sheet: '7C', baris: 14, nama: 'Siswa Tidak Dikenal', jenis: 'siswa', pesan: 'Siswa tidak ditemukan di kelas ini' }],
         diunggah_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T10:12:00+07:00`, selesai_pada: `${t}T10:12:20+07:00` },
       { id: 'contoh-log-1', mapel_id: 'contoh-ipa', mapel_nama: 'IPA (contoh)', jenjang: 8, berkas: 'nilai_uas_ipa_kelas_8.xlsx',
-        status: 'gagal', pesan: 'Berkas bukan template nilai UAS (sheet kelas tidak dikenali)', diproses: 0, total_baris: 0, berhasil: 0, gagal: 0,
-        per_sheet: [], galat: [], diunggah_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T09:40:00+07:00`, selesai_pada: `${t}T09:40:01+07:00` },
+        status: 'gagal', tahap: 'menyimpan', diproses: 12, total_baris: 64, berhasil: 7, gagal: 5, diisi_nol: 0, galat_total: 5,
+        pesan: 'Database menolak data ganda (index unik): 5 baris berturut-turut gagal disimpan (sheet 8A, baris 9 — Siswa Contoh), impor dihentikan. Baris yang sudah berhasil tetap tersimpan. Hubungi admin dengan detail teknis di bawah.',
+        galat_teknis: 'DuplicateKeyError: E11000 duplicate key error collection: nilai_ujian index: id_1 dup key: { id: null }',
+        gagal_di: { tahap: 'menyimpan', sheet: '8A', baris: 9, nama: 'Siswa Contoh' },
+        per_sheet: [{ sheet: '8A', kelas: '8A', total: 32, diproses: 12, berhasil: 7, gagal: 5, diisi_nol: 0 }, { sheet: '8B', kelas: '8B', total: 32, diproses: 0, berhasil: 0, gagal: 0, diisi_nol: 0 }],
+        galat: [5, 6, 7, 8, 9].map((baris) => ({ sheet: '8A', baris, nama: `Siswa Contoh ${baris}`, jenis: 'simpan',
+          pesan: 'Gagal menyimpan nilai ke database — Database menolak data ganda (index unik) (DuplicateKeyError: E11000 …)' })), diunggah_oleh_nama: 'Siti Aminah (contoh)', waktu: `${t}T09:40:00+07:00`, selesai_pada: `${t}T09:40:01+07:00` },
     ];
   }
   return { items: logContoh.map((l) => ({ ...l })) };
@@ -68,7 +123,8 @@ export function imporBerjalanTiruan(logId = 'contoh-log-3') {
     const total = 32;
     const diproses = Math.round(per * total);
     return { id: logId, mapel_id: baru.mapel_id, mapel_nama: baru.mapel_nama, jenjang: baru.jenjang, berkas: baru.berkas,
-      status: per >= 1 ? 'selesai' : 'proses', pesan: '', diproses, total_baris: total, berhasil: diproses, gagal: 0,
+      status: per >= 1 ? 'selesai' : 'proses', tahap: per >= 1 ? 'selesai' : 'menyimpan', diperbarui: new Date().toISOString(),
+      pesan: '', diproses, total_baris: total, berhasil: diproses, gagal: 0, diisi_nol: 0,
       per_sheet: [{ sheet: `${baru.jenjang}B`, kelas: `${baru.jenjang}B`, total, diproses, berhasil: diproses, gagal: 0 }], galat: [],
       diunggah_oleh_nama: 'Anda (contoh)', waktu: new Date(baru.mulai).toISOString(), selesai_pada: per >= 1 ? new Date().toISOString() : null };
   }
@@ -84,9 +140,10 @@ export function imporBerjalanTiruan(logId = 'contoh-log-3') {
   const diproses = per_sheet.reduce((a, x) => a + x.diproses, 0);
   return {
     id: 'contoh-log-3', mapel_id: 'contoh-bin', mapel_nama: 'Bahasa Indonesia (contoh)', jenjang: 9, berkas: 'nilai_uas_bahasa_indonesia_kelas_9.xlsx',
-    status: per >= 1 ? 'selesai' : 'proses', pesan: '', diproses, total_baris: 93,
+    status: per >= 1 ? 'selesai' : 'proses', tahap: per >= 1 ? 'selesai' : 'menyimpan', sheet_aktif: per >= 1 ? null : per_sheet.find((x) => x.diproses < x.total)?.sheet,
+    diperbarui: new Date().toISOString(), pesan: '', diproses, total_baris: 93, diisi_nol: 0,
     berhasil: per_sheet.reduce((a, x) => a + x.berhasil, 0), gagal: per_sheet.reduce((a, x) => a + x.gagal, 0), per_sheet,
-    galat: per_sheet[1].gagal ? [{ sheet: '9B', baris: 25, nama: 'Hana Khoirunnisa', pesan: 'Nilai kosong' }] : [],
+    galat: per_sheet[1].gagal ? [{ sheet: '9B', baris: 25, nama: 'Hana Khoirunnisa', jenis: 'ganda', pesan: 'Siswa yang sama sudah diisi di baris 12' }] : [],
     diunggah_oleh_nama: 'Anda (contoh)', waktu: new Date(MULAI_CONTOH).toISOString(), selesai_pada: per >= 1 ? new Date().toISOString() : null,
   };
 }
@@ -136,8 +193,9 @@ export const imporNilai = (ujianId, { berkas, mapelId, mapelNama, jenjang, ulang
 /** Baris gagal -> berkas .xlsx daftar perbaikan (sheet, baris, nama, penyebab). */
 export async function berkasBarisGagal(log) {
   const XLSX = await import('xlsx');
-  const ws = XLSX.utils.aoa_to_sheet([['Sheet', 'Baris', 'Nama', 'Penyebab'], ...(log.galat || []).map((g) => [g.sheet, g.baris, g.nama || '', g.pesan])]);
-  ws['!cols'] = [{ wch: 8 }, { wch: 7 }, { wch: 32 }, { wch: 60 }];
+  const ws = XLSX.utils.aoa_to_sheet([['Sheet', 'Baris', 'Nama', 'Jenis', 'Penyebab'],
+    ...(log.galat || []).map((g) => [g.sheet, g.baris, g.nama || '', JENIS_GALAT[g.jenis] || g.jenis || '', g.pesan])]);
+  ws['!cols'] = [{ wch: 8 }, { wch: 7 }, { wch: 32 }, { wch: 9 }, { wch: 60 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Baris gagal');
   return new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -185,7 +243,7 @@ async function templateNilaiTiruan(mapel, jenjang, kelas) {
   const wb = XLSX.utils.book_new();
   kelas.forEach((k) => {
     const baris = Array.from({ length: Math.min(k.jumlah_siswa || 5, 5) }, (_, i) => [i + 1, `contoh-${k.nama}-${i + 1}`, `${jenjang}0${i + 1}`, `Siswa ${k.nama} ${i + 1} (contoh)`, '']);
-    const ws = XLSX.utils.aoa_to_sheet([[`NILAI UAS ${mapel.nama} — KELAS ${k.nama}`], ['Isi kolom "Nilai UAS" (0–100). Jangan ubah ID Siswa & nama sheet.'], [], KOLOM_TEMPLATE_NILAI, ...baris]);
+    const ws = XLSX.utils.aoa_to_sheet([[`NILAI UAS ${mapel.nama} — KELAS ${k.nama}`], ['Isi kolom "Nilai UAS" (0–100; kosong = 0 saat diimpor). Jangan ubah ID Siswa & nama sheet.'], [], KOLOM_TEMPLATE_NILAI, ...baris]);
     ws['!cols'] = [6, 38, 10, 34, 12].map((wch) => ({ wch }));
     XLSX.utils.book_append_sheet(wb, ws, k.nama);
   });
