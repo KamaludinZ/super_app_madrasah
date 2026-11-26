@@ -53,13 +53,16 @@ async def list_students(
 ):
     """Daftar siswa. Admin melihat semua kelas; wali kelas kelasnya; siswa dirinya sendiri.
     Bawaan hanya siswa AKTIF (bukan mutasi keluar & akun aktif); include_inactive=true memuat semua
-    (data siswa nonaktif tetap tersimpan). exclude_mutation dipertahankan untuk kompatibilitas."""
+    (data siswa nonaktif tetap tersimpan). exclude_mutation dipertahankan untuk kompatibilitas.
+    Peran aktif wali kelas tanpa class_id selalu mendapat rombel perwaliannya saja, walau pengguna merangkap
+    peran yang boleh melihat semua kelas (admin, guru piket, BK, tendik, ...) — dipakai menu Data Siswa & E-Rapor Kelas."""
     if 'siswa' in user.get('roles', []) and len(user.get('roles', [])) == 1:
         me = await db.users.find_one({'id': user['id']}, {'_id': 0, 'password_hash': 0})
         return [serialize_doc(me)] if me else []
     # Roles with broad (all-class) read visibility, matching user_can_view_class's overlap set.
     BROAD_VISIBILITY_ROLES = {'guru_bk', 'guru_tata_tertib', 'guru_piket', 'tenaga_kependidikan', 'unit_kesehatan', 'unit_pelayanan', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'}
-    has_broad_visibility = 'admin' in user.get('roles', []) or bool(set(user.get('roles', [])) & BROAD_VISIBILITY_ROLES)
+    has_broad_visibility = user.get('active_role') != 'wali_kelas' and (
+        'admin' in user.get('roles', []) or bool(set(user.get('roles', [])) & BROAD_VISIBILITY_ROLES))
 
     # Semester yang sedang dilihat (Mode Lihat per pengguna). Semester lampau = tampilan riwayat:
     # siswa beserta rombelnya PADA semester itu, termasuk yang kini sudah naik/lulus/pindah.

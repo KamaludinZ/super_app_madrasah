@@ -27,8 +27,11 @@ import { VIEW_CONTEXT_CHANGED } from '@/lib/useViewYear';
 
 export default function DataSiswaPage() {
   const { activeRole, user } = useAuth();
-  const isAdmin = activeRole === 'admin' || user?.roles?.includes('admin');
-  const isWaliKelas = activeRole === 'wali_kelas' || user?.roles?.includes('wali_kelas');
+  // Peran aktif wali kelas selalu memakai tampilan kelasnya saja, walau akun juga punya peran admin
+  // (server pun membatasi daftar ke rombel perwalian untuk peran aktif ini).
+  const waliKelasAktif = activeRole === 'wali_kelas';
+  const isAdmin = !waliKelasAktif && (activeRole === 'admin' || user?.roles?.includes('admin'));
+  const isWaliKelas = waliKelasAktif || user?.roles?.includes('wali_kelas');
   // These roles see the same all-students admin-style view/filters, but
   // without any create/edit/delete/account actions (view-only).
   const VIEW_ONLY_BROAD_ROLES = ['guru_tata_tertib', 'unit_pelayanan', 'guru_bk', 'kepala_sekolah', 'waka_kesiswaan', 'penjamin_mutu'];
@@ -170,7 +173,8 @@ export default function DataSiswaPage() {
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Daftar Siswa</h1>
           <p className="text-sm text-slate-600 mt-1">
-            {hasAdminView ? 'Semua siswa madrasah' : isWaliKelas ? 'Siswa di kelas Anda' : 'Siswa'}
+            {hasAdminView ? 'Semua siswa madrasah' : isWaliKelas
+              ? `Siswa di kelas Anda${students[0]?.class_name ? ` (${students[0].class_name})` : ''}` : 'Siswa'}
           </p>
         </div>
         {isAdmin && (
