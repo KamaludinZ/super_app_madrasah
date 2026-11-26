@@ -26,7 +26,14 @@ ENV REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL}
 RUN npm run build
 
 # ── Stage 2: Serve dengan Nginx ──────────────────────────────
-FROM nginx:1.27-alpine
+# nginx 1.31 (Alpine 3.24). Seri 1.27 berhenti dibangun ulang sejak 2025 dan tertahan di Alpine 3.21.3 yang tidak lagi
+# mendapat patch keamanan (temuan scan Coolify: brotli, libxslt, OpenSSL, curl, libxml2, libexpat, libpng, musl, ...).
+# Saat seri ini tidak lagi dibangun ulang (mainline baru rilis), naikkan tag ke seri nginx terbaru.
+FROM nginx:1.31-alpine
+
+# Ambil patch keamanan Alpine terbaru saat build, agar celah yang diperbaiki setelah image dasar dirilis ikut tertutup
+# (mis. zlib 1.4 untuk CVE-2026-4738 belum ada di nginx:1.31-alpine per 23-11-2026, tetapi sudah ada di repo Alpine 3.24).
+RUN apk upgrade --no-cache
 
 # Salin hasil build React
 COPY --from=builder /app/build /usr/share/nginx/html
