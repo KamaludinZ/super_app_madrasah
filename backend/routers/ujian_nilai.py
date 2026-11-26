@@ -3,7 +3,7 @@ dengan monitoring progres.
 
 Akses: admin serta ketua & sekretaris panitia ujian itu (menu 'nilai'). Hanya ujian UAS pada semester konteks lihat.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -14,14 +14,20 @@ from core import db, get_active_context, get_current_user, log_audit
 from routers.ujian import akses_ujian
 from routers.ujian_ruang import siswa_semester
 from ujian import adalah_pengelola, hari_ini_wib, sekarang_wib
-from ujian_nilai import (KOLEKSI_IMPOR_LOG, KOLEKSI_MASA, KOLEKSI_NILAI, KOLEKSI_RAPOR, KOLEKSI_RIWAYAT, STATUS_IMPOR, dokumen_log_impor, dokumen_nilai,
-                         MasaNilaiIn, dokumen_riwayat, ke_angka, masa_terbuka, peran_pengunggah, rantai_ulang, rekap_kelas, ringkas_log)
+from ujian_nilai import (KOLEKSI_IMPOR_LOG, KOLEKSI_MASA, KOLEKSI_NILAI, KOLEKSI_RAPOR, KOLEKSI_RIWAYAT, LABEL_TAHAP, STATUS_IMPOR,
+                         dokumen_log_impor, dokumen_nilai, MasaNilaiIn, dokumen_riwayat, ke_angka, masa_terbuka, peran_pengunggah,
+                         rantai_ulang, rekap_kelas, ringkas_log, simpan_dokumen_nilai)
 from ujian_nilai_rapor import konteks_rapor, sinkron_rapor, status_ubah_guru, ujian_uas_semester
-from ujian_nilai_impor import jalankan_impor
+from ujian_nilai_impor import jalankan_impor, lokasi_teks
 from ujian_nilai_xlsx import MAKS_BERKAS, buat_template_nilai, nama_berkas_template_nilai
 
 router = APIRouter(tags=["Ujian - Nilai UAS"])
-MACET_SETELAH = timedelta(minutes=30)
+# Job impor memperbarui `diperbarui` paling lambat tiap 20 baris; tanpa aktivitas selama ini = job mati (server dimulai ulang).
+MACET_SETELAH = timedelta(minutes=10)
+
+
+def aktivitas_terakhir(doc: Dict[str, Any]) -> str:
+    return doc.get('diperbarui') or doc.get('waktu') or ''
 
 
 async def akses_nilai(user: Dict[str, Any], ujian_id: str, tulis: bool = False, cek_kunci: bool = True) -> Dict[str, Any]:
@@ -127,9 +133,9 @@ async def unggah_impor_nilai(ujian_id: str, request: Request, latar: BackgroundT
         raise HTTPException(400, f"Tidak ada kelas {jenjang} pada semester ujian ini")
 
     batas = (sekarang_wib() - MACET_SETELAH).isoformat()
-    berjalan = await db[KOLEKSI_IMPOR_LOG].find_one(
-        {'ujian_id': ujian_id, 'mapel_id': mapel_id, 'jenjang': jenjang, 'status': 'proses', 'waktu': {'$gte': batas}},
-        {'_id': 0, 'id': 1, 'diunggah_oleh_nama': 1})
+    berjalan = next((d for d in await db[KOLEKSI_IMPOR_LOG].find(
+        {'ujian_id': ujian_id, 'mapel_id': mapel_id, 'jenjang': jenjang, 'status': 'proses'},
+        {'_id': 0, 'id': 1, 'diunggah_oleh_nama': 1, 'waktu': 1, 'diperbarui': 1}).to_list(50) if aktivitas_terakhir(d) >= batas), None)
     if berjalan:
         raise HTTPException(409, f"Impor nilai {mapel['name']} kelas {jenjang} masih diproses (oleh {berjalan.get('diunggah_oleh_nama')}). "
                                  "Tunggu sampai selesai sebelum mengunggah lagi.")
@@ -145,14 +151,15 @@ async def unggah_impor_nilai(ujian_id: str, request: Request, latar: BackgroundT
         if asal.get('status') != 'selesai' or not asal.get('gagal'):
             raise HTTPException(409, "Impor asal tidak memiliki baris gagal untuk diunggah ulang")
         lewati = sorted({sid for lg in await rantai_ulang(db, asal) for sid in (lg.get('siswa_berhasil') or [])})
-    log = dokumen_log_impor(ujian_id, mapel, jenjang, (berkas.filename or 'nilai.xlsx')[:200], user,
-                            sebagai=peran_pengunggah(akses), ukuran=len(isi), ulang_dari=ulang_dari)
-    await db[KOLEKSI_IMPOR_LOG].insert_one(dict(log))
+    # Konteks disusun SEBELUM log dibuat: bila gagal, klien menerima galat HTTP langsung (bukan log 'proses' yang menggantung).
     siswa = [s for s in await siswa_semester(ujian['semester_id']) if s.get('kelas_id') in {c['id'] for c in kelas}]
     nama_mapel = {m['id']: m.get('name') for m in await db.subjects.find({}, {'_id': 0, 'id': 1, 'name': 1}).to_list(500)}
     konteks = {'ujian_id': ujian_id, 'mapel_id': mapel_id, 'jenjang': jenjang, 'nama_mapel': nama_mapel,
                'kelas': kelas, 'siswa': siswa, 'lewati_siswa': lewati, 'rapor': await konteks_rapor(db, ujian),
                'oleh': {'id': user.get('id'), 'full_name': user.get('full_name'), 'username': user.get('username')}}
+    log = dokumen_log_impor(ujian_id, mapel, jenjang, (berkas.filename or 'nilai.xlsx')[:200], user,
+                            sebagai=peran_pengunggah(akses), ukuran=len(isi), ulang_dari=ulang_dari)
+    await db[KOLEKSI_IMPOR_LOG].insert_one(dict(log))
     latar.add_task(jalankan_impor, db, log['id'], isi, konteks)
     await log_audit(user, 'ujian_nilai_impor', KOLEKSI_IMPOR_LOG, log['id'],
                     {'ujian_id': ujian_id, 'mapel_id': mapel_id, 'jenjang': jenjang, 'berkas': log['berkas'], 'ukuran': len(isi),
@@ -160,13 +167,24 @@ async def unggah_impor_nilai(ujian_id: str, request: Request, latar: BackgroundT
     return {'log_id': log['id'], 'status': 'proses'}
 
 
-PESAN_MACET = 'Impor terhenti (server dimulai ulang atau proses terlalu lama). Unggah ulang berkas yang sama.'
+def pesan_macet(doc: Dict[str, Any]) -> str:
+    terakhir = aktivitas_terakhir(doc)
+    try:
+        jam = datetime.fromisoformat(terakhir).strftime('%d/%m/%Y %H.%M')
+    except (TypeError, ValueError):
+        jam = '-'
+    tahap = LABEL_TAHAP.get(doc.get('tahap') or 'diterima', doc.get('tahap') or '-').lower()
+    return (f"Impor terhenti: tidak ada aktivitas sejak {jam} WIB pada tahap {tahap}{lokasi_teks({'sheet': doc.get('sheet_aktif')})} "
+            f"(lebih dari {int(MACET_SETELAH.total_seconds() // 60)} menit). Kemungkinan server dimulai ulang/redeploy saat impor "
+            "berjalan. Baris yang sudah berhasil tetap tersimpan; unggah ulang berkas yang sama.")
 
 
 async def _tandai_macet(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Log 'proses' yang tidak bergerak lebih dari MACET_SETELAH dianggap gagal agar panitia dapat mengunggah ulang."""
-    if doc.get('status') == 'proses' and (doc.get('waktu') or '') < (sekarang_wib() - MACET_SETELAH).isoformat():
-        ubah = {'status': 'gagal', 'pesan': PESAN_MACET, 'selesai_pada': sekarang_wib().isoformat(), 'sheet_aktif': None}
+    """Log 'proses' tanpa aktivitas (`diperbarui`) lebih dari MACET_SETELAH dianggap gagal agar panitia dapat mengunggah ulang."""
+    if doc.get('status') == 'proses' and aktivitas_terakhir(doc) < (sekarang_wib() - MACET_SETELAH).isoformat():
+        ubah = {'status': 'gagal', 'pesan': pesan_macet(doc), 'selesai_pada': sekarang_wib().isoformat(), 'sheet_aktif': None,
+                'gagal_di': {'tahap': doc.get('tahap') or 'diterima', 'sheet': doc.get('sheet_aktif'), 'baris': None, 'nama': None},
+                'galat_teknis': None}
         await db[KOLEKSI_IMPOR_LOG].update_one({'id': doc['id'], 'status': 'proses'}, {'$set': ubah})
         doc = {**doc, **ubah}
     return doc
@@ -302,7 +320,7 @@ async def simpan_nilai(ujian: Dict[str, Any], mapel_id: str, isian: List[Any], s
         if s['id'] in ada and ada[s['id']] == nilai or (s['id'] not in ada and nilai is None):
             continue
         dok = dokumen_nilai(ujian['id'], mapel_id, s, nilai, sumber, user)
-        await db[KOLEKSI_NILAI].update_one({'ujian_id': ujian['id'], 'mapel_id': mapel_id, 'siswa_id': s['id']}, {'$set': dok}, upsert=True)
+        await simpan_dokumen_nilai(db, dok)
         await db[KOLEKSI_RIWAYAT].insert_one(dokumen_riwayat(dok, ada.get(s['id'])))
         await sinkron_rapor(db, rapor, dok, user.get('id') if sumber == 'input_guru' else None)
         berubah += 1

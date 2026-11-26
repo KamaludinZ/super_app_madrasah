@@ -1,13 +1,15 @@
 """Ujian Madrasah — Nilai UAS: nilai per siswa per mapel per ujian, log impor (monitoring), dan masa ujian/remidi.
 
 Dokumen `nilai_ujian` (satu per ujian-mapel-siswa):
-    id, ujian_id, mapel_id, kelas_id, kelas, jenjang, sheet, siswa_id, nilai (0–100 | None), sumber
+    id (WAJIB ada: index unik `id` menolak lebih dari satu dokumen tanpa id — selalu simpan lewat simpan_dokumen_nilai), ujian_id, mapel_id, kelas_id, kelas, jenjang, sheet, siswa_id, nilai (0–100 | None), sumber
     ('impor' | 'input_panitia' | 'input_guru'), impor_log_id, diedit_oleh, diedit_oleh_nama, waktu
     Unik: (ujian_id, mapel_id, siswa_id). Disinkronkan ke grade_entries.nilai_uas (kolom UAS rapor & akun guru mapel).
 
 Dokumen `nilai_impor_log` (monitoring impor):
     id, ujian_id, mapel_id, mapel_nama, jenjang, berkas, ukuran (byte), status ('proses'|'selesai'|'gagal'), pesan, diproses, total_baris,
-    berhasil, gagal, per_sheet [{ sheet, kelas, total, diproses, berhasil, gagal, kosong, rata }], sheet_aktif,
+    berhasil, gagal, diisi_nol, per_sheet [{ sheet, kelas, total, diproses, berhasil, gagal, diisi_nol, dilewati, rata }], sheet_aktif,
+    tahap (TAHAP_IMPOR), diperbarui (detak aktivitas terakhir job; dasar deteksi macet), galat_teknis (jenis & pesan exception
+    tersaring, bila job gagal karena kesalahan server), gagal_di { tahap, sheet, baris, nama } (posisi saat job berhenti),
     kelas_tanpa_sheet, galat [{ sheet, baris, nama, siswa_id, nilai, jenis, pesan }] (maks GALAT_MAKS_DISIMPAN), galat_total,
     ulang_dari (log asal bila unggah ulang baris gagal), dilewati, siswa_berhasil [id siswa] (internal, tidak dikirim ke klien),
     diunggah_oleh, diunggah_oleh_nama, diunggah_sebagai ('Ketua Panitia' | 'Sekretaris Panitia' | 'Admin'), waktu, selesai_pada
@@ -24,6 +26,7 @@ mendapat kolom tambahan yang HANYA ditulis modul ujian:
 Kolom nilai pengetahuan/keterampilan/akhir/predikat milik guru tidak disentuh. `semester` grade_entries = kode semester
 ujian ('ganjil' | 'genap'), lihat kode_semester_rapor().
 """
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -42,6 +45,10 @@ STATUS_IMPOR = ('proses', 'selesai', 'gagal')
 SUMBER_NILAI = ('impor', 'input_panitia', 'input_guru')
 LABEL_SUMBER = {'impor': 'Impor panitia', 'input_panitia': 'Input panitia', 'input_guru': 'Input guru mapel'}
 GALAT_MAKS_DISIMPAN = 2000
+# Tahap job impor (urut): diterima -> membaca berkas -> memeriksa template & mencocokkan sheet -> menyimpan nilai -> selesai.
+TAHAP_IMPOR = ('diterima', 'membaca', 'memeriksa', 'menyimpan', 'selesai')
+LABEL_TAHAP = {'diterima': 'Berkas diterima', 'membaca': 'Membaca berkas Excel', 'memeriksa': 'Memeriksa template & sheet kelas',
+               'menyimpan': 'Menyimpan nilai', 'selesai': 'Selesai'}
 
 INDEX_NILAI = [
     (KOLEKSI_NILAI, [('id', 1)], {'unique': True}),
@@ -81,13 +88,15 @@ def dokumen_log_impor(ujian_id: str, mapel: Dict[str, Any], jenjang: int, berkas
         'berhasil': 0, 'gagal': 0, 'per_sheet': [], 'galat': [], 'galat_total': 0, 'sheet_aktif': None, 'kelas_tanpa_sheet': [],
         'diunggah_oleh': oleh.get('id'), 'diunggah_oleh_nama': oleh.get('full_name') or oleh.get('username'),
         'diunggah_sebagai': sebagai, 'waktu': (waktu or sekarang_wib()).isoformat(), 'selesai_pada': None,
-        'ulang_dari': ulang_dari, 'dilewati': 0, 'berubah': 0, 'siswa_berhasil': [],
+        'ulang_dari': ulang_dari, 'dilewati': 0, 'berubah': 0, 'diisi_nol': 0, 'siswa_berhasil': [],
+        'tahap': 'diterima', 'diperbarui': (waktu or sekarang_wib()).isoformat(), 'galat_teknis': None, 'gagal_di': None,
     }
 
 
 FIELD_LOG = ('id', 'mapel_id', 'mapel_nama', 'jenjang', 'berkas', 'ukuran', 'status', 'pesan', 'diproses', 'total_baris', 'berhasil',
              'gagal', 'per_sheet', 'sheet_aktif', 'kelas_tanpa_sheet', 'galat_total', 'diunggah_oleh', 'diunggah_oleh_nama',
-             'diunggah_sebagai', 'waktu', 'selesai_pada', 'ulang_dari', 'dilewati', 'berubah')
+             'diunggah_sebagai', 'waktu', 'selesai_pada', 'ulang_dari', 'dilewati', 'berubah', 'diisi_nol', 'tahap', 'diperbarui',
+             'galat_teknis', 'gagal_di')
 
 
 def durasi_detik(doc: Dict[str, Any]) -> Optional[int]:
@@ -165,6 +174,35 @@ def dokumen_nilai(ujian_id: str, mapel_id: str, siswa: Dict[str, Any], nilai: Op
         'diedit_oleh': oleh.get('id'), 'diedit_oleh_nama': oleh.get('full_name') or oleh.get('username'),
         'waktu': sekarang_wib().isoformat(),
     }
+
+
+async def simpan_dokumen_nilai(db, dok: Dict[str, Any]) -> None:
+    """Upsert satu nilai_ujian (kunci ujian-mapel-siswa). `id` diberi saat dokumen pertama kali dibuat: tanpa itu index
+    unik `id` menganggap setiap dokumen baru ber-id null sehingga siswa baru KEDUA ditolak (E11000 duplicate key)."""
+    await db[KOLEKSI_NILAI].update_one(
+        {'ujian_id': dok['ujian_id'], 'mapel_id': dok['mapel_id'], 'siswa_id': dok['siswa_id']},
+        {'$set': dok, '$setOnInsert': {'id': str(uuid.uuid4())}}, upsert=True)
+
+
+_POLA_RAHASIA = re.compile(r'\b[a-z][a-z0-9+.-]*://\S+', re.IGNORECASE)  # URL koneksi (mongodb+srv://user:pass@host...)
+
+
+def galat_teknis(e: BaseException, maks: int = 300) -> str:
+    """Ringkasan exception yang aman ditampilkan ke panitia: nama jenis + pesan, tanpa URL/kredensial koneksi."""
+    pesan = _POLA_RAHASIA.sub('[disembunyikan]', ' '.join(str(e).split()))
+    return f'{type(e).__name__}: {pesan}'[:maks] if pesan else type(e).__name__
+
+
+def penjelasan_galat(e: BaseException) -> str:
+    """Penjelasan bahasa awam untuk kesalahan server yang umum saat impor/simpan nilai."""
+    from pymongo.errors import AutoReconnect, DuplicateKeyError, NetworkTimeout, ServerSelectionTimeoutError
+    if isinstance(e, DuplicateKeyError):
+        return 'Database menolak data ganda (index unik)'
+    if isinstance(e, (ServerSelectionTimeoutError, NetworkTimeout, AutoReconnect)):
+        return 'Koneksi ke database terputus atau terlalu lambat'
+    if isinstance(e, MemoryError):
+        return 'Memori server tidak cukup untuk memproses berkas'
+    return 'Kesalahan tak terduga di server'
 
 
 def rekap_kelas(nilai: List[Dict[str, Any]], total: int) -> Dict[str, Any]:

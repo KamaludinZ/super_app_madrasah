@@ -4,7 +4,7 @@ Tata letak tiap sheet kelas (sama dengan template frontend, frontend/src/lib/uji
     baris 1  judul "NILAI UAS <mapel> — KELAS <kelas>"
     baris 2  petunjuk
     baris 4  header KOLOM_TEMPLATE_NILAI
-    baris 5… satu baris per siswa; kolom "Nilai UAS" (E) yang diisi, kolom "ID Siswa" (B) dipakai mencocokkan.
+    baris 5… satu baris per siswa; kolom "Nilai UAS" (E) yang diisi (kosong = 0 saat diimpor), kolom "ID Siswa" (B) dipakai mencocokkan.
 Nama sheet = nama kelas (mis. 7A). Sheet tersembunyi `_meta` menyimpan ujian_id, mapel_id & jenjang agar berkas mapel
 atau jenjang lain tidak terimpor ke tempat yang salah.
 """
@@ -149,7 +149,7 @@ def buat_template_nilai(ujian: Dict[str, Any], mapel: Dict[str, Any], jenjang: i
         ws['A1'] = f"NILAI UAS {mapel.get('name') or ''} — KELAS {k.get('name')}"
         ws['A1'].font = Font(bold=True, size=13)
         ws['A2'] = (f"{ujian.get('nama') or ''} · Isi kolom \"Nilai UAS\" (0–100, desimal boleh). Jangan ubah ID Siswa dan nama sheet; "
-                    "kosongkan bila belum ada nilai.")
+                    "nilai yang dibiarkan kosong otomatis diisi 0 saat diimpor.")
         ws['A2'].font = Font(italic=True, size=9, color='555555')
         for c, judul in enumerate(KOLOM_TEMPLATE_NILAI, start=1):
             sel = ws.cell(row=BARIS_HEADER, column=c, value=judul)

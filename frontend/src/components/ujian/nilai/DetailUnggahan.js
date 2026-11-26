@@ -2,6 +2,7 @@ import React from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { formatWIBPanjang } from '@/lib/datetime';
 import { BadgeStatusImpor } from '@/components/ujian/nilai/MonitoringImpor';
+import { labelTahap } from '@/lib/ujianNilai';
 
 const durasi = (mulai, selesai) => {
   if (!mulai || !selesai) return null;
@@ -9,14 +10,16 @@ const durasi = (mulai, selesai) => {
   return d < 60 ? `${d} detik` : `${Math.floor(d / 60)} menit ${d % 60} detik`;
 };
 
-/** Detail satu unggahan impor nilai: berkas, mapel & jenjang, pengunggah, waktu mulai/selesai, durasi, dan status. */
+/** Detail satu unggahan impor nilai: berkas, mapel & jenjang, pengunggah, waktu mulai/selesai, durasi, tahap, dan status. */
 export default function DetailUnggahan({ log }) {
   if (!log) return null;
   const baris = [
     ['Berkas', log.berkas], ['Mata pelajaran', log.mapel_nama], ['Jenjang', `Kelas ${log.jenjang}`],
-    ['Diunggah oleh', log.diunggah_oleh_nama], ['Mulai', formatWIBPanjang(log.waktu)],
+    ['Diunggah oleh', [log.diunggah_oleh_nama, log.diunggah_sebagai].filter(Boolean).join(' · ') || '—'], ['Mulai', formatWIBPanjang(log.waktu)],
     ['Selesai', log.selesai_pada ? formatWIBPanjang(log.selesai_pada) : '—'], ['Durasi', durasi(log.waktu, log.selesai_pada) || '—'],
     ['Sheet kelas', (log.per_sheet || []).map((s) => s.sheet).join(', ') || '—'],
+    ['Tahap', log.status === 'gagal' ? `Berhenti saat: ${labelTahap(log.gagal_di?.tahap || log.tahap)}` : labelTahap(log.status === 'selesai' ? 'selesai' : log.tahap || 'diterima')],
+    ['Aktivitas terakhir', log.diperbarui ? formatWIBPanjang(log.diperbarui) : '—'],
   ];
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4" data-testid="detail-unggahan">

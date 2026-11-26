@@ -2,9 +2,8 @@ import React, { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Download, FileUp, Loader2, RotateCcw } from 'lucide-react';
-import { pesanGalat } from '@/lib/ujian';
 import { simpanBerkas } from '@/lib/ujianPeserta';
-import { berkasBarisGagal, imporNilai, validasiBerkasNilai } from '@/lib/ujianNilai';
+import { berkasBarisGagal, imporNilai, pesanGalatUnggah, validasiBerkasNilai } from '@/lib/ujianNilai';
 
 /**
  * Alur unggah ulang bagian gagal: (1) unduh daftar baris gagal sebagai acuan perbaikan, (2) perbaiki baris itu di berkas
@@ -27,7 +26,7 @@ export default function UnggahUlangGagal({ ujianId, log, onMulai }) {
       toast.success(`Berkas perbaikan diunggah — memproses ulang ${log.mapel_nama} kelas ${log.jenjang}${h.tiruan ? ' (contoh)' : ''}`);
       onMulai?.(h.log_id);
     } catch (e) {
-      toast.error(pesanGalat(e, 'Gagal mengunggah berkas perbaikan.'));
+      toast.error(pesanGalatUnggah(e, 'Gagal mengunggah berkas perbaikan.'), { duration: 10000 });
     } finally {
       setProses(false);
     }
