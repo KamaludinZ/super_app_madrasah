@@ -231,8 +231,9 @@ export function galatBeritaAcara(isi) {
 // Riwayat berita acara hari ini (tanpa login): ruang mana yang sudah dilaporkan pengawas pada tiap sesi.
 //   GET /publik/ujian/{token}/berita-acara/riwayat
 //     -> { tanggal, items: [{ ruang_id, nama_ruang, sesi_id, sesi_ke, pengawas_nama, waktu_kirim }] }
-export const muatRiwayatBa = (token) => denganTiruan(
-  async () => (await publik.get(`/publik/ujian/${token}/berita-acara/riwayat`)).data,
+//   ?sesi_id= -> riwayat satu sesi (mis. sesi hari sebelumnya yang dipilih).
+export const muatRiwayatBa = (token, sesiId = '') => denganTiruan(
+  async () => (await publik.get(`/publik/ujian/${token}/berita-acara/riwayat`, { params: sesiId ? { sesi_id: sesiId } : {} })).data,
   () => {
     const sesi = infoTiruan().sesi;
     return {
@@ -244,3 +245,28 @@ export const muatRiwayatBa = (token) => denganTiruan(
     };
   },
 );
+
+// Pilihan sesi (tanpa login): sesi aktif tetap dipilih otomatis menurut jam server; sesi lain hari ini & hari
+// sebelumnya yang BELUM LENGKAP boleh dipilih; sesi lengkap & hari berikutnya tidak.
+//   GET /publik/ujian/{token}/sesi?untuk=daftar_hadir|berita_acara
+//     -> { tanggal, aktif_id, berikutnya: 'YYYY-MM-DD'|null,
+//          items: [{ id, tanggal, sesi_ke, jam_mulai, jam_selesai, mapel, status, boleh_dipilih, terisi, total, lengkap }] }
+//        status: 'aktif' | 'terbuka' (belum lengkap) | 'lengkap' | 'belum_waktunya'; terisi/total = peserta (daftar hadir)
+//        atau ruang (berita acara). Urut: hari ini dulu, lalu hari-hari sebelumnya.
+export const muatSesiPublik = (token, untuk) => denganTiruan(
+  async () => (await publik.get(`/publik/ujian/${token}/sesi`, { params: { untuk } })).data,
+  () => {
+    const sesi = infoTiruan().sesi;
+    return { tanggal: sesi.tanggal, aktif_id: sesi.id, berikutnya: null,
+      items: [{ ...sesi, status: 'aktif', boleh_dipilih: true, terisi: 0, total: 0, lengkap: false }] };
+  },
+);
+
+/** Sesi yang dipakai halaman: pilihan pengguna bila masih boleh dipilih, selain itu sesi aktif otomatis. */
+export function sesiTerpakai(info, pilihan, terpilihId) {
+  const pilih = terpilihId && pilihan?.items?.find((s) => s.id === terpilihId && s.boleh_dipilih);
+  return pilih || info?.sesi || null;
+}
+
+/** Ada sesi selain sesi aktif yang boleh dipilih? */
+export const adaSesiLain = (pilihan, aktifId) => (pilihan?.items || []).some((s) => s.boleh_dipilih && s.id !== aktifId);

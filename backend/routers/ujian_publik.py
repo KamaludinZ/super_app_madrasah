@@ -19,6 +19,7 @@ from ujian_berita_acara import (
 )
 from ujian_kehadiran import KOLEKSI_DH, KOLEKSI_DH_TTD, DaftarHadirIn, ambil_status_sesi, dokumen_kehadiran
 from ujian_ruang import peserta_ruang_ujian, urut_nama_ruang
+from ujian_sesi_publik import UNTUK, kelengkapan_sesi, susun_pilihan
 
 router = APIRouter()
 
@@ -77,6 +78,35 @@ async def ruang_ujian_publik(ujian_id: str, ruang_id: str) -> Dict[str, Any]:
     return r
 
 
+PESAN_SESI_LENGKAP = {
+    'daftar_hadir': 'Daftar hadir sesi ini sudah lengkap sehingga tidak dapat dipilih lagi. Muat ulang halaman untuk melihat sesi yang berjalan.',
+    'berita_acara': 'Berita acara semua ruang pada sesi ini sudah lengkap sehingga tidak dapat dipilih lagi.',
+}
+
+
+async def cek_sesi_boleh_diisi(ujian: Dict[str, Any], sesi: Dict[str, Any], untuk: str, hari_ini: str) -> None:
+    """Sesi hari ini tetap seperti semula (sesi aktif otomatis maupun sesi lain hari ini). Sesi hari sebelumnya boleh
+    diisi selama BELUM LENGKAP; sesi hari berikutnya tidak dapat dibuka sebelum harinya (403)."""
+    if sesi['tanggal'] > hari_ini:
+        raise HTTPException(403, 'Sesi ini belum dibuka — sesi hari berikutnya hanya dapat diisi pada harinya. '
+                                 'Muat ulang halaman untuk melihat sesi yang berjalan.')
+    if sesi['tanggal'] < hari_ini and (await kelengkapan_sesi(db, ujian['id'], [sesi], untuk))[sesi['id']]['lengkap']:
+        raise HTTPException(403, PESAN_SESI_LENGKAP[untuk])
+
+
+@router.get("/publik/ujian/{token}/sesi")
+async def pilihan_sesi_publik(token: str, untuk: str = Query('daftar_hadir')):
+    """Pilihan sesi: sesi aktif (otomatis menurut jam) + sesi lain hari ini & hari sebelumnya beserta kelengkapannya
+    (daftar hadir: peserta; berita acara: ruang). Hanya sesi aktif & sesi yang belum lengkap yang boleh dipilih."""
+    if untuk not in UNTUK:
+        raise HTTPException(422, 'Parameter untuk hanya daftar_hadir atau berita_acara')
+    _f, ujian = await formulir_dari_token(token)
+    hari_ini, jam = hari_ini_wib(), jam_wib()
+    jadwal = await jadwal_ujian(ujian['id'])
+    lalu = [s for s in jadwal if s['tanggal'] <= hari_ini]
+    return susun_pilihan(jadwal, sesi_aktif(jadwal, hari_ini, jam), hari_ini, await kelengkapan_sesi(db, ujian['id'], lalu, untuk))
+
+
 @router.get("/publik/ujian/{token}/ruang/{ruang_id}/peserta")
 async def peserta_ruang_publik(token: str, ruang_id: str, sesi_id: str = Query('', max_length=64)):
     """Langkah kelas & nama: kelas yang ada di ruang ini dan pesertanya (nama, kelas, nomor peserta — tanpa NIS/NISN)
@@ -111,8 +141,8 @@ def _tolak_ganda(nama: str, kehadiran: Dict[str, Any]) -> HTTPException:
 
 @router.post("/publik/ujian/{token}/daftar-hadir")
 async def kirim_daftar_hadir(token: str, body: DaftarHadirIn, request: Request):
-    """Kirim daftar hadir satu peserta (tanpa login). Ditolak bila formulir tertutup/di luar jam (403), sesi bukan
-    sesi hari ini (403), peserta bukan peserta ruang itu (404), tanda tangan kosong/rusak (422), atau nama itu sudah
+    """Kirim daftar hadir satu peserta (tanpa login). Ditolak bila formulir tertutup/di luar jam (403), sesi hari
+    berikutnya / sesi hari sebelumnya yang sudah lengkap (403), peserta bukan peserta ruang itu (404), tanda tangan kosong/rusak (422), atau nama itu sudah
     mengirim pada sesi ini (409 — satu kiriman per nama per sesi; index unik peserta+sesi menjaga kiriman bersamaan)."""
     f, ujian = await formulir_dari_token(token)
     hari_ini, jam = hari_ini_wib(), jam_wib()
@@ -120,8 +150,7 @@ async def kirim_daftar_hadir(token: str, body: DaftarHadirIn, request: Request):
     if not cek['terbuka']:
         raise HTTPException(403, cek['pesan'])
     sesi = await sesi_ujian(ujian['id'], body.sesi_id)
-    if sesi['tanggal'] != hari_ini:
-        raise HTTPException(403, 'Sesi ini bukan sesi hari ini. Muat ulang halaman untuk melihat sesi yang berjalan.')
+    await cek_sesi_boleh_diisi(ujian, sesi, 'daftar_hadir', hari_ini)
     ruang = await ruang_ujian_publik(ujian['id'], body.ruang_id)
     peserta = await db['peserta_ruang'].find_one({'id': body.peserta_id, 'ujian_id': ujian['id']}, {'_id': 0})
     if not peserta or peserta.get('ruang_id') != ruang['id']:
@@ -196,7 +225,8 @@ async def pengawas_publik(token: str):
 
 @router.post("/publik/ujian/{token}/berita-acara")
 async def kirim_berita_acara(token: str, body: BeritaAcaraIn, request: Request):
-    """Simpan berita acara pengawas (tanpa login): satu per ruang per sesi. Syarat: formulir terbuka & sesi hari ini (403),
+    """Simpan berita acara pengawas (tanpa login): satu per ruang per sesi. Syarat: formulir terbuka & sesi boleh diisi —
+    hari ini, atau hari sebelumnya yang belum lengkap (403),
     pengawas aktif di master (404), daftar hadir ruang itu pada sesi ini LENGKAP (403 dengan pesan), tanda tangan sah
     (422), belum pernah diisi (409). Jumlah hadir & tidak hadir diambil dari daftar hadir, bukan dari isian pengawas."""
     f, ujian = await formulir_dari_token(token)
@@ -205,8 +235,7 @@ async def kirim_berita_acara(token: str, body: BeritaAcaraIn, request: Request):
     if not cek['terbuka']:
         raise HTTPException(403, cek['pesan'])
     sesi = await sesi_ujian(ujian['id'], body.sesi_id)
-    if sesi['tanggal'] != hari_ini:
-        raise HTTPException(403, 'Sesi ini bukan sesi hari ini. Muat ulang halaman untuk melihat sesi yang berjalan.')
+    await cek_sesi_boleh_diisi(ujian, sesi, 'berita_acara', hari_ini)
     ruang = await ruang_ujian_publik(ujian['id'], body.ruang_id)
     pengawas = await db['guru_pengawas'].find_one({'id': body.pengawas_id}, {'_id': 0})
     if not pengawas or not pengawas.get('aktif', True):
@@ -236,14 +265,20 @@ async def kirim_berita_acara(token: str, body: BeritaAcaraIn, request: Request):
 
 
 @router.get("/publik/ujian/{token}/berita-acara/riwayat")
-async def riwayat_ba_publik(token: str):
-    """Berita acara hari ini (ruang, sesi, nama pengawas, jam kirim) agar pengawas tahu ruang yang sudah dilaporkan."""
+async def riwayat_ba_publik(token: str, sesi_id: str = Query('', max_length=64)):
+    """Berita acara hari ini — atau satu sesi bila `sesi_id` diisi (mis. sesi hari sebelumnya yang dipilih) — (ruang,
+    sesi, nama pengawas, jam kirim) agar pengawas tahu ruang yang sudah dilaporkan."""
     _f, ujian = await formulir_dari_token(token)
-    hari_ini = hari_ini_wib()
-    sesi = {s['id']: s for s in await jadwal_ujian(ujian['id']) if s['tanggal'] == hari_ini}
+    if sesi_id:
+        pilih = await sesi_ujian(ujian['id'], sesi_id)
+        tanggal, sesi, q = pilih['tanggal'], {pilih['id']: pilih}, {'ujian_id': ujian['id'], 'sesi_id': pilih['id']}
+    else:
+        tanggal = hari_ini_wib()
+        sesi = {s['id']: s for s in await jadwal_ujian(ujian['id']) if s['tanggal'] == tanggal}
+        q = {'ujian_id': ujian['id'], 'tanggal': tanggal}
     nama = {r['id']: r['nama_ruang'] for r in await db[KOLEKSI_RUANG].find({'ujian_id': ujian['id']}, {'_id': 0, 'id': 1, 'nama_ruang': 1}).to_list(500)}
-    docs = await db[KOLEKSI_BA].find({'ujian_id': ujian['id'], 'tanggal': hari_ini}, {'_id': 0}).to_list(500)
-    return {'tanggal': hari_ini, 'items': [{
+    docs = await db[KOLEKSI_BA].find(q, {'_id': 0}).to_list(500)
+    return {'tanggal': tanggal, 'items': [{
         'ruang_id': d['ruang_id'], 'nama_ruang': nama.get(d['ruang_id']), 'sesi_id': d['sesi_id'],
         'sesi_ke': (sesi.get(d['sesi_id']) or {}).get('sesi_ke'), 'pengawas_nama': d.get('pengawas_nama'), 'waktu_kirim': d.get('waktu_kirim'),
     } for d in sorted(docs, key=lambda x: x.get('waktu_kirim') or '')]}
