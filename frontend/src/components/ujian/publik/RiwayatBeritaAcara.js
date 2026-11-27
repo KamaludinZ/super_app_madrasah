@@ -4,16 +4,17 @@ import { formatWIB } from '@/lib/datetime';
 import { muatRiwayatBa } from '@/lib/ujianPublik';
 
 /**
- * Riwayat berita acara hari ini pada tautan publik: ruang mana yang sudah dilaporkan pengawas pada sesi aktif (nama
+ * Riwayat berita acara pada tautan publik: ruang mana yang sudah dilaporkan pengawas pada sesi yang dipakai (nama
  * pengawas & jam kirim) dan ruang yang belum. `segarkan` memuat ulang setelah kiriman baru.
  */
 export default function RiwayatBeritaAcara({ token, ruangList = [], sesi, segarkan = 0 }) {
   const [data, setData] = useState(null);
+  const sesiId = sesi?.id || '';
   useEffect(() => {
     let hidup = true;
-    muatRiwayatBa(token).then((d) => { if (hidup) setData(d); }).catch(() => {});
+    muatRiwayatBa(token, sesiId).then((d) => { if (hidup) setData(d); }).catch(() => {});
     return () => { hidup = false; };
-  }, [token, segarkan]);
+  }, [token, sesiId, segarkan]);
   if (!data || !sesi) return null;
   const sudah = Object.fromEntries(data.items.filter((i) => i.sesi_id === sesi.id).map((i) => [i.ruang_id, i]));
   return (

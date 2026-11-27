@@ -9,10 +9,12 @@ import KerangkaPublik, { Langkah, PesanPublik, teksSesi } from '@/components/uji
 import KolomTandaTangan from '@/components/ujian/publik/KolomTandaTangan';
 import BlokirSyaratDaftarHadir, { DaftarRekapBa } from '@/components/ujian/publik/BlokirSyaratDaftarHadir';
 import RiwayatBeritaAcara from '@/components/ujian/publik/RiwayatBeritaAcara';
+import PemilihSesiPublik from '@/components/ujian/publik/PemilihSesiPublik';
 import { FormulirTertutup, TautanTidakValid } from '@/components/ujian/publik/StatusTertutup';
 import { formatWIB } from '@/lib/datetime';
 import {
-  CATATAN_BA_MAKS, galatBeritaAcara, kirimBeritaAcara, muatInfoPublik, muatPengawasPublik, muatRekapBa, pesanGalatPublik,
+  CATATAN_BA_MAKS, adaSesiLain, galatBeritaAcara, kirimBeritaAcara, muatInfoPublik, muatPengawasPublik, muatRekapBa, muatSesiPublik,
+  pesanGalatPublik, sesiTerpakai,
 } from '@/lib/ujianPublik';
 
 const JUDUL = 'Berita Acara Pengawas Ujian';
@@ -21,6 +23,8 @@ const JUDUL = 'Berita Acara Pengawas Ujian';
  * Berita acara pengawas lewat tautan publik /publik/ujian/:token/berita-acara (tanpa login).
  * Alur: pilih ruangan -> pilih nama pengawas (master guru pengawas) -> lihat jumlah hadir & tidak hadir yang terisi
  * otomatis dari daftar hadir -> catatan -> tanda tangan -> kirim. Hanya bisa diisi bila daftar hadir ruang itu lengkap.
+ * Sesi aktif dipilih otomatis menurut jam; sesi lain hari ini/hari sebelumnya yang berita acaranya belum lengkap (masih
+ * ada ruang yang belum dilaporkan) dapat dipilih (PemilihSesiPublik).
  */
 export default function PublikBeritaAcaraPage() {
   const { token } = useParams();
@@ -47,13 +51,28 @@ export default function PublikBeritaAcaraPage() {
   useEffect(() => { muatInfo(); }, [muatInfo]);
   useEffect(() => { muatPengawasPublik(token).then((h) => setPengawasList(h.items)).catch(() => {}); }, [token]);
 
+  // Pilihan sesi: null = ikuti sesi aktif otomatis. Dimuat ulang setiap info disegarkan / setelah kiriman.
+  const [pilihan, setPilihan] = useState(null);
+  const [sesiPilihId, setSesiPilihId] = useState(null);
+  useEffect(() => {
+    if (!info) return undefined;
+    let hidup = true;
+    muatSesiPublik(token, 'berita_acara').then((d) => { if (hidup) setPilihan(d); }).catch(() => {});
+    return () => { hidup = false; };
+  }, [token, info, segarkan]);
+  const sesi = sesiTerpakai(info, pilihan, sesiPilihId);
+  const gantiSesi = (s) => {
+    setSesiPilihId(s.id === info?.sesi?.id ? null : s.id);
+    setRuang(null); setRekap(null); setTtd(null); setTampilGalat(false);
+  };
+
   const [memuatRekap, setMemuatRekap] = useState(false);
   const pilihRuang = async (r) => {
     if (r.id !== ruang?.id) { setRekap(null); setTtd(null); }
     setRuang(r);
     setMemuatRekap(true);
     try {
-      setRekap(await muatRekapBa(token, r.id, info?.sesi?.id));
+      setRekap(await muatRekapBa(token, r.id, sesi?.id));
     } catch (e) {
       toast.error(pesanGalatPublik(e, 'Gagal memuat rekap daftar hadir ruang.'));
     } finally {
@@ -62,7 +81,7 @@ export default function PublikBeritaAcaraPage() {
   };
 
   const [tampilGalat, setTampilGalat] = useState(false);
-  const isian = { sesi_id: info?.sesi?.id || '', ruang_id: ruang?.id || '', pengawas_id: pengawasId, catatan: catatan.trim(), ttd_png: ttd || '' };
+  const isian = { sesi_id: sesi?.id || '', ruang_id: ruang?.id || '', pengawas_id: pengawasId, catatan: catatan.trim(), ttd_png: ttd || '' };
   const galatIsian = galatBeritaAcara(isian);
 
   const kirim = async () => {
@@ -73,7 +92,7 @@ export default function PublikBeritaAcaraPage() {
       setSelesai(await kirimBeritaAcara(token, isian));
     } catch (e) {
       toast.error(pesanGalatPublik(e, 'Gagal mengirim berita acara. Periksa koneksi lalu coba lagi.'));
-      if (e?.response?.status === 409 || e?.response?.status === 403) pilihRuang(ruang);
+      if (e?.response?.status === 409 || e?.response?.status === 403) { pilihRuang(ruang); setSegarkan((n) => n + 1); }
     } finally {
       setMengirim(false);
     }
@@ -84,7 +103,7 @@ export default function PublikBeritaAcaraPage() {
   if (selesai) {
     const ulang = () => { setSelesai(null); setRuang(null); setRekap(null); setPengawasId(''); setCatatan(''); setTtd(null); setSegarkan((n) => n + 1); };
     return (
-      <KerangkaPublik info={info} judul={JUDUL}>
+      <KerangkaPublik info={{ ...info, sesi }} judul={JUDUL}>
         <PesanPublik Ikon={CheckCircle2} warna="text-[#006837]" judul="Berita acara tersimpan">
           <p>Ruang <strong>{selesai.ruang}</strong> · {selesai.pengawas_nama}</p>
           <p className="mt-1 text-xs text-slate-500">{teksSesi(selesai.sesi)} · terkirim {formatWIB(selesai.waktu_kirim, 'Time', { hour: '2-digit', minute: '2-digit' })} WIB</p>
@@ -95,22 +114,24 @@ export default function PublikBeritaAcaraPage() {
             <DaftarRekapBa rekap={selesai.rekap} />
           </section>
         )}
-        <RiwayatBeritaAcara token={token} ruangList={info.ruang} sesi={info.sesi} segarkan={segarkan} />
+        <RiwayatBeritaAcara token={token} ruangList={info.ruang} sesi={sesi} segarkan={segarkan} />
         <Button variant="outline" onClick={ulang} className="w-full gap-2" data-testid="ba-isi-lagi"><RotateCcw className="h-4 w-4" /> Isi berita acara ruang lain</Button>
       </KerangkaPublik>
     );
   }
 
-  const tertutup = !info.formulir?.terbuka || !info.sesi;
+  const tertutup = !info.formulir?.terbuka || (!info.sesi && !adaSesiLain(pilihan, info.sesi?.id));
   const pengawas = pengawasList.find((p) => p.id === pengawasId);
 
   return (
-    <KerangkaPublik info={info} judul={JUDUL}>
+    <KerangkaPublik info={{ ...info, sesi }} judul={JUDUL}>
       {info.tiruan && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-tiruan-ba">Server belum siap — menampilkan data contoh.</p>}
       {tertutup ? (
         <FormulirTertutup formulir={info.formulir} ujian={info.ujian} tanpaSesi={!info.sesi} onMuatUlang={muatInfo} memuat={memuatInfo} />
       ) : (
         <>
+          <PemilihSesiPublik pilihan={pilihan} terpilihId={sesi?.id} onPilih={gantiSesi} satuan="ruang" />
+          {sesi && (<>
           <Langkah nomor={1} judul="Pilih ruangan" selesai={!!ruang}>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" role="group" aria-label="Ruangan">
               {info.ruang.map((r) => (
@@ -166,7 +187,8 @@ export default function PublikBeritaAcaraPage() {
               </Langkah>
             </>
           )}
-          <RiwayatBeritaAcara token={token} ruangList={info.ruang} sesi={info.sesi} segarkan={segarkan} />
+          <RiwayatBeritaAcara token={token} ruangList={info.ruang} sesi={sesi} segarkan={segarkan} />
+          </>)}
         </>
       )}
     </KerangkaPublik>

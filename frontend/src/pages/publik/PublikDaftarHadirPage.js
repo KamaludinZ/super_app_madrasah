@@ -8,9 +8,11 @@ import KerangkaPublik, { Langkah, PesanPublik, teksSesi } from '@/components/uji
 import PemilihPesertaBertingkat from '@/components/ujian/publik/PemilihPesertaBertingkat';
 import { FormulirTertutup, TautanTidakValid } from '@/components/ujian/publik/StatusTertutup';
 import PenolakanGanda from '@/components/ujian/publik/PenolakanGanda';
+import PemilihSesiPublik from '@/components/ujian/publik/PemilihSesiPublik';
 import { formatWIB } from '@/lib/datetime';
 import {
-  galatDaftarHadir, jenisGalatKirim, kirimDaftarHadir, muatInfoPublik, muatPesertaPublik, pesanGalatPublik, rincianKirimanGanda,
+  adaSesiLain, galatDaftarHadir, jenisGalatKirim, kirimDaftarHadir, muatInfoPublik, muatPesertaPublik, muatSesiPublik, pesanGalatPublik,
+  rincianKirimanGanda, sesiTerpakai,
 } from '@/lib/ujianPublik';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -21,7 +23,8 @@ const JUDUL = 'Daftar Hadir Peserta Ujian';
 /**
  * Daftar hadir peserta ujian lewat tautan publik /publik/ujian/:token/daftar-hadir (tanpa login).
  * Alur: pilih ruangan -> kelas -> nama (dari daftar peserta ruang itu) -> tanda tangan PNG -> kirim. Satu nama hanya
- * sekali per sesi; formulir hanya terbuka pada masa ujian di jendela jam yang diatur panitia.
+ * sekali per sesi; formulir hanya terbuka pada masa ujian di jendela jam yang diatur panitia. Sesi aktif dipilih otomatis
+ * menurut jam; sesi lain hari ini/hari sebelumnya yang daftar hadirnya belum lengkap dapat dipilih (PemilihSesiPublik).
  */
 export default function PublikDaftarHadirPage() {
   const { token } = useParams();
@@ -44,18 +47,34 @@ export default function PublikDaftarHadirPage() {
   }, [token]);
   useEffect(() => { muatInfo(); }, [muatInfo]);
 
+  // Pilihan sesi: null = ikuti sesi aktif otomatis. Dimuat ulang setiap info/daftar disegarkan.
+  const [pilihan, setPilihan] = useState(null);
+  const [sesiPilihId, setSesiPilihId] = useState(null);
+  useEffect(() => {
+    if (!info) return undefined;
+    let hidup = true;
+    muatSesiPublik(token, 'daftar_hadir').then((d) => { if (hidup) setPilihan(d); }).catch(() => {});
+    return () => { hidup = false; };
+  }, [token, info, segarkan]);
+  const sesi = sesiTerpakai(info, pilihan, sesiPilihId);
+  const sesiId = sesi?.id;
+  const gantiSesi = (s) => {
+    setSesiPilihId(s.id === info?.sesi?.id ? null : s.id);
+    setPeserta(null); setTtd(null); setGanda(null); setSegarkan((n) => n + 1);
+  };
+
   const muatPeserta = useCallback(async (r) => {
     try {
-      return await muatPesertaPublik(token, r.id, info?.sesi?.id);
+      return await muatPesertaPublik(token, r.id, sesiId);
     } catch (e) {
       toast.error(pesanGalatPublik(e, 'Gagal memuat daftar peserta ruang.'));
       return { kelas: [], peserta: [] };
     }
-  }, [token, info]);
+  }, [token, sesiId]);
 
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [ganda, setGanda] = useState(null);
-  const isian = { sesi_id: info?.sesi?.id || '', ruang_id: ruang?.id || '', peserta_id: peserta?.id || '', ttd_png: ttd || '' };
+  const isian = { sesi_id: sesiId || '', ruang_id: ruang?.id || '', peserta_id: peserta?.id || '', ttd_png: ttd || '' };
   const galatIsian = galatDaftarHadir(isian);
 
   const kirim = async () => {
@@ -75,7 +94,7 @@ export default function PublikDaftarHadirPage() {
       toast.error(pesanGalatPublik(e, jenis === 'koneksi'
         ? 'Tidak ada koneksi ke server. Data belum terkirim — periksa sinyal lalu tekan Kirim lagi.'
         : 'Gagal mengirim daftar hadir. Coba lagi.'));
-      if (jenis === 'tertutup') muatInfo();
+      if (jenis === 'tertutup') { setSesiPilihId(null); muatInfo(); }
     } finally {
       setMengirim(false);
       setKonfirmasi(false);
@@ -92,7 +111,7 @@ export default function PublikDaftarHadirPage() {
   }
   if (selesai) {
     return (
-      <KerangkaPublik info={info} judul={JUDUL}>
+      <KerangkaPublik info={{ ...info, sesi }} judul={JUDUL}>
         <PesanPublik Ikon={CheckCircle2} warna="text-[#006837]" judul="Kehadiran tercatat">
           <p><strong>{selesai.nama}</strong> ({selesai.kelas}) · No. Peserta <strong>{selesai.nomor_peserta || '-'}</strong> · Ruang {selesai.ruang}</p>
           <p className="mt-1 text-xs text-slate-500">{teksSesi(selesai.sesi)} · terkirim {formatWIB(selesai.waktu_kirim, 'Time', { hour: '2-digit', minute: '2-digit' })} WIB</p>
@@ -102,20 +121,22 @@ export default function PublikDaftarHadirPage() {
     );
   }
 
-  const tertutup = !info.formulir?.terbuka || !info.sesi;
+  const bisaPilihLain = adaSesiLain(pilihan, info.sesi?.id);
+  const tertutup = !info.formulir?.terbuka || (!info.sesi && !bisaPilihLain);
 
   return (
-    <KerangkaPublik info={info} judul={JUDUL}>
+    <KerangkaPublik info={{ ...info, sesi }} judul={JUDUL}>
       {info.tiruan && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="info-tiruan-dh">Server belum siap — menampilkan data contoh.</p>}
       {tertutup ? (
         <FormulirTertutup formulir={info.formulir} ujian={info.ujian} tanpaSesi={!info.sesi} onMuatUlang={muatInfo} memuat={memuatInfo} />
       ) : (
         <>
+          <PemilihSesiPublik pilihan={pilihan} terpilihId={sesiId} onPilih={gantiSesi} satuan="peserta" />
           <PenolakanGanda rincian={ganda} onPilihLain={() => { setGanda(null); window.scrollTo({ top: 0 }); }} />
-          <PemilihPesertaBertingkat ruangList={info.ruang} muatPeserta={muatPeserta} segarkan={segarkan}
-            onPilih={(p, pilihan) => { setPeserta(p); setRuang(pilihan.ruang || null); setTtd(null); if (p) setGanda(null); }} />
+          {sesi && <PemilihPesertaBertingkat ruangList={info.ruang} muatPeserta={muatPeserta} segarkan={segarkan}
+            onPilih={(p, pil) => { setPeserta(p); setRuang(pil.ruang || null); setTtd(null); if (p) setGanda(null); }} />}
 
-          {peserta && (
+          {sesi && peserta && (
             <Langkah nomor={4} judul="Tanda tangan" keterangan={`${peserta.nama} · No. Peserta ${peserta.nomor_peserta || '-'} · Ruang ${ruang.nama_ruang}`}>
               <KolomTandaTangan ref={padRef} onUbah={setTtd} nomor={peserta.nomor_peserta} nama={peserta.nama} />
               <Button onClick={() => setKonfirmasi(true)} disabled={!!galatIsian || mengirim} className="mt-3 h-12 w-full gap-2 bg-[#006837] text-base hover:bg-[#005830]" data-testid="dh-kirim">
