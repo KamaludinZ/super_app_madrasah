@@ -6,13 +6,15 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from core import (
     db,
     get_active_academic_year,
     get_active_context,
+    get_current_user,
     get_settings,
     log_audit,
     logger,
@@ -22,6 +24,7 @@ from core import (
     ACADEMIC_MANAGEMENT_ROLES,
 )
 from journal_core import current_day_id, now_wib
+from pkg_log_galat import boleh_lapor, ip_klien, simpan_galat
 
 router = APIRouter()
 
@@ -30,16 +33,51 @@ router = APIRouter()
 # AUDIT / SECURITY LOGS
 # ============================================================
 @router.get("/admin/audit-logs")
-async def get_audit_logs(limit: int = 200, target_id: Optional[str] = None,
-                         target_type: Optional[str] = None,
+async def get_audit_logs(limit: int = Query(200, ge=1, le=1000), target_id: Optional[str] = None,
+                         target_type: Optional[str] = None, action: Optional[str] = None,
+                         kecuali_action: Optional[str] = None,
                          user: Dict = Depends(require_role('admin', 'kepala_sekolah', 'waka_kurikulum'))):
+    """Log audit terbaru. `action=error` khusus tab Errors; `kecuali_action=error` untuk Audit Trail agar galat tidak
+    menutupi aktivitas biasa (dan sebaliknya) dalam batas `limit` yang sama."""
     q = {}
     if target_id:
         q['entity_id'] = target_id
     if target_type:
         q['entity'] = target_type
+    if action:
+        q['action'] = action
+    elif kecuali_action:
+        q['action'] = {'$ne': kecuali_action}
     items = await db.audit_logs.find(q, {'_id': 0}).sort('timestamp', -1).to_list(limit)
     return [serialize_doc(i) for i in items]
+
+
+class LaporanGalatKlien(BaseModel):
+    """Galat yang hanya terlihat di browser: permintaan tidak dijawab backend (koneksi terputus, diblokir
+    Cloudflare/proxy) atau dijawab proxy dengan 502/503/504/52x."""
+    jenis: str = Field('jaringan', max_length=40)
+    pesan: str = Field('', max_length=500)
+    metode: str = Field('', max_length=10)
+    path: str = Field('', max_length=300)
+    status: Optional[int] = Field(None, ge=0, le=999)
+    halaman: str = Field('', max_length=300)
+    ukuran_unggahan: Optional[int] = Field(None, ge=0)
+    online: Optional[bool] = None
+
+
+@router.post("/admin/error-logs/klien")
+async def lapor_galat_klien(body: LaporanGalatKlien, request: Request, user: Dict = Depends(get_current_user)):
+    """Catat galat browser ke tab Errors (semua pengguna login; dibatasi per pengguna agar log tidak banjir)."""
+    if not boleh_lapor(user.get('id') or ip_klien(request) or '-'):
+        return {'dicatat': False}
+    jenis = ' '.join(body.jenis.split()) or 'jaringan'
+    await simpan_galat(db, {
+        'sumber': 'browser', 'error_type': 'Browser: ' + ('Koneksi terputus' if jenis == 'jaringan' else jenis),
+        'message': body.pesan.strip()[:500], 'path': body.path.split('?')[0][:300], 'method': body.metode.upper()[:10],
+        'status': body.status, 'halaman': body.halaman.split('?')[0][:300], 'ukuran_unggahan': body.ukuran_unggahan,
+        'online': body.online, 'peran': user.get('active_role'), 'traceback': None,
+    }, user_id=user.get('id'), username=user.get('username') or user.get('full_name'), request=request)
+    return {'dicatat': True}
 
 
 @router.get("/admin/security-logs")
