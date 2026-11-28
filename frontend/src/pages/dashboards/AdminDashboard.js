@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/AuthContext';
 import PublicPagesSection from '@/components/PublicPagesSection';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { KemenagBadge } from '@/components/branding/KemenagBadge';
+import RingkasanVervalDashboard from '@/components/verval/RingkasanVervalDashboard';
 
 export default function AdminDashboard() {
   const { user, activeRole } = useAuth();
@@ -190,6 +191,9 @@ export default function AdminDashboard() {
         <KPI label="Jadwal Hari Ini" value={stats?.total_schedules_today || 0} icon={Calendar} />
         <KPI label="Jurnal Hari Ini" value={stats?.total_journals_today || 0} icon={ClipboardCheck} color="emerald" />
       </div>
+
+      {/* Verval Data siswa & GTK (khusus admin: peninjau ajuan) */}
+      {activeRole === 'admin' && <RingkasanVervalDashboard />}
 
       {/* Stats Siswa */}
       <Card data-testid="students-stats-overview">

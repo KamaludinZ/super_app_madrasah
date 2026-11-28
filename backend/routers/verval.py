@@ -4,7 +4,7 @@ Mengelola request perubahan data siswa/guru/tendik yang perlu approval admin/wal
 """
 from nama_gelar import FIELD_NAMA_GELAR, lengkapi_nama
 from wilayah_master import BLOK_ALAMAT_SISWA, KOLOM_ALAMAT_GTK, KOLOM_ALAMAT_SISWA, selaraskan_alamat
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -540,5 +540,30 @@ async def get_verval_stats(user: Dict = Depends(require_role('admin', 'wali_kela
         'approved': approved,
         'rejected': rejected,
         'siswa_pending': siswa_pending,
-        'gtk_pending': gtk_pending
+        'gtk_pending': gtk_pending,
+        'rincian': {k: await _rincian_verval({**base_query, **q}) for k, q in GRUP_VERVAL.items()},
     }
+
+
+# Kelompok verval untuk dashboard admin — sama dengan halaman /admin/verval-siswa & /admin/verval-gtk.
+GRUP_VERVAL = {
+    'siswa': {'user_type': 'siswa'},
+    'gtk': {'user_type': {'$in': ['guru', 'tenaga_kependidikan']}},
+}
+JAM_AJUAN_BARU = 24
+
+
+async def _rincian_verval(q: Dict) -> Dict:
+    """Ringkasan satu kelompok: jumlah per status, ajuan menunggu yang masuk 24 jam terakhir, dan ajuan menunggu terbaru
+    (nama pengaju, jenis ajuan, waktu) agar admin tahu ada ajuan baru dari dashboard."""
+    hitung = {s: await db.verval_requests.count_documents({**q, 'status': s}) for s in ('pending', 'approved', 'rejected')}
+    batas = (datetime.utcnow() - timedelta(hours=JAM_AJUAN_BARU)).isoformat()
+    baru = await db.verval_requests.count_documents({**q, 'status': 'pending', 'created_at': {'$gte': batas}})
+    terbaru = None
+    docs = await db.verval_requests.find({**q, 'status': 'pending'}, {'_id': 0, 'user_id': 1, 'request_type': 1, 'created_at': 1}) \
+        .sort('created_at', -1).to_list(1)
+    if docs:
+        d = docs[0]
+        u = await db.users.find_one({'id': d.get('user_id')}, {'_id': 0, 'full_name': 1}) or {}
+        terbaru = {'nama': u.get('full_name'), 'request_type': d.get('request_type'), 'created_at': d.get('created_at')}
+    return {**hitung, 'baru_24_jam': baru, 'terbaru': terbaru}
