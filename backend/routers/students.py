@@ -576,7 +576,10 @@ async def students_import(file: UploadFile = File(...), request: Request = None,
     if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
         raise HTTPException(400, "Hanya .xlsx")
     contents = await file.read()
-    rows = parse_student_rows(contents)
+    try:
+        rows = parse_student_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Berkas Excel tidak dapat dibaca. Gunakan template dari halaman Import lalu simpan sebagai .xlsx ({e})")
     classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
     success = 0
     errors = []
@@ -625,7 +628,10 @@ async def students_initial_import(file: UploadFile = File(...), request: Request
     if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
         raise HTTPException(400, "Hanya .xlsx")
     contents = await file.read()
-    rows = parse_student_initial_rows(contents)
+    try:
+        rows = parse_student_initial_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Berkas Excel tidak dapat dibaca. Gunakan template dari halaman Import lalu simpan sebagai .xlsx ({e})")
     classes_map = {c['name']: c['id'] for c in await db.classes.find({}, {'_id': 0}).to_list(500)}
     success = 0
     errors = []

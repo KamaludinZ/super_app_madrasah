@@ -266,13 +266,17 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
     if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
         raise HTTPException(400, "Hanya .xlsx")
     contents = await file.read()
-    rows = parse_class_rows(contents)
+    try:
+        rows = parse_class_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Berkas Excel tidak dapat dibaca. Gunakan template dari halaman Import lalu simpan sebagai .xlsx ({e})")
 
-    # Get active semester context for creating classes
-    ctx = await get_active_context(user)
-    semester_id = ctx.get('semester_id')
-    if not semester_id:
-        raise HTTPException(400, "Tidak ada semester aktif")
+    # Kelas dibuat pada semester aktif (beserta tahun pelajarannya), sama seperti form Tambah Kelas.
+    sem = await db.semesters.find_one({'is_active': True}, {'_id': 0, 'id': 1, 'academic_year_id': 1})
+    if not sem or not sem.get('academic_year_id'):
+        raise HTTPException(400, "Tidak ada semester aktif. Atur semester aktif di menu Tahun Pelajaran terlebih dahulu.")
+    semester_id, ay_id = sem['id'], sem['academic_year_id']
+    ay = await db.academic_years.find_one({'id': ay_id}, {'_id': 0, 'name': 1})
 
     users_map = {u['username']: u['id'] for u in await db.users.find({}, {'_id': 0, 'username': 1, 'id': 1}).to_list(2000)}
     rooms_map = {r['name']: r['id'] for r in await db.rooms.find({}, {'_id': 0, 'name': 1, 'id': 1}).to_list(500)}
@@ -290,10 +294,11 @@ async def classes_import(file: UploadFile = File(...), request: Request = None,
             room_id = rooms_map.get(r.get('ruang_kode')) if r.get('ruang_kode') else None
             cls = ClassModel(
                 name=r['name'], grade=r['grade'], parallel=r['parallel'],
-                semester_id=semester_id,
+                academic_year_id=ay_id, semester_id=semester_id,
                 homeroom_teacher_id=homeroom_id, room_id=room_id,
                 is_accelerated=r.get('is_accelerated', False),
             )
+            cls.token = await _ensure_unique_token(_generate_class_token(cls.name, (ay or {}).get('name')))
             doc = cls.model_dump()
             doc['created_at'] = doc['created_at'].isoformat()
             new_docs.append(doc)

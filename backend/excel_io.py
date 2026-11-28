@@ -43,6 +43,25 @@ def _make_workbook_with_data(sheet_name: str, headers: List[str],
     return wb
 
 
+KOLOM_BACA = 40  # setiap baris dipanjangkan sampai jumlah kolom ini agar row[i] aman walau sel kanan kosong
+
+
+def baris_data(ws, min_row: int = 2):
+    """(nomor_baris, nilai_sel) untuk setiap baris data mulai `min_row`.
+
+    Mode read_only openpyxl mempercayai tag <dimension> di berkas. Berkas yang disimpan sebagian aplikasi (mis. ekspor
+    dari aplikasi lain) bisa menulis tag itu keliru, misalnya "A1": baris data lalu tidak terbaca sama sekali atau
+    kolomnya terpotong. Dimensi diabaikan (dihitung dari isi) dan setiap baris dipanjangkan sampai KOLOM_BACA kolom.
+    """
+    if hasattr(ws, 'reset_dimensions'):
+        ws.reset_dimensions()
+    for idx, row in enumerate(ws.iter_rows(min_row=min_row, values_only=True), start=min_row):
+        row = tuple(row or ())
+        if len(row) < KOLOM_BACA:
+            row = row + (None,) * (KOLOM_BACA - len(row))
+        yield idx, row
+
+
 def workbook_to_bytes(wb: Workbook) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
@@ -87,7 +106,7 @@ def parse_user_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Pengguna'] if 'Pengguna' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         rows.append({
@@ -138,7 +157,7 @@ def parse_class_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Kelas'] if 'Kelas' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         try:
@@ -186,7 +205,7 @@ def parse_room_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Ruangan'] if 'Ruangan' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         try:
@@ -233,7 +252,7 @@ def parse_subject_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['MataPelajaran'] if 'MataPelajaran' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         rows.append({
@@ -272,7 +291,7 @@ def parse_student_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Siswa'] if 'Siswa' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         # Normalize date if datetime
@@ -324,7 +343,7 @@ def parse_student_initial_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Siswa Awal'] if 'Siswa Awal' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         bd = row[5]
@@ -384,7 +403,7 @@ def parse_student_combined_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['Siswa'] if 'Siswa' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         bd = row[5]
@@ -433,7 +452,7 @@ def parse_gtk_initial_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['GTK Awal'] if 'GTK Awal' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         rows.append({
@@ -482,7 +501,7 @@ def parse_gtk_combined_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb['GTK'] if 'GTK' in wb.sheetnames else wb.active
     rows = []
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or all(v is None or str(v).strip() == '' for v in row):
             continue
         rows.append({
@@ -697,7 +716,7 @@ def parse_nism_update_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     rows = []
 
     # Headers expected: id, nisn, nama_lengkap, kelas, nism, nomor_peserta_ujian
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or not any(row):  # Skip empty rows
             continue
 
@@ -824,7 +843,7 @@ def parse_rhk_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     ws = wb.active
     rows = []
 
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or not any(row):
             continue
 
@@ -933,7 +952,7 @@ def parse_student_account_bulk_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
     ws = wb.active
     rows = []
 
-    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+    for idx, row in baris_data(ws):
         if not row or not any(row):
             continue
 

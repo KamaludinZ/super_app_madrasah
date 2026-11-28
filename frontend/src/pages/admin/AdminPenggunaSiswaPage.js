@@ -83,13 +83,18 @@ export default function AdminPenggunaSiswaPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.username || !form.full_name) {
+    const username = (form.username || '').trim();
+    if (!username || !form.full_name) {
       toast.error('Username dan nama wajib diisi');
+      return;
+    }
+    if (/\s/.test(username)) {
+      toast.error('Username tidak boleh mengandung spasi');
       return;
     }
     try {
       if (editing) {
-        const payload = { ...form };
+        const payload = { ...form, username };
         const mutationPayload = {
           mutation_type: payload.mutation_type || null,
           mutation_date: payload.mutation_date || null,
@@ -117,7 +122,7 @@ export default function AdminPenggunaSiswaPage() {
         toast.success('Data siswa berhasil diperbarui');
       } else {
         if (!form.password) { toast.error('Password wajib diisi untuk siswa baru'); return; }
-        const payload = { ...form };
+        const payload = { ...form, username };
         delete payload.selected_student_id;
         delete payload.mutation_type;
         delete payload.mutation_date;
@@ -446,9 +451,14 @@ export default function AdminPenggunaSiswaPage() {
               <Input
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
-                disabled={!!editing}
+                autoComplete="off"
                 data-testid="student-form-username"
               />
+              {editing && editing.username && form.username.trim() !== editing.username && (
+                <p className="mt-1 text-xs text-amber-700" data-testid="student-form-username-info">
+                  Username login berubah dari <strong>{editing.username}</strong> menjadi <strong>{form.username.trim() || '-'}</strong>. Beri tahu siswa untuk login dengan username baru.
+                </p>
+              )}
             </div>
             <div>
               <Label>Password {editing ? '(kosongkan jika tidak ganti)' : '*'}</Label>

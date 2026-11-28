@@ -9,8 +9,7 @@ import {
   Users as UsersIcon, GraduationCap, Info, DoorOpen, School, BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+import { api } from '@/lib/api';
 
 const ENTITIES = [
   {
@@ -18,8 +17,8 @@ const ENTITIES = [
     label: 'GTK (Data + Akun)',
     icon: UsersIcon,
     templateName: 'template_gtk_lengkap_matsandatama.xlsx',
-    templateUrl: '/api/users/gtk-combined-template',
-    importUrl: '/api/users/import-gtk-combined',
+    templateUrl: '/users/gtk-combined-template',
+    importUrl: '/users/import-gtk-combined',
     description: 'Import GTK lengkap dengan data dan akun login sekaligus. Hasil data dan akun masuk ke /admin/users.',
     fields: ['nama_lengkap*', 'roles* (pisah koma)', 'nip_nuptk', 'email', 'phone', 'gender (L/P)', 'username*', 'password*'],
   },
@@ -28,8 +27,8 @@ const ENTITIES = [
     label: 'Siswa (Data + Akun)',
     icon: GraduationCap,
     templateName: 'template_siswa_lengkap_matsandatama.xlsx',
-    templateUrl: '/api/students/combined-template',
-    importUrl: '/api/students/import-combined',
+    templateUrl: '/students/combined-template',
+    importUrl: '/students/import-combined',
     description: 'Import siswa lengkap dengan data dan akun login sekaligus. Hasil data dan akun masuk ke /admin/pengguna-siswa.',
     fields: ['nama_lengkap*', 'nisn*', 'gender (L/P)', 'kelas* (mis. 7A)', 'tempat_lahir', 'tgl_lahir (YYYY-MM-DD)', 'alamat', 'email', 'phone', 'username*', 'password*'],
   },
@@ -38,8 +37,8 @@ const ENTITIES = [
     label: 'Ruangan',
     icon: DoorOpen,
     templateName: 'template_ruangan_matsandatama.xlsx',
-    templateUrl: '/api/rooms/excel-template',
-    importUrl: '/api/rooms/import-excel',
+    templateUrl: '/rooms/excel-template',
+    importUrl: '/rooms/import-excel',
     description: 'Import data ruangan (kelas, lab, ruang guru, dll). Hasil data masuk ke /admin/rooms.',
     fields: ['kode*', 'deskripsi', 'lat', 'lon', 'radius_meter', 'gps_aktif (ya/tidak)', 'qr_mode (static/dynamic)'],
   },
@@ -48,8 +47,8 @@ const ENTITIES = [
     label: 'Kelas',
     icon: School,
     templateName: 'template_kelas_matsandatama.xlsx',
-    templateUrl: '/api/classes/excel-template',
-    importUrl: '/api/classes/import-excel',
+    templateUrl: '/classes/excel-template',
+    importUrl: '/classes/import-excel',
     description: 'Import data kelas (7A, 7B, 8A, dll). Hasil data masuk ke /admin/classes.',
     fields: ['nama*', 'tingkat*', 'paralel*', 'wali_kelas_username', 'ruang_kode', 'is_accelerated (ya/tidak)'],
   },
@@ -58,12 +57,34 @@ const ENTITIES = [
     label: 'Mata Pelajaran',
     icon: BookOpen,
     templateName: 'template_mapel_matsandatama.xlsx',
-    templateUrl: '/api/subjects/excel-template',
-    importUrl: '/api/subjects/import-excel',
+    templateUrl: '/subjects/excel-template',
+    importUrl: '/subjects/import-excel',
     description: 'Import data mata pelajaran (Matematika, IPA, Bahasa Indonesia, dll). Hasil data masuk ke /admin/subjects.',
     fields: ['kode*', 'nama*'],
   },
 ];
+
+const MAKS_UKURAN_MB = 10;
+
+/** Pesan galat impor yang jelas untuk pengguna (bukan sekadar "Failed to fetch"). */
+async function pesanGalatImpor(e, cadangan) {
+  const res = e?.response;
+  if (!res) {
+    if (e?.code === 'ECONNABORTED') return 'Server terlalu lama memproses berkas. Coba bagi berkas menjadi beberapa bagian lalu impor lagi.';
+    return 'Tidak dapat terhubung ke server (koneksi terputus). Periksa internet Anda lalu coba lagi.';
+  }
+  let data = res.data;
+  if (data instanceof Blob) {
+    try { data = JSON.parse(await data.text()); } catch { data = null; }
+  }
+  const d = data?.detail;
+  if (typeof d === 'string' && d) return d;
+  if (Array.isArray(d)) return d.map((x) => x?.msg).filter(Boolean).join('; ') || cadangan;
+  if (res.status === 413) return `Ukuran berkas terlalu besar untuk server. Hapus sheet/gambar yang tidak perlu (maks. ${MAKS_UKURAN_MB} MB).`;
+  if (res.status === 401 || res.status === 403) return 'Sesi login berakhir atau tidak berwenang. Silakan login ulang sebagai admin.';
+  if (res.status >= 500) return `Server mengalami gangguan (kode ${res.status}). Coba lagi beberapa saat lagi.`;
+  return `${cadangan} (kode ${res.status})`;
+}
 
 function normalizeSuccessCount(success) {
   if (Array.isArray(success)) return success.length;
@@ -78,21 +99,16 @@ function ImportTab({ entity }) {
 
   const downloadTemplate = async () => {
     try {
-      const token = localStorage.getItem('matsa_token');
-      const r = await fetch(`${BACKEND_URL}${entity.templateUrl}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!r.ok) throw new Error('Gagal unduh template');
-      const blob = await r.blob();
+      const { data: blob } = await api.get(entity.templateUrl, { responseType: 'blob' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = entity.templateName;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success('Template diunduh');
     } catch (e) {
-      toast.error(e.message || 'Gagal unduh template');
+      toast.error(await pesanGalatImpor(e, 'Gagal mengunduh template'));
     }
   };
 
@@ -101,6 +117,12 @@ function ImportTab({ entity }) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xlsm')) {
       toast.error('Hanya file .xlsx/.xlsm yang didukung');
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+    if (file.size > MAKS_UKURAN_MB * 1024 * 1024) {
+      toast.error(`Ukuran berkas maksimal ${MAKS_UKURAN_MB} MB. Hapus sheet/gambar yang tidak perlu lalu simpan ulang.`);
+      if (inputRef.current) inputRef.current.value = '';
       return;
     }
 
@@ -109,14 +131,8 @@ function ImportTab({ entity }) {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const token = localStorage.getItem('matsa_token');
-      const r = await fetch(`${BACKEND_URL}${entity.importUrl}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Gagal import');
+      // Header multipart wajib: klien api bawaan memakai JSON sehingga FormData bisa terkirim sebagai JSON.
+      const { data } = await api.post(entity.importUrl, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
 
       const errors = data.errors || [];
       const total = data.total_rows || 0;
@@ -132,7 +148,7 @@ function ImportTab({ entity }) {
         toast.info('File kosong, tidak ada data diimport');
       }
     } catch (err) {
-      toast.error(err.message || 'Gagal import');
+      toast.error(await pesanGalatImpor(err, 'Gagal import'), { duration: 8000 });
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -236,7 +252,7 @@ function ImportTab({ entity }) {
                 <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
                   {result.errors.map((err, i) => (
                     <div key={i} className="text-xs text-rose-900 font-mono py-1 border-b border-rose-100 last:border-0" data-testid={`import-error-${i}`}>
-                      {typeof err === 'string' ? err : JSON.stringify(err)}
+                      {typeof err === 'string' ? err : (err?.row ? `Baris ${err.row}: ${err.error || ''}` : JSON.stringify(err))}
                     </div>
                   ))}
                 </div>
