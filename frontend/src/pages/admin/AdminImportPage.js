@@ -71,7 +71,7 @@ async function pesanGalatImpor(e, cadangan) {
   const res = e?.response;
   if (!res) {
     if (e?.code === 'ECONNABORTED') return 'Server terlalu lama memproses berkas. Coba bagi berkas menjadi beberapa bagian lalu impor lagi.';
-    return 'Tidak dapat terhubung ke server (koneksi terputus). Periksa internet Anda lalu coba lagi.';
+    return 'Tidak dapat terhubung ke server (koneksi terputus). Bila internet Anda normal, kemungkinan unggahan diblokir Cloudflare/firewall server — rinciannya tercatat di menu Log Aktivitas > Errors.';
   }
   let data = res.data;
   if (data instanceof Blob) {

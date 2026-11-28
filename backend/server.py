@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from core import client, db, logger
+from pkg_log_galat import catat_galat_server
 from routers import (
     absensi_gtk,
     academic,
@@ -233,6 +234,10 @@ if not CORS_ALLOW_CREDENTIALS and os.environ.get('ENVIRONMENT', '').strip().lowe
                    "contoh: CORS_ORIGINS=https://super.mtsn2kotamalang.sch.id")
 
 
+def pesan_galat_500(kode: str) -> str:
+    return f"Terjadi kesalahan di server (kode {kode}). Detailnya tercatat di menu Log Aktivitas > Errors."
+
+
 def _add_cors_headers(response, origin: str):
     """Header CORS manual untuk respons error 500 (dibuat di luar CORSMiddleware)."""
     if not origin:
@@ -249,11 +254,8 @@ def _add_cors_headers(response, origin: str):
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler that ensures CORS headers are always present"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-
-    response = JSONResponse(
-        status_code=500,
-        content={"detail": "Internal Server Error"}
-    )
+    kode = await catat_galat_server(db, request, exc)
+    response = JSONResponse(status_code=500, content={"detail": pesan_galat_500(kode), "kode_galat": kode})
     _add_cors_headers(response, request.headers.get("origin", ""))
     return response
 
@@ -278,11 +280,8 @@ async def add_security_headers(request, call_next):
     except Exception as exc:
         # If an error occurs, create error response with CORS headers
         logger.error(f"Request failed: {exc}", exc_info=True)
-
-        response = JSONResponse(
-            status_code=500,
-            content={"detail": "Internal Server Error"}
-        )
+        kode = await catat_galat_server(db, request, exc)
+        response = JSONResponse(status_code=500, content={"detail": pesan_galat_500(kode), "kode_galat": kode})
         _add_cors_headers(response, request.headers.get("origin", ""))
         return response
 

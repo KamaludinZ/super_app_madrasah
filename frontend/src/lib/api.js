@@ -17,9 +17,56 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ---- Laporan galat browser ke tab "Errors" (/admin/audit-logs) ----
+// Galat yang tidak pernah sampai ke backend (koneksi terputus, diblokir Cloudflare/proxy, 502/503/504/52x dari proxy)
+// tidak tercatat di server, jadi dilaporkan dari sini. Pakai klien terpisah agar tidak berulang, dibatasi per alamat.
+const STATUS_PROXY = [502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530];
+const pelapor = axios.create({ baseURL: BASE, timeout: 15000 });
+const jejakLapor = {};
+
+function ukuranUnggahan(data) {
+  try {
+    if (typeof FormData !== 'undefined' && data instanceof FormData) {
+      let n = 0;
+      data.forEach((v) => { n += v && typeof v === 'object' && 'size' in v ? v.size : String(v).length; });
+      return n;
+    }
+  } catch { /* abaikan */ }
+  return undefined;
+}
+
+export function laporGalatBrowser(err) {
+  try {
+    const cfg = err?.config || {};
+    const status = err?.response?.status;
+    if (err?.code === 'ERR_CANCELED' || (cfg.url || '').includes('/admin/error-logs/klien')) return;
+    const habisWaktu = err?.code === 'ECONNABORTED';
+    const terputus = !err?.response && !habisWaktu;
+    if (!terputus && !habisWaktu && !STATUS_PROXY.includes(status)) return;
+    const token = localStorage.getItem('matsa_token');
+    if (!token) return;
+    const metode = (cfg.method || 'get').toUpperCase();
+    const kunci = `${metode} ${cfg.url}`;
+    const kini = Date.now();
+    if (jejakLapor[kunci] && kini - jejakLapor[kunci] < 15000) return;
+    jejakLapor[kunci] = kini;
+    const isi = {
+      jenis: terputus ? 'jaringan' : habisWaktu ? 'Waktu habis' : `HTTP ${status} dari proxy`,
+      pesan: `${err?.message || ''}${err?.code ? ` (${err.code})` : ''}`.slice(0, 500),
+      metode, path: `/api${(cfg.url || '').startsWith('/') ? '' : '/'}${cfg.url || ''}`.slice(0, 300), status: status ?? null,
+      halaman: window.location.pathname.slice(0, 300), ukuran_unggahan: ukuranUnggahan(cfg.data),
+      online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+    };
+    const kirim = (sisa) => pelapor.post('/admin/error-logs/klien', isi, { headers: { Authorization: `Bearer ${token}` } })
+      .catch(() => { if (sisa > 0) setTimeout(() => kirim(sisa - 1), 10000); });
+    setTimeout(() => kirim(1), 1000);
+  } catch { /* pelaporan tidak boleh mengganggu aplikasi */ }
+}
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
+    laporGalatBrowser(err);
     if (err?.response?.status === 401) {
       localStorage.removeItem('matsa_token');
       localStorage.removeItem('matsa_user');
