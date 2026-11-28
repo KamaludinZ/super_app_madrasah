@@ -658,12 +658,14 @@ async def update_user(uid: str, req: UserUpdateRequest, request: Request, user: 
         # Special handling for username: allow empty string
         if k == 'username':
             if v is not None:
-                update[k] = v
+                update[k] = v.strip()
         # For other fields: skip None values, but keep everything else including empty strings
         elif v is not None:
             update[k] = v
 
-    # Validasi username tidak duplikat dengan user lain
+    # Validasi username: tanpa spasi & tidak duplikat dengan user lain
+    if update.get('username') and any(ch.isspace() for ch in update['username']):
+        raise HTTPException(400, "Username tidak boleh mengandung spasi")
     if 'username' in update and update['username']:
         existing = await db.users.find_one({'username': update['username'], 'id': {'$ne': uid}})
         if existing:

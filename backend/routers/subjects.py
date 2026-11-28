@@ -60,7 +60,10 @@ async def subjects_import(file: UploadFile = File(...), request: Request = None,
     if not file.filename.lower().endswith(('.xlsx', '.xlsm')):
         raise HTTPException(400, "Hanya .xlsx")
     contents = await file.read()
-    rows = parse_subject_rows(contents)
+    try:
+        rows = parse_subject_rows(contents)
+    except Exception as e:
+        raise HTTPException(400, f"Berkas Excel tidak dapat dibaca. Gunakan template dari halaman Import lalu simpan sebagai .xlsx ({e})")
     success = 0
     errors = []
     new_docs = []
