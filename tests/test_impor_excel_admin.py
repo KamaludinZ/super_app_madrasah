@@ -111,3 +111,34 @@ def test_admin_ubah_username_siswa(klien):
     r = klien('admin', 'admin', 'PUT', f'/users/{sid}', json={'username': 'siswa baru'})
     assert r.status_code == 400 and 'spasi' in r.json()['detail']
     assert klien('guru1', 'guru', 'PUT', f'/users/{sid}', json={'username': 'x'}).status_code == 403
+
+
+JALUR_JSON = {'/users/import-gtk-combined': 'gtk-combined', '/students/import-combined': 'students-combined',
+              '/rooms/import-excel': 'rooms', '/classes/import-excel': 'classes', '/subjects/import-excel': 'subjects'}
+
+
+@pytest.mark.parametrize('tpl,imp,koleksi', KASUS)
+def test_impor_lewat_jalur_cadangan_json(klien, tpl, imp, koleksi):
+    import base64
+    isi = satu_baris(klien('admin', 'admin', 'GET', tpl).content)
+    if imp == '/classes/import-excel':
+        klien.db.classes.docs = [c for c in klien.db.classes.docs if c['name'] != '7A']
+    awal = len(getattr(klien.db, koleksi).docs)
+    b64 = base64.b64encode(isi).decode()
+    r = klien('admin', 'admin', 'POST', f'/impor-excel/{JALUR_JSON[imp]}/json', json={'nama_berkas': 'data.xlsx', 'isi_base64': b64})
+    assert r.status_code == 200, r.text
+    assert r.json()['success'] == 1 and len(getattr(klien.db, koleksi).docs) == awal + 1
+
+
+def test_jalur_cadangan_json_validasi(klien):
+    import base64
+    isi = satu_baris(klien('admin', 'admin', 'GET', '/subjects/excel-template').content)
+    url = '/impor-excel/subjects/json'
+    data_url = 'data:application/octet-stream;base64,' + base64.b64encode(isi).decode()
+    assert klien('admin', 'admin', 'POST', url, json={'nama_berkas': 'a.xlsx', 'isi_base64': data_url}).json()['success'] == 1
+    r = klien('admin', 'admin', 'POST', url, json={'nama_berkas': 'a.xlsx', 'isi_base64': '!!bukan base64!!'})
+    assert r.status_code == 400
+    r = klien('admin', 'admin', 'POST', url, json={'nama_berkas': 'a.txt', 'isi_base64': base64.b64encode(isi).decode()})
+    assert r.status_code == 400  # aturan berkas sama dengan unggahan biasa
+    assert klien('admin', 'admin', 'POST', '/impor-excel/x/json', json={'nama_berkas': 'a.xlsx', 'isi_base64': 'QQ=='}).status_code == 404
+    assert klien('guru1', 'guru', 'POST', url, json={'nama_berkas': 'a.xlsx', 'isi_base64': 'QQ=='}).status_code == 403

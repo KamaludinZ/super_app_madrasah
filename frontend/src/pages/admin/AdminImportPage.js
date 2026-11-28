@@ -68,6 +68,7 @@ const MAKS_UKURAN_MB = 10;
 
 /** Pesan galat impor yang jelas untuk pengguna (bukan sekadar "Failed to fetch"). */
 async function pesanGalatImpor(e, cadangan) {
+  if (e?.bacaGagal) return e.message;
   const res = e?.response;
   if (!res) {
     if (e?.code === 'ECONNABORTED') return 'Server terlalu lama memproses berkas. Coba bagi berkas menjadi beberapa bagian lalu impor lagi.';
@@ -84,6 +85,43 @@ async function pesanGalatImpor(e, cadangan) {
   if (res.status === 401 || res.status === 403) return 'Sesi login berakhir atau tidak berwenang. Silakan login ulang sebagai admin.';
   if (res.status >= 500) return `Server mengalami gangguan (kode ${res.status}). Coba lagi beberapa saat lagi.`;
   return `${cadangan} (kode ${res.status})`;
+}
+
+/** ArrayBuffer -> base64 (bertahap agar tidak melampaui batas argumen fungsi). */
+function keBase64(buf) {
+  const b = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return window.btoa(s);
+}
+
+/**
+ * Kirim berkas impor. Berkas dibaca ke memori lebih dulu: Chrome Android kadang membatalkan unggahan berkas yang
+ * dipilih dari WhatsApp/Drive/folder tersinkron saat isinya dibaca ulang ("Network Error" tanpa pernah terkirim).
+ * Bila unggahan multipart tetap terputus tanpa jawaban server, diulang sekali lewat jalur cadangan JSON base64.
+ * Mengembalikan { data, cadangan }.
+ */
+async function kirimBerkasImpor(entity, file) {
+  let isi;
+  try {
+    isi = await file.arrayBuffer();
+  } catch {
+    const e = new Error('Berkas tidak dapat dibaca dari perangkat. Simpan/unduh dulu berkas ke penyimpanan HP (mis. folder Download), lalu pilih lagi.');
+    e.bacaGagal = true;
+    throw e;
+  }
+  const blob = new Blob([isi], { type: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const fd = new FormData();
+    fd.append('file', blob, file.name);
+    // Header multipart wajib: klien api bawaan memakai JSON sehingga FormData bisa terkirim sebagai JSON.
+    const { data } = await api.post(entity.importUrl, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
+    return { data, cadangan: false };
+  } catch (e) {
+    if (e?.response || e?.code === 'ECONNABORTED' || e?.code === 'ERR_CANCELED') throw e;
+    const { data } = await api.post(`/impor-excel/${entity.key}/json`, { nama_berkas: file.name, isi_base64: keBase64(isi) }, { timeout: 300000 });
+    return { data, cadangan: true };
+  }
 }
 
 function normalizeSuccessCount(success) {
@@ -129,10 +167,8 @@ function ImportTab({ entity }) {
     setBusy(true);
     setResult(null);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      // Header multipart wajib: klien api bawaan memakai JSON sehingga FormData bisa terkirim sebagai JSON.
-      const { data } = await api.post(entity.importUrl, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
+      const { data, cadangan } = await kirimBerkasImpor(entity, file);
+      if (cadangan) toast.info('Unggahan biasa terputus, berkas dikirim lewat jalur cadangan.');
 
       const errors = data.errors || [];
       const total = data.total_rows || 0;
